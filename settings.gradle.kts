@@ -22,7 +22,7 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "练食AI"
+rootProject.name = "TrainFit"
 
 
 include(":app")
