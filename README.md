@@ -2,18 +2,17 @@
 
 <div align="center">
 
-[![Download APK](https://img.shields.io/badge/📥_Download_APK-TrainFit_v1.0-blue?style=for-the-badge&logo=android)](https://github.com/QD8-png/TrainFit/raw/main/downloads/TrainFit-v1.0.apk)
-![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20Web-09090b?style=for-the-badge&logo=android&logoColor=white)
-![Kotlin](https://img.shields.io/badge/Kotlin-2.0-7F52FF?style=for-the-badge&logo=kotlin&logoColor=white)
-![Jetpack Compose](https://img.shields.io/badge/Jetpack%20Compose-UI-4285F4?style=for-the-badge&logo=jetpackcompose&logoColor=white)
-![License](https://img.shields.io/badge/License-MIT-emerald?style=for-the-badge)
-
 <p align="center">
   <b>用最简单、最快的方式，掌控你的增肌减脂闭环。</b><br>
   专为硬核力量训练者与科学减脂人群打造 —— <b>口喷记录</b> · <b>自动超负荷加片建议</b> · <b>热量缺口动态闭环</b>。
 </p>
 
-### [📥 👉 点击这里直接下载最新 Android APK 安装包 (TrainFit-v1.0.apk)](https://github.com/QD8-png/TrainFit/raw/main/downloads/TrainFit-v1.0.apk)
+### 📥 [ 👉 点击这里直接下载最新 Android APK 安装包 (TrainFit-v1.0.apk) 👈 ](https://github.com/QD8-png/TrainFit/releases/download/v1.0.0/TrainFit-v1.0.apk)
+
+> 💡 **多通道下载指引**：
+> - 🚀 **官方 Release 直链（推荐，极速）**：[TrainFit-v1.0.apk (GitHub Releases)](https://github.com/QD8-png/TrainFit/releases/download/v1.0.0/TrainFit-v1.0.apk)
+> - 📦 **GitHub Releases 发行页**：[查看全部版本与更新日志](https://github.com/QD8-png/TrainFit/releases)
+> - 🔗 **仓库备用直链**：[TrainFit-v1.0.apk (Raw 源码库直链)](https://github.com/QD8-png/TrainFit/raw/main/downloads/TrainFit-v1.0.apk)
 
 [✨ 功能特性](#-核心功能亮点) • [📐 科学模型](#-底层数理与算法模型) • [🚀 快速开始](#-快速上手与运行) • [📱 手机安装](#-导出-apk--手机安装) • [📂 项目架构](#-项目工程结构)
 

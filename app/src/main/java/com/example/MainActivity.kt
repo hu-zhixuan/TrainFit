@@ -74,6 +74,7 @@ import com.example.viewmodel.FitnessViewModel
 sealed class AppDestination(val route: String, val title: String, val icon: ImageVector) {
     object Diet : AppDestination("diet", "饮食 · 缺口", Icons.Default.Restaurant)
     object Workout : AppDestination("workout", "训练 · 加片", Icons.Default.FitnessCenter)
+    object Overload : AppDestination("overload", "超负荷加片", Icons.Default.Speed)
     object History : AppDestination("history", "历史走势", Icons.Default.CalendarMonth)
     object Profile : AppDestination("profile", "档案", Icons.Default.LocalFireDepartment)
 }
