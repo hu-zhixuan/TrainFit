@@ -24,9 +24,11 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Accept Licenses and Build APK
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Build APK with Gradle
         run: |
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
           wget -q https://services.gradle.org/distributions/gradle-8.10.2-bin.zip
           unzip -q gradle-8.10.2-bin.zip
           export PATH=$PWD/gradle-8.10.2/bin:$PATH
