@@ -138,8 +138,11 @@ class FitnessApp {
   }
 
   getDaySummary(dateStr) {
+    const isToday = dateStr === getTodayDateString();
     const dayWorkouts = this.workouts.filter(w => w.date === dateStr);
     const dayDiet = this.diet.filter(d => d.date === dateStr);
+
+    const hasLogs = dayWorkouts.length > 0 || dayDiet.length > 0;
 
     const workoutBurn = dayWorkouts.reduce((sum, w) => sum + (w.burnedCalories || 0), 0);
     const totalVolume = dayWorkouts.reduce((sum, w) => sum + (w.weightKg * w.sets * w.reps), 0);
@@ -151,10 +154,17 @@ class FitnessApp {
     const totalFat = dayDiet.reduce((sum, d) => sum + (d.fatG || 0), 0);
 
     const totalBurn = this.profile.tdee + workoutBurn;
-    const deficit = totalBurn - dietIntake;
+
+    // Only compute deficit if the day was actually tracked or is today
+    let deficit = 0;
+    if (hasLogs || isToday) {
+      deficit = totalBurn - dietIntake;
+    }
 
     return {
       date: dateStr,
+      isToday,
+      hasLogs,
       tdee: this.profile.tdee,
       workoutBurn,
       totalBurn,
@@ -468,17 +478,20 @@ class FitnessApp {
       historyData.push({
         date: dStr,
         label: dStr.slice(5),
-        deficit: summary.deficit,
+        hasLogs: summary.hasLogs,
+        isToday: summary.isToday,
+        deficit: summary.hasLogs ? summary.deficit : 0, // Past unrecorded days = 0
         volume: summary.totalVolume,
         burn: summary.workoutBurn,
         intake: summary.dietIntake
       });
     }
 
-    const totalDeficit = historyData.reduce((s, d) => s + d.deficit, 0);
-    const avgDeficit = Math.round(totalDeficit / daysCount);
+    const trackedDays = historyData.filter(d => d.hasLogs || (d.isToday && (d.volume > 0 || d.intake > 0)));
+    const totalDeficit = trackedDays.reduce((s, d) => s + d.deficit, 0);
+    const activeDays = trackedDays.length;
+    const avgDeficit = activeDays > 0 ? Math.round(totalDeficit / activeDays) : 0;
     const totalVol = historyData.reduce((s, d) => s + d.volume, 0);
-    const activeDays = historyData.filter(d => d.volume > 0 || d.intake > 0).length;
 
     document.getElementById('hist-total-deficit').textContent = `${Math.round(totalDeficit).toLocaleString()} kcal`;
     document.getElementById('hist-avg-deficit').textContent = `${avgDeficit} kcal`;
