@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    
+    <!-- Barbell and progressive overload plate emblem with energy flame -->
+    <!-- Central Bar -->
+    <path
+        android:fillColor="#E2E8F0"
+        android:pathData="M30,51h48v6h-48z" />
+
+    <!-- Left Plate Inner -->
+    <path
+        android:fillColor="#38BDF8"
+        android:pathData="M34,36h6v36h-6z" />
+    <!-- Left Plate Outer -->
+    <path
+        android:fillColor="#0EA5E9"
+        android:pathData="M24,41h7v26h-7z" />
+
+    <!-- Right Plate Inner -->
+    <path
+        android:fillColor="#38BDF8"
+        android:pathData="M68,36h6v36h-6z" />
+    <!-- Right Plate Outer -->
+    <path
+        android:fillColor="#0EA5E9"
+        android:pathData="M77,41h7v26h-7z" />
+
+    <!-- Center AI Flame / Calorie Pulse Emblem -->
+    <path
+        android:pathData="M54,30 C58,37 63,42 63,50 C63,56 59,60 54,60 C49,60 45,56 45,50 C45,43 51,37 54,30 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:angle="270"
+                android:endX="54"
+                android:endY="60"
+                android:startX="54"
+                android:startY="30"
+                android:type="linear">
+                <item android:color="#F97316" android:offset="0.0" />
+                <item android:color="#EF4444" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Upward Growth / Progressive Overload Arrow Accent -->
+    <path
+        android:strokeColor="#10B981"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M48,74 L54,68 L60,74" />
+</vector>
