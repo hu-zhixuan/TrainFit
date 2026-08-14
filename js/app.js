@@ -721,7 +721,7 @@ class FitnessApp {
     } else {
       const baseText = textarea.value.trim();
       this.updateMicUi(true);
-      SpeechModule.start(
+      const ok = SpeechModule.start(
         (transcript) => {
           if (transcript && transcript.trim()) {
             textarea.value = baseText ? `${baseText}，${transcript}` : transcript;
@@ -729,8 +729,22 @@ class FitnessApp {
         },
         () => {
           this.updateMicUi(false);
+        },
+        (errorType) => {
+          this.updateMicUi(false);
+          if (errorType === 'NOT_SUPPORTED') {
+            this.showToast('⚠️ 当前浏览器未启用语音听写，可直接在下方打字或点击示例');
+          } else if (errorType === 'not-allowed') {
+            this.showToast('⚠️ 麦克风权限被禁止，请在浏览器设置中开启麦克风权限');
+          } else if (errorType === 'network') {
+            this.showToast('⚠️ 语音连接超时，可直接打字或点击快捷示例');
+          }
         }
       );
+
+      if (!ok) {
+        this.updateMicUi(false);
+      }
     }
   }
 
