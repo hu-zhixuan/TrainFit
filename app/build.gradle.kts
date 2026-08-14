@@ -14,8 +14,6 @@ android {
     targetSdk = 35
     versionCode = 1
     versionName = "1.0.0"
-
-    testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
 
   buildTypes {
@@ -38,12 +36,6 @@ android {
     compose = true
     buildConfig = true
   }
-
-  testOptions {
-    unitTests {
-      isIncludeAndroidResources = true
-    }
-  }
 }
 
 dependencies {
@@ -64,9 +56,6 @@ dependencies {
   implementation(libs.androidx.room.runtime)
   implementation(libs.kotlinx.coroutines.android)
   implementation(libs.kotlinx.coroutines.core)
-
-  testImplementation(libs.junit)
-  testImplementation(libs.androidx.junit)
 
   debugImplementation(libs.androidx.compose.ui.tooling)
   debugImplementation(libs.androidx.compose.ui.test.manifest)

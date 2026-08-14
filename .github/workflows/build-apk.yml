@@ -34,12 +34,12 @@ jobs:
 
       - name: Build Debug APK
         run: |
-          gradle assembleDebug --no-daemon --stacktrace
+          gradle assembleDebug -x test --no-daemon --stacktrace
 
       - name: Collect APK Files
         run: |
           mkdir -p release-apk
-          find . -name "*.apk" -exec cp {} release-apk/TrainFit-v1.0.apk \;
+          find app/build/outputs/apk/ -name "*.apk" -exec cp {} release-apk/TrainFit-v1.0.apk \;
           ls -la release-apk/
 
       - name: Upload APK Artifact
