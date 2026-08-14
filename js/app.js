@@ -502,28 +502,84 @@ class FitnessApp {
     ChartEngine.drawDeficitTrend('deficit-trend-canvas', historyData, this.profile.targetDeficitKcal);
     ChartEngine.drawVolumeTrend('volume-trend-canvas', historyData);
 
-    // List of past items
+    // Interactive Memory Cards
     const container = document.getElementById('history-timeline-list');
-    const pastRecords = historyData.filter(d => d.volume > 0 || d.intake > 0).reverse();
+    const pastRecords = historyData.filter(d => d.hasLogs || (d.isToday && (d.volume > 0 || d.intake > 0))).reverse();
 
     if (pastRecords.length === 0) {
       container.innerHTML = `<div class="empty-hint">暂无历史打卡数据，今日完成饮食或训练后将自动生成统计</div>`;
       return;
     }
 
-    container.innerHTML = pastRecords.map(d => `
-      <div class="log-item-card">
-        <div class="log-item-header">
-          <span class="log-item-name">${d.date}</span>
-          <span class="tag-pill ${d.deficit >= this.profile.targetDeficitKcal ? 'lime-tag' : 'cyan-tag'}">
-            净缺口 ${Math.round(d.deficit)} kcal
-          </span>
+    container.innerHTML = pastRecords.map(d => {
+      const dayWorkouts = this.workouts.filter(w => w.date === d.date);
+      const dayDiet = this.diet.filter(diet => diet.date === d.date);
+      const isToday = d.date === getTodayDateString();
+
+      return `
+        <div class="history-memory-card" id="card-history-${d.date}">
+          <div class="history-card-header" onclick="window.app.toggleHistoryCard('${d.date}')">
+            <div class="history-card-left">
+              <div class="history-card-date-row">
+                <span class="history-card-date">${isToday ? `${d.date} · 今天` : d.date}</span>
+                <span class="tag-pill ${d.deficit >= this.profile.targetDeficitKcal ? 'lime-tag' : 'cyan-tag'}">
+                  ${d.deficit >= 0 ? `净缺口 ${Math.round(d.deficit)} kcal` : `盈余 +${Math.round(Math.abs(d.deficit))} kcal`}
+                </span>
+              </div>
+              <div class="history-card-stats-line">
+                <span>摄入 <b>${d.intake}</b> kcal</span>
+                <span>·</span>
+                <span>举铁 <b>${d.volume.toLocaleString()}</b> kg</span>
+                <span>·</span>
+                <span>运动 <b>+${d.burn}</b> kcal</span>
+              </div>
+            </div>
+            <div class="history-card-right">
+              <span class="history-toggle-hint">查看回忆</span>
+              <span class="history-toggle-icon" id="icon-toggle-${d.date}">▾</span>
+            </div>
+          </div>
+
+          <div class="history-card-body hidden" id="body-history-${d.date}">
+            <!-- 饮食明细 -->
+            <div class="history-section-block">
+              <div class="history-section-title">🥗 饮食回忆 (${dayDiet.length})</div>
+              ${dayDiet.length > 0 ? dayDiet.map(m => `
+                <div class="history-subitem-row">
+                  <span class="tag-pill orange-tag mini-tag">${m.mealType}</span>
+                  <span class="history-subitem-name">${m.foodSummary}</span>
+                  <span class="history-subitem-val">${m.calories} kcal</span>
+                </div>
+              `).join('') : '<div class="history-empty-sub">当天无饮食打卡记录</div>'}
+            </div>
+
+            <!-- 训练明细 -->
+            <div class="history-section-block">
+              <div class="history-section-title">🏋️ 训练回忆 (${dayWorkouts.length})</div>
+              ${dayWorkouts.length > 0 ? dayWorkouts.map(w => `
+                <div class="history-subitem-row">
+                  <span class="tag-pill cyan-tag mini-tag">${w.muscleGroup}</span>
+                  <span class="history-subitem-name">${w.exerciseName} (${w.weightKg > 0 ? w.weightKg + 'kg ' : '自重 '}${w.sets}x${w.reps})</span>
+                  <span class="history-subitem-val">${(w.weightKg * w.sets * w.reps).toLocaleString()} kg</span>
+                </div>
+              `).join('') : '<div class="history-empty-sub">当天未记录力量训练</div>'}
+            </div>
+          </div>
         </div>
-        <div class="log-item-subtext">
-          摄入 ${d.intake} kcal · 举铁容量 ${d.volume.toLocaleString()} kg
-        </div>
-      </div>
-    `).join('');
+      `;
+    }).join('');
+  }
+
+  toggleHistoryCard(dateStr) {
+    const body = document.getElementById(`body-history-${dateStr}`);
+    const icon = document.getElementById(`icon-toggle-${dateStr}`);
+    if (body) {
+      const isHidden = body.classList.contains('hidden');
+      body.classList.toggle('hidden', !isHidden);
+      if (icon) {
+        icon.textContent = isHidden ? '▴' : '▾';
+      }
+    }
   }
 
   renderProfileForm() {
