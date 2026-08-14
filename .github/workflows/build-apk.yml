@@ -48,8 +48,8 @@ jobs:
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
         with:
-          tag_name: v1.0.0
           name: "TrainFit v1.0.0 (练食AI 官方独立安装包)"
           draft: false
           prerelease: false
