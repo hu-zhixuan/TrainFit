@@ -1,5 +1,5 @@
 /**
- * 练食AI · 发丝级极简 Canvas 走势与仪表盘引擎
+ * 练食AI · 发丝级极简 Canvas 走势与仪表盘引擎 (支持正负双向坐标轴)
  */
 
 const ChartEngine = {
@@ -75,27 +75,51 @@ const ChartEngine = {
     const chartWidth = width - paddingLeft - paddingRight;
     const chartHeight = height - paddingTop - paddingBottom;
 
-    const maxDeficit = Math.max(...daysData.map(d => Math.max(d.deficit || 0, targetDeficit, 600))) * 1.25;
+    // Calculate dynamic upper and lower limits with negative support
+    const maxVal = Math.max(...daysData.map(d => d.deficit || 0), targetDeficit, 500);
+    const minVal = Math.min(...daysData.map(d => d.deficit || 0), 0);
+
+    const upperLimit = Math.max(maxVal * 1.25, 600);
+    const lowerLimit = minVal < -50 ? Math.min(minVal * 1.25, -400) : 0;
+    const totalRange = upperLimit - lowerLimit;
+
+    const getY = (val) => {
+      return paddingTop + chartHeight * (1 - (val - lowerLimit) / totalRange);
+    };
+
+    const yZero = getY(0);
 
     // Draw horizontal grid lines & Y-axis labels
+    const gridSteps = lowerLimit < 0 ? 4 : 3;
     ctx.strokeStyle = '#23232a';
     ctx.lineWidth = 1;
-    for (let i = 0; i <= 3; i++) {
-      const y = paddingTop + (chartHeight / 3) * i;
+    for (let i = 0; i <= gridSteps; i++) {
+      const val = upperLimit - (totalRange / gridSteps) * i;
+      const y = getY(val);
+
       ctx.beginPath();
       ctx.moveTo(paddingLeft, y);
       ctx.lineTo(width - paddingRight, y);
       ctx.stroke();
 
-      const labelVal = Math.round(maxDeficit - (maxDeficit / 3) * i);
       ctx.fillStyle = '#71717a';
       ctx.font = '10px sans-serif';
       ctx.textAlign = 'right';
-      ctx.fillText(labelVal, paddingLeft - 6, y + 3);
+      ctx.fillText(Math.round(val), paddingLeft - 6, y + 3);
+    }
+
+    // Draw Crisp 0-Baseline if negative axis is active
+    if (lowerLimit < 0) {
+      ctx.beginPath();
+      ctx.strokeStyle = '#3f3f46';
+      ctx.lineWidth = 1.2;
+      ctx.moveTo(paddingLeft, yZero);
+      ctx.lineTo(width - paddingRight, yZero);
+      ctx.stroke();
     }
 
     // Draw Target Deficit Dashed Line
-    const targetY = paddingTop + chartHeight * (1 - targetDeficit / maxDeficit);
+    const targetY = getY(targetDeficit);
     ctx.beginPath();
     ctx.setLineDash([3, 3]);
     ctx.strokeStyle = '#10b981';
@@ -112,15 +136,25 @@ const ChartEngine = {
     const barWidth = Math.max(Math.min(step * 0.65, 18), 3.5);
 
     daysData.forEach((day, index) => {
+      const val = day.deficit || 0;
       const x = paddingLeft + index * step + (step - barWidth) / 2;
-      const barH = ((Math.max(day.deficit || 0, 0)) / maxDeficit) * chartHeight;
-      const y = paddingTop + chartHeight - barH;
 
-      // Draw Bar
-      if (barH > 0) {
-        ctx.fillStyle = (day.deficit >= targetDeficit) ? '#10b981' : '#38bdf8';
+      // Positive Deficit -> Bar goes UPWARDS
+      if (val > 0) {
+        const y = getY(val);
+        const barH = yZero - y;
+        ctx.fillStyle = val >= targetDeficit ? '#10b981' : '#38bdf8';
         ctx.beginPath();
-        ctx.roundRect(x, y, barWidth, barH, [2, 2, 0, 0]);
+        ctx.roundRect(x, y, barWidth, Math.max(barH, 2), [2, 2, 0, 0]);
+        ctx.fill();
+      }
+      // Negative Deficit (Surplus) -> Bar goes DOWNWARDS
+      else if (val < 0) {
+        const y = getY(val);
+        const barH = y - yZero;
+        ctx.fillStyle = '#ef4444'; // Red for surplus
+        ctx.beginPath();
+        ctx.roundRect(x, yZero, barWidth, Math.max(barH, 2), [0, 0, 2, 2]);
         ctx.fill();
       }
 
