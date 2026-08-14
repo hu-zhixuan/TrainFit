@@ -27,11 +27,11 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Install Standalone Gradle & Build APK
+      - name: Install Gradle 8.10.2 & Build APK
         run: |
-          wget -q https://services.gradle.org/distributions/gradle-8.7-bin.zip
-          unzip -q gradle-8.7-bin.zip
-          export PATH=$PWD/gradle-8.7/bin:$PATH
+          wget -q https://services.gradle.org/distributions/gradle-8.10.2-bin.zip
+          unzip -q gradle-8.10.2-bin.zip
+          export PATH=$PWD/gradle-8.10.2/bin:$PATH
           gradle assembleDebug -x test --no-daemon --stacktrace
 
       - name: Collect APK Files
