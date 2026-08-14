@@ -3,8 +3,6 @@ name: Build and Release TrainFit APK
 on:
   push:
     branches: [ main ]
-    tags:
-      - 'v*'
   workflow_dispatch:
 
 permissions:
@@ -18,6 +16,7 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
+          token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
 
       - name: Set up JDK 17
@@ -58,9 +57,19 @@ jobs:
           path: release-apk/TrainFit-v1.0.apk
           retention-days: 30
 
+      - name: Commit and Push APK directly to repo
+        run: |
+          mkdir -p downloads
+          cp release-apk/TrainFit-v1.0.apk downloads/TrainFit-v1.0.apk
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -f downloads/TrainFit-v1.0.apk
+          git commit -m "chore(release): upload pre-built TrainFit-v1.0.apk binary [skip ci]" || echo "No changes to commit"
+          git push origin main
+
       - name: Publish APK to GitHub Releases
         uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main'
+        continue-on-error: true
         with:
           tag_name: v1.0.0
           name: "TrainFit v1.0.0 正式安装包 (Android APK)"
