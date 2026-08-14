@@ -58,20 +58,23 @@ jobs:
           path: release-apk/TrainFit-v1.0.apk
           retention-days: 30
 
-      - name: Create or Update GitHub Release
+      - name: Publish APK to GitHub Releases
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main'
+        with:
+          tag_name: v1.0.0
+          name: "TrainFit v1.0.0 正式安装包 (Android APK)"
+          body: |
+            ### 🏋️‍♂️ 练食AI (TrainFit) v1.0.0 正式版
+            
+            - 🎙️ **全能中式口喷饮食与训练记录**
+            - ⚡ **自动超负荷加片建议 (Progressive Overload)**
+            - 🎯 **动态热量缺口与三大营养素闭环**
+            - 📴 **纯本地离线运行模式**，无配置开箱即用！
+            
+            **📥 直接点击下方 Assets 中的 `TrainFit-v1.0.apk` 即可下载并安装到手机。**
+          draft: false
+          prerelease: false
+          files: release-apk/TrainFit-v1.0.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release create v1.0.0 release-apk/TrainFit-v1.0.apk \
-            --title "TrainFit v1.0.0 正式安装包 (Android APK)" \
-            --notes "### 🏋️‍♂️ 练食AI (TrainFit) v1.0.0 正式版下载\n\n- 🎙️ **全能中式口喷饮食与训练记录**\n- ⚡ **自动超负荷加片建议 (Progressive Overload)**\n- 🎯 **动态热量缺口与三大营养素闭环**\n- 📴 **纯本地离线运行模式**，无配置开箱即用！\n\n**📥 直接点击下方 Assets 中的 TrainFit-v1.0.apk 即可下载并安装到手机。**" || \
-          gh release upload v1.0.0 release-apk/TrainFit-v1.0.apk --clobber
-
-      - name: Update pre-built APK in repo downloads
-        run: |
-          mkdir -p downloads
-          cp release-apk/TrainFit-v1.0.apk downloads/TrainFit-v1.0.apk
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add downloads/TrainFit-v1.0.apk
-          git diff --cached --quiet || (git commit -m "ci: update pre-built TrainFit-v1.0.apk [skip ci]" && git push origin main)
