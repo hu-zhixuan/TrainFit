@@ -20,10 +20,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up JDK 17
+      - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
+          java-version: '21'
           distribution: 'temurin'
 
       - name: Setup Android SDK
@@ -31,17 +31,17 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.11.1'
 
-      - name: Generate Wrapper & Build Debug APK
-        run: |
-          gradle wrapper
-          chmod +x ./gradlew
-          ./gradlew assembleDebug --no-daemon
+      - name: Build Debug APK
+        run: gradle assembleDebug --stacktrace --no-daemon
 
-      - name: Prepare Release APK
+      - name: Collect APK Files
         run: |
           mkdir -p release-apk
-          cp app/build/outputs/apk/debug/app-debug.apk release-apk/TrainFit-v1.0.apk
+          find . -name "*.apk" -exec cp {} release-apk/TrainFit-v1.0.apk \;
+          ls -la release-apk/
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
@@ -52,15 +52,17 @@ jobs:
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name || 'v1.0.0' }}
+          tag_name: v1.0.0
           name: "TrainFit v1.0.0 (练食AI 官方独立安装包)"
+          draft: false
+          prerelease: false
           body: |
-            ## 🏋️‍♂️ 练食AI (TrainFit) v1.0.0 官方独立 APK 安装包发布
+            ## 🏋️‍♂️ 练食AI (TrainFit) v1.0.0 官方独立 APK 安装包
 
-            ### 📱 安装说明：
-            1. 点击下方 **Assets** 中的 `TrainFit-v1.0.apk` 下载到安卓手机；
-            2. 点击安装即可直接使用；
-            3. **100% 离线独立可用**：无需配置 API Key，内置全量中式餐饮热量库、智能口喷分量换算与超负荷加片建议。
+            ### 📱 安装与使用说明：
+            1. 点击下方 **Assets** 列表中的 `TrainFit-v1.0.apk` 直接下载到手机；
+            2. 点击安装包即可安装使用；
+            3. **100% 离线独立可用**：无需任何 API Key，内置全量中式餐饮热量库、口喷分量自动折算与超负荷加片建议。
           files: release-apk/TrainFit-v1.0.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
