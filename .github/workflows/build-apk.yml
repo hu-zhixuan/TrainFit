@@ -26,14 +26,16 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Setup Gradle
+      - name: Setup Gradle 8.10.2
         uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
 
       - name: Ensure Gradle Wrapper Exists
         run: |
           if [ ! -f gradle/wrapper/gradle-wrapper.jar ]; then
-            echo "Generating Gradle Wrapper..."
-            gradle wrapper --gradle-version 8.7
+            echo "Generating Gradle Wrapper 8.10.2..."
+            gradle wrapper --gradle-version 8.10.2
           fi
           chmod +x ./gradlew
 
@@ -62,8 +64,8 @@ jobs:
         run: |
           gh release create v1.0.0 release-apk/TrainFit-v1.0.apk \
             --title "TrainFit v1.0.0 正式安装包 (Android APK)" \
-            --notes "### 🏋️‍♂️ 练食AI (TrainFit) v1.0.0 正式版下载\n\n- 🎙️ **全能中式口喷饮食与训练记录**\n- ⚡ **自动超负荷加片建议 (Progressive Overload)**\n- 🎯 **动态热量缺口与三大营养素闭环**\n- 📴 **纯本地离线运行模式**，无配置开箱即用！\n\n**📥 直接点击下方 Assets 中的 TrainFit-v1.0.apk 即可下载并安装到手机。**" \
-            --clobber || true
+            --notes "### 🏋️‍♂️ 练食AI (TrainFit) v1.0.0 正式版下载\n\n- 🎙️ **全能中式口喷饮食与训练记录**\n- ⚡ **自动超负荷加片建议 (Progressive Overload)**\n- 🎯 **动态热量缺口与三大营养素闭环**\n- 📴 **纯本地离线运行模式**，无配置开箱即用！\n\n**📥 直接点击下方 Assets 中的 TrainFit-v1.0.apk 即可下载并安装到手机。**" || \
+          gh release upload v1.0.0 release-apk/TrainFit-v1.0.apk --clobber
 
       - name: Update pre-built APK in repo downloads
         run: |

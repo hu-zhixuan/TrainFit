@@ -67,6 +67,6 @@ dependencies {
   debugImplementation(libs.androidx.compose.ui.tooling)
   debugImplementation(libs.androidx.compose.ui.test.manifest)
 
-  "ksp"(libs.androidx.room.compiler)
+  add("ksp", libs.androidx.room.compiler)
 }
 
