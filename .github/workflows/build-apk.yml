@@ -3,8 +3,6 @@ name: Build and Release TrainFit APK
 on:
   push:
     branches: [ main ]
-    tags:
-      - 'v*'
   workflow_dispatch:
 
 permissions:
@@ -24,15 +22,13 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.10.2'
+      - name: Make Gradle Wrapper Executable
+        run: chmod +x ./gradlew
 
       - name: Build Debug APK
-        run: gradle assembleDebug --stacktrace --no-daemon
+        run: ./gradlew assembleDebug --stacktrace --no-daemon
 
-      - name: Locate and Copy APK
+      - name: Collect APK Files
         run: |
           mkdir -p release-apk
           find app/build/outputs/apk/ -name "*.apk" -exec cp {} release-apk/TrainFit-v1.0.apk \;
@@ -44,21 +40,11 @@ jobs:
           name: TrainFit-v1.0-APK
           path: release-apk/TrainFit-v1.0.apk
 
-      - name: Publish GitHub Release
-        uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main'
-        with:
-          tag_name: v1.0.0
-          name: "TrainFit v1.0.0 (练食AI 官方独立安装包)"
-          draft: false
-          prerelease: false
-          body: |
-            ## 🏋️‍♂️ 练食AI (TrainFit) v1.0.0 官方独立 APK 安装包发布
-
-            ### 📱 安装说明：
-            1. 点击下方 **Assets** 列表中的 `TrainFit-v1.0.apk` 下载到安卓手机；
-            2. 点击安装包直接安装使用；
-            3. **100% 离线独立可用**：无需任何 API Key，内置全量中式餐饮热量库、口喷分量自动折算与超负荷加片建议。
-          files: release-apk/TrainFit-v1.0.apk
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Copy APK to repo downloads
+        run: |
+          cp release-apk/TrainFit-v1.0.apk downloads/TrainFit-v1.0.apk
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add downloads/TrainFit-v1.0.apk
+          git diff --cached --quiet || git commit -m "ci: update TrainFit-v1.0.apk with latest build"
+          git push origin main

@@ -15,6 +15,9 @@ android {
     targetSdk = 34
     versionCode = 1
     versionName = "1.0.0"
+
+    // Provide a default empty API key so BuildConfig.GEMINI_API_KEY always compiles
+    buildConfigField("String", "GEMINI_API_KEY", "\"\"")
   }
 
   buildTypes {
@@ -58,8 +61,12 @@ dependencies {
   implementation(libs.kotlinx.coroutines.android)
   implementation(libs.kotlinx.coroutines.core)
 
+  // OkHttp - required by GeminiFitnessService
+  implementation(libs.okhttp)
+
   debugImplementation(libs.androidx.compose.ui.tooling)
   debugImplementation(libs.androidx.compose.ui.test.manifest)
 
   "ksp"(libs.androidx.room.compiler)
 }
+
