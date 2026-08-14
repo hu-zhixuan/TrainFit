@@ -39,6 +39,16 @@ class FitnessApp {
   }
 
   initData() {
+    // One-time purge of legacy mock data leftover from earlier testing sessions
+    const cacheVer = localStorage.getItem('fit_cache_v2');
+    if (!cacheVer) {
+      localStorage.removeItem('fit_workouts');
+      localStorage.removeItem('fit_diet');
+      localStorage.removeItem('fit_profile');
+      localStorage.removeItem('fit_onboarded');
+      localStorage.setItem('fit_cache_v2', 'true');
+    }
+
     const savedProfile = localStorage.getItem('fit_profile');
     this.profile = savedProfile ? JSON.parse(savedProfile) : { ...DEFAULT_PROFILE };
     this.recalculateMetabolism();
