@@ -3,6 +3,8 @@ name: Build and Release TrainFit APK
 on:
   push:
     branches: [ main ]
+    tags:
+      - 'v*'
   workflow_dispatch:
 
 permissions:
@@ -15,13 +17,14 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: gradle
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
@@ -29,10 +32,13 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      - name: Build Debug APK
-        run: gradle assembleDebug
+      - name: Generate Wrapper & Build Debug APK
+        run: |
+          gradle wrapper
+          chmod +x ./gradlew
+          ./gradlew assembleDebug --no-daemon
 
-      - name: Locate and Rename APK
+      - name: Prepare Release APK
         run: |
           mkdir -p release-apk
           cp app/build/outputs/apk/debug/app-debug.apk release-apk/TrainFit-v1.0.apk
@@ -43,19 +49,18 @@ jobs:
           name: TrainFit-v1.0-APK
           path: release-apk/TrainFit-v1.0.apk
 
-      - name: Create Release
+      - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/heads/main')
         with:
-          tag_name: v1.0.0
-          name: "TrainFit v1.0.0 (练食AI 官方安装包)"
+          tag_name: ${{ github.ref_name || 'v1.0.0' }}
+          name: "TrainFit v1.0.0 (练食AI 官方独立安装包)"
           body: |
-            ## 🏋️‍♂️ 练食AI (TrainFit) v1.0.0 官方独立 APK 安装包
-            
+            ## 🏋️‍♂️ 练食AI (TrainFit) v1.0.0 官方独立 APK 安装包发布
+
             ### 📱 安装说明：
-            1. 点击下方 **Assets** 中的 `TrainFit-v1.0.apk` 直接下载到手机；
-            2. 在安卓手机上点击安装包安装即可直接使用；
-            3. **零依赖**：无需配置 API Key，内置全量离线中式饮食热量数据库、中文语音解析引擎与超负荷加片建议算法。
+            1. 点击下方 **Assets** 中的 `TrainFit-v1.0.apk` 下载到安卓手机；
+            2. 点击安装即可直接使用；
+            3. **100% 离线独立可用**：无需配置 API Key，内置全量中式餐饮热量库、智能口喷分量换算与超负荷加片建议。
           files: release-apk/TrainFit-v1.0.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
