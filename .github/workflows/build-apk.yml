@@ -24,11 +24,9 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Gradle 8.10.2 & Build APK
+      - name: Accept Licenses and Build APK
         run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
           wget -q https://services.gradle.org/distributions/gradle-8.10.2-bin.zip
           unzip -q gradle-8.10.2-bin.zip
           export PATH=$PWD/gradle-8.10.2/bin:$PATH
@@ -37,7 +35,7 @@ jobs:
       - name: Collect APK Files
         run: |
           mkdir -p release-apk
-          find app/build/outputs/apk/ -name "*.apk" -exec cp {} release-apk/TrainFit-v1.0.apk \;
+          find app/build/outputs/ -name "*.apk" -exec cp {} release-apk/TrainFit-v1.0.apk \;
           ls -la release-apk/
 
       - name: Upload APK Artifact
