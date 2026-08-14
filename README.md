@@ -2,16 +2,18 @@
 
 <div align="center">
 
-![TrainFit Banner](https://img.shields.io/badge/Platform-Android%20%7C%20Web%20PWA-09090b?style=for-the-badge&logo=android&logoColor=white)
+![Download APK](https://img.shields.io/badge/📥_Download_APK-TrainFit_v1.0-blue?style=for-the-badge&logo=android)
+![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20Web-09090b?style=for-the-badge&logo=android&logoColor=white)
 ![Kotlin](https://img.shields.io/badge/Kotlin-2.0-7F52FF?style=for-the-badge&logo=kotlin&logoColor=white)
-![Jetpack Compose](https://img.shields.io/badge/Jetpack%20Compose-Declarative%20UI-4285F4?style=for-the-badge&logo=jetpackcompose&logoColor=white)
-![Node.js](https://img.shields.io/badge/Node.js-Standalone%20Server-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)
+![Jetpack Compose](https://img.shields.io/badge/Jetpack%20Compose-UI-4285F4?style=for-the-badge&logo=jetpackcompose&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-emerald?style=for-the-badge)
 
 <p align="center">
   <b>用最简单、最快的方式，掌控你的增肌减脂闭环。</b><br>
   专为硬核力量训练者与科学减脂人群打造 —— <b>口喷记录</b> · <b>自动超负荷加片建议</b> · <b>热量缺口动态闭环</b>。
 </p>
+
+### [📥 👉 点击这里直接下载最新 Android APK 安装包](https://github.com/QD8-png/TrainFit/releases)
 
 [✨ 功能特性](#-核心功能亮点) • [📐 科学模型](#-底层数理与算法模型) • [🚀 快速开始](#-快速上手与运行) • [📱 手机安装](#-导出-apk--手机安装) • [📂 项目架构](#-项目工程结构)
 
