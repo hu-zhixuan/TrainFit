@@ -1,5 +1,5 @@
 /**
- * 练食AI · 发丝级极简 Canvas 走势与仪表盘引擎 (支持正负双向坐标轴)
+ * 练食AI · 发丝级极简 Canvas 走势与仪表盘引擎 (支持正负双向坐标轴与高DPI视网膜屏)
  */
 
 const ChartEngine = {
@@ -9,8 +9,8 @@ const ChartEngine = {
     const ctx = canvas.getContext('2d');
     const dpr = window.devicePixelRatio || 1;
 
-    const width = canvas.parentElement.clientWidth || 320;
-    const height = 180;
+    const width = 130;
+    const height = 130;
     canvas.width = width * dpr;
     canvas.height = height * dpr;
     canvas.style.width = width + 'px';
@@ -20,8 +20,8 @@ const ChartEngine = {
     ctx.clearRect(0, 0, width, height);
 
     const centerX = width / 2;
-    const centerY = height / 2 + 6;
-    const radius = 62;
+    const centerY = height / 2;
+    const radius = 54;
     const lineWidth = 6;
 
     // Background track ring
@@ -34,7 +34,7 @@ const ChartEngine = {
     const isSurplus = deficit < 0;
     const safeTarget = Math.max(targetDeficit, 1);
     const ratio = Math.max(0, Math.min(deficit / safeTarget, 1.0));
-    const strokeColor = isSurplus ? '#ef4444' : (deficit >= targetDeficit ? '#10b981' : '#38bdf8');
+    const strokeColor = isSurplus ? '#ef4444' : (deficit >= targetDeficit && targetDeficit > 0 ? '#10b981' : '#38bdf8');
 
     // Foreground progress arc
     const startAngle = -Math.PI / 2;
@@ -45,7 +45,7 @@ const ChartEngine = {
       ctx.arc(centerX, centerY, radius, startAngle, startAngle + sweepAngle);
       ctx.strokeStyle = strokeColor;
       ctx.lineWidth = lineWidth;
-      ctx.lineCap = 'butt';
+      ctx.lineCap = 'round';
       ctx.stroke();
     }
   },
@@ -57,7 +57,7 @@ const ChartEngine = {
     const dpr = window.devicePixelRatio || 1;
 
     const width = canvas.parentElement.clientWidth || 340;
-    const height = 180;
+    const height = 170;
     canvas.width = width * dpr;
     canvas.height = height * dpr;
     canvas.style.width = width + 'px';
@@ -69,9 +69,9 @@ const ChartEngine = {
     if (!daysData || daysData.length === 0) return;
 
     const paddingLeft = 38;
-    const paddingBottom = 28;
-    const paddingTop = 20;
-    const paddingRight = 16;
+    const paddingBottom = 26;
+    const paddingTop = 18;
+    const paddingRight = 14;
     const chartWidth = width - paddingLeft - paddingRight;
     const chartHeight = height - paddingTop - paddingBottom;
 
@@ -108,7 +108,7 @@ const ChartEngine = {
       ctx.fillText(Math.round(val), paddingLeft - 6, y + 3);
     }
 
-    // Draw Crisp 0-Baseline if negative axis is active
+    // Draw 0-Baseline if negative axis is active
     if (lowerLimit < 0) {
       ctx.beginPath();
       ctx.strokeStyle = '#3f3f46';
@@ -129,7 +129,7 @@ const ChartEngine = {
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // Sample interval for dates to prevent horizontal overlapping on 30-day view
+    // Sample interval for dates
     const totalDays = daysData.length;
     const sampleStep = totalDays > 14 ? Math.ceil(totalDays / 5) : 1;
     const step = chartWidth / totalDays;
@@ -142,29 +142,37 @@ const ChartEngine = {
       // Positive Deficit -> Bar goes UPWARDS
       if (val > 0) {
         const y = getY(val);
-        const barH = yZero - y;
+        const barH = Math.max(yZero - y, 2);
         ctx.fillStyle = val >= targetDeficit ? '#10b981' : '#38bdf8';
         ctx.beginPath();
-        ctx.roundRect(x, y, barWidth, Math.max(barH, 2), [2, 2, 0, 0]);
+        if (ctx.roundRect) {
+          ctx.roundRect(x, y, barWidth, barH, [2, 2, 0, 0]);
+        } else {
+          ctx.rect(x, y, barWidth, barH);
+        }
         ctx.fill();
       }
       // Negative Deficit (Surplus) -> Bar goes DOWNWARDS
       else if (val < 0) {
         const y = getY(val);
-        const barH = y - yZero;
-        ctx.fillStyle = '#ef4444'; // Red for surplus
+        const barH = Math.max(y - yZero, 2);
+        ctx.fillStyle = '#ef4444';
         ctx.beginPath();
-        ctx.roundRect(x, yZero, barWidth, Math.max(barH, 2), [0, 0, 2, 2]);
+        if (ctx.roundRect) {
+          ctx.roundRect(x, yZero, barWidth, barH, [0, 0, 2, 2]);
+        } else {
+          ctx.rect(x, yZero, barWidth, barH);
+        }
         ctx.fill();
       }
 
-      // Sampled Date Labels (Avoid overlapping on 30-day views!)
+      // Sampled Date Labels
       const isSampled = (index % sampleStep === 0) || (index === totalDays - 1);
       if (isSampled) {
         ctx.fillStyle = '#71717a';
         ctx.font = '10px sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText(day.label || day.date.slice(5), x + barWidth / 2, height - 8);
+        ctx.fillText(day.label || day.date.slice(5), x + barWidth / 2, height - 6);
       }
     });
   },
@@ -176,7 +184,7 @@ const ChartEngine = {
     const dpr = window.devicePixelRatio || 1;
 
     const width = canvas.parentElement.clientWidth || 340;
-    const height = 160;
+    const height = 150;
     canvas.width = width * dpr;
     canvas.height = height * dpr;
     canvas.style.width = width + 'px';
@@ -188,13 +196,13 @@ const ChartEngine = {
     if (!daysData || daysData.length === 0) return;
 
     const paddingLeft = 40;
-    const paddingBottom = 28;
-    const paddingTop = 20;
-    const paddingRight = 16;
+    const paddingBottom = 26;
+    const paddingTop = 18;
+    const paddingRight = 14;
     const chartWidth = width - paddingLeft - paddingRight;
     const chartHeight = height - paddingTop - paddingBottom;
 
-    const maxVol = Math.max(...daysData.map(d => d.volume || 0), 2000) * 1.25;
+    const maxVol = Math.max(...daysData.map(d => d.volume || 0), 1500) * 1.25;
 
     // Grid
     ctx.strokeStyle = '#23232a';
@@ -226,7 +234,7 @@ const ChartEngine = {
       else ctx.lineTo(x, y);
     });
 
-    ctx.strokeStyle = '#f4f4f5';
+    ctx.strokeStyle = '#38bdf8';
     ctx.lineWidth = 2;
     ctx.stroke();
 
@@ -235,11 +243,10 @@ const ChartEngine = {
       const x = paddingLeft + index * step;
       const y = paddingTop + chartHeight * (1 - (day.volume || 0) / maxVol);
 
-      // Only draw dots for tracked volume or sampled points
       if (day.volume > 0 || totalDays <= 7) {
         ctx.beginPath();
         ctx.arc(x, y, 3, 0, Math.PI * 2);
-        ctx.fillStyle = '#f4f4f5';
+        ctx.fillStyle = '#38bdf8';
         ctx.fill();
       }
 
@@ -248,8 +255,12 @@ const ChartEngine = {
         ctx.fillStyle = '#71717a';
         ctx.font = '10px sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText(day.label || day.date.slice(5), x, height - 8);
+        ctx.fillText(day.label || day.date.slice(5), x, height - 6);
       }
     });
   }
 };
+
+if (typeof window !== 'undefined') {
+  window.ChartEngine = ChartEngine;
+}

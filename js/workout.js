@@ -1,23 +1,40 @@
 /**
- * 练食AI · 高精度训练动作/组数/次数/重量语音解析引擎
+ * 练食AI · 高精度训练动作/组数/次数/重量精准语音解析引擎
+ * 支持全场景中文字词、复合乘除、缺省单位智能消歧与超负荷双重累进加片建议
  */
 
-// Comprehensive Chinese number normalization
-function parseChineseNum(str) {
+// Universal high-precision Chinese & Arabic numeral parser
+function parseChineseUniversalNum(str) {
   if (!str) return null;
-  str = str.trim();
+  str = ("" + str).trim();
+  if (!str) return null;
 
-  // If already standard number
+  if (str === "半") return 0.5;
+  if (str === "俩" || str === "双") return 2;
+
+  // Pure digits and optional decimal
   if (/^[0-9]+(?:\.[0-9]+)?$/.test(str)) {
     return parseFloat(str);
   }
 
-  // Handle "两点五", "2点5", "八十二点五"
+  // Handle "点" (e.g. "两点五", "八十二点五", "2点5", "0点5")
   if (str.includes("点")) {
     const parts = str.split("点");
-    const intPart = parseChineseNum(parts[0]) || 0;
-    const decPart = parseChineseNum(parts[1]) || 0;
-    return intPart + decPart / 10.0;
+    const intPart = parseChineseUniversalNum(parts[0]) || 0;
+    let decStr = parts[1];
+    let decVal = 0;
+    if (/^[0-9]+$/.test(decStr)) {
+      decVal = parseFloat("0." + decStr);
+    } else {
+      const chDigits = { '零': '0', '一': '1', '二': '2', '两': '2', '三': '3', '四': '4', '五': '5', '六': '6', '七': '7', '八': '8', '九': '9' };
+      let dStr = "";
+      for (const ch of decStr) {
+        if (chDigits[ch] !== undefined) dStr += chDigits[ch];
+        else if (/[0-9]/.test(ch)) dStr += ch;
+      }
+      decVal = dStr.length > 0 ? parseFloat("0." + dStr) : 0;
+    }
+    return intPart + decVal;
   }
 
   const digits = {
@@ -25,45 +42,68 @@ function parseChineseNum(str) {
     '五': 5, '六': 6, '七': 7, '八': 8, '九': 9
   };
 
+  // Single digit
   if (str.length === 1 && digits[str] !== undefined) {
     return digits[str];
   }
 
   let total = 0;
-  let temp = 0;
+  let section = 0;
+  let currentDigit = null;
+  let lastUnit = null;
 
   for (let i = 0; i < str.length; i++) {
-    const char = str[i];
-    if (digits[char] !== undefined) {
-      temp = digits[char];
-      if (i === str.length - 1) {
-        total += temp;
-      }
-    } else if (char === '十') {
-      if (temp === 0) temp = 1;
-      total += temp * 10;
-      temp = 0;
-    } else if (char === '百') {
-      if (temp === 0) temp = 1;
-      total += temp * 100;
-      temp = 0;
-    } else if (char === '千') {
-      if (temp === 0) temp = 1;
-      total += temp * 1000;
-      temp = 0;
-    } else if (/[0-9]/.test(char)) {
-      // Mixed ascii numbers
-      let numStr = "";
+    const ch = str[i];
+    if (digits[ch] !== undefined) {
+      currentDigit = digits[ch];
+    } else if (/[0-9]/.test(ch)) {
+      let numBuf = "";
       while (i < str.length && /[0-9.]/.test(str[i])) {
-        numStr += str[i];
+        numBuf += str[i];
         i++;
       }
       i--;
-      return parseFloat(numStr);
+      currentDigit = parseFloat(numBuf);
+    } else if (ch === '十') {
+      const num = currentDigit !== null ? currentDigit : 1;
+      section += num * 10;
+      currentDigit = null;
+      lastUnit = 10;
+    } else if (ch === '百') {
+      const num = currentDigit !== null ? currentDigit : 1;
+      section += num * 100;
+      currentDigit = null;
+      lastUnit = 100;
+    } else if (ch === '千') {
+      const num = currentDigit !== null ? currentDigit : 1;
+      section += num * 1000;
+      currentDigit = null;
+      lastUnit = 1000;
+    } else if (ch === '万') {
+      const num = currentDigit !== null ? currentDigit : 0;
+      section += num;
+      total += (section || 1) * 10000;
+      section = 0;
+      currentDigit = null;
+      lastUnit = 10000;
     }
   }
 
-  return total > 0 ? total : (temp > 0 ? temp : null);
+  if (currentDigit !== null) {
+    // Colloquial check: "两百五" -> 250, "一百二" -> 120
+    if (lastUnit === 100 && currentDigit > 0 && currentDigit < 10) {
+      section += currentDigit * 10;
+    } else if (lastUnit === 1000 && currentDigit > 0 && currentDigit < 10) {
+      section += currentDigit * 100;
+    } else if (lastUnit === 10000 && currentDigit > 0 && currentDigit < 10) {
+      section += currentDigit * 1000;
+    } else {
+      section += currentDigit;
+    }
+  }
+
+  total += section;
+  return total > 0 ? total : null;
 }
 
 // Convert all Chinese numerals in a string into standardized Arabic digits
@@ -83,7 +123,7 @@ function normalizeTextWithNumbers(text) {
   const chNumRegex = /([零一二两俩三四五六七八九十百千0-9]+(?:点[零一二三四五六七八九0-9]+)?)/g;
 
   s = s.replace(chNumRegex, (match) => {
-    const parsed = parseChineseNum(match);
+    const parsed = parseChineseUniversalNum(match);
     return parsed !== null ? ` ${parsed} ` : match;
   });
 
@@ -126,7 +166,7 @@ const WorkoutEngine = {
       let exerciseName = "杠铃卧推";
       let muscle = "胸部";
 
-      // Match exercise name from knowledge base aliases (sorted by longest alias first)
+      // Match exercise name from knowledge base aliases (longest alias first)
       let foundExercise = false;
       const allAliases = [];
       EXERCISE_KNOWLEDGE_BASE.forEach(item => {
@@ -148,7 +188,7 @@ const WorkoutEngine = {
       const hasNumbers = /[0-9]/.test(segment);
       if (!foundExercise) {
         if (!hasNumbers) {
-          // Pure chatter segment like "今天练了胸" or "打卡记录", ignore
+          // Pure chatter segment like "今天练了胸", ignore
           continue;
         }
 
@@ -170,18 +210,51 @@ const WorkoutEngine = {
         }
       }
 
-      // --- Precise Extraction of Weight, Sets, Reps, RPE ---
+      // --- High-Precision Extraction of Weight, Sets, Reps, RPE ---
       let weightKg = null;
       let sets = null;
       let reps = null;
       let rpe = null;
 
-      // 1. Extract Weight (kg / 公斤 / 千克 / 磅)
-      // Patterns: "80公斤", "80 kg", "重量80", "单边24kg", "0公斤"
+      // 1. Sets x Reps Compound Pattern (e.g. "4*8", "4x10", "4乘10", "4个10")
+      const multiMatch = segment.match(/([0-9]+(?:\.[0-9]+)?)\s*(?:[*xX乘××]|个)\s*([0-9]+(?:\.[0-9]+)?)/i);
+      if (multiMatch) {
+        const v1 = parseFloat(multiMatch[1]);
+        const v2 = parseFloat(multiMatch[2]);
+        if (v1 <= 15 && v2 <= 50) {
+          sets = Math.round(v1);
+          reps = Math.round(v2);
+        }
+      }
+
+      // 2. Explicit Sets Pattern (e.g. "4组", "做4组", "4 sets")
+      if (sets === null) {
+        const sm = segment.match(/([0-9]+(?:\.[0-9]+)?)\s*(?:组|组数|set|sets)/i);
+        if (sm && sm[1]) {
+          sets = Math.round(parseFloat(sm[1]));
+        }
+      }
+
+      // 3. Explicit Reps Pattern (e.g. "8次", "每组8个", "10下", "8 reps")
+      if (reps === null) {
+        const repPatterns = [
+          /(?:每组|每组做|每组能做|各|均)?\s*([0-9]+(?:\.[0-9]+)?)\s*(?:次|个|下|reps|rep)/i,
+          /(?:每组)\s*([0-9]+(?:\.[0-9]+)?)/i
+        ];
+        for (const rp of repPatterns) {
+          const m = segment.match(rp);
+          if (m && m[1]) {
+            reps = Math.round(parseFloat(m[1]));
+            break;
+          }
+        }
+      }
+
+      // 4. Explicit Weight Pattern (e.g. "80公斤", "80kg", "单边24kg", "0公斤", "120千克", "80磅")
       const weightPatterns = [
-        /(?:重量|重|负重|单边|每边|挂)?\s*([0-9]+(?:\.[0-9]+)?)\s*(?:公斤|kg|千克|KG|Kg)/i,
-        /(?:重量|负重|重)\s*([0-9]+(?:\.[0-9]+)?)/i,
-        /([0-9]+(?:\.[0-9]+)?)\s*(?:磅|lb|lbs)/i
+        /(?:重量|重|负重|单边|每边|挂|用|上)?\s*([0-9]+(?:\.[0-9]+)?)\s*(?:公斤|kg|千克|KG|Kg)/i,
+        /([0-9]+(?:\.[0-9]+)?)\s*(?:磅|lb|lbs)/i,
+        /(?:重量|负重|重|用了|挂了|上了)\s*([0-9]+(?:\.[0-9]+)?)/i
       ];
 
       for (const wp of weightPatterns) {
@@ -194,66 +267,70 @@ const WorkoutEngine = {
         }
       }
 
-      // 2. Extract Sets (组 / 组数)
-      // Patterns: "4组", "做4组", "4 sets", "4*8", "4x8", "4乘8"
-      const setPatterns = [
-        /([0-9]+)\s*(?:组|组数|set|sets)/i,
-        /(?:做了|完成|共)?\s*([0-9]+)\s*组/i,
-        /([0-9]+)\s*(?:[*xX乘×])\s*([0-9]+)/i // 4*8 or 4乘8 -> sets=4, reps=8
-      ];
-
-      const multiMatch = segment.match(/([0-9]+)\s*(?:[*xX乘×])\s*([0-9]+)/i);
-      if (multiMatch) {
-        sets = parseInt(multiMatch[1], 10);
-        reps = parseInt(multiMatch[2], 10);
-      } else {
-        const sm = segment.match(/([0-9]+)\s*(?:组|组数|set|sets)/i);
-        if (sm && sm[1]) {
-          sets = parseInt(sm[1], 10);
-        }
-      }
-
-      // 3. Extract Reps (次 / 个 / 下 / reps)
-      // Patterns: "8次", "每组8次", "8个", "8下", "每组8"
-      if (reps === null) {
-        const repPatterns = [
-          /(?:每组|每组做|每组能做|均)?\s*([0-9]+)\s*(?:次|个|下|reps|rep)/i,
-          /([0-9]+)\s*(?:次|个|下)/i,
-          /(?:每组)\s*([0-9]+)/i
-        ];
-
-        for (const rp of repPatterns) {
-          const m = segment.match(rp);
-          if (m && m[1]) {
-            reps = parseInt(m[1], 10);
-            break;
-          }
-        }
-      }
-
-      // 4. Extract RPE
-      const rpeMatch = segment.match(/rpe\s*([0-9]+(?:\.[0-9]+)?)/i) || segment.match(/自觉强度\s*([0-9]+(?:\.[0-9]+)?)/i);
+      // 5. Explicit RPE Pattern
+      const rpeMatch = segment.match(/(?:rpe|RPE|自觉强度|强度|疲劳度)\s*([0-9]+(?:\.[0-9]+)?)/i);
       if (rpeMatch && rpeMatch[1]) {
         rpe = parseFloat(rpeMatch[1]);
       }
 
-      // 5. Smart Positional Fallback if missing labels (e.g. "卧推 80 4 8" or "深蹲 100 4 6")
-      if (weightKg === null || sets === null || reps === null) {
-        // Collect all standalone numbers in order
-        const allNums = [...segment.matchAll(/\b([0-9]+(?:\.[0-9]+)?)\b/g)].map(m => parseFloat(m[1]));
-        if (allNums.length >= 3) {
-          if (weightKg === null) weightKg = allNums[0];
-          if (sets === null) sets = parseInt(allNums[1], 10);
-          if (reps === null) reps = parseInt(allNums[2], 10);
-        } else if (allNums.length === 2) {
-          if (sets === null) sets = parseInt(allNums[0], 10);
-          if (reps === null) reps = parseInt(allNums[1], 10);
+      // 6. Context-Aware Intelligent Disambiguation for unassigned numbers
+      // Extract all numbers in the segment that haven't been used yet
+      const allFoundNums = [...segment.matchAll(/\b([0-9]+(?:\.[0-9]+)?)\b/g)].map(m => parseFloat(m[1]));
+
+      // Filter out numbers that already exactly match parsed sets or reps
+      const unassignedNums = [];
+      let setsAccounted = sets === null;
+      let repsAccounted = reps === null;
+
+      for (const num of allFoundNums) {
+        if (!setsAccounted && num === sets) {
+          setsAccounted = true;
+        } else if (!repsAccounted && num === reps) {
+          repsAccounted = true;
+        } else if (weightKg !== null && num === weightKg) {
+          // already assigned weight
+        } else if (rpe !== null && num === rpe) {
+          // already assigned rpe
+        } else {
+          unassignedNums.push(num);
         }
+      }
+
+      // If weightKg is still null and we have unassigned numbers
+      if (weightKg === null && unassignedNums.length > 0) {
+        // Look for number >= 20 (heavy weight) or large number
+        const heavyIdx = unassignedNums.findIndex(n => n >= 20);
+        if (heavyIdx !== -1) {
+          weightKg = unassignedNums[heavyIdx];
+          unassignedNums.splice(heavyIdx, 1);
+        } else if (unassignedNums.length > 0) {
+          weightKg = unassignedNums[0];
+          unassignedNums.splice(0, 1);
+        }
+      }
+
+      // If sets is still null and unassigned numbers remain
+      if (sets === null && unassignedNums.length > 0) {
+        const setIdx = unassignedNums.findIndex(n => n <= 10);
+        if (setIdx !== -1) {
+          sets = Math.round(unassignedNums[setIdx]);
+          unassignedNums.splice(setIdx, 1);
+        } else {
+          sets = Math.round(unassignedNums[0]);
+          unassignedNums.splice(0, 1);
+        }
+      }
+
+      // If reps is still null and unassigned numbers remain
+      if (reps === null && unassignedNums.length > 0) {
+        reps = Math.round(unassignedNums[0]);
+        unassignedNums.splice(0, 1);
       }
 
       // Sensible Defaults if still missing
       if (weightKg === null) {
-        weightKg = (exerciseName.includes("自重") || exerciseName.includes("引体") || exerciseName.includes("双杠")) ? 0.0 : 60.0;
+        const isBodyweight = exerciseName.includes("自重") || exerciseName.includes("引体") || exerciseName.includes("双杠");
+        weightKg = isBodyweight ? 0.0 : (exerciseName.includes("哑铃") ? 14.0 : 60.0);
       }
       if (sets === null || sets <= 0) sets = 4;
       if (reps === null || reps <= 0) reps = 8;
@@ -283,7 +360,7 @@ const WorkoutEngine = {
         reps: 8,
         weightKg: 80.0,
         rpe: 8.0,
-        burnedCalories: 150,
+        burnedCalories: 148,
         notes: rawVoiceText
       });
     }
@@ -302,58 +379,53 @@ const WorkoutEngine = {
 
     const advices = [];
 
-    for (const [exercise, logs] of Object.entries(grouped)) {
+    for (const [name, logs] of Object.entries(grouped)) {
       const latest = logs[logs.length - 1];
-      const isCompound = exercise.includes("卧推") || exercise.includes("深蹲") || exercise.includes("硬拉") || exercise.includes("推举") || exercise.includes("划船");
-      const targetRepsGoal = (exercise.includes("硬拉") || exercise.includes("深蹲")) ? 6 : 8;
-      const increment = isCompound ? 2.5 : 1.25;
-      const muscle = latest.muscleGroup || "力量动作";
+      const isCompound = name.includes("卧推") || name.includes("深蹲") || name.includes("硬拉") || name.includes("划船") || name.includes("推举") || name.includes("倒蹬");
+      const increment = isCompound ? 2.5 : 1.0;
+      const targetRepsCap = isCompound ? 8 : 12;
 
-      if (latest.reps >= targetRepsGoal && latest.sets >= 3 && (latest.rpe || 8.0) <= 8.5) {
-        const nextWeight = latest.weightKg + increment;
+      if (latest.reps >= targetRepsCap && latest.sets >= 3 && latest.rpe <= 8.5) {
         advices.push({
-          exerciseName: exercise,
-          muscleGroup: muscle,
+          exerciseName: name,
+          muscleGroup: latest.muscleGroup,
           currentWeightKg: latest.weightKg,
           currentSets: latest.sets,
           currentReps: latest.reps,
-          currentRpe: latest.rpe || 8.0,
-          adviceType: "ADD_WEIGHT",
-          reason: `已达成目标次数（${latest.reps}次）且 RPE 控制在 ${latest.rpe || 8.0}，力量储备充足，满足渐进超负荷标准！`,
-          targetWeightKg: nextWeight,
+          status: "READY_TO_ADD_PLATE",
+          actionTitle: `🚀 达成双重累进标靶，建议加片 +${increment}kg`,
+          actionDetail: `最近一次【${name}】以 ${latest.weightKg}kg 达成 ${latest.sets}组×${latest.reps}次 (RPE ${latest.rpe})！下次训练可直接上调至 ${(latest.weightKg + increment)}kg 冲刺！`,
+          targetWeightKg: latest.weightKg + increment,
           targetSets: latest.sets,
-          targetReps: Math.max(targetRepsGoal - 2, 6),
-          confidenceScore: 0.96
+          targetReps: Math.max(6, latest.reps - 2)
         });
-      } else if ((latest.rpe || 8.0) >= 9.5) {
+      } else if (latest.reps < targetRepsCap) {
         advices.push({
-          exerciseName: exercise,
-          muscleGroup: muscle,
+          exerciseName: name,
+          muscleGroup: latest.muscleGroup,
           currentWeightKg: latest.weightKg,
           currentSets: latest.sets,
           currentReps: latest.reps,
-          currentRpe: latest.rpe || 9.5,
-          adviceType: "BUILD_VOLUME",
-          reason: `当前 RPE 较高 (${latest.rpe})，建议保持当前重量巩固动作轨迹与离心控制，提升耐受度。`,
+          status: "INCREASE_REPS",
+          actionTitle: `📈 保持 ${latest.weightKg}kg，冲击更多次数`,
+          actionDetail: `距离标靶 (${targetRepsCap}次) 还有余力，建议保持 ${latest.weightKg}kg 训练，尝试推进至 ${latest.reps + 1}~${targetRepsCap} 次后再加片。`,
           targetWeightKg: latest.weightKg,
           targetSets: latest.sets,
-          targetReps: latest.reps + 1,
-          confidenceScore: 0.90
+          targetReps: latest.reps + 1
         });
       } else {
         advices.push({
-          exerciseName: exercise,
-          muscleGroup: muscle,
+          exerciseName: name,
+          muscleGroup: latest.muscleGroup,
           currentWeightKg: latest.weightKg,
           currentSets: latest.sets,
           currentReps: latest.reps,
-          currentRpe: latest.rpe || 8.0,
-          adviceType: "ADD_REPS",
-          reason: `当前重量适应良好，下次训练目标每组增加 1 次（挑战 ${latest.reps + 1} 次），积累容量。`,
+          status: "MAINTAIN",
+          actionTitle: `💪 巩固动作轨迹与向心控制`,
+          actionDetail: `目前 ${latest.weightKg}kg ${latest.sets}组×${latest.reps}次 适应中，注重向心离心节奏与顶峰收缩。`,
           targetWeightKg: latest.weightKg,
           targetSets: latest.sets,
-          targetReps: latest.reps + 1,
-          confidenceScore: 0.92
+          targetReps: latest.reps
         });
       }
     }
@@ -364,6 +436,8 @@ const WorkoutEngine = {
 
 if (typeof window !== 'undefined') {
   window.WorkoutEngine = WorkoutEngine;
+  window.parseChineseUniversalNum = parseChineseUniversalNum;
+  window.normalizeTextWithNumbers = normalizeTextWithNumbers;
 } else if (typeof module !== 'undefined' && module.exports) {
-  module.exports = WorkoutEngine;
+  module.exports = { WorkoutEngine, parseChineseUniversalNum, normalizeTextWithNumbers };
 }

@@ -1,5 +1,6 @@
 /**
- * 练食AI · 极简 3 分区主逻辑 (吃/缺口 · 练/加片 · 历史)
+ * 练食AI · 极简 3 分区主逻辑 (吃/缺口 · 练/加片 · 历史走势)
+ * 极致克制、纯净极简主义、0 假数据初始化与 Mifflin-St Jeor 基础代谢闭环
  */
 
 const DEFAULT_PROFILE = {
@@ -11,9 +12,9 @@ const DEFAULT_PROFILE = {
   tdee: 2392,
   goalType: "fat_loss",
   targetDeficitKcal: 450,
-  targetProteinG: 140,
-  targetCarbsG: 240,
-  targetFatG: 55
+  targetProteinG: 144,
+  targetCarbsG: 238,
+  targetFatG: 58
 };
 
 function getTodayDateString(offsetDays = 0) {
@@ -24,13 +25,14 @@ function getTodayDateString(offsetDays = 0) {
 
 class FitnessApp {
   constructor() {
-    this.currentTab = 'diet'; // Default start on Diet & Deficit
+    this.currentTab = 'diet';
     this.selectedDate = getTodayDateString();
     this.historyRange = 'WEEK';
     this.voiceMode = 'DIET'; // 'DIET' | 'WORKOUT'
     this.parsedWorkoutBuffer = [];
     this.parsedDietBuffer = null;
     this.onboardingGender = 'male';
+    this.tutorialCurrentStep = 1;
 
     this.initData();
     this.bindEvents();
@@ -39,21 +41,20 @@ class FitnessApp {
   }
 
   initData() {
-    // One-time purge of legacy mock data leftover from earlier testing sessions
-    const cacheVer = localStorage.getItem('fit_cache_v2');
+    const cacheVer = localStorage.getItem('fit_cache_v4_minimal');
     if (!cacheVer) {
       localStorage.removeItem('fit_workouts');
       localStorage.removeItem('fit_diet');
       localStorage.removeItem('fit_profile');
       localStorage.removeItem('fit_onboarded');
-      localStorage.setItem('fit_cache_v2', 'true');
+      localStorage.setItem('fit_cache_v4_minimal', 'true');
     }
 
     const savedProfile = localStorage.getItem('fit_profile');
     this.profile = savedProfile ? JSON.parse(savedProfile) : { ...DEFAULT_PROFILE };
     this.recalculateMetabolism();
 
-    // Clean initial state: no fake dummy history records!
+    // Clean 0 initial state
     const savedWorkouts = localStorage.getItem('fit_workouts');
     this.workouts = savedWorkouts ? JSON.parse(savedWorkouts) : [];
 
@@ -64,12 +65,41 @@ class FitnessApp {
   checkOnboarding() {
     const isOnboarded = localStorage.getItem('fit_onboarded');
     if (!isOnboarded) {
-      const modal = document.getElementById('modal-onboarding');
-      if (modal) {
-        modal.classList.remove('hidden');
-        this.calcOnboardingTdee();
-      }
+      this.openTutorialModal(1);
     }
+  }
+
+  openTutorialModal(startStep = 1) {
+    this.tutorialCurrentStep = startStep;
+    this.nextTutorialStep(startStep);
+    const modal = document.getElementById('modal-onboarding');
+    if (modal) {
+      modal.classList.remove('hidden');
+    }
+  }
+
+  closeTutorialModal() {
+    const modal = document.getElementById('modal-onboarding');
+    if (modal) {
+      modal.classList.add('hidden');
+    }
+  }
+
+  nextTutorialStep(stepNum) {
+    this.tutorialCurrentStep = stepNum;
+    for (let i = 1; i <= 3; i++) {
+      const slide = document.getElementById(`tutorial-slide-${i}`);
+      const dot = document.getElementById(`onboarding-dot-${i}`);
+      if (slide) slide.classList.toggle('active', i === stepNum);
+      if (dot) dot.classList.toggle('active', i === stepNum);
+    }
+    if (stepNum === 3) {
+      this.calcOnboardingTdee();
+    }
+  }
+
+  skipToProfileStep() {
+    this.nextTutorialStep(3);
   }
 
   setOnboardingGender(gender) {
@@ -107,7 +137,7 @@ class FitnessApp {
     this.profile.weightKg = weight;
     this.profile.age = age;
     this.profile.targetDeficitKcal = deficit;
-    this.profile.targetProteinG = Math.round(weight * 2.0); // 2g per kg bodyweight
+    this.profile.targetProteinG = Math.round(weight * 2.0);
     this.profile.targetCarbsG = Math.round(weight * 3.3);
     this.profile.targetFatG = Math.round(weight * 0.8);
 
@@ -115,9 +145,9 @@ class FitnessApp {
     this.saveData();
     localStorage.setItem('fit_onboarded', 'true');
 
-    document.getElementById('modal-onboarding').classList.add('hidden');
+    this.closeTutorialModal();
     this.render();
-    this.showToast('🚀 档案设置成功！欢迎开启练食之旅！');
+    this.showToast('🚀 身体参数初始化完成！');
   }
 
   saveData() {
@@ -135,6 +165,21 @@ class FitnessApp {
     const tdee = Math.round(bmr * 1.45);
     this.profile.bmr = Math.round(bmr);
     this.profile.tdee = tdee;
+  }
+
+  onProfileParamChange() {
+    const height = parseFloat(document.getElementById('input-height').value) || 175;
+    const weight = parseFloat(document.getElementById('input-weight').value) || 72;
+    const age = parseInt(document.getElementById('input-age').value, 10) || 26;
+    const isMale = this.profile.gender === 'male';
+
+    const bmr = isMale
+      ? (10 * weight + 6.25 * height - 5 * age + 5)
+      : (10 * weight + 6.25 * height - 5 * age - 161);
+    const tdee = Math.round(bmr * 1.45);
+
+    document.getElementById('profile-bmr-display').textContent = `${Math.round(bmr)} kcal`;
+    document.getElementById('profile-tdee-display').textContent = `${tdee} kcal`;
   }
 
   getDaySummary(dateStr) {
@@ -155,7 +200,6 @@ class FitnessApp {
 
     const totalBurn = this.profile.tdee + workoutBurn;
 
-    // Only compute deficit if the day was actually tracked or is today
     let deficit = 0;
     if (hasLogs || isToday) {
       deficit = totalBurn - dietIntake;
@@ -189,72 +233,89 @@ class FitnessApp {
       });
     });
 
-    // Profile Screen open & close
-    document.getElementById('btn-open-profile').addEventListener('click', () => {
+    // Tutorial Buttons
+    document.getElementById('btn-open-tutorial')?.addEventListener('click', () => {
+      this.openTutorialModal(1);
+    });
+    document.getElementById('btn-profile-reopen-tutorial')?.addEventListener('click', () => {
+      this.openTutorialModal(1);
+    });
+
+    // Profile Screen
+    document.getElementById('btn-open-profile')?.addEventListener('click', () => {
       this.switchTab('profile');
     });
-    document.getElementById('btn-profile-back').addEventListener('click', () => {
+    document.getElementById('btn-profile-back')?.addEventListener('click', () => {
       this.switchTab('diet');
     });
 
-    // Voice Hero Buttons
-    document.getElementById('btn-hero-diet-voice').addEventListener('click', () => {
+    // Reset Data
+    document.getElementById('btn-open-reset-modal')?.addEventListener('click', () => {
+      document.getElementById('modal-reset-confirm').classList.remove('hidden');
+    });
+    document.getElementById('btn-cancel-reset')?.addEventListener('click', () => {
+      document.getElementById('modal-reset-confirm').classList.add('hidden');
+    });
+    document.getElementById('btn-confirm-reset')?.addEventListener('click', () => {
+      this.resetAllDataToZero();
+    });
+
+    // Voice Action Buttons
+    document.getElementById('btn-hero-diet-voice')?.addEventListener('click', () => {
       this.openVoiceSheet('DIET');
     });
-    document.getElementById('btn-hero-workout-voice').addEventListener('click', () => {
+    document.getElementById('btn-hero-workout-voice')?.addEventListener('click', () => {
       this.openVoiceSheet('WORKOUT');
     });
 
     // Manual Add buttons
-    document.getElementById('btn-manual-add-diet').addEventListener('click', () => {
+    document.getElementById('btn-manual-add-diet')?.addEventListener('click', () => {
       this.openVoiceSheet('DIET');
     });
-    
-    // Direct Manual Workout Form Modal
-    document.getElementById('btn-manual-add-workout').addEventListener('click', () => {
+    document.getElementById('btn-manual-add-workout')?.addEventListener('click', () => {
       this.openManualWorkoutModal();
     });
 
     // Manual Workout Form Controls
-    document.getElementById('btn-cancel-manual-workout').addEventListener('click', () => {
+    document.getElementById('btn-cancel-manual-workout')?.addEventListener('click', () => {
       this.closeManualWorkoutModal();
     });
-    document.getElementById('btn-save-manual-workout').addEventListener('click', () => {
+    document.getElementById('btn-save-manual-workout')?.addEventListener('click', () => {
       this.saveManualWorkout();
     });
 
     // Onboarding Button
-    document.getElementById('btn-complete-onboarding').addEventListener('click', () => {
+    document.getElementById('btn-complete-onboarding')?.addEventListener('click', () => {
       this.completeOnboarding();
     });
 
     // Voice Modal Controls
-    document.getElementById('btn-close-voice-sheet').addEventListener('click', () => {
+    document.getElementById('btn-close-voice-sheet')?.addEventListener('click', () => {
       this.closeVoiceSheet();
     });
-    document.getElementById('btn-toggle-mic').addEventListener('click', () => {
+    document.getElementById('btn-toggle-mic')?.addEventListener('click', () => {
       this.toggleMic();
     });
-    document.getElementById('btn-submit-voice-parse').addEventListener('click', () => {
+    document.getElementById('btn-submit-voice-parse')?.addEventListener('click', () => {
       this.submitVoiceParse();
     });
 
     // Confirmation Modals
-    document.getElementById('btn-cancel-workout-confirm').addEventListener('click', () => {
+    document.getElementById('btn-cancel-workout-confirm')?.addEventListener('click', () => {
       document.getElementById('modal-confirm-workouts').classList.add('hidden');
     });
-    document.getElementById('btn-save-confirmed-workouts').addEventListener('click', () => {
+    document.getElementById('btn-save-confirmed-workouts')?.addEventListener('click', () => {
       this.saveConfirmedWorkouts();
     });
 
-    document.getElementById('btn-cancel-diet-confirm').addEventListener('click', () => {
+    document.getElementById('btn-cancel-diet-confirm')?.addEventListener('click', () => {
       document.getElementById('modal-confirm-diet').classList.add('hidden');
     });
-    document.getElementById('btn-save-confirmed-diet').addEventListener('click', () => {
+    document.getElementById('btn-save-confirmed-diet')?.addEventListener('click', () => {
       this.saveConfirmedDiet();
     });
 
-    // Meal type buttons in confirm modal
+    // Meal type selector in confirm modal
     document.querySelectorAll('.meal-type-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         document.querySelectorAll('.meal-type-btn').forEach(b => b.classList.remove('active'));
@@ -266,9 +327,9 @@ class FitnessApp {
     });
 
     // History Period
-    document.querySelectorAll('.period-btn').forEach(btn => {
+    document.querySelectorAll('.period-seg-btn').forEach(btn => {
       btn.addEventListener('click', () => {
-        document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.period-seg-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         this.historyRange = btn.dataset.range;
         this.renderHistoryScreen();
@@ -278,17 +339,30 @@ class FitnessApp {
     // Profile Settings
     document.querySelectorAll('.gender-btn').forEach(btn => {
       btn.addEventListener('click', () => {
-        document.querySelectorAll('.gender-btn').forEach(b => b.classList.remove('active'));
+        if (btn.id && btn.id.startsWith('onboarding')) return;
+        document.querySelectorAll('.gender-btn').forEach(b => {
+          if (!b.id || !b.id.startsWith('onboarding')) b.classList.remove('active');
+        });
         btn.classList.add('active');
-        this.profile.gender = btn.dataset.gender;
+        this.profile.gender = btn.dataset.gender || 'male';
         this.recalculateMetabolism();
-        this.renderProfileForm();
+        this.onProfileParamChange();
       });
     });
 
-    document.getElementById('btn-save-profile').addEventListener('click', () => {
+    document.getElementById('btn-save-profile')?.addEventListener('click', () => {
       this.saveProfile();
     });
+  }
+
+  resetAllDataToZero() {
+    this.workouts = [];
+    this.diet = [];
+    this.saveData();
+    document.getElementById('modal-reset-confirm').classList.add('hidden');
+    this.render();
+    this.showToast('🗑️ 已彻底清空历史记录，恢复 0 状态');
+    this.switchTab('diet');
   }
 
   switchTab(tab) {
@@ -322,52 +396,43 @@ class FitnessApp {
   updateHeaderDate() {
     const d = new Date();
     const months = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
-    document.getElementById('header-date-indicator').textContent = `今天 · ${months[d.getMonth()]}${d.getDate()}日`;
+    const el = document.getElementById('header-date-indicator');
+    if (el) {
+      el.textContent = `今天 · ${months[d.getMonth()]}${d.getDate()}日`;
+    }
   }
 
   renderDietScreen() {
     const summary = this.getDaySummary(this.selectedDate);
 
     // Deficit Numbers
-    document.getElementById('diet-net-deficit-num').textContent = Math.round(summary.deficit);
+    document.getElementById('diet-net-deficit-num').textContent = Math.round(summary.deficit).toLocaleString();
     document.getElementById('diet-total-burn-num').textContent = `${Math.round(summary.totalBurn)} kcal`;
     document.getElementById('diet-intake-num').textContent = `${Math.round(summary.dietIntake)} kcal`;
-    document.getElementById('diet-target-deficit-num').textContent = `${Math.round(summary.targetDeficit)} kcal`;
 
-    // Status Pill
+    // Remaining intake allowance
+    const remainingKcal = Math.round(summary.totalBurn - summary.targetDeficit - summary.dietIntake);
+    const remEl = document.getElementById('diet-remaining-num');
+    if (remEl) {
+      remEl.textContent = `${Math.max(0, remainingKcal)} kcal`;
+    }
+
+    // Status Badge
     const pill = document.getElementById('diet-status-pill');
     const isTargetMet = summary.deficit >= summary.targetDeficit && summary.targetDeficit > 0;
     const isDeficit = summary.deficit >= 0;
 
     if (!isDeficit) {
-      pill.className = 'status-pill surplus';
+      pill.className = 'status-badge surplus';
       pill.textContent = `热量盈余 +${Math.round(Math.abs(summary.deficit))} kcal`;
     } else if (isTargetMet) {
-      pill.className = 'status-pill';
+      pill.className = 'status-badge';
       pill.textContent = `✓ 缺口达标 ${Math.round(summary.deficit)} kcal`;
     } else {
-      const pct = Math.round((summary.deficit / summary.targetDeficit) * 100);
-      pill.className = 'status-pill';
+      const pct = summary.targetDeficit > 0 ? Math.round((summary.deficit / summary.targetDeficit) * 100) : 0;
+      pill.className = 'status-badge';
       pill.textContent = `缺口进行中 ${pct}%`;
     }
-
-    // Remaining allowance
-    const remainingKcal = Math.round(summary.totalBurn - summary.targetDeficit - summary.dietIntake);
-    const remTip = document.getElementById('diet-remaining-tip');
-    if (remainingKcal >= 0) {
-      remTip.innerHTML = `今日还可以摄入约 <b>${remainingKcal}</b> kcal`;
-    } else {
-      remTip.innerHTML = `⚠️ 今日摄入已超出计划 <b>${Math.abs(remainingKcal)}</b> kcal`;
-    }
-
-    // Draw Gauge Canvas
-    ChartEngine.drawDeficitGauge(
-      'gauge-canvas',
-      summary.deficit,
-      summary.targetDeficit,
-      summary.totalBurn,
-      summary.dietIntake
-    );
 
     // Macros
     document.getElementById('macro-p-txt').textContent = `${Math.round(summary.totalProtein)}/${this.profile.targetProteinG}g`;
@@ -379,29 +444,35 @@ class FitnessApp {
     document.getElementById('macro-f-txt').textContent = `${Math.round(summary.totalFat)}/${this.profile.targetFatG}g`;
     document.getElementById('macro-f-bar').style.width = `${Math.min((summary.totalFat / this.profile.targetFatG) * 100, 100)}%`;
 
-    // Render Meals
+    // Render Meals List
     const dayDiet = this.diet.filter(d => d.date === this.selectedDate);
     const container = document.getElementById('diet-items-list');
-    document.getElementById('diet-list-title').textContent = `今日饮食记录 (${dayDiet.length})`;
+    document.getElementById('diet-list-title').textContent = `今日饮食 (${dayDiet.length})`;
 
     if (dayDiet.length === 0) {
-      container.innerHTML = `<div class="empty-hint">今日尚未记录饮食，点击上方【🎙️ 口喷记饮食】快速添加</div>`;
+      container.innerHTML = `
+        <div class="empty-state">
+          🥗 今日暂无饮食记录<br>
+          点击上方【🎙️ 口喷记饮食】说出吃了什么，即刻计算热量
+        </div>
+      `;
       return;
     }
 
     container.innerHTML = dayDiet.map(d => `
-      <div class="log-item-card">
-        <div class="log-item-header">
-          <div class="log-item-title-row">
-            <span class="tag-pill orange-tag">${d.mealType}</span>
-            <span class="log-item-name">${d.foodSummary}</span>
+      <div class="record-card">
+        <div class="record-row-top">
+          <div class="record-name-group">
+            <span class="tag-badge tag-orange">${d.mealType}</span>
+            <span class="record-name">${d.foodSummary}</span>
           </div>
-          <button class="btn-delete-item" onclick="window.app.deleteDiet('${d.id}')" title="删除">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+          <button class="btn-delete" onclick="window.app.deleteDiet('${d.id}')" title="删除记录">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
           </button>
         </div>
-        <div class="log-item-specs highlight-orange">
-          ${d.calories} kcal <small style="color:var(--text-secondary);font-weight:normal;">(蛋白 ${d.proteinG || 0}g · 碳水 ${d.carbsG || 0}g · 脂肪 ${d.fatG || 0}g)</small>
+        <div class="record-row-bottom">
+          <span class="record-stat-highlight" style="color:var(--accent-orange);">${d.calories} kcal</span>
+          <span>蛋白 ${d.proteinG || 0}g · 碳水 ${d.carbsG || 0}g · 脂肪 ${d.fatG || 0}g</span>
         </div>
       </div>
     `).join('');
@@ -415,14 +486,19 @@ class FitnessApp {
 
     const dayWorkouts = this.workouts.filter(w => w.date === this.selectedDate);
     const container = document.getElementById('workout-items-list');
-    document.getElementById('workout-list-title').textContent = `今日训练与加片建议 (${dayWorkouts.length})`;
+    document.getElementById('workout-list-title').textContent = `今日动作与加片建议 (${dayWorkouts.length})`;
 
     if (dayWorkouts.length === 0) {
-      container.innerHTML = `<div class="empty-hint">今日尚未记录训练，点击上方【🎙️ 口喷记训练】或【+ 手动加动作】添加</div>`;
+      container.innerHTML = `
+        <div class="empty-state">
+          🏋️ 今日暂无训练记录<br>
+          点击上方【🎙️ 口喷记训练】或【+ 手动加动作】添加训练
+        </div>
+      `;
       return;
     }
 
-    // Generate Overload Advices
+    // Overload Advices
     const advices = WorkoutEngine.generateOverloadAdvices(this.workouts);
 
     container.innerHTML = dayWorkouts.map(w => {
@@ -430,37 +506,37 @@ class FitnessApp {
 
       let overloadBadgeHtml = '';
       if (matchedAdvice) {
-        if (matchedAdvice.adviceType === 'ADD_WEIGHT') {
+        if (matchedAdvice.status === 'READY_TO_ADD_PLATE') {
           overloadBadgeHtml = `
-            <div class="overload-tip-pill">
-              <span>⚡ <b>AI 加片建议</b>：满足超负荷标准！下次目标加片至 <b>${matchedAdvice.targetWeightKg}kg</b> (${matchedAdvice.targetReps}次)</span>
+            <div class="overload-badge">
+              <span>⚡ <b>AI 加片建议</b>：下次目标加片至 <b>${matchedAdvice.targetWeightKg}kg</b> (${matchedAdvice.targetReps}次)</span>
             </div>
           `;
         } else {
           overloadBadgeHtml = `
-            <div class="overload-tip-pill building">
-              <span>📈 <b>AI 进阶建议</b>：当前重量保持，下次目标冲击 <b>${matchedAdvice.targetReps}次</b> 积累容量</span>
+            <div class="overload-badge" style="background:var(--bg-subtle);border-color:var(--border-subtle);color:var(--text-secondary);">
+              <span>📈 <b>AI 进阶建议</b>：下次目标冲击 <b>${matchedAdvice.targetReps}次</b> 积累容量</span>
             </div>
           `;
         }
       }
 
       return `
-        <div class="log-item-card">
-          <div class="log-item-header">
-            <div class="log-item-title-row">
-              <span class="tag-pill cyan-tag">${w.muscleGroup}</span>
-              <span class="log-item-name">${w.exerciseName}</span>
+        <div class="record-card">
+          <div class="record-row-top">
+            <div class="record-name-group">
+              <span class="tag-badge tag-cyan">${w.muscleGroup}</span>
+              <span class="record-name">${w.exerciseName}</span>
             </div>
-            <button class="btn-delete-item" onclick="window.app.deleteWorkout('${w.id}')" title="删除">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            <button class="btn-delete" onclick="window.app.deleteWorkout('${w.id}')" title="删除动作">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
             </button>
           </div>
-          <div class="log-item-specs highlight-cyan">
-            ${w.weightKg > 0 ? `${w.weightKg} kg × ` : '自重 × '}${w.sets} 组 × ${w.reps} 次 <span style="font-size:0.75rem;color:var(--text-muted);">(RPE ${w.rpe})</span>
-          </div>
-          <div class="log-item-subtext">
-            总吨位: ${(w.weightKg * w.sets * w.reps).toLocaleString()} kg · 消耗约 +${w.burnedCalories} kcal
+          <div class="record-row-bottom">
+            <span class="record-stat-highlight" style="color:var(--accent-cyan);">
+              ${w.weightKg > 0 ? `${w.weightKg}kg × ` : '自重 × '}${w.sets}组 × ${w.reps}次
+            </span>
+            <span>吨位: ${(w.weightKg * w.sets * w.reps).toLocaleString()}kg · +${w.burnedCalories} kcal</span>
           </div>
           ${overloadBadgeHtml}
         </div>
@@ -480,7 +556,7 @@ class FitnessApp {
         label: dStr.slice(5),
         hasLogs: summary.hasLogs,
         isToday: summary.isToday,
-        deficit: summary.hasLogs ? summary.deficit : 0, // Past unrecorded days = 0
+        deficit: summary.hasLogs ? summary.deficit : 0,
         volume: summary.totalVolume,
         burn: summary.workoutBurn,
         intake: summary.dietIntake
@@ -502,12 +578,12 @@ class FitnessApp {
     ChartEngine.drawDeficitTrend('deficit-trend-canvas', historyData, this.profile.targetDeficitKcal);
     ChartEngine.drawVolumeTrend('volume-trend-canvas', historyData);
 
-    // Interactive Memory Cards
+    // History items
     const container = document.getElementById('history-timeline-list');
     const pastRecords = historyData.filter(d => d.hasLogs || (d.isToday && (d.volume > 0 || d.intake > 0))).reverse();
 
     if (pastRecords.length === 0) {
-      container.innerHTML = `<div class="empty-hint">暂无历史打卡数据，今日完成饮食或训练后将自动生成统计</div>`;
+      container.innerHTML = `<div class="empty-state">暂无历史打卡记录</div>`;
       return;
     }
 
@@ -517,52 +593,41 @@ class FitnessApp {
       const isToday = d.date === getTodayDateString();
 
       return `
-        <div class="history-memory-card" id="card-history-${d.date}">
-          <div class="history-card-header" onclick="window.app.toggleHistoryCard('${d.date}')">
-            <div class="history-card-left">
-              <div class="history-card-date-row">
-                <span class="history-card-date">${isToday ? `${d.date} · 今天` : d.date}</span>
-                <span class="tag-pill ${d.deficit >= this.profile.targetDeficitKcal ? 'lime-tag' : 'cyan-tag'}">
-                  ${d.deficit >= 0 ? `净缺口 ${Math.round(d.deficit)} kcal` : `盈余 +${Math.round(Math.abs(d.deficit))} kcal`}
-                </span>
-              </div>
-              <div class="history-card-stats-line">
-                <span>摄入 <b>${d.intake}</b> kcal</span>
-                <span>·</span>
-                <span>举铁 <b>${d.volume.toLocaleString()}</b> kg</span>
-                <span>·</span>
-                <span>运动 <b>+${d.burn}</b> kcal</span>
-              </div>
+        <div class="history-item">
+          <div class="history-item-header" onclick="window.app.toggleHistoryCard('${d.date}')">
+            <div>
+              <div class="history-item-date">${isToday ? `${d.date} · 今天` : d.date}</div>
+              <div class="history-item-sub">摄入 ${d.intake} kcal · 举铁 ${d.volume.toLocaleString()} kg · 运动 +${d.burn} kcal</div>
             </div>
-            <div class="history-card-right">
-              <span class="history-toggle-hint">查看回忆</span>
-              <span class="history-toggle-icon" id="icon-toggle-${d.date}">▾</span>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <span class="tag-badge ${d.deficit >= this.profile.targetDeficitKcal ? 'tag-lime' : 'tag-cyan'}">
+                ${d.deficit >= 0 ? `净缺口 ${Math.round(d.deficit)}` : `盈余 +${Math.round(Math.abs(d.deficit))}`}
+              </span>
+              <span id="icon-toggle-${d.date}" style="font-size:0.75rem;color:var(--text-muted);">▾</span>
             </div>
           </div>
 
-          <div class="history-card-body hidden" id="body-history-${d.date}">
-            <!-- 饮食明细 -->
-            <div class="history-section-block">
-              <div class="history-section-title">🥗 饮食回忆 (${dayDiet.length})</div>
+          <div class="history-item-body hidden" id="body-history-${d.date}">
+            <!-- 饮食 -->
+            <div style="display:flex;flex-direction:column;gap:4px;">
+              <div style="font-size:0.68rem;font-weight:700;color:var(--text-muted);">🥗 饮食 (${dayDiet.length})</div>
               ${dayDiet.length > 0 ? dayDiet.map(m => `
-                <div class="history-subitem-row">
-                  <span class="tag-pill orange-tag mini-tag">${m.mealType}</span>
-                  <span class="history-subitem-name">${m.foodSummary}</span>
-                  <span class="history-subitem-val">${m.calories} kcal</span>
+                <div style="display:flex;justify-content:space-between;font-size:0.72rem;">
+                  <span><b style="color:var(--accent-orange);">${m.mealType}</b> ${m.foodSummary}</span>
+                  <span style="color:var(--text-secondary);">${m.calories} kcal</span>
                 </div>
-              `).join('') : '<div class="history-empty-sub">当天无饮食打卡记录</div>'}
+              `).join('') : '<div style="font-size:0.68rem;color:var(--text-muted);">无饮食记录</div>'}
             </div>
 
-            <!-- 训练明细 -->
-            <div class="history-section-block">
-              <div class="history-section-title">🏋️ 训练回忆 (${dayWorkouts.length})</div>
+            <!-- 训练 -->
+            <div style="display:flex;flex-direction:column;gap:4px;margin-top:4px;">
+              <div style="font-size:0.68rem;font-weight:700;color:var(--text-muted);">🏋️ 训练 (${dayWorkouts.length})</div>
               ${dayWorkouts.length > 0 ? dayWorkouts.map(w => `
-                <div class="history-subitem-row">
-                  <span class="tag-pill cyan-tag mini-tag">${w.muscleGroup}</span>
-                  <span class="history-subitem-name">${w.exerciseName} (${w.weightKg > 0 ? w.weightKg + 'kg ' : '自重 '}${w.sets}x${w.reps})</span>
-                  <span class="history-subitem-val">${(w.weightKg * w.sets * w.reps).toLocaleString()} kg</span>
+                <div style="display:flex;justify-content:space-between;font-size:0.72rem;">
+                  <span><b style="color:var(--accent-cyan);">${w.muscleGroup}</b> ${w.exerciseName} (${w.weightKg > 0 ? w.weightKg + 'kg ' : '自重 '}${w.sets}x${w.reps})</span>
+                  <span style="color:var(--text-secondary);">${(w.weightKg * w.sets * w.reps).toLocaleString()} kg</span>
                 </div>
-              `).join('') : '<div class="history-empty-sub">当天未记录力量训练</div>'}
+              `).join('') : '<div style="font-size:0.68rem;color:var(--text-muted);">无训练记录</div>'}
             </div>
           </div>
         </div>
@@ -596,7 +661,9 @@ class FitnessApp {
     document.getElementById('input-target-fat').value = p.targetFatG;
 
     document.querySelectorAll('.gender-btn').forEach(b => {
-      b.classList.toggle('active', b.dataset.gender === p.gender);
+      if (!b.id || !b.id.startsWith('onboarding')) {
+        b.classList.toggle('active', b.dataset.gender === p.gender);
+      }
     });
   }
 
@@ -620,11 +687,10 @@ class FitnessApp {
     this.recalculateMetabolism();
     this.saveData();
     this.render();
-    this.showToast('✓ 身体档案与热量目标保存成功！');
+    this.showToast('✓ 档案与目标保存成功');
     this.switchTab('diet');
   }
 
-  // Manual Workout Modal
   openManualWorkoutModal() {
     document.getElementById('modal-manual-workout').classList.remove('hidden');
   }
@@ -643,13 +709,12 @@ class FitnessApp {
 
   saveManualWorkout() {
     const name = document.getElementById('manual-exercise-name').value.trim() || '力量训练';
-    const muscle = document.getElementById('manual-exercise-muscle').value || '全身';
+    const muscle = document.getElementById('manual-exercise-muscle').value || '复合训练';
     const weight = parseFloat(document.getElementById('manual-exercise-weight').value) || 0;
     const sets = parseInt(document.getElementById('manual-exercise-sets').value, 10) || 4;
     const reps = parseInt(document.getElementById('manual-exercise-reps').value, 10) || 8;
-    const rpe = parseFloat(document.getElementById('manual-exercise-rpe').value) || 8.0;
 
-    const isCompound = name.includes("卧推") || name.includes("深蹲") || name.includes("硬拉") || name.includes("划船");
+    const isCompound = name.includes("卧推") || name.includes("深蹲") || name.includes("硬拉") || name.includes("划船") || name.includes("推举");
     const burn = Math.round(isCompound ? (sets * 28 + weight * 0.45) : (sets * 18 + weight * 0.2));
 
     const item = {
@@ -660,19 +725,18 @@ class FitnessApp {
       sets,
       reps,
       weightKg: weight,
-      rpe,
+      rpe: 8.0,
       burnedCalories: burn,
-      notes: `手动记录: ${weight}kg x ${sets}组 x ${reps}次`
+      notes: `手动记录: ${weight > 0 ? weight + 'kg ' : '自重 '}${sets}组 x ${reps}次`
     };
 
     this.workouts.unshift(item);
     this.saveData();
     this.closeManualWorkoutModal();
     this.render();
-    this.showToast(`✓ 已添加训练动作：${name} (${weight > 0 ? weight + 'kg ' : '自重 '}${sets}x${reps})`);
+    this.showToast(`✓ 已添加：${name}`);
   }
 
-  // Voice Sheet
   openVoiceSheet(mode) {
     this.voiceMode = mode;
     const modal = document.getElementById('modal-voice-dictation');
@@ -683,23 +747,24 @@ class FitnessApp {
     textarea.value = '';
 
     if (mode === 'WORKOUT') {
-      title.textContent = '口喷记训练 · AI 动作识别';
+      title.textContent = '口喷记训练';
       desc.textContent = '说出动作名称、组数、次数及公斤数';
       samplesContainer.innerHTML = `
-        <span class="sample-chip" onclick="window.app.fillVoiceSample('卧推80公斤4组8次rpe8，上斜哑铃卧推26公斤3组10次')">卧推80kg 4组8次 + 哑铃上斜</span>
-        <span class="sample-chip" onclick="window.app.fillVoiceSample('深蹲100公斤4组6次，腿屈伸45公斤3组12次')">深蹲100kg 4组6次</span>
-        <span class="sample-chip" onclick="window.app.fillVoiceSample('引体向上4组8次自重，杠铃划船70公斤4组8次')">引体向上 + 杠铃划船</span>
+        <span class="sample-chip" onclick="window.app.fillVoiceSample('卧推80公斤做4组每组10个，上斜哑铃24公斤3组')">卧推80kg 4x10 + 上斜哑铃</span>
+        <span class="sample-chip" onclick="window.app.fillVoiceSample('深蹲100公斤4组6次')">深蹲100kg 4x6</span>
+        <span class="sample-chip" onclick="window.app.fillVoiceSample('引体向上4组8次自重')">引体向上 4x8 自重</span>
       `;
     } else {
-      title.textContent = '口喷记饮食 · AI 营养识别';
-      desc.textContent = '说出吃的美食及大概克数/分量规格';
+      title.textContent = '口喷记饮食';
+      desc.textContent = '说出吃了什么及大概分量规格';
       samplesContainer.innerHTML = `
-        <span class="sample-chip" onclick="window.app.fillVoiceSample('吃了一大碗米饭配半斤酱牛肉和一盘水煮西兰花')">大碗米饭 + 半斤牛肉 + 西兰花</span>
-        <span class="sample-chip" onclick="window.app.fillVoiceSample('早餐喝了一盒纯牛奶吃了两个水煮蛋一片全麦面包')">纯牛奶1盒 + 2个蛋 + 全麦面包</span>
-        <span class="sample-chip" onclick="window.app.fillVoiceSample('加餐喝了一大勺乳清蛋白粉吃了一根香蕉')">蛋白粉1大勺 + 香蕉1根</span>
+        <span class="sample-chip" onclick="window.app.fillVoiceSample('中午吃了200克大米饭，200克黑椒鸡胸肉和一盘西兰花')">米饭200g + 鸡胸200g + 西兰花</span>
+        <span class="sample-chip" onclick="window.app.fillVoiceSample('早上吃了2个水煮蛋大概100克，一杯牛奶250毫升')">蛋2个 + 牛奶250ml</span>
+        <span class="sample-chip" onclick="window.app.fillVoiceSample('1勺乳清蛋白粉配1根香蕉')">蛋白粉1勺 + 香蕉1根</span>
       `;
     }
 
+    this.updateWaveformBars(0);
     modal.classList.remove('hidden');
   }
 
@@ -710,6 +775,7 @@ class FitnessApp {
   closeVoiceSheet() {
     SpeechModule.stop();
     this.updateMicUi(false);
+    this.updateWaveformBars(0);
     document.getElementById('modal-voice-dictation').classList.add('hidden');
   }
 
@@ -718,10 +784,11 @@ class FitnessApp {
     if (SpeechModule.isRecording) {
       SpeechModule.stop();
       this.updateMicUi(false);
+      this.updateWaveformBars(0);
     } else {
       const baseText = textarea.value.trim();
       this.updateMicUi(true);
-      const ok = SpeechModule.start(
+      SpeechModule.start(
         (transcript) => {
           if (transcript && transcript.trim()) {
             textarea.value = baseText ? `${baseText}，${transcript}` : transcript;
@@ -729,23 +796,34 @@ class FitnessApp {
         },
         () => {
           this.updateMicUi(false);
+          this.updateWaveformBars(0);
         },
         (errorType) => {
           this.updateMicUi(false);
+          this.updateWaveformBars(0);
           if (errorType === 'NOT_SUPPORTED') {
-            this.showToast('⚠️ 当前浏览器未启用语音听写，可直接在下方打字或点击示例');
+            this.showToast('💡 当前环境未开启原生语音，可直接打字或点击快捷示例');
           } else if (errorType === 'not-allowed') {
-            this.showToast('⚠️ 麦克风权限被禁止，请在浏览器设置中开启麦克风权限');
-          } else if (errorType === 'network') {
-            this.showToast('⚠️ 语音连接超时，可直接打字或点击快捷示例');
+            this.showToast('⚠️ 麦克风权限未开启');
           }
+        },
+        (volume) => {
+          this.updateWaveformBars(volume);
         }
       );
-
-      if (!ok) {
-        this.updateMicUi(false);
-      }
     }
+  }
+
+  updateWaveformBars(volume) {
+    const bars = document.querySelectorAll('.waveform-bar');
+    if (!bars || bars.length === 0) return;
+
+    bars.forEach((bar, idx) => {
+      const mult = [0.4, 0.7, 1.2, 1.5, 1.2, 0.7, 0.4][idx] || 1.0;
+      const height = Math.max(3, Math.min(20, Math.round(volume * 20 * mult)));
+      bar.style.height = `${height}px`;
+      bar.classList.toggle('active', volume > 0.08);
+    });
   }
 
   updateMicUi(isRec) {
@@ -755,13 +833,13 @@ class FitnessApp {
 
     btn.classList.toggle('recording', isRec);
     ring.classList.toggle('active', isRec);
-    label.textContent = isRec ? '🎙️ 正在聆听中... 再次点击停止' : '点击麦克风说话，或在下方快速输入';
+    label.textContent = isRec ? '🎙️ 聆听中... 点击停止' : '点击麦克风说话，或在下方快速输入';
   }
 
   submitVoiceParse() {
     const text = document.getElementById('voice-text-input').value.trim();
     if (!text) {
-      this.showToast('请先说话或输入内容！');
+      this.showToast('请先说话或输入内容');
       return;
     }
 
@@ -770,25 +848,26 @@ class FitnessApp {
     if (this.voiceMode === 'WORKOUT') {
       const items = WorkoutEngine.parseWorkoutVoice(text);
       this.parsedWorkoutBuffer = items;
-      this.showWorkoutConfirmModal(items, text);
+      this.showWorkoutConfirmModal(items);
     } else {
       const result = NutritionEngine.parseDietVoice(text);
       this.parsedDietBuffer = result;
-      this.showDietConfirmModal(result, text);
+      this.showDietConfirmModal(result);
     }
   }
 
-  showWorkoutConfirmModal(items, rawText) {
+  showWorkoutConfirmModal(items) {
     const container = document.getElementById('confirm-workouts-items-container');
     container.innerHTML = items.map((item, idx) => `
-      <div class="confirm-item-row">
-        <div class="confirm-item-title">
-          <b>${item.exerciseName}</b> <span class="tag-pill cyan-tag">${item.muscleGroup}</span>
+      <div style="background:var(--bg-input);padding:10px;border-radius:var(--radius-sm);border:1px solid var(--border-subtle);display:flex;justify-content:space-between;align-items:center;">
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span class="tag-badge tag-cyan">${item.muscleGroup}</span>
+          <b style="font-size:0.85rem;">${item.exerciseName}</b>
         </div>
-        <div class="confirm-item-inputs">
-          <input type="number" step="0.5" value="${item.weightKg}" onchange="window.app.updateWorkoutBuffer(${idx}, 'weightKg', this.value)" class="form-input mini-input" title="重量kg"> kg
-          <input type="number" value="${item.sets}" onchange="window.app.updateWorkoutBuffer(${idx}, 'sets', this.value)" class="form-input mini-input" title="组数"> 组
-          <input type="number" value="${item.reps}" onchange="window.app.updateWorkoutBuffer(${idx}, 'reps', this.value)" class="form-input mini-input" title="次数"> 次
+        <div style="display:flex;align-items:center;gap:4px;font-size:0.75rem;">
+          <input type="number" step="0.5" value="${item.weightKg}" onchange="window.app.updateWorkoutBuffer(${idx}, 'weightKg', this.value)" class="form-input" style="width:58px;padding:3px 5px;text-align:center;"> kg
+          <input type="number" value="${item.sets}" onchange="window.app.updateWorkoutBuffer(${idx}, 'sets', this.value)" class="form-input" style="width:40px;padding:3px 5px;text-align:center;"> 组
+          <input type="number" value="${item.reps}" onchange="window.app.updateWorkoutBuffer(${idx}, 'reps', this.value)" class="form-input" style="width:40px;padding:3px 5px;text-align:center;"> 次
         </div>
       </div>
     `).join('');
@@ -814,7 +893,7 @@ class FitnessApp {
         sets: item.sets,
         reps: item.reps,
         weightKg: item.weightKg,
-        rpe: item.rpe || 8.0,
+        rpe: 8.0,
         burnedCalories: Math.round(item.burnedCalories),
         notes: item.notes || "AI语音录入"
       });
@@ -823,31 +902,28 @@ class FitnessApp {
     this.saveData();
     document.getElementById('modal-confirm-workouts').classList.add('hidden');
     this.render();
-    this.showToast(`✓ 已存入 ${this.parsedWorkoutBuffer.length} 项训练！`);
+    this.showToast(`✓ 已存入 ${this.parsedWorkoutBuffer.length} 项训练`);
     this.switchTab('workout');
   }
 
-  showDietConfirmModal(result, rawText) {
-    document.getElementById('confirm-diet-spoken-voice').textContent = `🎙️ 识别到语音: "${rawText}"`;
+  showDietConfirmModal(result) {
     document.getElementById('confirm-diet-summary').value = result.foodSummary;
     document.getElementById('confirm-diet-cal').value = result.totalCalories;
     document.getElementById('confirm-diet-p').value = result.proteinG;
     document.getElementById('confirm-diet-c').value = result.carbsG;
     document.getElementById('confirm-diet-f').value = result.fatG;
 
-    // Highlights breakdown
     const box = document.getElementById('confirm-diet-items-box');
     box.innerHTML = `
-      <div class="breakdown-title"><b>识别到的食物明细 (分量与热量)</b></div>
+      <div style="font-weight:700;color:var(--text-muted);font-size:0.7rem;margin-bottom:2px;">识别明细</div>
       ${result.items.map(i => `
-        <div class="food-item-row">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
           <span>${i.name} (${Math.round(i.estimatedGrams)}g)</span>
-          <b class="highlight-orange">${i.calories} kcal</b>
+          <b style="color:var(--accent-orange);">${i.calories} kcal</b>
         </div>
       `).join('')}
     `;
 
-    // Activate current meal type
     document.querySelectorAll('.meal-type-btn').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.type === result.mealType);
     });
@@ -871,15 +947,14 @@ class FitnessApp {
       calories: Math.round(cal),
       proteinG: Math.round(p * 10) / 10,
       carbsG: Math.round(c * 10) / 10,
-      fatG: Math.round(f * 10) / 10,
-      advice: this.parsedDietBuffer ? this.parsedDietBuffer.advice : "科学饮食，精准控卡"
+      fatG: Math.round(f * 10) / 10
     };
 
     this.diet.unshift(item);
     this.saveData();
     document.getElementById('modal-confirm-diet').classList.add('hidden');
     this.render();
-    this.showToast(`✓ 已存入饮食：+${item.calories} kcal`);
+    this.showToast(`✓ 已存入：+${item.calories} kcal`);
     this.switchTab('diet');
   }
 
@@ -887,18 +962,19 @@ class FitnessApp {
     this.diet = this.diet.filter(d => d.id !== id);
     this.saveData();
     this.render();
-    this.showToast('已删除该饮食记录');
+    this.showToast('已删除记录');
   }
 
   deleteWorkout(id) {
     this.workouts = this.workouts.filter(w => w.id !== id);
     this.saveData();
     this.render();
-    this.showToast('已删除该训练动作');
+    this.showToast('已删除动作');
   }
 
   showToast(msg) {
     const t = document.getElementById('app-toast');
+    if (!t) return;
     t.textContent = msg;
     t.classList.remove('hidden');
     clearTimeout(this.toastTimer);
