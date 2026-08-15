@@ -7,10 +7,10 @@
   专为硬核力量训练者与科学减脂人群打造 —— <b>口喷记录</b> · <b>自动超负荷加片建议</b> · <b>热量缺口动态闭环</b>。
 </p>
 
-### 📥 [ 👉 点击这里直接下载最新 Android APK 安装包 (TrainFit-v1.1.apk) 👈 ](https://github.com/QD8-png/TrainFit/releases/download/v1.1.0/TrainFit-v1.1.apk)
+### 📥 [ 👉 点击这里直接下载最新 Android APK 安装包 (TrainFit-v1.1.1.apk) 👈 ](https://github.com/QD8-png/TrainFit/releases/download/v1.1.1/TrainFit-v1.1.apk)
 
 > 💡 **多通道下载指引**：
-> - 🚀 **官方 Release 直链（推荐，极速）**：[TrainFit-v1.1.apk (GitHub Releases v1.1.0)](https://github.com/QD8-png/TrainFit/releases/download/v1.1.0/TrainFit-v1.1.apk)
+> - 🚀 **官方 Release 直链（推荐，极速）**：[TrainFit-v1.1.1.apk (GitHub Releases v1.1.1)](https://github.com/QD8-png/TrainFit/releases/download/v1.1.1/TrainFit-v1.1.apk)
 > - 📦 **GitHub Releases 发行页**：[查看全部版本与更新日志](https://github.com/QD8-png/TrainFit/releases)
 > - 🔗 **仓库备用直链**：[TrainFit-v1.1.apk (Raw 源码库直链)](https://github.com/QD8-png/TrainFit/raw/main/downloads/TrainFit-v1.1.apk)
 > - ⚡ **永久最新指向**：[TrainFit-Latest.apk (永远指向最新版)](https://github.com/QD8-png/TrainFit/raw/main/downloads/TrainFit-Latest.apk)
