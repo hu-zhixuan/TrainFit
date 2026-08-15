@@ -1368,6 +1368,20 @@ class FitnessApp {
   }
 
   showDietConfirmModal(result) {
+    this.parsedDietBuffer = result;
+    this.renderDietConfirmItems();
+
+    document.querySelectorAll('.meal-type-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.type === result.mealType);
+    });
+
+    document.getElementById('modal-confirm-diet').classList.remove('hidden');
+  }
+
+  renderDietConfirmItems() {
+    if (!this.parsedDietBuffer) return;
+    const result = this.parsedDietBuffer;
+
     document.getElementById('confirm-diet-summary').value = result.foodSummary;
     document.getElementById('confirm-diet-cal').value = result.totalCalories;
     document.getElementById('confirm-diet-p').value = result.proteinG;
@@ -1375,21 +1389,68 @@ class FitnessApp {
     document.getElementById('confirm-diet-f').value = result.fatG;
 
     const box = document.getElementById('confirm-diet-items-box');
+    if (!box) return;
+
     box.innerHTML = `
-      <div style="font-weight:700;color:var(--text-muted);font-size:0.7rem;margin-bottom:2px;">识别明细</div>
-      ${result.items.map(i => `
-        <div style="display:flex;justify-content:space-between;align-items:center;">
-          <span>${i.name} (${Math.round(i.estimatedGrams)}g)</span>
-          <b style="color:var(--accent-orange);">${i.calories} kcal</b>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+        <span style="font-weight:700;color:var(--text-muted);font-size:0.7rem;">🍽️ 菜品成分与精确克数微调</span>
+        <span style="font-size:0.65rem;color:var(--accent-cyan);">支持 ± 微调克数实时重算</span>
+      </div>
+      ${result.items.map((i, idx) => `
+        <div style="background:var(--bg-card);padding:8px 10px;border-radius:var(--radius-sm);border:1px solid var(--border-subtle);display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+          <div style="display:flex;flex-direction:column;gap:2px;">
+            <b style="font-size:0.8rem;">${i.name}</b>
+            <span style="font-size:0.68rem;color:var(--text-muted);">P:${i.proteinG}g · C:${i.carbsG}g · F:${i.fatG}g</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <div style="display:flex;align-items:center;gap:2px;">
+              <button onclick="window.app.adjustDietItemGrams(${idx}, -20)" class="btn-subtle" style="width:22px;height:22px;padding:0;font-size:0.75rem;border-radius:4px;display:flex;align-items:center;justify-content:center;">-</button>
+              <input type="number" step="10" value="${Math.round(i.estimatedGrams)}" onchange="window.app.setDietItemGrams(${idx}, this.value)" class="form-input" style="width:55px;padding:2px 4px;text-align:center;font-size:0.75rem;height:24px;">
+              <span style="font-size:0.7rem;color:var(--text-muted);">g</span>
+              <button onclick="window.app.adjustDietItemGrams(${idx}, 20)" class="btn-subtle" style="width:22px;height:22px;padding:0;font-size:0.75rem;border-radius:4px;display:flex;align-items:center;justify-content:center;">+</button>
+            </div>
+            <b style="color:var(--accent-orange);font-size:0.82rem;min-width:55px;text-align:right;">${i.calories} kcal</b>
+          </div>
         </div>
       `).join('')}
     `;
+  }
 
-    document.querySelectorAll('.meal-type-btn').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.type === result.mealType);
-    });
+  adjustDietItemGrams(index, delta) {
+    if (!this.parsedDietBuffer || !this.parsedDietBuffer.items[index]) return;
+    const item = this.parsedDietBuffer.items[index];
+    const newGrams = Math.max(10, (item.estimatedGrams || 100) + delta);
+    this.setDietItemGrams(index, newGrams);
+  }
 
-    document.getElementById('modal-confirm-diet').classList.remove('hidden');
+  setDietItemGrams(index, grams) {
+    if (!this.parsedDietBuffer || !this.parsedDietBuffer.items[index]) return;
+    const item = this.parsedDietBuffer.items[index];
+    const g = Math.max(5, parseFloat(grams) || 100);
+    item.estimatedGrams = g;
+
+    if (item.rawItem) {
+      const nut = NutritionEngine.calcItemNutrition(item.rawItem, g);
+      item.calories = nut.calories;
+      item.proteinG = nut.proteinG;
+      item.carbsG = nut.carbsG;
+      item.fatG = nut.fatG;
+    } else {
+      const ratio = g / 100;
+      item.calories = Math.round(128 * ratio);
+      item.proteinG = Math.round(7.2 * ratio * 10) / 10;
+      item.carbsG = Math.round(16.0 * ratio * 10) / 10;
+      item.fatG = Math.round(4.0 * ratio * 10) / 10;
+    }
+
+    // Recalculate totals
+    const items = this.parsedDietBuffer.items;
+    this.parsedDietBuffer.totalCalories = items.reduce((sum, i) => sum + i.calories, 0);
+    this.parsedDietBuffer.proteinG = Math.round(items.reduce((sum, i) => sum + i.proteinG, 0) * 10) / 10;
+    this.parsedDietBuffer.carbsG = Math.round(items.reduce((sum, i) => sum + i.carbsG, 0) * 10) / 10;
+    this.parsedDietBuffer.fatG = Math.round(items.reduce((sum, i) => sum + i.fatG, 0) * 10) / 10;
+
+    this.renderDietConfirmItems();
   }
 
   saveConfirmedDiet() {

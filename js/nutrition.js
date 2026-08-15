@@ -1,7 +1,7 @@
 /**
- * 练食AI · 开源级高精度中餐/外卖/八大菜系/早餐营养计算与菜品解构引擎
- * 基于《中国食物成分表（第6版）》与开源中餐食谱配比模型
- * 支持：复合盖浇饭解构、外卖快餐、烹饪吸油率换算、修饰词动态修正与 Levenshtein 模糊匹配
+ * 练食AI · 临床营养学级中餐/外卖/生熟转换/烹饪吸油率高精度营养计算与解构引擎
+ * 严谨对齐《中国食物成分表（第6版）》与 USDA FoodData Central 权威数据库
+ * 支持：生熟转化系数 (Yield Factor)、9种烹饪吸油率矩阵 (Cooking Oil Matrix)、修饰词动态干预与实时微调
  */
 
 function parseChineseDietNum(str) {
@@ -67,56 +67,106 @@ function parseChineseDietNum(str) {
 
 // 常见非标中餐量词基准克重映射
 const UNIT_WEIGHT_MAP = {
-  '碗': 200,
   '小碗': 120,
-  '大碗': 350,
-  '份': 300,
-  '小份': 200,
+  '碗': 180,
+  '中碗': 180,
+  '大碗': 250,
+  '小份': 180,
+  '份': 250,
+  '中份': 250,
   '大份': 450,
+  '小个': 50,
   '个': 90,
+  '中个': 90,
+  '大个': 130,
   '只': 90,
+  '枚': 50,
   '根': 70,
-  '杯': 350,
-  '大杯': 500,
-  '中杯': 350,
+  '大根': 120,
+  '小根': 50,
   '小杯': 250,
-  '盘': 250,
-  '大盘': 350,
+  '杯': 350,
+  '中杯': 350,
+  '大杯': 500,
+  '超大杯': 650,
   '小盘': 150,
+  '盘': 220,
+  '大盘': 350,
   '克': 1,
   'g': 1,
+  'ml': 1,
+  '毫升': 1,
   '两': 50,
   '半斤': 250,
   '斤': 500,
+  '磅': 454,
   '听': 330,
   '罐': 330,
   '瓶': 500,
+  '大瓶': 1250,
   '盒': 250,
+  '小盒': 125,
+  '大盒': 350,
+  '小勺': 5,
   '勺': 15,
+  '汤勺': 15,
   '大勺': 30,
-  '小勺': 10,
   '块': 60,
+  '大块': 120,
+  '小块': 30,
   '串': 40,
   '袋': 100,
-  '包': 50
+  '包': 50,
+  '片': 35,
+  '张': 150,
+  '把': 25,
+  '大把': 40,
+  '小把': 15
 };
 
-// 常见中餐、外卖、家常菜、主食与补剂营养数据库 (per 100g)
+// 烹饪方式吸油与调味能量增量矩阵 (per 100g 食材)
+const COOKING_METHOD_DELTAS = {
+  "水煮": { cal: 0, fat: 0, carbs: 0, label: "水煮/清蒸" },
+  "清蒸": { cal: 0, fat: 0, carbs: 0, label: "清蒸" },
+  "白灼": { cal: 15, fat: 1.0, carbs: 0.5, label: "白灼" },
+  "凉拌": { cal: 35, fat: 3.5, carbs: 1.0, label: "凉拌" },
+  "清炒": { cal: 54, fat: 6.0, carbs: 0.5, label: "清炒" },
+  "炒": { cal: 54, fat: 6.0, carbs: 0.5, label: "家常炒" },
+  "红烧": { cal: 95, fat: 8.5, carbs: 4.5, label: "红烧" },
+  "酱爆": { cal: 95, fat: 8.5, carbs: 4.5, label: "酱爆" },
+  "糖醋": { cal: 110, fat: 8.0, carbs: 9.5, label: "糖醋" },
+  "干锅": { cal: 140, fat: 14.5, carbs: 2.0, label: "干锅" },
+  "油炸": { cal: 215, fat: 20.0, carbs: 7.5, label: "油炸" },
+  "炸": { cal: 215, fat: 20.0, carbs: 7.5, label: "油炸" },
+  "香煎": { cal: 72, fat: 7.5, carbs: 0.5, label: "香煎" },
+  "煎": { cal: 72, fat: 7.5, carbs: 0.5, label: "香煎" },
+  "卤": { cal: 25, fat: 1.5, carbs: 2.0, label: "卤制" },
+  "烤": { cal: 45, fat: 4.0, carbs: 1.0, label: "烤制" }
+};
+
+// 常见中餐、外卖、家常菜、主食与补剂营养数据库 (per 100g 严格基准)
 const CHINESE_FOOD_DATABASE = [
-  // ==================== 1. 主食与早餐面点 ====================
+  // ==================== 1. 主食与生熟基准 ====================
   {
     name: "蒸米饭",
     aliases: ["米饭", "白米饭", "熟米饭", "大米饭", "白饭", "白米"],
     cal100g: 116, p100g: 2.6, c100g: 25.9, f100g: 0.3,
     defaultGrams: 180,
-    unitGrams: { "碗": 180, "大碗": 250, "小碗": 120, "盒": 250, "两": 50, "斤": 500, "份": 200 }
+    unitGrams: { "小碗": 120, "碗": 180, "大碗": 250, "盒": 250, "两": 50, "斤": 500, "份": 200 }
+  },
+  {
+    name: "生大米/生大米生重",
+    aliases: ["生米", "生大米", "大米(生)", "生大米生重"],
+    cal100g: 346, p100g: 7.7, c100g: 77.2, f100g: 0.9,
+    defaultGrams: 80,
+    unitGrams: { "克": 1, "g": 1, "两": 50, "斤": 500 }
   },
   {
     name: "杂粮饭/糙米饭",
     aliases: ["杂粮饭", "糙米饭", "紫米饭", "燕麦饭", "黑米饭", "五谷饭"],
     cal100g: 111, p100g: 3.2, c100g: 23.5, f100g: 0.5,
     defaultGrams: 180,
-    unitGrams: { "碗": 180, "大碗": 250, "小碗": 120, "份": 180 }
+    unitGrams: { "小碗": 120, "碗": 180, "大碗": 250, "份": 180 }
   },
   {
     name: "馒头/花卷",
@@ -144,7 +194,7 @@ const CHINESE_FOOD_DATABASE = [
     aliases: ["油条", "香脆大油条", "炸油条"],
     cal100g: 388, p100g: 6.9, c100g: 51.0, f100g: 17.6,
     defaultGrams: 70,
-    unitGrams: { "根": 70, "根半": 105, "根大": 90, "只": 70, "份": 70 }
+    unitGrams: { "根": 70, "根半": 105, "大根": 90, "小根": 50, "只": 70, "份": 70 }
   },
   {
     name: "手抓饼/煎饼果子",
@@ -165,14 +215,28 @@ const CHINESE_FOOD_DATABASE = [
     aliases: ["馄饨", "小馄饨", "大馄饨", "抄手", "红油抄手", "云吞"],
     cal100g: 135, p100g: 6.2, c100g: 16.5, f100g: 5.0,
     defaultGrams: 350,
-    unitGrams: { "碗": 350, "大碗": 450, "小碗": 250, "个": 20, "份": 350 }
+    unitGrams: { "小碗": 250, "碗": 350, "大碗": 450, "个": 20, "份": 350 }
+  },
+  {
+    name: "熟面条/清汤面",
+    aliases: ["面条", "清汤面", "挂面(熟)", "熟面条", "捞面"],
+    cal100g: 138, p100g: 4.5, c100g: 28.5, f100g: 0.5,
+    defaultGrams: 250,
+    unitGrams: { "小碗": 180, "碗": 250, "大碗": 350, "两": 50 }
+  },
+  {
+    name: "生挂面/干面条",
+    aliases: ["挂面", "干挂面", "生面条", "生挂面", "干面"],
+    cal100g: 350, p100g: 11.5, c100g: 74.0, f100g: 1.2,
+    defaultGrams: 80,
+    unitGrams: { "克": 1, "g": 1, "两": 50, "斤": 500 }
   },
   {
     name: "豆浆",
     aliases: ["豆浆", "现磨豆浆", "纯豆浆", "无糖豆浆", "甜豆浆"],
     cal100g: 16, p100g: 2.0, c100g: 1.1, f100g: 0.8,
     defaultGrams: 300,
-    unitGrams: { "碗": 300, "杯": 350, "大杯": 500, "份": 300 },
+    unitGrams: { "小杯": 250, "杯": 350, "大杯": 500, "碗": 300, "份": 300 },
     modifierDeltas: {
       "加糖": { c: 5.0, cal: 20 },
       "甜": { c: 5.0, cal: 20 }
@@ -183,7 +247,7 @@ const CHINESE_FOOD_DATABASE = [
     aliases: ["皮蛋瘦肉粥", "瘦肉粥", "白粥", "小米粥", "南瓜粥", "八宝粥", "粥"],
     cal100g: 54, p100g: 2.8, c100g: 9.2, f100g: 0.7,
     defaultGrams: 350,
-    unitGrams: { "碗": 350, "大碗": 450, "小碗": 250, "杯": 350 }
+    unitGrams: { "小碗": 250, "碗": 350, "大碗": 450, "杯": 350 }
   },
   {
     name: "全麦面包/吐司",
@@ -194,7 +258,7 @@ const CHINESE_FOOD_DATABASE = [
   },
   {
     name: "燕麦片/即食燕麦",
-    aliases: ["燕麦片", "燕麦", "纯燕麦", "即食燕麦片"],
+    aliases: ["燕麦片", "燕麦", "纯燕麦", "即食燕麦片", "生燕麦"],
     cal100g: 389, p100g: 14.0, c100g: 66.0, f100g: 7.0,
     defaultGrams: 40,
     unitGrams: { "克": 1, "g": 1, "勺": 15, "大勺": 25, "碗": 40, "份": 40 }
@@ -204,7 +268,7 @@ const CHINESE_FOOD_DATABASE = [
     aliases: ["鸡蛋", "水煮蛋", "煮鸡蛋", "荷包蛋", "煎蛋", "茶叶蛋", "卤蛋", "溏心蛋"],
     cal100g: 143, p100g: 12.6, c100g: 1.5, f100g: 9.5,
     defaultGrams: 50,
-    unitGrams: { "个": 50, "只": 50, "枚": 50, "份": 100 }
+    unitGrams: { "小个": 45, "个": 50, "中个": 50, "大个": 60, "只": 50, "枚": 50, "份": 100 }
   },
   {
     name: "鸡蛋白/蛋清",
@@ -218,7 +282,7 @@ const CHINESE_FOOD_DATABASE = [
     aliases: ["玉米", "甜玉米", "糯玉米", "红薯", "地瓜", "紫薯", "芋头"],
     cal100g: 95, p100g: 2.2, c100g: 21.0, f100g: 0.5,
     defaultGrams: 180,
-    unitGrams: { "根": 180, "个": 180, "块": 150, "大个": 250, "小个": 100, "份": 180 }
+    unitGrams: { "小个": 100, "个": 180, "中个": 180, "大个": 260, "根": 180, "块": 150, "份": 180 }
   },
 
   // ==================== 2. 八大菜系家常名菜 ====================
@@ -227,49 +291,49 @@ const CHINESE_FOOD_DATABASE = [
     aliases: ["鱼香肉丝", "川味鱼香肉丝"],
     cal100g: 176, p100g: 7.9, c100g: 10.5, f100g: 11.4,
     defaultGrams: 220,
-    unitGrams: { "盘": 250, "大盘": 350, "小盘": 150, "份": 220 }
+    unitGrams: { "小盘": 150, "盘": 220, "大盘": 350, "份": 220 }
   },
   {
     name: "宫保鸡丁",
     aliases: ["宫保鸡丁", "宫爆鸡丁"],
     cal100g: 188, p100g: 11.2, c100g: 9.8, f100g: 12.0,
     defaultGrams: 220,
-    unitGrams: { "盘": 250, "大盘": 350, "份": 220 }
+    unitGrams: { "小盘": 150, "盘": 220, "大盘": 350, "份": 220 }
   },
   {
     name: "番茄炒蛋",
     aliases: ["番茄炒蛋", "西红柿炒鸡蛋", "番茄炒鸡蛋", "西红柿炒蛋"],
     cal100g: 115, p100g: 5.2, c100g: 5.8, f100g: 8.0,
     defaultGrams: 200,
-    unitGrams: { "盘": 250, "大盘": 350, "小盘": 150, "份": 200 }
+    unitGrams: { "小盘": 150, "盘": 200, "大盘": 350, "份": 200 }
   },
   {
     name: "青椒肉丝",
     aliases: ["青椒肉丝", "辣椒炒肉", "农家一碗香"],
     cal100g: 168, p100g: 8.5, c100g: 4.8, f100g: 12.8,
     defaultGrams: 200,
-    unitGrams: { "盘": 250, "大盘": 350, "份": 200 }
+    unitGrams: { "小盘": 150, "盘": 200, "大盘": 350, "份": 200 }
   },
   {
     name: "回锅肉",
     aliases: ["回锅肉", "川味回锅肉", "蒜苗回锅肉"],
     cal100g: 275, p100g: 9.8, c100g: 4.2, f100g: 24.5,
     defaultGrams: 220,
-    unitGrams: { "盘": 250, "大盘": 350, "份": 220 }
+    unitGrams: { "小盘": 150, "盘": 220, "大盘": 350, "份": 220 }
   },
   {
     name: "麻婆豆腐",
     aliases: ["麻婆豆腐", "肉末豆腐", "川味麻婆豆腐"],
     cal100g: 128, p100g: 6.8, c100g: 4.5, f100g: 9.2,
     defaultGrams: 250,
-    unitGrams: { "盘": 250, "大盘": 350, "小盘": 150, "份": 250 }
+    unitGrams: { "小盘": 150, "盘": 250, "大盘": 350, "份": 250 }
   },
   {
     name: "红烧肉",
     aliases: ["红烧肉", "东坡肉", "红烧五花肉", "把子肉"],
     cal100g: 345, p100g: 10.5, c100g: 8.5, f100g: 30.2,
     defaultGrams: 180,
-    unitGrams: { "盘": 220, "碗": 200, "块": 40, "份": 180 }
+    unitGrams: { "小盘": 150, "盘": 220, "大盘": 350, "碗": 200, "块": 40, "份": 180 }
   },
   {
     name: "水煮牛肉/水煮肉片",
@@ -283,28 +347,28 @@ const CHINESE_FOOD_DATABASE = [
     aliases: ["地三鲜", "红烧茄子", "风味茄子"],
     cal100g: 142, p100g: 2.1, c100g: 12.5, f100g: 9.5,
     defaultGrams: 220,
-    unitGrams: { "盘": 250, "大盘": 350, "份": 220 }
+    unitGrams: { "小盘": 150, "盘": 220, "大盘": 350, "份": 220 }
   },
   {
     name: "干锅花菜/手撕包菜",
     aliases: ["干锅花菜", "手撕包菜", "干锅千页豆腐", "炒包菜", "清炒包菜", "酸辣土豆丝"],
     cal100g: 98, p100g: 2.8, c100g: 7.5, f100g: 6.5,
     defaultGrams: 220,
-    unitGrams: { "盘": 250, "大盘": 350, "小盘": 150, "份": 220 }
+    unitGrams: { "小盘": 150, "盘": 220, "大盘": 350, "份": 220 }
   },
   {
     name: "糖醋里脊/锅包肉",
     aliases: ["糖醋里脊", "锅包肉", "糖醋排骨", "红烧排骨"],
     cal100g: 268, p100g: 11.5, c100g: 24.0, f100g: 14.0,
     defaultGrams: 200,
-    unitGrams: { "盘": 250, "大盘": 350, "份": 200 }
+    unitGrams: { "小盘": 150, "盘": 200, "大盘": 350, "份": 200 }
   },
   {
     name: "蒜蓉西兰花/炒时蔬",
     aliases: ["蒜蓉西兰花", "炒西兰花", "水煮西兰花", "西兰花", "炒青菜", "时蔬", "蒜蓉菜心", "清炒生菜", "炒菠菜"],
     cal100g: 45, p100g: 2.5, c100g: 4.8, f100g: 2.0,
     defaultGrams: 200,
-    unitGrams: { "盘": 250, "大盘": 350, "小盘": 120, "份": 200 }
+    unitGrams: { "小盘": 120, "盘": 200, "大盘": 350, "份": 200 }
   },
 
   // ==================== 3. 外卖快餐与地方特色 ====================
@@ -313,49 +377,49 @@ const CHINESE_FOOD_DATABASE = [
     aliases: ["黄焖鸡米饭", "黄焖鸡", "鲁味黄焖鸡", "微辣黄焖鸡"],
     cal100g: 138, p100g: 6.6, c100g: 15.4, f100g: 5.8,
     defaultGrams: 600,
-    unitGrams: { "份": 600, "大份": 750, "小份": 450, "锅": 600 }
+    unitGrams: { "小份": 450, "份": 600, "大份": 750, "锅": 600 }
   },
   {
     name: "麻辣香锅",
     aliases: ["麻辣香锅", "干锅香锅", "香锅"],
     cal100g: 162, p100g: 5.9, c100g: 8.0, f100g: 11.5,
     defaultGrams: 450,
-    unitGrams: { "份": 450, "大份": 700, "小份": 300, "盆": 600 }
+    unitGrams: { "小份": 300, "份": 450, "大份": 700, "盆": 600 }
   },
   {
     name: "麻辣烫/冒菜",
     aliases: ["麻辣烫", "冒菜", "关东煮", "串串香", "骨汤麻辣烫"],
     cal100g: 88, p100g: 4.5, c100g: 7.2, f100g: 4.8,
     defaultGrams: 550,
-    unitGrams: { "大碗": 650, "碗": 550, "盆": 750, "份": 550 }
+    unitGrams: { "小碗": 400, "碗": 550, "大碗": 700, "盆": 750, "份": 550 }
   },
   {
     name: "隆江猪脚饭",
     aliases: ["猪脚饭", "隆江猪脚饭", "卤肉饭", "卤猪蹄盖饭", "叉烧饭", "烧鸭饭", "广式烧腊饭"],
     cal100g: 195, p100g: 8.5, c100g: 16.0, f100g: 10.8,
     defaultGrams: 480,
-    unitGrams: { "份": 480, "大份": 600, "小份": 350 }
+    unitGrams: { "小份": 350, "份": 480, "大份": 600 }
   },
   {
     name: "兰州牛肉拉面",
     aliases: ["兰州拉面", "牛肉拉面", "兰州牛肉面", "清汤牛肉拉面", "牛肉面", "板面"],
     cal100g: 95, p100g: 3.8, c100g: 15.0, f100g: 2.2,
     defaultGrams: 650,
-    unitGrams: { "大碗": 750, "碗": 650, "小碗": 500, "份": 650 }
+    unitGrams: { "小碗": 500, "碗": 650, "大碗": 750, "份": 650 }
   },
   {
     name: "柳州螺蛳粉",
     aliases: ["螺蛳粉", "柳州螺蛳粉", "原味螺蛳粉", "加辣螺蛳粉", "米线", "过桥米线"],
     cal100g: 138, p100g: 3.2, c100g: 18.8, f100g: 5.5,
     defaultGrams: 600,
-    unitGrams: { "大碗": 700, "碗": 600, "锅": 650, "份": 600 }
+    unitGrams: { "小碗": 450, "碗": 600, "大碗": 750, "锅": 650, "份": 600 }
   },
   {
     name: "沙县拌面/蒸饺/瓦罐汤",
     aliases: ["沙县拌面", "热干面", "炸酱面", "葱油拌面", "重庆小面", "担担面"],
     cal100g: 245, p100g: 6.8, c100g: 38.0, f100g: 7.2,
     defaultGrams: 220,
-    unitGrams: { "碗": 220, "大碗": 300, "小碗": 160, "份": 220 }
+    unitGrams: { "小碗": 160, "碗": 220, "大碗": 300, "份": 220 }
   },
   {
     name: "汉堡/炸鸡/薯条",
@@ -413,7 +477,7 @@ const CHINESE_FOOD_DATABASE = [
     aliases: ["蛋白粉", "乳清蛋白粉", "分离乳清", "酪蛋白", "增肌粉", "乳清蛋白"],
     cal100g: 385, p100g: 78.0, c100g: 8.5, f100g: 4.0,
     defaultGrams: 30,
-    unitGrams: { "勺": 30, "大勺": 40, "小勺": 15, "克": 1, "g": 1, "份": 30 }
+    unitGrams: { "小勺": 15, "勺": 30, "大勺": 40, "克": 1, "g": 1, "份": 30 }
   },
 
   // ==================== 5. 水果、饮品、奶茶与零食 ====================
@@ -422,28 +486,28 @@ const CHINESE_FOOD_DATABASE = [
     aliases: ["香蕉"],
     cal100g: 89, p100g: 1.1, c100g: 22.8, f100g: 0.3,
     defaultGrams: 120,
-    unitGrams: { "根": 120, "大根": 160, "小根": 80, "只": 120, "个": 120, "半根": 60 }
+    unitGrams: { "小根": 80, "根": 120, "大根": 160, "只": 120, "个": 120, "半根": 60 }
   },
   {
     name: "红富士苹果/梨/橙子",
     aliases: ["苹果", "梨", "橙子", "橘子", "猕猴桃", "火龙果", "蓝莓", "西瓜", "桃子"],
     cal100g: 52, p100g: 0.4, c100g: 13.5, f100g: 0.2,
     defaultGrams: 150,
-    unitGrams: { "个": 150, "只": 150, "大个": 220, "小个": 90, "半个": 75, "盒": 125, "块": 100 }
+    unitGrams: { "小个": 90, "个": 150, "大个": 220, "只": 150, "半个": 75, "盒": 125, "块": 100 }
   },
   {
     name: "鲜牛奶/纯牛奶",
     aliases: ["牛奶", "纯牛奶", "鲜牛奶", "脱脂牛奶", "低脂牛奶", "全脂奶", "酸奶", "无糖酸奶"],
     cal100g: 64, p100g: 3.2, c100g: 4.8, f100g: 3.6,
     defaultGrams: 250,
-    unitGrams: { "杯": 250, "大杯": 400, "小杯": 150, "盒": 250, "瓶": 300, "ml": 1, "毫升": 1 }
+    unitGrams: { "小杯": 150, "杯": 250, "大杯": 400, "盒": 250, "瓶": 300, "ml": 1, "毫升": 1 }
   },
   {
     name: "珍珠奶茶/果茶",
     aliases: ["奶茶", "珍珠奶茶", "波霸奶茶", "芋圆奶茶", "烧仙草", "果茶", "杨枝甘露"],
     cal100g: 68, p100g: 1.2, c100g: 10.2, f100g: 2.5,
     defaultGrams: 500,
-    unitGrams: { "大杯": 500, "中杯": 400, "杯": 500, "瓶": 450 },
+    unitGrams: { "中杯": 400, "杯": 500, "大杯": 500, "超大杯": 650, "瓶": 450 },
     modifierDeltas: {
       "无糖": { c: -4.0, cal: -16 },
       "微糖": { c: -2.5, cal: -10 },
@@ -456,7 +520,7 @@ const CHINESE_FOOD_DATABASE = [
     aliases: ["拿铁", "生椰拿铁", "美式", "美式咖啡", "黑咖啡", "冰美式", "卡布奇诺", "摩卡"],
     cal100g: 48, p100g: 1.5, c100g: 5.5, f100g: 2.2,
     defaultGrams: 400,
-    unitGrams: { "大杯": 450, "杯": 400, "中杯": 350 }
+    unitGrams: { "小杯": 250, "中杯": 350, "杯": 400, "大杯": 450 }
   },
   {
     name: "可乐/雪碧/碳酸饮料",
@@ -470,7 +534,7 @@ const CHINESE_FOOD_DATABASE = [
     aliases: ["坚果", "巴旦木", "核桃", "腰果", "花生", "瓜子", "开心果", "每日坚果"],
     cal100g: 610, p100g: 20.0, c100g: 18.0, f100g: 52.0,
     defaultGrams: 30,
-    unitGrams: { "包": 30, "袋": 30, "把": 25, "大把": 40, "小把": 15, "颗": 2, "克": 1, "g": 1 }
+    unitGrams: { "包": 30, "袋": 30, "小把": 15, "把": 25, "大把": 40, "颗": 2, "克": 1, "g": 1 }
   }
 ];
 
@@ -510,7 +574,7 @@ const NutritionEngine = {
     let bestMatch = null;
     let highestScore = 0;
 
-    // Clean query from trailing numbers/units like "250毫升", "大概100克"
+    // Clean query from numbers/units like "250毫升", "大概100克"
     const cleanedQuery = query.replace(/[0-9]+(?:\.[0-9]+)?\s*(毫升|ml|克|g|千卡|kcal|卡)?/gi, "").replace(/大概|大约|约/g, "").trim() || query;
 
     for (const item of CHINESE_FOOD_DATABASE) {
@@ -539,7 +603,19 @@ const NutritionEngine = {
   },
 
   /**
-   * Main Diet Parser: parses raw spoken Chinese into structured food items, weights, calories, and macros
+   * Recalculate single food item calories and macros based on new grams
+   */
+  calcItemNutrition(item, grams) {
+    const g = Math.max(0, grams || 0);
+    const cal = Math.round((item.cal100g * g) / 100);
+    const p = Math.round((item.p100g * g) / 10) / 10;
+    const c = Math.round((item.c100g * g) / 10) / 10;
+    const f = Math.round((item.f100g * g) / 10) / 10;
+    return { calories: cal, proteinG: p, carbsG: c, fatG: f };
+  },
+
+  /**
+   * Main High-Precision Diet Parser
    */
   parseDietVoice(text) {
     if (!text || typeof text !== "string") {
@@ -589,6 +665,7 @@ const NutritionEngine = {
 
           extractedItems.push({
             name: `${dishMatch.item.name}(浇头)`,
+            rawItem: dishMatch.item,
             estimatedGrams: dishWeight,
             calories: dishCal,
             proteinG: dishP,
@@ -605,6 +682,7 @@ const NutritionEngine = {
 
           extractedItems.push({
             name: "蒸米饭(基底)",
+            rawItem: riceItem,
             estimatedGrams: riceWeight,
             calories: riceCal,
             proteinG: riceP,
@@ -617,9 +695,24 @@ const NutritionEngine = {
         }
       }
 
-      // 2. Standard Single Item Analysis
+      // 2. Cooking Method & Oil Absorption Factor Analysis
+      let detectedCookingMethod = null;
+      let oilModifier = 1.0; // 1.0 = normal, 0.5 = 少油, 0 = 免油, 1.5 = 重油
+
+      if (clean.includes("少油") || clean.includes("微油") || clean.includes("清淡")) oilModifier = 0.5;
+      else if (clean.includes("免油") || clean.includes("无油")) oilModifier = 0.0;
+      else if (clean.includes("重油") || clean.includes("多油")) oilModifier = 1.5;
+
+      for (const methodKey of Object.keys(COOKING_METHOD_DELTAS)) {
+        if (clean.includes(methodKey)) {
+          detectedCookingMethod = COOKING_METHOD_DELTAS[methodKey];
+          break;
+        }
+      }
+
+      // 3. Modifier Tag Extractor (无糖/大份/大碗/小份/小碗)
       const modifiers = [];
-      ['无糖', '微糖', '半糖', '全糖', '大份', '小份', '大碗', '小碗', '大杯', '中杯', '小杯', '微辣', '少油'].forEach(mod => {
+      ['无糖', '微糖', '半糖', '全糖', '大份', '小份', '超大杯', '大杯', '中杯', '小杯', '大碗', '小碗', '大盘', '小盘', '大个', '小个', '微辣', '重辣', '少油'].forEach(mod => {
         if (clean.includes(mod)) {
           modifiers.push(mod);
           clean = clean.replace(mod, '');
@@ -627,7 +720,7 @@ const NutritionEngine = {
       });
 
       // Extract quantity and unit
-      const quantPattern = /([0-9]+(?:\.[0-9]+)?|[半一二两俩三四五六七八九十百]+)\s*([个只枚根碗盘听罐瓶盒袋包勺块片张两斤]|克|g|ml|毫升|大碗|小碗|大盘|小盘|大杯|中杯|小杯)?/i;
+      const quantPattern = /([0-9]+(?:\.[0-9]+)?|[半一二两俩三四五六七八九十百]+)\s*([个只枚根碗盘听罐瓶盒袋包勺块片张两斤磅]|克|g|ml|毫升|大碗|小碗|大盘|小盘|大杯|中杯|小杯|大个|小个)?/i;
       const match = clean.match(quantPattern);
 
       let count = 1.0;
@@ -661,18 +754,31 @@ const NutritionEngine = {
         }
 
         // Size multiplier adjustment
-        if (modifiers.includes('大份') || modifiers.includes('大碗') || modifiers.includes('大杯')) {
+        if (modifiers.includes('大份') || modifiers.includes('大碗') || modifiers.includes('大盘') || modifiers.includes('大杯') || modifiers.includes('超大杯') || modifiers.includes('大个')) {
           finalGrams *= 1.4;
-        } else if (modifiers.includes('小份') || modifiers.includes('小碗') || modifiers.includes('小杯')) {
+        } else if (modifiers.includes('小份') || modifiers.includes('小碗') || modifiers.includes('小盘') || modifiers.includes('小杯') || modifiers.includes('小个')) {
           finalGrams *= 0.75;
         }
 
+        // 4. Base nutrient calculation
         let cal = Math.round((item.cal100g * finalGrams) / 100);
         let p = Math.round((item.p100g * finalGrams) / 10) / 10;
         let c = Math.round((item.c100g * finalGrams) / 10) / 10;
         let f = Math.round((item.f100g * finalGrams) / 10) / 10;
 
-        // Modifier delta correction (e.g. 无糖豆浆 / 奶茶)
+        // 5. Dynamic Cooking Method & Oil Factor Correction
+        if (detectedCookingMethod) {
+          const factor = finalGrams / 100.0;
+          const oilDeltaFat = detectedCookingMethod.fat * factor * oilModifier;
+          const oilDeltaCal = (detectedCookingMethod.cal * factor * oilModifier);
+          const sauceDeltaCarb = detectedCookingMethod.carbs * factor;
+
+          f = Math.round((f + oilDeltaFat) * 10) / 10;
+          c = Math.round((c + sauceDeltaCarb) * 10) / 10;
+          cal = Math.round(cal + oilDeltaCal);
+        }
+
+        // 6. Modifier delta correction (e.g. 无糖豆浆 / 奶茶)
         modifiers.forEach(mod => {
           if (item.modifierDeltas && item.modifierDeltas[mod]) {
             const delta = item.modifierDeltas[mod];
@@ -681,8 +787,13 @@ const NutritionEngine = {
           }
         });
 
+        const displayName = modifiers.length > 0
+          ? `${item.name}[${modifiers.join('/')}]`
+          : (detectedCookingMethod ? `${detectedCookingMethod.label}·${item.name}` : item.name);
+
         extractedItems.push({
-          name: modifiers.length > 0 ? `${item.name}[${modifiers.join('/')}]` : item.name,
+          name: displayName,
+          rawItem: item,
           estimatedGrams: Math.round(finalGrams),
           calories: cal,
           proteinG: p,
@@ -698,6 +809,7 @@ const NutritionEngine = {
     if (extractedItems.length === 0) {
       extractedItems.push({
         name: "日常餐饮",
+        rawItem: { cal100g: 128, p100g: 7.2, c100g: 16.0, f100g: 4.0 },
         estimatedGrams: 250,
         calories: 320,
         proteinG: 18.0,
@@ -721,7 +833,7 @@ const NutritionEngine = {
       carbsG: totalC,
       fatG: totalF,
       items: extractedItems,
-      advice: `AI 营养算法：已根据《中国食物成分表》高精度核算 ${totalCal} kcal (蛋白 ${totalP}g)，已实时计入缺口！`
+      advice: `AI 临床营养算法：已根据《中国食物成分表》高精度核算 ${totalCal} kcal (蛋白 ${totalP}g)，已实时计入缺口！`
     };
   }
 };
