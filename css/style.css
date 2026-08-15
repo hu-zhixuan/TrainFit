@@ -1092,8 +1092,41 @@ body {
   align-items: center;
   justify-content: center;
   gap: 3px;
-  height: 20px;
-  margin-top: 8px;
+  height: 24px;
+}
+
+.macro-ratio-bar-wrapper {
+  display: flex;
+  height: 18px;
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  margin: 6px 0 8px;
+  background: var(--bg-subtle);
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #000;
+}
+
+.macro-ratio-seg {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: width 0.3s ease;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.macro-ratio-seg.seg-p {
+  background: var(--accent-cyan);
+}
+
+.macro-ratio-seg.seg-c {
+  background: var(--accent-lime);
+}
+
+.macro-ratio-seg.seg-f {
+  background: var(--accent-orange);
 }
 
 .waveform-bar {

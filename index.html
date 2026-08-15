@@ -73,6 +73,12 @@
           </div>
 
           <!-- Sleek Macro Lines -->
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;margin-bottom:4px;">
+            <span style="font-size:0.7rem;color:var(--text-muted);">三大营养素目标</span>
+            <button class="btn-subtle" onclick="window.app.openCustomMacrosModal()" style="padding:2px 8px;font-size:0.68rem;height:auto;border-radius:var(--radius-full);color:var(--accent-cyan);border:1px solid rgba(56,189,248,0.3);background:transparent;">
+              ✏️ 自定义碳蛋脂
+            </button>
+          </div>
           <div class="macro-pills-row">
             <div class="macro-pill-item">
               <div class="macro-pill-header"><span>蛋白质</span><b id="macro-p-txt">0/144g</b></div>
@@ -260,24 +266,49 @@
         </div>
 
         <div class="card">
-          <div class="form-group">
-            <label class="form-label" for="input-target-deficit">每日目标热量缺口 (kcal)</label>
-            <input type="number" id="input-target-deficit" class="form-input" value="450">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+            <label class="form-label" style="font-size:0.85rem;font-weight:700;margin:0;">🎯 每日目标与碳蛋脂摄入自定义</label>
+            <span class="status-badge" id="profile-macro-cal-badge" style="font-size:0.68rem;padding:2px 8px;">配比: 2050 kcal</span>
           </div>
 
-          <div class="form-grid-three">
+          <div class="form-group">
+            <label class="form-label" for="input-target-deficit">每日目标热量缺口 (kcal)</label>
+            <input type="number" id="input-target-deficit" class="form-input" value="450" oninput="window.app.onProfileDeficitChange()">
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:6px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <span class="form-label" style="margin:0;">快速预设方案：</span>
+            </div>
+            <div class="quick-samples-box" style="margin:0;padding:0;background:transparent;border:none;">
+              <div class="samples-scroll" style="gap:6px;">
+                <span class="sample-chip" onclick="window.app.applyMacroPreset('high_protein')">🌟 高蛋白刷脂 (4:4:2)</span>
+                <span class="sample-chip" onclick="window.app.applyMacroPreset('balanced')">⚖️ 均衡减脂 (4:4:2)</span>
+                <span class="sample-chip" onclick="window.app.applyMacroPreset('bulking')">🚀 增肌充碳 (5:3:2)</span>
+                <span class="sample-chip" onclick="window.app.applyMacroPreset('low_carb')">🥑 低碳生酮 (2:1:7)</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-grid-three" style="margin-top:4px;">
             <div class="form-group">
               <label class="form-label" for="input-target-protein">蛋白目标 (g)</label>
-              <input type="number" id="input-target-protein" class="form-input" value="144">
+              <input type="number" id="input-target-protein" class="form-input" value="144" style="color:var(--accent-cyan);font-weight:700;" oninput="window.app.onProfileMacroInputChange()">
             </div>
             <div class="form-group">
               <label class="form-label" for="input-target-carbs">碳水目标 (g)</label>
-              <input type="number" id="input-target-carbs" class="form-input" value="238">
+              <input type="number" id="input-target-carbs" class="form-input" value="238" style="color:var(--accent-lime);font-weight:700;" oninput="window.app.onProfileMacroInputChange()">
             </div>
             <div class="form-group">
               <label class="form-label" for="input-target-fat">脂肪目标 (g)</label>
-              <input type="number" id="input-target-fat" class="form-input" value="58">
+              <input type="number" id="input-target-fat" class="form-input" value="58" style="color:var(--accent-orange);font-weight:700;" oninput="window.app.onProfileMacroInputChange()">
             </div>
+          </div>
+
+          <div class="macro-ratio-bar-wrapper" id="profile-macro-ratio-bar">
+            <div class="macro-ratio-seg seg-p" id="profile-seg-p" style="width:28%;">蛋 28%</div>
+            <div class="macro-ratio-seg seg-c" id="profile-seg-c" style="width:46%;">碳 46%</div>
+            <div class="macro-ratio-seg seg-f" id="profile-seg-f" style="width:26%;">脂 26%</div>
           </div>
         </div>
 
@@ -738,6 +769,71 @@
         </div>
       </div>
 
+    </div>
+  </div>
+
+  <!-- MODAL: CUSTOM MACROS (自定义碳蛋脂摄入要求) -->
+  <div class="modal-overlay hidden" id="modal-custom-macros">
+    <div class="dialog-card">
+      <div class="sheet-header">
+        <div>
+          <h3 class="sheet-title">🎯 自定义碳蛋脂摄入要求</h3>
+          <p class="sheet-subtitle">自由设定蛋白质、碳水与脂肪的每日摄入克数</p>
+        </div>
+        <button class="icon-btn" onclick="window.app.closeCustomMacrosModal()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <!-- Quick preset chips -->
+      <div class="quick-samples-box">
+        <div class="samples-title">快速预设方案推荐：</div>
+        <div class="samples-scroll">
+          <span class="sample-chip" onclick="window.app.setCustomMacroPreset('high_protein')">🌟 高蛋白刷脂 (4:4:2)</span>
+          <span class="sample-chip" onclick="window.app.setCustomMacroPreset('balanced')">⚖️ 均衡减脂 (4:4:2)</span>
+          <span class="sample-chip" onclick="window.app.setCustomMacroPreset('bulking')">🚀 增肌充碳 (5:3:2)</span>
+          <span class="sample-chip" onclick="window.app.setCustomMacroPreset('low_carb')">🥑 低碳生酮 (2:1:7)</span>
+        </div>
+      </div>
+
+      <!-- 3 inputs -->
+      <div class="form-grid-three">
+        <div class="form-group">
+          <label class="form-label" for="custom-macro-p">蛋白质 (g)</label>
+          <input type="number" id="custom-macro-p" class="form-input" style="color:var(--accent-cyan);font-weight:700;" oninput="window.app.onCustomMacroInputChange()">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="custom-macro-c">碳水化合物 (g)</label>
+          <input type="number" id="custom-macro-c" class="form-input" style="color:var(--accent-lime);font-weight:700;" oninput="window.app.onCustomMacroInputChange()">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="custom-macro-f">脂肪 (g)</label>
+          <input type="number" id="custom-macro-f" class="form-input" style="color:var(--accent-orange);font-weight:700;" oninput="window.app.onCustomMacroInputChange()">
+        </div>
+      </div>
+
+      <!-- Visual Ratio Bar and Calories Comparison -->
+      <div class="macro-ratio-bar-wrapper">
+        <div class="macro-ratio-seg seg-p" id="custom-seg-p" style="width:28%;">蛋 28%</div>
+        <div class="macro-ratio-seg seg-c" id="custom-seg-c" style="width:46%;">碳 46%</div>
+        <div class="macro-ratio-seg seg-f" id="custom-seg-f" style="width:26%;">脂 26%</div>
+      </div>
+
+      <div style="background:var(--bg-input);padding:10px 12px;border-radius:var(--radius-sm);border:1px solid var(--border-subtle);display:flex;flex-direction:column;gap:4px;font-size:0.75rem;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <span style="color:var(--text-muted);">三大营养素总热量：</span>
+          <b id="custom-macro-total-cal" style="color:var(--accent-cyan);font-size:0.85rem;">2050 kcal</b>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;font-size:0.7rem;color:var(--text-muted);">
+          <span>当前每日饮食目标：</span>
+          <span id="custom-macro-target-diet-cal">1942 kcal (TDEE - 缺口)</span>
+        </div>
+      </div>
+
+      <div class="dialog-actions-row">
+        <button class="btn-subtle" onclick="window.app.closeCustomMacrosModal()">取消</button>
+        <button class="btn-primary cyan-btn" onclick="window.app.saveCustomMacros()">✓ 保存并应用要求</button>
+      </div>
     </div>
   </div>
 

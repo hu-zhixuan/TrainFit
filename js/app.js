@@ -1008,6 +1008,185 @@ class FitnessApp {
         b.classList.toggle('active', b.dataset.gender === p.gender);
       }
     });
+
+    this.updateProfileMacroRatioBar();
+  }
+
+  // ==================== Custom Macro Targets Logic ====================
+  openCustomMacrosModal() {
+    document.getElementById('custom-macro-p').value = this.profile.targetProteinG;
+    document.getElementById('custom-macro-c').value = this.profile.targetCarbsG;
+    document.getElementById('custom-macro-f').value = this.profile.targetFatG;
+
+    this.updateCustomMacroModalCalc();
+    document.getElementById('modal-custom-macros')?.classList.remove('hidden');
+  }
+
+  closeCustomMacrosModal() {
+    document.getElementById('modal-custom-macros')?.classList.add('hidden');
+  }
+
+  setCustomMacroPreset(presetType) {
+    const weight = this.profile.weightKg || 72;
+    const targetCal = Math.max(1200, (this.profile.tdee || 2392) - (this.profile.targetDeficitKcal || 450));
+
+    let p = Math.round(weight * 2.0);
+    let f = Math.round(weight * 0.8);
+    let c = Math.max(50, Math.round((targetCal - p * 4 - f * 9) / 4));
+
+    if (presetType === 'high_protein') {
+      p = Math.round(weight * 2.2);
+      f = Math.round(weight * 0.7);
+      c = Math.max(40, Math.round((targetCal - p * 4 - f * 9) / 4));
+    } else if (presetType === 'balanced') {
+      p = Math.round(weight * 1.6);
+      f = Math.round(weight * 0.8);
+      c = Math.max(50, Math.round((targetCal - p * 4 - f * 9) / 4));
+    } else if (presetType === 'bulking') {
+      p = Math.round(weight * 1.8);
+      f = Math.round(weight * 0.7);
+      c = Math.max(80, Math.round((targetCal - p * 4 - f * 9) / 4));
+    } else if (presetType === 'low_carb') {
+      c = Math.round(weight * 0.5); // ~35-40g
+      p = Math.round(weight * 2.0);
+      f = Math.max(30, Math.round((targetCal - p * 4 - c * 4) / 9));
+    }
+
+    document.getElementById('custom-macro-p').value = p;
+    document.getElementById('custom-macro-c').value = c;
+    document.getElementById('custom-macro-f').value = f;
+
+    this.updateCustomMacroModalCalc();
+  }
+
+  onCustomMacroInputChange() {
+    this.updateCustomMacroModalCalc();
+  }
+
+  updateCustomMacroModalCalc() {
+    const p = parseFloat(document.getElementById('custom-macro-p').value) || 0;
+    const c = parseFloat(document.getElementById('custom-macro-c').value) || 0;
+    const f = parseFloat(document.getElementById('custom-macro-f').value) || 0;
+
+    const totalCal = Math.round(p * 4 + c * 4 + f * 9);
+    const targetDietCal = (this.profile.tdee || 2392) - (this.profile.targetDeficitKcal || 450);
+
+    const totalCalEl = document.getElementById('custom-macro-total-cal');
+    if (totalCalEl) {
+      totalCalEl.textContent = `${totalCal} kcal`;
+      const diff = totalCal - targetDietCal;
+      totalCalEl.style.color = Math.abs(diff) <= 80 ? 'var(--accent-lime)' : 'var(--accent-cyan)';
+    }
+
+    const targetCalEl = document.getElementById('custom-macro-target-diet-cal');
+    if (targetCalEl) {
+      targetCalEl.textContent = `${targetDietCal} kcal (TDEE ${this.profile.tdee} - 缺口 ${this.profile.targetDeficitKcal})`;
+    }
+
+    const safeTotal = Math.max(1, totalCal);
+    const pPct = Math.round((p * 4 / safeTotal) * 100);
+    const cPct = Math.round((c * 4 / safeTotal) * 100);
+    const fPct = Math.max(0, 100 - pPct - cPct);
+
+    const segP = document.getElementById('custom-seg-p');
+    const segC = document.getElementById('custom-seg-c');
+    const segF = document.getElementById('custom-seg-f');
+
+    if (segP) { segP.style.width = `${pPct}%`; segP.textContent = `蛋 ${pPct}%`; }
+    if (segC) { segC.style.width = `${cPct}%`; segC.textContent = `碳 ${cPct}%`; }
+    if (segF) { segF.style.width = `${fPct}%`; segF.textContent = `脂 ${fPct}%`; }
+  }
+
+  saveCustomMacros() {
+    const p = parseFloat(document.getElementById('custom-macro-p').value) || 140;
+    const c = parseFloat(document.getElementById('custom-macro-c').value) || 240;
+    const f = parseFloat(document.getElementById('custom-macro-f').value) || 55;
+
+    this.profile.targetProteinG = p;
+    this.profile.targetCarbsG = c;
+    this.profile.targetFatG = f;
+
+    this.saveData();
+    this.closeCustomMacrosModal();
+    this.render();
+    this.showToast(`✓ 碳蛋脂目标已更新：蛋 ${p}g / 碳 ${c}g / 脂 ${f}g`);
+  }
+
+  // Profile Screen Macro Helpers
+  applyMacroPreset(presetType) {
+    const weight = parseFloat(document.getElementById('input-weight').value) || this.profile.weightKg || 72;
+    const height = parseFloat(document.getElementById('input-height').value) || this.profile.heightCm || 175;
+    const age = parseInt(document.getElementById('input-age').value, 10) || this.profile.age || 26;
+    const isMale = this.profile.gender === 'male';
+    const deficit = parseFloat(document.getElementById('input-target-deficit').value) || 450;
+
+    const bmr = isMale
+      ? (10 * weight + 6.25 * height - 5 * age + 5)
+      : (10 * weight + 6.25 * height - 5 * age - 161);
+    const tdee = Math.round(bmr * 1.45);
+    const targetCal = Math.max(1200, tdee - deficit);
+
+    let p = Math.round(weight * 2.0);
+    let f = Math.round(weight * 0.8);
+    let c = Math.max(50, Math.round((targetCal - p * 4 - f * 9) / 4));
+
+    if (presetType === 'high_protein') {
+      p = Math.round(weight * 2.2);
+      f = Math.round(weight * 0.7);
+      c = Math.max(40, Math.round((targetCal - p * 4 - f * 9) / 4));
+    } else if (presetType === 'balanced') {
+      p = Math.round(weight * 1.6);
+      f = Math.round(weight * 0.8);
+      c = Math.max(50, Math.round((targetCal - p * 4 - f * 9) / 4));
+    } else if (presetType === 'bulking') {
+      p = Math.round(weight * 1.8);
+      f = Math.round(weight * 0.7);
+      c = Math.max(80, Math.round((targetCal - p * 4 - f * 9) / 4));
+    } else if (presetType === 'low_carb') {
+      c = Math.round(weight * 0.5);
+      p = Math.round(weight * 2.0);
+      f = Math.max(30, Math.round((targetCal - p * 4 - c * 4) / 9));
+    }
+
+    document.getElementById('input-target-protein').value = p;
+    document.getElementById('input-target-carbs').value = c;
+    document.getElementById('input-target-fat').value = f;
+
+    this.updateProfileMacroRatioBar();
+    this.showToast('已应用预设配比');
+  }
+
+  onProfileDeficitChange() {
+    this.updateProfileMacroRatioBar();
+  }
+
+  onProfileMacroInputChange() {
+    this.updateProfileMacroRatioBar();
+  }
+
+  updateProfileMacroRatioBar() {
+    const p = parseFloat(document.getElementById('input-target-protein')?.value) || 0;
+    const c = parseFloat(document.getElementById('input-target-carbs')?.value) || 0;
+    const f = parseFloat(document.getElementById('input-target-fat')?.value) || 0;
+
+    const totalCal = Math.round(p * 4 + c * 4 + f * 9);
+    const badge = document.getElementById('profile-macro-cal-badge');
+    if (badge) {
+      badge.textContent = `配比: ${totalCal} kcal`;
+    }
+
+    const safeTotal = Math.max(1, totalCal);
+    const pPct = Math.round((p * 4 / safeTotal) * 100);
+    const cPct = Math.round((c * 4 / safeTotal) * 100);
+    const fPct = Math.max(0, 100 - pPct - cPct);
+
+    const segP = document.getElementById('profile-seg-p');
+    const segC = document.getElementById('profile-seg-c');
+    const segF = document.getElementById('profile-seg-f');
+
+    if (segP) { segP.style.width = `${pPct}%`; segP.textContent = `蛋 ${pPct}%`; }
+    if (segC) { segC.style.width = `${cPct}%`; segC.textContent = `碳 ${cPct}%`; }
+    if (segF) { segF.style.width = `${fPct}%`; segF.textContent = `脂 ${fPct}%`; }
   }
 
   saveProfile() {
