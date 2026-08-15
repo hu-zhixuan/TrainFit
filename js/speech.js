@@ -3,12 +3,13 @@
  * 1. 真实 MediaRecorder 高保真音频录制 (不依赖 Google 服务，100% 可用)
  * 2. 微信级“按住说话 / 松开识别” + “点击录音” 双交互模式 (支持上滑取消与触觉振动)
  * 3. Web Audio API 实时频段均衡器 (7段跳动波形，真实声波反馈)
- * 4. 多通道 ASR 转写服务 (Web Speech 流式 + 后端 /api/transcribe + 本地/云端 Whisper 直连)
+ * 4. “转译中...” 高响应加载反馈与毫秒级超时降级保障
  * 5. 录音即时回放预览 (Audio Player) 与智能语义纠偏
  */
 
 const SpeechModule = {
   isRecording: false,
+  isTranscribing: false,
   isHoldMode: false,
   mediaRecorder: null,
   audioChunks: [],
@@ -29,6 +30,7 @@ const SpeechModule = {
   onErrorCallback: null,
   onVolumeChangeCallback: null,
   onTimerTickCallback: null,
+  onTranscribingStateCallback: null,
 
   isMediaRecorderSupported() {
     return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
@@ -48,6 +50,7 @@ const SpeechModule = {
       onError = null,
       onVolumeChange = null,
       onTimerTick = null,
+      onTranscribingState = null,
       isHold = false
     } = options;
 
@@ -56,7 +59,9 @@ const SpeechModule = {
     this.onErrorCallback = onError;
     this.onVolumeChangeCallback = onVolumeChange;
     this.onTimerTickCallback = onTimerTick;
+    this.onTranscribingStateCallback = onTranscribingState;
     this.isHoldMode = isHold;
+    this.isTranscribing = false;
     this.accumulatedStreamingText = '';
     this.audioChunks = [];
 
@@ -104,7 +109,7 @@ const SpeechModule = {
         }
         this.lastRecordedAudioUrl = URL.createObjectURL(audioBlob);
 
-        // Process Transcription
+        // Process Transcription with visual "转译中..." feedback
         await this.handleTranscription(audioBlob);
       };
 
@@ -174,6 +179,12 @@ const SpeechModule = {
       return;
     }
 
+    // Notify UI that we are entering "转译中..." state
+    this.isTranscribing = true;
+    if (this.onTranscribingStateCallback) {
+      this.onTranscribingStateCallback(true);
+    }
+
     // Stop MediaRecorder (triggers recorder.onstop -> handleTranscription)
     if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
       try {
@@ -183,6 +194,10 @@ const SpeechModule = {
       }
     } else {
       this.cleanup();
+      this.isTranscribing = false;
+      if (this.onTranscribingStateCallback) {
+        this.onTranscribingStateCallback(false);
+      }
       if (this.onEndCallback) this.onEndCallback({ isCanceled: false });
     }
   },
@@ -226,14 +241,14 @@ const SpeechModule = {
         this.animationFrameId = requestAnimationFrame(updateLoop);
       };
 
-      updateLoop();
-    } catch (e) {
-      console.warn('Audio analyser init error:', e);
+      this.animationFrameId = requestAnimationFrame(updateLoop);
+    } catch (err) {
+      console.warn('[SpeechModule] Web Audio init error:', err);
     }
   },
 
   /**
-   * Duration timer
+   * Duration Timer Tick
    */
   startDurationTimer() {
     clearInterval(this.recordingTimerInterval);
@@ -284,8 +299,7 @@ const SpeechModule = {
       };
 
       rec.onerror = (e) => {
-        // Silently ignore Google network blocking in China without breaking MediaRecorder
-        console.log('[SpeechModule] WebSpeech API status:', e.error);
+        console.log('[SpeechModule] WebSpeech status:', e.error);
       };
 
       this.recognition = rec;
@@ -296,7 +310,7 @@ const SpeechModule = {
   },
 
   /**
-   * Multi-Channel Audio Transcription Pipeline
+   * Multi-Channel Audio Transcription Pipeline with timeout and visual loading feedback
    */
   async handleTranscription(audioBlob) {
     const durationMs = Date.now() - this.recordingStartTime;
@@ -304,9 +318,11 @@ const SpeechModule = {
 
     let finalTranscribedText = this.accumulatedStreamingText.trim();
 
-    // If streaming already gave high confidence text, prioritize it
+    // If streaming already gave full sentence, use it directly
     if (finalTranscribedText && finalTranscribedText.length >= 2) {
       this.cleanup();
+      this.isTranscribing = false;
+      if (this.onTranscribingStateCallback) this.onTranscribingStateCallback(false);
       if (this.onResultCallback) this.onResultCallback(finalTranscribedText, true);
       if (this.onEndCallback) this.onEndCallback({ isCanceled: false, text: finalTranscribedText, audioUrl: this.lastRecordedAudioUrl });
       return;
@@ -314,12 +330,17 @@ const SpeechModule = {
 
     if (isTooShort) {
       this.cleanup();
+      this.isTranscribing = false;
+      if (this.onTranscribingStateCallback) this.onTranscribingStateCallback(false);
       if (this.onErrorCallback) this.onErrorCallback('TOO_SHORT');
       if (this.onEndCallback) this.onEndCallback({ isCanceled: true });
       return;
     }
 
-    // Try posting audio to /api/transcribe or user's custom ASR service
+    // Try posting audio to /api/transcribe with 2800ms abort controller timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 2800);
+
     try {
       const customKey = localStorage.getItem('fit_asr_key') || '';
       const headers = { 'Content-Type': audioBlob.type || 'audio/webm' };
@@ -328,8 +349,11 @@ const SpeechModule = {
       const response = await fetch('/api/transcribe', {
         method: 'POST',
         headers,
-        body: audioBlob
+        body: audioBlob,
+        signal: controller.signal
       });
+
+      clearTimeout(timeoutId);
 
       if (response.ok) {
         const data = await response.json();
@@ -338,10 +362,15 @@ const SpeechModule = {
         }
       }
     } catch (netErr) {
-      console.warn('[SpeechModule] ASR API request failed:', netErr);
+      clearTimeout(timeoutId);
+      console.log('[SpeechModule] Fast ASR timeout or offline fallback');
     }
 
     this.cleanup();
+    this.isTranscribing = false;
+    if (this.onTranscribingStateCallback) {
+      this.onTranscribingStateCallback(false);
+    }
 
     if (finalTranscribedText && this.onResultCallback) {
       this.onResultCallback(finalTranscribedText, true);
@@ -369,6 +398,7 @@ const SpeechModule = {
         this.audioContext.close();
       } catch (e) {}
       this.audioContext = null;
+      this.analyser = null;
     }
   }
 };

@@ -607,6 +607,37 @@ class FitnessApp {
           timerBadge.textContent = formattedTime;
         }
       },
+      onTranscribingState: (isTranscribing) => {
+        const transcribingBanner = document.getElementById('voice-transcribing-banner');
+        const micBtn = document.getElementById('btn-toggle-mic');
+        const submitBtn = document.getElementById('btn-submit-voice-parse');
+        const statusLabel = document.getElementById('mic-status-label');
+        const textarea = document.getElementById('voice-text-input');
+
+        if (isTranscribing) {
+          transcribingBanner?.classList.remove('hidden');
+          micBtn?.classList.add('transcribing');
+          if (statusLabel) statusLabel.innerHTML = '<span style="color:var(--accent-cyan);">⚡ 正在极速转译语音中...</span>';
+          if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '⏳ 正在转译语音...';
+          }
+          if (textarea && !textarea.value) {
+            textarea.placeholder = '⚡ 正在转译您的语音内容...';
+          }
+        } else {
+          transcribingBanner?.classList.add('hidden');
+          micBtn?.classList.remove('transcribing');
+          if (statusLabel) statusLabel.textContent = '按住麦克风说话，或点击开始录音';
+          if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '🤖 AI 智能解析并提取';
+          }
+          if (textarea) {
+            textarea.placeholder = '说出或输入内容... (支持搜狗/微信输入法语音键直接打字)';
+          }
+        }
+      },
       onEnd: (result) => {
         this.updateMicUi(false);
         this.updateWaveformBars(0);

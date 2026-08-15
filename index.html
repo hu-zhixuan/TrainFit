@@ -365,9 +365,20 @@
         </div>
       </div>
       
-      <div style="display:flex;align-items:center;justify-content:center;gap:6px;">
-        <span class="status-badge" id="mic-timer-badge" style="display:none;">00:00</span>
-        <div class="mic-status-label" id="mic-status-label">按住麦克风说话，或点击开始录音</div>
+      <!-- Status and Live Transcribing Shimmer Indicator -->
+      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;">
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span class="status-badge" id="mic-timer-badge" style="display:none;">00:00</span>
+          <div class="mic-status-label" id="mic-status-label">按住麦克风说话，或点击开始录音</div>
+        </div>
+        
+        <!-- Centralized Transcribing Shimmer Bar -->
+        <div id="voice-transcribing-banner" class="transcribing-banner hidden">
+          <div class="spinner-dots">
+            <span></span><span></span><span></span>
+          </div>
+          <span class="transcribing-text">⚡ 正在极速转译中，请稍候...</span>
+        </div>
       </div>
 
       <!-- Recorded Audio Playback Bar -->
