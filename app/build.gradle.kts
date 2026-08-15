@@ -13,8 +13,8 @@ android {
     applicationId = "com.trainfit.ai"
     minSdk = 24
     targetSdk = 34
-    versionCode = 1
-    versionName = "1.0.0"
+    versionCode = 2
+    versionName = "1.1.0"
 
     // Provide a default empty API key so BuildConfig.GEMINI_API_KEY always compiles
     buildConfigField("String", "GEMINI_API_KEY", "\"\"")

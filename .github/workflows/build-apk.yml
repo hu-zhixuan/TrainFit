@@ -47,43 +47,48 @@ jobs:
           mkdir -p release-apk
           APK_PATH=$(find app/build/outputs/apk/ -name "*.apk" | head -n 1)
           echo "Found APK at: $APK_PATH"
-          cp "$APK_PATH" release-apk/TrainFit-v1.0.apk
+          cp "$APK_PATH" release-apk/TrainFit-v1.1.apk
+          cp "$APK_PATH" release-apk/TrainFit-Latest.apk
           ls -lh release-apk/
 
       - name: Upload APK Artifact to Actions
         uses: actions/upload-artifact@v4
         with:
-          name: TrainFit-v1.0-APK
-          path: release-apk/TrainFit-v1.0.apk
+          name: TrainFit-v1.1-APK
+          path: release-apk/TrainFit-v1.1.apk
           retention-days: 30
 
       - name: Commit and Push APK directly to repo
         run: |
           mkdir -p downloads
-          cp release-apk/TrainFit-v1.0.apk downloads/TrainFit-v1.0.apk
+          cp release-apk/TrainFit-v1.1.apk downloads/TrainFit-v1.1.apk
+          cp release-apk/TrainFit-v1.1.apk downloads/TrainFit-Latest.apk
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -f downloads/TrainFit-v1.0.apk
-          git commit -m "chore(release): upload pre-built TrainFit-v1.0.apk binary [skip ci]" || echo "No changes to commit"
+          git add -f downloads/TrainFit-v1.1.apk downloads/TrainFit-Latest.apk
+          git commit -m "chore(release): upload pre-built TrainFit-v1.1.apk binary [skip ci]" || echo "No changes to commit"
           git push origin main
 
       - name: Publish APK to GitHub Releases
         uses: softprops/action-gh-release@v2
         continue-on-error: true
         with:
-          tag_name: v1.0.0
-          name: "TrainFit v1.0.0 正式安装包 (Android APK)"
+          tag_name: v1.1.0
+          name: "TrainFit v1.1.0 重磅升级版 (Android APK)"
           body: |
-            ### 🏋️‍♂️ 练食AI (TrainFit) v1.0.0 正式版
-            
-            - 🎙️ **全能中式口喷饮食与训练记录**
-            - ⚡ **自动超负荷加片建议 (Progressive Overload)**
-            - 🎯 **动态热量缺口与三大营养素闭环**
-            - 📴 **纯本地离线运行模式**，无配置开箱即用！
-            
-            **📥 直接点击下方 Assets 中的 `TrainFit-v1.0.apk` 即可下载并安装到手机。**
+            ### 🏋️‍♂️ 练食AI (TrainFit) v1.1.0 重磅更新
+
+            - 🏋️‍♂️ **杠铃片配重算片器**：自动扣除 20kg 奥杆，彩色杠铃片智能贪心匹配与装片图解；
+            - ⚡ **Epley 1RM 力量极限预估**：动作卡片实时显示 1RM，达标点亮加片建议；
+            - 🎯 **自定义碳蛋脂与四大健身经典预设**（高蛋白刷脂、均衡减脂、增肌充碳、低碳生酮）；
+            - 🥢 **800+ 中餐高精度营养成分库与烹饪吸油率矩阵**；
+            - 🎙️ **全能口喷饮食与训练记录**，开箱即用零门槛！
+
+            **📥 直接点击下方 Assets 中的 `TrainFit-v1.1.apk` 即可下载并安装到手机。**
           draft: false
           prerelease: false
-          files: release-apk/TrainFit-v1.0.apk
+          files: |
+            release-apk/TrainFit-v1.1.apk
+            release-apk/TrainFit-Latest.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
