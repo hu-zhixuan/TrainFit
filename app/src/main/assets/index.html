@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>练食AI · 科学训练与饮食缺口追踪</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Noto+Sans+SC:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#09090b">
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <!-- App Viewport Container (Responsive Mobile Frame) -->
+  <div class="app-viewport">
+    
+    <!-- Top Minimalist Header -->
+    <header class="app-header">
+      <div class="header-branding">
+        <div class="brand-dot"></div>
+        <h1 class="brand-title">练食AI</h1>
+        <span class="header-date" id="header-date-indicator">今天</span>
+      </div>
+      <div class="header-actions">
+        <button class="icon-btn" id="btn-open-tutorial" aria-label="新手教程" title="查看新手教程">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+        </button>
+        <button class="icon-btn" id="btn-open-profile" aria-label="身体档案与代谢" title="身体档案与代谢">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Screens Container -->
+    <main class="screens-container">
+      
+      <!-- TAB 1: 饮食与热量缺口 (DIET & DEFICIT) -->
+      <section id="screen-diet" class="screen-view active">
+        
+        <!-- 1. Ultra-Clean Hero Deficit Display -->
+        <div class="deficit-hero">
+          <div class="deficit-hero-header">
+            <span class="section-tag">今日净热量缺口</span>
+            <div class="status-badge" id="diet-status-pill">缺口进行中 0%</div>
+          </div>
+
+          <div class="hero-number-row">
+            <span class="hero-number" id="diet-net-deficit-num">0</span>
+            <span class="hero-unit">kcal 净缺口</span>
+          </div>
+
+          <!-- 3-Col Data Strip -->
+          <div class="data-strip">
+            <div class="data-strip-col">
+              <span class="data-strip-label">总消耗</span>
+              <b class="data-strip-val" id="diet-total-burn-num">0 kcal</b>
+            </div>
+            <div class="data-strip-col">
+              <span class="data-strip-label">已摄入</span>
+              <b class="data-strip-val" style="color:var(--accent-orange);" id="diet-intake-num">0 kcal</b>
+            </div>
+            <div class="data-strip-col">
+              <span class="data-strip-label">剩余可吃</span>
+              <b class="data-strip-val" style="color:var(--accent-lime);" id="diet-remaining-num">0 kcal</b>
+            </div>
+          </div>
+
+          <!-- Sleek Macro Lines -->
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;margin-bottom:4px;">
+            <span style="font-size:0.7rem;color:var(--text-muted);">三大营养素目标</span>
+            <button class="btn-subtle" onclick="window.app.openCustomMacrosModal()" style="padding:2px 8px;font-size:0.68rem;height:auto;border-radius:var(--radius-full);color:var(--accent-cyan);border:1px solid rgba(56,189,248,0.3);background:transparent;">
+              ✏️ 自定义碳蛋脂
+            </button>
+          </div>
+          <div class="macro-pills-row">
+            <div class="macro-pill-item">
+              <div class="macro-pill-header"><span>蛋白质</span><b id="macro-p-txt">0/144g</b></div>
+              <div class="macro-track"><div class="macro-fill cyan-fill" id="macro-p-bar" style="width:0%"></div></div>
+            </div>
+            <div class="macro-pill-item">
+              <div class="macro-pill-header"><span>碳水</span><b id="macro-c-txt">0/238g</b></div>
+              <div class="macro-track"><div class="macro-fill lime-fill" id="macro-c-bar" style="width:0%"></div></div>
+            </div>
+            <div class="macro-pill-item">
+              <div class="macro-pill-header"><span>脂肪</span><b id="macro-f-txt">0/58g</b></div>
+              <div class="macro-track"><div class="macro-fill yellow-fill" id="macro-f-bar" style="width:0%"></div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. Clean Voice Action Capsule -->
+        <div class="action-capsule-row">
+          <button class="btn-action-primary orange-action" id="btn-hero-diet-voice">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>
+            </svg>
+            <span>🎙️ 口喷记饮食</span>
+          </button>
+          <button class="btn-action-subtle" id="btn-manual-add-diet">+ 快速记餐</button>
+        </div>
+
+        <!-- 3. Today's Meals List -->
+        <div class="list-container">
+          <div class="list-header">
+            <span class="list-title" id="diet-list-title">今日饮食 (0)</span>
+          </div>
+          <div id="diet-items-list" style="display:flex;flex-direction:column;gap:8px;"></div>
+        </div>
+      </section>
+
+      <!-- TAB 2: 训练与加片 (WORKOUT & PROGRESSIVE OVERLOAD) -->
+      <section id="screen-workout" class="screen-view">
+        
+        <!-- 1. Minimalist Workout Stats Strip -->
+        <div class="workout-stats-grid">
+          <div class="stat-item">
+            <span class="stat-item-label">总举铁容量</span>
+            <b class="stat-item-val" style="color:var(--accent-cyan);" id="workout-total-vol">0 kg</b>
+          </div>
+          <div class="stat-item">
+            <span class="stat-item-label">完成组数</span>
+            <b class="stat-item-val" id="workout-total-sets">0 组</b>
+          </div>
+          <div class="stat-item">
+            <span class="stat-item-label">运动消耗</span>
+            <b class="stat-item-val" style="color:var(--accent-lime);" id="workout-total-burn">+0 kcal</b>
+          </div>
+        </div>
+
+        <!-- 2. Clean Voice Action Capsule -->
+        <div class="action-capsule-row">
+          <button class="btn-action-primary cyan-action" id="btn-hero-workout-voice">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>
+            </svg>
+            <span>🎙️ 口喷记训练</span>
+          </button>
+          <button class="btn-action-subtle" id="btn-manual-add-workout">+ 手动加动作</button>
+        </div>
+
+        <!-- 3. Workouts List with Overload Badges -->
+        <div class="list-container">
+          <div class="list-header">
+            <span class="list-title" id="workout-list-title">今日动作与加片建议 (0)</span>
+          </div>
+          <div id="workout-items-list" style="display:flex;flex-direction:column;gap:8px;"></div>
+        </div>
+      </section>
+
+      <!-- TAB 3: 历史走势与时光回溯 (HISTORY & TIME MACHINE) -->
+      <section id="screen-history" class="screen-view">
+        
+        <!-- Segmented Period Switcher -->
+        <div class="period-segmented-bar" id="history-range-bar">
+          <button class="period-seg-btn active" data-range="WEEK">近 7 天</button>
+          <button class="period-seg-btn" data-range="MONTH">近 30 天</button>
+        </div>
+
+        <!-- Summary Grid -->
+        <div class="history-summary-grid">
+          <div class="hist-grid-col">
+            <span class="hist-grid-label">累计缺口</span>
+            <b class="hist-grid-val" style="color:var(--accent-lime);" id="hist-total-deficit">0 kcal</b>
+          </div>
+          <div class="hist-grid-col">
+            <span class="hist-grid-label">日均缺口</span>
+            <b class="hist-grid-val" id="hist-avg-deficit">0 kcal</b>
+          </div>
+          <div class="hist-grid-col">
+            <span class="hist-grid-label">总举铁</span>
+            <b class="hist-grid-val" style="color:var(--accent-cyan);" id="hist-total-volume">0 kg</b>
+          </div>
+          <div class="hist-grid-col">
+            <span class="hist-grid-label">打卡天数</span>
+            <b class="hist-grid-val" style="color:var(--accent-orange);" id="hist-active-days">0 天</b>
+          </div>
+        </div>
+
+        <!-- Deficit Trend Chart Box -->
+        <div class="chart-box">
+          <div class="chart-header">
+            <span>每日热量缺口走势</span>
+            <span style="font-size:0.65rem;color:var(--accent-cyan);">💡 点击任意柱状图开启该日全景回溯</span>
+          </div>
+          <div class="canvas-wrapper">
+            <canvas id="deficit-trend-canvas" width="340" height="170"></canvas>
+          </div>
+        </div>
+
+        <!-- Volume Trend Chart Box -->
+        <div class="chart-box">
+          <div class="chart-header">
+            <span>训练举铁容量走势 (kg)</span>
+            <span style="font-size:0.65rem;color:var(--text-muted);">点击走势点可回溯</span>
+          </div>
+          <div class="canvas-wrapper">
+            <canvas id="volume-trend-canvas" width="340" height="150"></canvas>
+          </div>
+        </div>
+
+        <!-- Past Days Timeline -->
+        <div class="list-container">
+          <div class="list-header">
+            <span class="list-title">打卡历史时光轴 (点击展开当日卡片)</span>
+          </div>
+          <div id="history-timeline-list" style="display:flex;flex-direction:column;gap:8px;"></div>
+        </div>
+      </section>
+
+      <!-- SCREEN: 身体档案与热量目标 (PROFILE) -->
+      <section id="screen-profile" class="screen-view">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <button class="icon-btn" id="btn-profile-back" title="返回">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg>
+          </button>
+          <div>
+            <h2 style="font-size:1.02rem;font-weight:800;">身体档案与日常代谢</h2>
+            <p style="font-size:0.68rem;color:var(--text-muted);">Mifflin-St Jeor 基础代谢 BMR & TDEE</p>
+          </div>
+        </div>
+
+        <div class="card">
+          <div style="display:flex;justify-content:space-around;text-align:center;padding:4px 0;">
+            <div>
+              <div class="stat-item-label">基础代谢 (BMR)</div>
+              <b class="stat-item-val" style="color:var(--accent-lime);font-size:1.15rem;" id="profile-bmr-display">1650 kcal</b>
+            </div>
+            <div style="width:1px;background:var(--border);"></div>
+            <div>
+              <div class="stat-item-label">日常总消耗 (TDEE)</div>
+              <b class="stat-item-val" style="color:var(--accent-cyan);font-size:1.15rem;" id="profile-tdee-display">2392 kcal</b>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="form-group">
+            <label class="form-label">生理性别</label>
+            <div class="gender-toggle-row">
+              <button class="gender-btn active" data-gender="male">男性 ♂</button>
+              <button class="gender-btn" data-gender="female">女性 ♀</button>
+            </div>
+          </div>
+
+          <div class="form-grid-three">
+            <div class="form-group">
+              <label class="form-label" for="input-height">身高 (cm)</label>
+              <input type="number" id="input-height" class="form-input" value="175" oninput="window.app.onProfileParamChange()">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="input-weight">体重 (kg)</label>
+              <input type="number" step="0.5" id="input-weight" class="form-input" value="72.0" oninput="window.app.onProfileParamChange()">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="input-age">年龄</label>
+              <input type="number" id="input-age" class="form-input" value="26" oninput="window.app.onProfileParamChange()">
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+            <label class="form-label" style="font-size:0.85rem;font-weight:700;margin:0;">🎯 每日目标与碳蛋脂摄入自定义</label>
+            <span class="status-badge" id="profile-macro-cal-badge" style="font-size:0.68rem;padding:2px 8px;">配比: 2050 kcal</span>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="input-target-deficit">每日目标热量缺口 (kcal)</label>
+            <input type="number" id="input-target-deficit" class="form-input" value="450" oninput="window.app.onProfileDeficitChange()">
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:6px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <span class="form-label" style="margin:0;">快速预设方案：</span>
+            </div>
+            <div class="quick-samples-box" style="margin:0;padding:0;background:transparent;border:none;">
+              <div class="samples-scroll" style="gap:6px;">
+                <span class="sample-chip" onclick="window.app.applyMacroPreset('high_protein')">🌟 高蛋白刷脂 (4:4:2)</span>
+                <span class="sample-chip" onclick="window.app.applyMacroPreset('balanced')">⚖️ 均衡减脂 (4:4:2)</span>
+                <span class="sample-chip" onclick="window.app.applyMacroPreset('bulking')">🚀 增肌充碳 (5:3:2)</span>
+                <span class="sample-chip" onclick="window.app.applyMacroPreset('low_carb')">🥑 低碳生酮 (2:1:7)</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-grid-three" style="margin-top:4px;">
+            <div class="form-group">
+              <label class="form-label" for="input-target-protein">蛋白目标 (g)</label>
+              <input type="number" id="input-target-protein" class="form-input" value="144" style="color:var(--accent-cyan);font-weight:700;" oninput="window.app.onProfileMacroInputChange()">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="input-target-carbs">碳水目标 (g)</label>
+              <input type="number" id="input-target-carbs" class="form-input" value="238" style="color:var(--accent-lime);font-weight:700;" oninput="window.app.onProfileMacroInputChange()">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="input-target-fat">脂肪目标 (g)</label>
+              <input type="number" id="input-target-fat" class="form-input" value="58" style="color:var(--accent-orange);font-weight:700;" oninput="window.app.onProfileMacroInputChange()">
+            </div>
+          </div>
+
+          <div class="macro-ratio-bar-wrapper" id="profile-macro-ratio-bar">
+            <div class="macro-ratio-seg seg-p" id="profile-seg-p" style="width:28%;">蛋 28%</div>
+            <div class="macro-ratio-seg seg-c" id="profile-seg-c" style="width:46%;">碳 46%</div>
+            <div class="macro-ratio-seg seg-f" id="profile-seg-f" style="width:26%;">脂 26%</div>
+          </div>
+        </div>
+
+        <button class="btn-primary cyan-btn large-btn" id="btn-save-profile">
+          ✓ 保存身体档案与设置
+        </button>
+
+        <div class="card" style="gap:8px;">
+          <button class="btn-subtle" id="btn-profile-reopen-tutorial">
+            📖 重新查看新手使用教程
+          </button>
+          <button class="btn-danger" id="btn-open-reset-modal">
+            🗑️ 清空所有打卡数据 (恢复全新 0 状态)
+          </button>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- Bottom Navigation Bar -->
+    <nav class="bottom-nav-bar">
+      <button class="nav-item active" data-tab="diet">
+        <svg class="nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+          <path d="M18 8h1a4 4 0 0 1 0 8h-1M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8zM6 1v3M10 1v3M14 1v3"/>
+        </svg>
+        <span>饮食 · 缺口</span>
+      </button>
+      <button class="nav-item" data-tab="workout">
+        <svg class="nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+          <path d="M6 2v20M18 2v20M6 12h12M2 7h4M2 17h4M18 7h4M18 17h4"/>
+        </svg>
+        <span>训练 · 加片</span>
+      </button>
+      <button class="nav-item" data-tab="history">
+        <svg class="nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+          <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+        </svg>
+        <span>历史走势</span>
+      </button>
+    </nav>
+  </div>
+
+  <!-- MODAL: VOICE DICTATION SHEET (WeChat Style Hold & Click Dual Mode) -->
+  <div class="modal-overlay hidden" id="modal-voice-dictation">
+    <div class="bottom-sheet-content">
+      <div class="sheet-handle"></div>
+      <div class="sheet-header">
+        <div>
+          <h3 class="sheet-title" id="voice-sheet-title">🎙️ 口喷录入</h3>
+          <p class="sheet-subtitle" id="voice-sheet-desc">支持【按住说话】或【点击录音】，也可直接打字</p>
+        </div>
+        <button class="icon-btn" id="btn-close-voice-sheet">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <!-- Center Big Mic with Waveform and Live Timer -->
+      <div class="mic-pulsing-wrapper">
+        <div class="pulse-ring" id="mic-pulse-ring"></div>
+        <button class="big-mic-btn" id="btn-toggle-mic" title="按住说话 或 点击录音">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">
+            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>
+          </svg>
+        </button>
+        <div class="audio-waveform-bars" id="audio-waveform-bars">
+          <div class="waveform-bar"></div>
+          <div class="waveform-bar"></div>
+          <div class="waveform-bar"></div>
+          <div class="waveform-bar"></div>
+          <div class="waveform-bar"></div>
+          <div class="waveform-bar"></div>
+          <div class="waveform-bar"></div>
+        </div>
+      </div>
+      
+      <!-- Status and Live Transcribing Shimmer Indicator -->
+      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;">
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span class="status-badge" id="mic-timer-badge" style="display:none;">00:00</span>
+          <div class="mic-status-label" id="mic-status-label">按住麦克风说话，或点击开始录音</div>
+        </div>
+        
+        <!-- Centralized Transcribing Shimmer Bar -->
+        <div id="voice-transcribing-banner" class="transcribing-banner hidden">
+          <div class="spinner-dots">
+            <span></span><span></span><span></span>
+          </div>
+          <span class="transcribing-text">⚡ 正在极速转译中，请稍候...</span>
+        </div>
+      </div>
+
+      <!-- Recorded Audio Playback Bar -->
+      <div id="voice-audio-preview" style="display:none;align-items:center;justify-content:space-between;background:var(--bg-input);padding:8px 12px;border-radius:var(--radius-sm);border:1px solid var(--border-subtle);font-size:0.75rem;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <button id="btn-play-audio-preview" style="background:var(--accent-cyan);border:none;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#000;font-size:0.65rem;">▶</button>
+          <span style="color:var(--text-secondary);">录音已就绪</span>
+        </div>
+        <span id="audio-preview-duration" style="color:var(--text-muted);font-variant-numeric:tabular-nums;">00:03</span>
+      </div>
+
+      <!-- Quick sample pills -->
+      <div class="quick-samples-box">
+        <div class="samples-title">快捷口喷示例（点击快速体验）：</div>
+        <div class="samples-scroll" id="voice-samples-container"></div>
+      </div>
+
+      <textarea id="voice-text-input" class="voice-textarea" rows="2" placeholder="说出或输入内容... (支持搜狗/微信输入法语音键直接打字)"></textarea>
+
+      <button class="btn-primary cyan-btn large-btn" id="btn-submit-voice-parse">
+        🤖 AI 智能解析并提取
+      </button>
+    </div>
+  </div>
+
+  <!-- MODAL: DAILY TIME MACHINE RETROSPECTIVE (历史全景回溯与彩色卡片) -->
+  <div class="modal-overlay hidden" id="modal-day-retrospective">
+    <div class="dialog-card retrospective-card">
+      <div class="retrospective-header">
+        <div class="retro-nav-group">
+          <button class="icon-btn" id="btn-retro-prev-day" title="前一天">‹</button>
+          <div>
+            <h3 class="retro-title" id="retro-date-title">2026-08-15</h3>
+            <span class="status-badge" id="retro-status-pill">达标</span>
+          </div>
+          <button class="icon-btn" id="btn-retro-next-day" title="后一天">›</button>
+        </div>
+        <button class="icon-btn" id="btn-close-retro" title="关闭回溯">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <!-- Retrospective Hero Summary Ring -->
+      <div class="retro-hero-box" id="retro-hero-box">
+        <div class="retro-ring-wrapper">
+          <canvas id="retrospective-ring-canvas" width="100" height="100"></canvas>
+          <div class="retro-ring-center">
+            <span class="retro-ring-num" id="retro-net-deficit-num">0</span>
+            <span class="retro-ring-sub">kcal 净缺口</span>
+          </div>
+        </div>
+        <div class="retro-hero-stats">
+          <div class="retro-stat-row">
+            <span class="stat-item-label">总消耗 (TDEE+运动)</span>
+            <b class="stat-item-val" id="retro-total-burn">0 kcal</b>
+          </div>
+          <div class="retro-stat-row">
+            <span class="stat-item-label">已摄入卡路里</span>
+            <b class="stat-item-val" style="color:var(--accent-orange);" id="retro-intake">0 kcal</b>
+          </div>
+          <div class="retro-stat-row">
+            <span class="stat-item-label">目标缺口要求</span>
+            <b class="stat-item-val" style="color:var(--accent-lime);" id="retro-target-deficit">450 kcal</b>
+          </div>
+        </div>
+      </div>
+
+      <!-- Colored Card 1: 🥗 饮食营养全景 (Warm Amber Glow) -->
+      <div class="color-card color-card-diet">
+        <div class="color-card-header">
+          <span class="color-card-title" style="color:var(--accent-orange);">🥗 饮食与营养全景</span>
+          <span class="color-card-badge" id="retro-diet-total-cal">0 kcal</span>
+        </div>
+        
+        <!-- Macros Bar -->
+        <div class="macro-pills-row" style="margin:4px 0 8px;">
+          <div class="macro-pill-item">
+            <div class="macro-pill-header"><span>蛋白</span><b id="retro-macro-p">0g</b></div>
+            <div class="macro-track"><div class="macro-fill cyan-fill" id="retro-macro-p-bar" style="width:0%"></div></div>
+          </div>
+          <div class="macro-pill-item">
+            <div class="macro-pill-header"><span>碳水</span><b id="retro-macro-c">0g</b></div>
+            <div class="macro-track"><div class="macro-fill lime-fill" id="retro-macro-c-bar" style="width:0%"></div></div>
+          </div>
+          <div class="macro-pill-item">
+            <div class="macro-pill-header"><span>脂肪</span><b id="retro-macro-f">0g</b></div>
+            <div class="macro-track"><div class="macro-fill yellow-fill" id="retro-macro-f-bar" style="width:0%"></div></div>
+          </div>
+        </div>
+
+        <div id="retro-diet-items-list" class="retro-items-container"></div>
+      </div>
+
+      <!-- Colored Card 2: 🏋️ 训练与加片全景 (Ice Cyan Glow) -->
+      <div class="color-card color-card-workout">
+        <div class="color-card-header">
+          <span class="color-card-title" style="color:var(--accent-cyan);">🏋️ 训练负荷与加片回溯</span>
+          <span class="color-card-badge" id="retro-workout-vol">0 kg 吨位</span>
+        </div>
+
+        <div class="retro-sub-stats">
+          <span>完成组数: <b id="retro-workout-sets">0 组</b></span>
+          <span>运动消耗: <b id="retro-workout-burn" style="color:var(--accent-lime);">+0 kcal</b></span>
+        </div>
+
+        <div id="retro-workout-items-list" class="retro-items-container"></div>
+      </div>
+
+      <div class="dialog-actions-row">
+        <button class="btn-subtle" id="btn-retro-close-bottom">关闭</button>
+        <button class="btn-primary cyan-btn" id="btn-retro-set-active-day">跳转为今日记录</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: CONFIRM WORKOUTS -->
+  <div class="modal-overlay hidden" id="modal-confirm-workouts">
+    <div class="dialog-card">
+      <div class="sheet-header">
+        <div>
+          <h3 class="sheet-title">AI 提取到训练项目</h3>
+          <p class="sheet-subtitle">核对动作、组数与重量</p>
+        </div>
+      </div>
+      <div id="confirm-workouts-items-container" style="display:flex;flex-direction:column;gap:8px;"></div>
+      <div class="dialog-actions-row">
+        <button class="btn-subtle" id="btn-cancel-workout-confirm">取消</button>
+        <button class="btn-primary cyan-btn" id="btn-save-confirmed-workouts">✓ 存入训练</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: CONFIRM DIET -->
+  <div class="modal-overlay hidden" id="modal-confirm-diet">
+    <div class="dialog-card">
+      <div class="sheet-header">
+        <div>
+          <h3 class="sheet-title">AI 营养与热量识别</h3>
+          <p class="sheet-subtitle">已自动计算食物克数与热量营养</p>
+        </div>
+      </div>
+
+      <div class="gender-toggle-row" id="confirm-diet-meal-types">
+        <button class="gender-btn meal-type-btn active" data-type="早餐">早餐</button>
+        <button class="gender-btn meal-type-btn" data-type="午餐">午餐</button>
+        <button class="gender-btn meal-type-btn" data-type="晚餐">晚餐</button>
+        <button class="gender-btn meal-type-btn" data-type="加餐/补剂">加餐</button>
+      </div>
+
+      <!-- Cooking Oil / Sauce Mode Selector -->
+      <div style="display:flex;justify-content:space-between;align-items:center;margin:2px 0;">
+        <span style="font-size:0.7rem;color:var(--text-muted);">🍳 烹饪油脂档位：</span>
+        <div class="gender-toggle-row" style="margin:0;gap:4px;">
+          <button class="gender-btn oil-mode-btn" data-oil="0.5" onclick="window.app.setDietOilMode(0.5, this)" style="padding:3px 8px;font-size:0.68rem;">🌿少油/自烹</button>
+          <button class="gender-btn oil-mode-btn active" data-oil="1.0" onclick="window.app.setDietOilMode(1.0, this)" style="padding:3px 8px;font-size:0.68rem;">🍳标准外卖</button>
+          <button class="gender-btn oil-mode-btn" data-oil="1.5" onclick="window.app.setDietOilMode(1.5, this)" style="padding:3px 8px;font-size:0.68rem;">🔥餐馆重油</button>
+        </div>
+      </div>
+
+      <div id="confirm-diet-items-box" style="background:var(--bg-input);padding:10px;border-radius:var(--radius-sm);border:1px solid var(--border-subtle);display:flex;flex-direction:column;gap:6px;font-size:0.75rem;"></div>
+
+      <div class="form-group">
+        <label class="form-label">食物摘要</label>
+        <input type="text" id="confirm-diet-summary" class="form-input">
+      </div>
+
+      <div class="form-grid-four">
+        <div class="form-group">
+          <label class="form-label">热量 (kcal)</label>
+          <input type="number" id="confirm-diet-cal" class="form-input" style="color:var(--accent-orange);font-weight:700;">
+        </div>
+        <div class="form-group">
+          <label class="form-label">蛋白 (g)</label>
+          <input type="number" id="confirm-diet-p" class="form-input">
+        </div>
+        <div class="form-group">
+          <label class="form-label">碳水 (g)</label>
+          <input type="number" id="confirm-diet-c" class="form-input">
+        </div>
+        <div class="form-group">
+          <label class="form-label">脂肪 (g)</label>
+          <input type="number" id="confirm-diet-f" class="form-input">
+        </div>
+      </div>
+
+      <div class="dialog-actions-row">
+        <button class="btn-subtle" id="btn-cancel-diet-confirm">取消</button>
+        <button class="btn-primary orange-btn" id="btn-save-confirmed-diet">✓ 存入饮食</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: MANUAL WORKOUT INPUT FORM -->
+  <div class="modal-overlay hidden" id="modal-manual-workout">
+    <div class="dialog-card">
+      <div class="sheet-header">
+        <div>
+          <h3 class="sheet-title">手动添加训练动作</h3>
+          <p class="sheet-subtitle">快速选择或输入动作、组数与重量</p>
+        </div>
+      </div>
+
+      <div class="quick-samples-box">
+        <div class="samples-title">常用快捷填入：</div>
+        <div class="samples-scroll">
+          <span class="sample-chip" onclick="window.app.fillManualExercise('杠铃卧推', '胸部', 80, 4, 8)">卧推 (80kg 4x8)</span>
+          <span class="sample-chip" onclick="window.app.fillManualExercise('杠铃深蹲', '腿部', 100, 4, 6)">深蹲 (100kg 4x6)</span>
+          <span class="sample-chip" onclick="window.app.fillManualExercise('传统硬拉', '背部/臀腿', 120, 4, 6)">硬拉 (120kg 4x6)</span>
+          <span class="sample-chip" onclick="window.app.fillManualExercise('引体向上', '背部', 0, 4, 8)">引体 (自重 4x8)</span>
+          <span class="sample-chip" onclick="window.app.fillManualExercise('哑铃侧平举', '肩部', 8, 4, 15)">侧平举 (8kg 4x15)</span>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">动作名称</label>
+        <input type="text" id="manual-exercise-name" class="form-input" value="杠铃卧推">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">训练部位</label>
+        <select id="manual-exercise-muscle" class="form-input">
+          <option value="胸部">胸部</option>
+          <option value="背部">背部</option>
+          <option value="腿部">腿部</option>
+          <option value="肩部">肩部</option>
+          <option value="手臂">手臂</option>
+          <option value="核心">核心</option>
+          <option value="有氧">有氧</option>
+        </select>
+      </div>
+
+      <div class="form-grid-three">
+        <div class="form-group">
+          <label class="form-label">重量 (kg)</label>
+          <input type="number" step="0.5" id="manual-exercise-weight" class="form-input" value="80">
+        </div>
+        <div class="form-group">
+          <label class="form-label">组数</label>
+          <input type="number" id="manual-exercise-sets" class="form-input" value="4">
+        </div>
+        <div class="form-group">
+          <label class="form-label">每组次数</label>
+          <input type="number" id="manual-exercise-reps" class="form-input" value="8">
+        </div>
+      </div>
+
+      <div class="dialog-actions-row">
+        <button class="btn-subtle" id="btn-cancel-manual-workout">取消</button>
+        <button class="btn-primary cyan-btn" id="btn-save-manual-workout">✓ 保存训练</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: NOVICE TUTORIAL & ONBOARDING -->
+  <div class="modal-overlay hidden" id="modal-onboarding">
+    <div class="dialog-card onboarding-card">
+      
+      <!-- Top Dots -->
+      <div class="onboarding-steps-indicator">
+        <div class="step-dot active" id="onboarding-dot-1"></div>
+        <div class="step-dot" id="onboarding-dot-2"></div>
+        <div class="step-dot" id="onboarding-dot-3"></div>
+      </div>
+
+      <!-- SLIDE 1 -->
+      <div class="tutorial-step-slide active" id="tutorial-slide-1">
+        <div>
+          <div style="font-size:0.68rem;font-weight:700;color:var(--accent-orange);">新手教程 · 1/3</div>
+          <h2 style="font-size:1.05rem;font-weight:800;margin-top:2px;">🎙️ 口喷记饮食 · 缺口闭环</h2>
+          <p style="font-size:0.72rem;color:var(--text-muted);">一句话搞定营养统计，无需翻找繁琐菜名</p>
+        </div>
+
+        <div class="tutorial-feature-card">
+          <div class="tutorial-feature-icon">🥗</div>
+          <div class="tutorial-feature-body">
+            <div class="tutorial-feature-title">中式生活量词秒级换算</div>
+            <div class="tutorial-feature-desc">说出 <i>“两碗米饭配半斤酱牛肉”</i> 或 <i>“2个水煮蛋加一杯牛奶”</i>，AI 自动核算克数、卡路里与蛋白质。</div>
+          </div>
+        </div>
+
+        <div class="tutorial-feature-card">
+          <div class="tutorial-feature-icon">🎯</div>
+          <div class="tutorial-feature-body">
+            <div class="tutorial-feature-title">实时净缺口闭环</div>
+            <div class="tutorial-feature-desc">根据日常代谢 + 训练消耗，实时提示 <i>“今日还可吃多少 kcal”</i>，杜绝饮食超标。</div>
+          </div>
+        </div>
+
+        <div class="dialog-actions-row" style="justify-content:space-between;">
+          <button class="btn-subtle" onclick="window.app.skipToProfileStep()">跳过介绍</button>
+          <button class="btn-primary cyan-btn" onclick="window.app.nextTutorialStep(2)">下一步：训练加片 ➔</button>
+        </div>
+      </div>
+
+      <!-- SLIDE 2 -->
+      <div class="tutorial-step-slide" id="tutorial-slide-2">
+        <div>
+          <div style="font-size:0.68rem;font-weight:700;color:var(--accent-cyan);">新手教程 · 2/3</div>
+          <h2 style="font-size:1.05rem;font-weight:800;margin-top:2px;">🏋️ 口喷记训练 · 科学加片</h2>
+          <p style="font-size:0.72rem;color:var(--text-muted);">双重累进模型，告别健身房盲目训练</p>
+        </div>
+
+        <div class="tutorial-feature-card">
+          <div class="tutorial-feature-icon">⚡</div>
+          <div class="tutorial-feature-body">
+            <div class="tutorial-feature-title">一键提取组数与重量</div>
+            <div class="tutorial-feature-desc">说出 <i>“卧推80公斤做4组每组10个”</i>，自动生成动作卡片并计算举铁吨位与能量消耗。</div>
+          </div>
+        </div>
+
+        <div class="tutorial-feature-card">
+          <div class="tutorial-feature-icon">🚀</div>
+          <div class="tutorial-feature-body">
+            <div class="tutorial-feature-title">自动超负荷加片建议</div>
+            <div class="tutorial-feature-desc">完成目标组次时，系统自动生成 <b>+2.5kg 加片徽章</b>，指引下一次训练稳步突破。</div>
+          </div>
+        </div>
+
+        <div class="dialog-actions-row" style="justify-content:space-between;">
+          <button class="btn-subtle" onclick="window.app.nextTutorialStep(1)">上一步</button>
+          <button class="btn-primary cyan-btn" onclick="window.app.nextTutorialStep(3)">下一步：输入身体参数 ➔</button>
+        </div>
+      </div>
+
+      <!-- SLIDE 3 -->
+      <div class="tutorial-step-slide" id="tutorial-slide-3">
+        <div>
+          <div style="font-size:0.68rem;font-weight:700;color:var(--accent-lime);">初始化配置 · 3/3</div>
+          <h2 style="font-size:1.05rem;font-weight:800;margin-top:2px;">📐 输入身高体重 · 算日常代谢</h2>
+          <p style="font-size:0.72rem;color:var(--text-muted);">基于 Mifflin-St Jeor 权威公式精准计算 BMR & TDEE</p>
+        </div>
+
+        <div class="gender-toggle-row">
+          <button class="gender-btn active" id="onboarding-gender-male" onclick="window.app.setOnboardingGender('male')">男性 ♂</button>
+          <button class="gender-btn" id="onboarding-gender-female" onclick="window.app.setOnboardingGender('female')">女性 ♀</button>
+        </div>
+
+        <div class="form-grid-three">
+          <div class="form-group">
+            <label class="form-label">身高 (cm)</label>
+            <input type="number" id="onboarding-height" class="form-input" value="175" oninput="window.app.calcOnboardingTdee()">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="onboarding-weight">体重 (kg)</label>
+            <input type="number" step="0.5" id="onboarding-weight" class="form-input" value="72.0" oninput="window.app.calcOnboardingTdee()">
+          </div>
+          <div class="form-group">
+            <label class="form-label">年龄</label>
+            <input type="number" id="onboarding-age" class="form-input" value="26" oninput="window.app.calcOnboardingTdee()">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">每日目标热量缺口 (kcal)</label>
+          <input type="number" id="onboarding-deficit" class="form-input" value="450">
+        </div>
+
+        <div class="onboarding-calc-preview" id="onboarding-calc-preview">
+          预估基础代谢 BMR: <b>1650</b> kcal | 预估总消耗 TDEE: <b>2392</b> kcal
+        </div>
+
+        <div class="dialog-actions-row" style="justify-content:space-between;margin-top:4px;">
+          <button class="btn-subtle" onclick="window.app.nextTutorialStep(2)">上一步</button>
+          <button class="btn-primary cyan-btn" id="btn-complete-onboarding">
+            🚀 开启纯净练食之旅
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- MODAL: CUSTOM MACROS (自定义碳蛋脂摄入要求) -->
+  <div class="modal-overlay hidden" id="modal-custom-macros">
+    <div class="dialog-card">
+      <div class="sheet-header">
+        <div>
+          <h3 class="sheet-title">🎯 自定义碳蛋脂摄入要求</h3>
+          <p class="sheet-subtitle">自由设定蛋白质、碳水与脂肪的每日摄入克数</p>
+        </div>
+        <button class="icon-btn" onclick="window.app.closeCustomMacrosModal()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <!-- Quick preset chips -->
+      <div class="quick-samples-box">
+        <div class="samples-title">快速预设方案推荐：</div>
+        <div class="samples-scroll">
+          <span class="sample-chip" onclick="window.app.setCustomMacroPreset('high_protein')">🌟 高蛋白刷脂 (4:4:2)</span>
+          <span class="sample-chip" onclick="window.app.setCustomMacroPreset('balanced')">⚖️ 均衡减脂 (4:4:2)</span>
+          <span class="sample-chip" onclick="window.app.setCustomMacroPreset('bulking')">🚀 增肌充碳 (5:3:2)</span>
+          <span class="sample-chip" onclick="window.app.setCustomMacroPreset('low_carb')">🥑 低碳生酮 (2:1:7)</span>
+        </div>
+      </div>
+
+      <!-- 3 inputs -->
+      <div class="form-grid-three">
+        <div class="form-group">
+          <label class="form-label" for="custom-macro-p">蛋白质 (g)</label>
+          <input type="number" id="custom-macro-p" class="form-input" style="color:var(--accent-cyan);font-weight:700;" oninput="window.app.onCustomMacroInputChange()">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="custom-macro-c">碳水化合物 (g)</label>
+          <input type="number" id="custom-macro-c" class="form-input" style="color:var(--accent-lime);font-weight:700;" oninput="window.app.onCustomMacroInputChange()">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="custom-macro-f">脂肪 (g)</label>
+          <input type="number" id="custom-macro-f" class="form-input" style="color:var(--accent-orange);font-weight:700;" oninput="window.app.onCustomMacroInputChange()">
+        </div>
+      </div>
+
+      <!-- Visual Ratio Bar and Calories Comparison -->
+      <div class="macro-ratio-bar-wrapper">
+        <div class="macro-ratio-seg seg-p" id="custom-seg-p" style="width:28%;">蛋 28%</div>
+        <div class="macro-ratio-seg seg-c" id="custom-seg-c" style="width:46%;">碳 46%</div>
+        <div class="macro-ratio-seg seg-f" id="custom-seg-f" style="width:26%;">脂 26%</div>
+      </div>
+
+      <div style="background:var(--bg-input);padding:10px 12px;border-radius:var(--radius-sm);border:1px solid var(--border-subtle);display:flex;flex-direction:column;gap:4px;font-size:0.75rem;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <span style="color:var(--text-muted);">三大营养素总热量：</span>
+          <b id="custom-macro-total-cal" style="color:var(--accent-cyan);font-size:0.85rem;">2050 kcal</b>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;font-size:0.7rem;color:var(--text-muted);">
+          <span>当前每日饮食目标：</span>
+          <span id="custom-macro-target-diet-cal">1942 kcal (TDEE - 缺口)</span>
+        </div>
+      </div>
+
+      <div class="dialog-actions-row">
+        <button class="btn-subtle" onclick="window.app.closeCustomMacrosModal()">取消</button>
+        <button class="btn-primary cyan-btn" onclick="window.app.saveCustomMacros()">✓ 保存并应用要求</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: RESET CONFIRM -->
+  <div class="modal-overlay hidden" id="modal-reset-confirm">
+    <div class="dialog-card">
+      <div>
+        <h3 class="sheet-title" style="color:var(--accent-red);">⚠️ 确认清空所有数据？</h3>
+        <p class="sheet-subtitle" style="margin-top:4px;">此操作将清空全部历史饮食与训练记录，恢复为 0 状态，不可撤回。</p>
+      </div>
+      <div class="dialog-actions-row">
+        <button class="btn-subtle" id="btn-cancel-reset">取消</button>
+        <button class="btn-danger" id="btn-confirm-reset">确认彻底清空</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: BARBELL PLATE CALCULATOR (杠铃片配重计算器) -->
+  <div class="modal-overlay hidden" id="modal-plate-calculator">
+    <div class="dialog-card">
+      <div class="sheet-header">
+        <div>
+          <h3 class="sheet-title">🏋️ 杠铃片配重计算器</h3>
+          <p class="sheet-subtitle">告别大脑缺氧算片，单边装片一目了然</p>
+        </div>
+        <button class="icon-btn" onclick="window.app.closePlateCalculator()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">目标总重量 (kg，包含20kg标准奥林匹克杆)</label>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button class="btn-subtle" onclick="window.app.adjustPlateCalcWeight(-2.5)" style="padding:6px 12px;font-weight:700;">-2.5</button>
+          <input type="number" step="2.5" id="plate-calc-weight-input" class="form-input" value="80" style="text-align:center;font-size:1.2rem;font-weight:800;color:var(--accent-cyan);" oninput="window.app.renderPlateCalculation()">
+          <button class="btn-subtle" onclick="window.app.adjustPlateCalcWeight(2.5)" style="padding:6px 12px;font-weight:700;">+2.5</button>
+        </div>
+      </div>
+
+      <!-- Barbell Graphic Visualization -->
+      <div id="plate-calc-visual" class="barbell-visual-wrapper"></div>
+
+      <!-- Text breakdown -->
+      <div id="plate-calc-text-summary" style="background:var(--bg-input);padding:10px 12px;border-radius:var(--radius-sm);border:1px solid var(--border-subtle);font-size:0.75rem;"></div>
+
+      <div class="dialog-actions-row">
+        <button class="btn-primary cyan-btn" onclick="window.app.closePlateCalculator()">✓ 明白，去举铁</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- FLOATING REST TIMER (组间休息计时器) -->
+  <div id="floating-rest-timer" class="floating-timer hidden">
+    <div class="timer-left">
+      <span class="timer-icon">⏱️</span>
+      <div>
+        <div class="timer-title">组间休息倒计时</div>
+        <div class="timer-digits" id="rest-timer-digits">01:30</div>
+      </div>
+    </div>
+    <div class="timer-right">
+      <button class="timer-btn" onclick="window.app.adjustRestTimer(-15)">-15s</button>
+      <button class="timer-btn" onclick="window.app.adjustRestTimer(30)">+30s</button>
+      <button class="timer-btn timer-btn-skip" onclick="window.app.skipRestTimer()">跳过</button>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div class="toast hidden" id="app-toast"></div>
+
+  <!-- JavaScript Modules -->
+  <script src="js/nutrition.js"></script>
+  <script src="js/workout.js"></script>
+  <script src="js/charts.js"></script>
+  <script src="js/speech.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
