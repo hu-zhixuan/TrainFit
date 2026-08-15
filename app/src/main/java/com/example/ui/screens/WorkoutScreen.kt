@@ -50,6 +50,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.WorkoutLog
+import com.example.ui.components.BarbellPlateCalculatorDialog
 import com.example.ui.components.DictationMode
 import com.example.ui.components.ManualWorkoutDialog
 import com.example.ui.theme.ElectricLime
@@ -72,6 +73,7 @@ fun WorkoutScreen(
 
     var selectedMuscleFilter by remember { mutableStateOf("全部") }
     var showManualAddDialog by remember { mutableStateOf(false) }
+    var plateCalcWeight by remember { mutableStateOf<Double?>(null) }
 
     val muscleOptions = listOf("全部", "胸部", "背部", "腿部", "肩部", "手臂", "核心", "有氧")
 
@@ -84,6 +86,13 @@ fun WorkoutScreen(
     val totalVolume = workouts.sumOf { it.totalVolumeKg }
     val totalSets = workouts.sumOf { it.sets }
     val totalBurn = workouts.sumOf { it.caloriesBurned }
+
+    if (plateCalcWeight != null) {
+        BarbellPlateCalculatorDialog(
+            initialWeightKg = plateCalcWeight!!,
+            onDismiss = { plateCalcWeight = null }
+        )
+    }
 
     if (showManualAddDialog) {
         ManualWorkoutDialog(
@@ -303,6 +312,7 @@ fun WorkoutScreen(
             items(filteredWorkouts, key = { it.id }) { item ->
                 WorkoutItemCard(
                     workout = item,
+                    onOpenPlateCalc = { plateCalcWeight = item.weightKg },
                     onDelete = { viewModel.deleteWorkout(item.id) }
                 )
             }
@@ -313,8 +323,12 @@ fun WorkoutScreen(
 @Composable
 fun WorkoutItemCard(
     workout: WorkoutLog,
+    onOpenPlateCalc: () -> Unit,
     onDelete: () -> Unit
 ) {
+    val est1RM = if (workout.reps <= 1) workout.weightKg.roundToInt() else (workout.weightKg * (1 + workout.reps / 30.0)).roundToInt()
+    val isBarbell = workout.weightKg >= 20.0 && (workout.exerciseName.contains("卧推") || workout.exerciseName.contains("深蹲") || workout.exerciseName.contains("硬拉") || workout.exerciseName.contains("推举") || workout.exerciseName.contains("杠铃"))
+
     Card(
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = SurfaceCardDark),
@@ -322,7 +336,7 @@ fun WorkoutItemCard(
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            // Title & Muscle Badge & Delete
+            // Title & Muscle Badge & Plate Calc Button & Delete
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -349,6 +363,23 @@ fun WorkoutItemCard(
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold
                     )
+                    if (isBarbell) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Surface(
+                            onClick = onOpenPlateCalc,
+                            shape = RoundedCornerShape(6.dp),
+                            color = NeonCyan.copy(alpha = 0.15f),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, NeonCyan.copy(alpha = 0.4f))
+                        ) {
+                            Text(
+                                text = "⚡ 算片",
+                                color = NeonCyan,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
                 }
 
                 IconButton(
@@ -409,17 +440,33 @@ fun WorkoutItemCard(
                     )
                 }
 
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = Color(0xFF131A29)
-                ) {
-                    Text(
-                        text = "容量 ${workout.totalVolumeKg.roundToInt()}kg",
-                        color = TextSecondary,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                    )
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    if (est1RM > 0) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color(0xFF1E293B)
+                        ) {
+                            Text(
+                                text = "预估1RM ${est1RM}kg",
+                                color = NeonCyan,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = Color(0xFF131A29)
+                    ) {
+                        Text(
+                            text = "容量 ${workout.totalVolumeKg.roundToInt()}kg",
+                            color = TextSecondary,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
                 }
             }
 

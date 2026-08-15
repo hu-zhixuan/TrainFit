@@ -5,8 +5,10 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -792,5 +794,425 @@ fun ManualWorkoutDialog(
                 }
             }
         }
+    }
+}
+
+// ==================== Barbell Plate Calculator (杠铃片配重计算器) ====================
+@Composable
+fun BarbellPlateCalculatorDialog(
+    initialWeightKg: Double = 80.0,
+    onDismiss: () -> Unit
+) {
+    var weightText by remember { mutableStateOf(initialWeightKg.roundToInt().toString()) }
+    val currentWeight = weightText.toDoubleOrNull() ?: 20.0
+    val targetWeight = currentWeight.coerceAtLeast(20.0)
+    val barWeight = 20.0
+    val netWeight = (targetWeight - barWeight).coerceAtLeast(0.0)
+    val perSideWeight = netWeight / 2.0
+
+    val availablePlates = listOf(25.0, 20.0, 15.0, 10.0, 5.0, 2.5, 1.25)
+    val platesPerSide = remember(perSideWeight) {
+        val result = mutableListOf<Double>()
+        var remaining = perSideWeight
+        for (p in availablePlates) {
+            while (remaining >= p - 0.01) {
+                result.add(p)
+                remaining = kotlin.math.round((remaining - p) * 100) / 100.0
+            }
+        }
+        result
+    }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(24.dp),
+            color = SurfaceCardDark,
+            border = androidx.compose.foundation.BorderStroke(1.dp, NeonCyan.copy(alpha = 0.5f)),
+            modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp)
+        ) {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                // Header
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier.size(38.dp).clip(CircleShape).background(NeonCyan.copy(alpha = 0.2f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.FitnessCenter, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(20.dp))
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text("🏋️ 杠铃配重算片器", color = TextPrimary, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                            Text("告别大脑缺氧算片，单边装片一目了然", color = TextSecondary, fontSize = 11.sp)
+                        }
+                    }
+                    IconButton(onClick = onDismiss, modifier = Modifier.size(28.dp)) {
+                        Icon(Icons.Default.Close, contentDescription = "Close", tint = TextMuted)
+                    }
+                }
+
+                // Weight Input & Steppers
+                Column {
+                    Text("目标总重量 (含20kg标准奥林匹克杆)", color = TextMuted, fontSize = 11.sp)
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedButton(
+                            onClick = {
+                                val next = (targetWeight - 2.5).coerceAtLeast(20.0)
+                                weightText = if (next % 1.0 == 0.0) next.roundToInt().toString() else next.toString()
+                            },
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.size(44.dp),
+                            contentPadding = PaddingValues(0.dp)
+                        ) {
+                            Text("-2.5", color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+
+                        OutlinedTextField(
+                            value = weightText,
+                            onValueChange = { weightText = it },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.weight(1f),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = NeonCyan,
+                                unfocusedTextColor = NeonCyan,
+                                focusedBorderColor = NeonCyan,
+                                unfocusedBorderColor = Color(0xFF334155)
+                            ),
+                            textStyle = androidx.compose.ui.text.TextStyle(
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                fontWeight = FontWeight.Black,
+                                fontSize = 18.sp
+                            )
+                        )
+
+                        OutlinedButton(
+                            onClick = {
+                                val next = targetWeight + 2.5
+                                weightText = if (next % 1.0 == 0.0) next.roundToInt().toString() else next.toString()
+                            },
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.size(44.dp),
+                            contentPadding = PaddingValues(0.dp)
+                        ) {
+                            Text("+2.5", color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+
+                // Barbell Visual Schematic
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Color(0xFF131A29))
+                        .border(1.dp, Color(0xFF26324A), RoundedCornerShape(14.dp))
+                        .padding(14.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        // Left plates
+                        Row(horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
+                            platesPerSide.asReversed().forEach { p ->
+                                PlateDiscView(p)
+                            }
+                        }
+                        // Sleeve & Collar & Bar
+                        Box(modifier = Modifier.width(4.dp).height(30.dp).background(Color(0xFF64748B)))
+                        Box(
+                            modifier = Modifier.width(40.dp).height(18.dp).background(Color(0xFF94A3B8)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("20kg", color = Color.Black, fontSize = 9.sp, fontWeight = FontWeight.Black)
+                        }
+                        Box(modifier = Modifier.width(4.dp).height(30.dp).background(Color(0xFF64748B)))
+                        // Right plates
+                        Row(horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
+                            platesPerSide.forEach { p ->
+                                PlateDiscView(p)
+                            }
+                        }
+                    }
+                }
+
+                // Summary Text
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0xFF131A29))
+                        .padding(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("单侧配重: ", color = TextMuted, fontSize = 12.sp)
+                        Text("${perSideWeight} kg", color = NeonCyan, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    val plateSummary = if (platesPerSide.isEmpty()) {
+                        "无需挂片 (使用20kg空杆)"
+                    } else {
+                        val counts = platesPerSide.groupingBy { it }.eachCount()
+                        counts.entries.joinToString(" + ") { "${it.key}kg × ${it.value}块" }
+                    }
+                    Text("👉 每边装片: $plateSummary", color = TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                }
+
+                // Confirm button
+                Button(
+                    onClick = onDismiss,
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = NeonCyan, contentColor = Color.Black),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("✓ 明白，去举铁", fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun PlateDiscView(weightKg: Double) {
+    val (color, height, width) = when (weightKg) {
+        25.0 -> Triple(Color(0xFFEF4444), 48.dp, 10.dp)
+        20.0 -> Triple(Color(0xFF3B82F6), 44.dp, 9.dp)
+        15.0 -> Triple(Color(0xFFEAB308), 40.dp, 8.dp)
+        10.0 -> Triple(Color(0xFF22C55E), 36.dp, 7.dp)
+        5.0 -> Triple(Color(0xFFF8FAFC), 30.dp, 6.dp)
+        2.5 -> Triple(Color(0xFF1E293B), 24.dp, 5.dp)
+        else -> Triple(Color(0xFF64748B), 20.dp, 5.dp)
+    }
+    Box(
+        modifier = Modifier
+            .width(width)
+            .height(height)
+            .clip(RoundedCornerShape(2.dp))
+            .background(color)
+            .border(0.5.dp, Color.Black.copy(alpha = 0.3f), RoundedCornerShape(2.dp))
+    )
+}
+
+// ==================== Custom Macros Dialog (自定义碳蛋脂弹窗) ====================
+@Composable
+fun CustomMacrosDialog(
+    currentProteinG: Double,
+    currentCarbsG: Double,
+    currentFatG: Double,
+    weightKg: Double = 70.0,
+    targetCalories: Double = 2000.0,
+    onSave: (protein: Double, carbs: Double, fat: Double) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var pStr by remember { mutableStateOf(currentProteinG.roundToInt().toString()) }
+    var cStr by remember { mutableStateOf(currentCarbsG.roundToInt().toString()) }
+    var fStr by remember { mutableStateOf(currentFatG.roundToInt().toString()) }
+
+    val pVal = pStr.toDoubleOrNull() ?: 140.0
+    val cVal = cStr.toDoubleOrNull() ?: 240.0
+    val fVal = fStr.toDoubleOrNull() ?: 55.0
+    val totalCal = (pVal * 4 + cVal * 4 + fVal * 9).roundToInt()
+    val safeTotal = totalCal.coerceAtLeast(1)
+    val pPct = ((pVal * 4 / safeTotal) * 100).roundToInt()
+    val cPct = ((cVal * 4 / safeTotal) * 100).roundToInt()
+    val fPct = (100 - pPct - cPct).coerceAtLeast(0)
+
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(24.dp),
+            color = SurfaceCardDark,
+            border = androidx.compose.foundation.BorderStroke(1.dp, EmberOrange.copy(alpha = 0.5f)),
+            modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp)
+        ) {
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth().padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(modifier = Modifier.size(38.dp).clip(CircleShape).background(EmberOrange.copy(alpha = 0.2f)), contentAlignment = Alignment.Center) {
+                                Icon(Icons.Default.LocalFireDepartment, contentDescription = null, tint = EmberOrange, modifier = Modifier.size(20.dp))
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text("🎯 自定义碳蛋脂摄入", color = TextPrimary, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                                Text("精准匹配高蛋白刷脂、生酮或增肌", color = TextSecondary, fontSize = 11.sp)
+                            }
+                        }
+                        IconButton(onClick = onDismiss, modifier = Modifier.size(28.dp)) {
+                            Icon(Icons.Default.Close, contentDescription = "Close", tint = TextMuted)
+                        }
+                    }
+                }
+
+                // 4 Fitness Presets
+                item {
+                    Text("💡 健身经典方案一键带入", color = TextMuted, fontSize = 11.sp)
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            PresetChip("🌟高蛋白刷脂 4:4:2", modifier = Modifier.weight(1f)) {
+                                pStr = (weightKg * 2.2).roundToInt().toString()
+                                fStr = (weightKg * 0.7).roundToInt().toString()
+                                val curP = pStr.toDouble()
+                                val curF = fStr.toDouble()
+                                cStr = (((targetCalories - curP * 4 - curF * 9) / 4).coerceAtLeast(40.0)).roundToInt().toString()
+                            }
+                            PresetChip("⚖️均衡减脂 4:4:2", modifier = Modifier.weight(1f)) {
+                                pStr = (weightKg * 1.6).roundToInt().toString()
+                                fStr = (weightKg * 0.8).roundToInt().toString()
+                                val curP = pStr.toDouble()
+                                val curF = fStr.toDouble()
+                                cStr = (((targetCalories - curP * 4 - curF * 9) / 4).coerceAtLeast(50.0)).roundToInt().toString()
+                            }
+                        }
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            PresetChip("🚀增肌充碳 5:3:2", modifier = Modifier.weight(1f)) {
+                                pStr = (weightKg * 1.8).roundToInt().toString()
+                                fStr = (weightKg * 0.7).roundToInt().toString()
+                                val curP = pStr.toDouble()
+                                val curF = fStr.toDouble()
+                                cStr = (((targetCalories - curP * 4 - curF * 9) / 4).coerceAtLeast(80.0)).roundToInt().toString()
+                            }
+                            PresetChip("🥑低碳生酮 2:1:7", modifier = Modifier.weight(1f)) {
+                                cStr = (weightKg * 0.5).roundToInt().toString()
+                                pStr = (weightKg * 2.0).roundToInt().toString()
+                                val curC = cStr.toDouble()
+                                val curP = pStr.toDouble()
+                                fStr = (((targetCalories - curP * 4 - curC * 4) / 9).coerceAtLeast(30.0)).roundToInt().toString()
+                            }
+                        }
+                    }
+                }
+
+                // Inputs for P, C, F
+                item {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = pStr,
+                            onValueChange = { pStr = it },
+                            label = { Text("蛋白(g)", fontSize = 10.sp) },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.weight(1f),
+                            colors = OutlinedTextFieldDefaults.colors(focusedTextColor = NeonCyan, unfocusedTextColor = NeonCyan)
+                        )
+                        OutlinedTextField(
+                            value = cStr,
+                            onValueChange = { cStr = it },
+                            label = { Text("碳水(g)", fontSize = 10.sp) },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.weight(1f),
+                            colors = OutlinedTextFieldDefaults.colors(focusedTextColor = ElectricLime, unfocusedTextColor = ElectricLime)
+                        )
+                        OutlinedTextField(
+                            value = fStr,
+                            onValueChange = { fStr = it },
+                            label = { Text("脂肪(g)", fontSize = 10.sp) },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.weight(1f),
+                            colors = OutlinedTextFieldDefaults.colors(focusedTextColor = EmberOrange, unfocusedTextColor = EmberOrange)
+                        )
+                    }
+                }
+
+                // Dynamic Ratio Bar
+                item {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(0xFF131A29))
+                            .padding(12.dp)
+                    ) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("宏量能量核算", color = TextMuted, fontSize = 11.sp)
+                            Text("$totalCal kcal", color = EmberOrange, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(16.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                        ) {
+                            if (pPct > 0) Box(modifier = Modifier.weight(pPct.toFloat().coerceAtLeast(0.1f)).fillMaxHeight().background(NeonCyan), contentAlignment = Alignment.Center) {
+                                Text("蛋$pPct%", color = Color.Black, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                            }
+                            if (cPct > 0) Box(modifier = Modifier.weight(cPct.toFloat().coerceAtLeast(0.1f)).fillMaxHeight().background(ElectricLime), contentAlignment = Alignment.Center) {
+                                Text("碳$cPct%", color = Color.Black, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                            }
+                            if (fPct > 0) Box(modifier = Modifier.weight(fPct.toFloat().coerceAtLeast(0.1f)).fillMaxHeight().background(EmberOrange), contentAlignment = Alignment.Center) {
+                                Text("脂$fPct%", color = Color.Black, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+
+                // Actions
+                item {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        OutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f), shape = RoundedCornerShape(12.dp)) {
+                            Text("取消", color = TextSecondary)
+                        }
+                        Button(
+                            onClick = {
+                                onSave(pVal, cVal, fVal)
+                                onDismiss()
+                            },
+                            modifier = Modifier.weight(1.2f),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = EmberOrange, contentColor = Color.Black)
+                        ) {
+                            Text("保存配比", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun PresetChip(text: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(8.dp),
+        color = Color(0xFF131A29),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF26324A)),
+        modifier = modifier
+    ) {
+        Text(
+            text = text,
+            color = TextSecondary,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 6.dp),
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+        )
     }
 }

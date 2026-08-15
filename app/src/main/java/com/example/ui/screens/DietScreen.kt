@@ -55,6 +55,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.example.data.model.DietLog
+import com.example.ui.components.CustomMacrosDialog
 import com.example.ui.components.DictationMode
 import com.example.ui.theme.ElectricLime
 import com.example.ui.theme.EmberOrange
@@ -77,11 +78,26 @@ fun DietScreen(
     val daySummary by viewModel.currentDaySummary.collectAsState()
 
     var showManualAddDialog by remember { mutableStateOf(false) }
+    var showCustomMacrosDialog by remember { mutableStateOf(false) }
 
     val totalCalories = dietLogs.sumOf { it.calories }
     val totalProtein = dietLogs.sumOf { it.proteinG }
     val totalCarbs = dietLogs.sumOf { it.carbsG }
     val totalFat = dietLogs.sumOf { it.fatG }
+
+    if (showCustomMacrosDialog) {
+        CustomMacrosDialog(
+            currentProteinG = profile.targetProteinG,
+            currentCarbsG = profile.targetCarbsG,
+            currentFatG = profile.targetFatG,
+            weightKg = profile.weightKg,
+            targetCalories = (profile.tdee - profile.targetDeficitKcal).coerceAtLeast(1200.0),
+            onSave = { p, c, f ->
+                viewModel.updateUserProfile(profile.copy(targetProteinG = p, targetCarbsG = c, targetFatG = f))
+            },
+            onDismiss = { showCustomMacrosDialog = false }
+        )
+    }
 
     if (showManualAddDialog) {
         ManualDietDialog(
@@ -385,6 +401,29 @@ fun DietScreen(
                     }
 
                     Spacer(modifier = Modifier.height(14.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("三大宏量营养素目标", color = TextMuted, fontSize = 11.sp)
+                        Surface(
+                            onClick = { showCustomMacrosDialog = true },
+                            shape = RoundedCornerShape(6.dp),
+                            color = EmberOrange.copy(alpha = 0.15f),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, EmberOrange.copy(alpha = 0.3f))
+                        ) {
+                            Text(
+                                text = "✏️ 自定义碳蛋脂",
+                                color = EmberOrange,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
 
                     // Macro breakdown pills
                     Row(
