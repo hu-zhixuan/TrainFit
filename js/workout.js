@@ -431,6 +431,49 @@ const WorkoutEngine = {
     }
 
     return advices;
+  },
+
+  calc1RM(weightKg, reps) {
+    const w = parseFloat(weightKg) || 0;
+    const r = parseInt(reps, 10) || 1;
+    if (w <= 0) return 0;
+    if (r <= 1) return Math.round(w);
+    // Epley Formula: 1RM = W * (1 + r / 30)
+    return Math.round(w * (1 + r / 30.0));
+  },
+
+  calcBarbellPlates(totalWeightKg, barWeight = 20) {
+    const target = parseFloat(totalWeightKg) || 20;
+    if (target < barWeight) {
+      return {
+        barWeight,
+        targetWeight: target,
+        perSideWeight: 0,
+        platesPerSide: [],
+        remainder: 0
+      };
+    }
+
+    const netWeight = target - barWeight;
+    const perSide = netWeight / 2.0;
+    const availablePlates = [25, 20, 15, 10, 5, 2.5, 1.25];
+    const platesPerSide = [];
+    let current = perSide;
+
+    for (const p of availablePlates) {
+      while (current >= p - 0.01) {
+        platesPerSide.push(p);
+        current = Math.round((current - p) * 100) / 100;
+      }
+    }
+
+    return {
+      barWeight,
+      targetWeight: target,
+      perSideWeight: perSide,
+      platesPerSide,
+      remainder: current
+    };
   }
 };
 

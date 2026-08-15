@@ -1148,6 +1148,145 @@ body {
   margin-top: 2px;
 }
 
+/* Floating Rest Timer */
+.floating-timer {
+  position: fixed;
+  bottom: 68px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: calc(100% - 32px);
+  max-width: 440px;
+  background: rgba(18, 22, 28, 0.95);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  z-index: 99;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6), 0 0 12px rgba(56, 189, 248, 0.2);
+  animation: slideUpFloat 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.floating-timer.hidden {
+  display: none;
+}
+
+@keyframes slideUpFloat {
+  from { transform: translate(-50%, 20px); opacity: 0; }
+  to { transform: translate(-50%, 0); opacity: 1; }
+}
+
+.timer-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.timer-icon {
+  font-size: 1.1rem;
+}
+
+.timer-title {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.timer-digits {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--accent-cyan);
+  font-variant-numeric: tabular-nums;
+}
+
+.timer-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.timer-btn {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  border-radius: var(--radius-sm);
+  padding: 4px 8px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.timer-btn:active {
+  transform: scale(0.92);
+}
+
+.timer-btn-skip {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: var(--accent-red);
+}
+
+/* Visual Barbell Plate Display */
+.barbell-visual-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-input);
+  border-radius: var(--radius-sm);
+  padding: 16px 12px;
+  border: 1px solid var(--border-subtle);
+  overflow-x: auto;
+  gap: 2px;
+  min-height: 80px;
+}
+
+.bar-shaft {
+  width: 40px;
+  height: 8px;
+  background: #94a3b8;
+  border-radius: 2px;
+}
+
+.bar-sleeve {
+  width: 14px;
+  height: 24px;
+  background: #cbd5e1;
+  border-radius: 2px;
+}
+
+.bar-collar {
+  width: 6px;
+  height: 36px;
+  background: #64748b;
+  border-radius: 2px;
+}
+
+.plate-disc {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  font-size: 0.55rem;
+  font-weight: 800;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+  letter-spacing: -2px;
+}
+
+.plate-25 { width: 14px; height: 64px; background: #ef4444; }
+.plate-20 { width: 13px; height: 58px; background: #3b82f6; }
+.plate-15 { width: 12px; height: 52px; background: #eab308; color: #000; }
+.plate-10 { width: 11px; height: 46px; background: #22c55e; }
+.plate-5 { width: 9px; height: 38px; background: #f8fafc; color: #000; text-shadow: none; }
+.plate-2_5 { width: 8px; height: 32px; background: #1e293b; border: 1px solid #475569; }
+.plate-1_25 { width: 7px; height: 26px; background: #64748b; }
+
 .voice-textarea {
   width: 100%;
   background: var(--bg-input);

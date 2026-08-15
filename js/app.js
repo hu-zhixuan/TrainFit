@@ -892,12 +892,16 @@ class FitnessApp {
         }
       }
 
+      const est1RM = WorkoutEngine.calc1RM(w.weightKg, w.reps);
+      const isBarbell = w.weightKg >= 20 && (w.exerciseName.includes("卧推") || w.exerciseName.includes("深蹲") || w.exerciseName.includes("硬拉") || w.exerciseName.includes("推举") || w.exerciseName.includes("杠铃"));
+
       return `
         <div class="record-card">
           <div class="record-row-top">
             <div class="record-name-group">
               <span class="tag-badge tag-cyan">${w.muscleGroup}</span>
               <span class="record-name">${w.exerciseName}</span>
+              ${isBarbell ? `<button onclick="window.app.openPlateCalculator(${w.weightKg})" class="btn-subtle" style="padding:1px 6px;font-size:0.65rem;border-radius:4px;color:var(--accent-cyan);border:1px solid rgba(56,189,248,0.3);cursor:pointer;background:transparent;">⚡ 算片</button>` : ''}
             </div>
             <button class="btn-delete" onclick="window.app.deleteWorkout('${w.id}')" title="删除动作">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
@@ -907,7 +911,7 @@ class FitnessApp {
             <span class="record-stat-highlight" style="color:var(--accent-cyan);">
               ${w.weightKg > 0 ? `${w.weightKg}kg × ` : '自重 × '}${w.sets}组 × ${w.reps}次
             </span>
-            <span>吨位: ${(w.weightKg * w.sets * w.reps).toLocaleString()}kg · +${w.burnedCalories} kcal</span>
+            <span>${est1RM > 0 ? `预估1RM: ${est1RM}kg · ` : ''}吨位: ${(w.weightKg * w.sets * w.reps).toLocaleString()}kg</span>
           </div>
           ${overloadBadgeHtml}
         </div>
@@ -1247,6 +1251,7 @@ class FitnessApp {
     this.closeManualWorkoutModal();
     this.render();
     this.showToast(`✓ 已添加：${name}`);
+    this.startRestTimer(90);
   }
 
   openVoiceSheet(mode) {
@@ -1364,6 +1369,7 @@ class FitnessApp {
     document.getElementById('modal-confirm-workouts').classList.add('hidden');
     this.render();
     this.showToast(`✓ 已存入 ${this.parsedWorkoutBuffer.length} 项训练`);
+    this.startRestTimer(90);
     this.switchTab('workout');
   }
 
@@ -1478,6 +1484,160 @@ class FitnessApp {
     this.render();
     this.showToast(`✓ 已存入：+${item.calories} kcal`);
     this.switchTab('diet');
+  }
+
+  setDietOilMode(multiplier, btn) {
+    document.querySelectorAll('.oil-mode-btn').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+
+    if (this.parsedDietBuffer && this.parsedDietBuffer.items) {
+      this.parsedDietBuffer.items.forEach(item => {
+        if (item.rawItem) {
+          const nut = NutritionEngine.calcItemNutrition(item.rawItem, item.estimatedGrams || 100);
+          const baseFat = nut.fatG;
+          const adjustedFat = Math.round((baseFat * multiplier) * 10) / 10;
+          const fatDelta = adjustedFat - baseFat;
+          item.fatG = Math.max(0, adjustedFat);
+          item.calories = Math.max(10, Math.round(nut.calories + fatDelta * 9));
+        }
+      });
+
+      const items = this.parsedDietBuffer.items;
+      this.parsedDietBuffer.totalCalories = items.reduce((sum, i) => sum + i.calories, 0);
+      this.parsedDietBuffer.proteinG = Math.round(items.reduce((sum, i) => sum + i.proteinG, 0) * 10) / 10;
+      this.parsedDietBuffer.carbsG = Math.round(items.reduce((sum, i) => sum + i.carbsG, 0) * 10) / 10;
+      this.parsedDietBuffer.fatG = Math.round(items.reduce((sum, i) => sum + i.fatG, 0) * 10) / 10;
+
+      this.renderDietConfirmItems();
+    }
+  }
+
+  // ==================== Barbell Plate Calculator (配重算片) ====================
+  openPlateCalculator(initialWeight = 80) {
+    const input = document.getElementById('plate-calc-weight-input');
+    if (input) input.value = initialWeight;
+    this.renderPlateCalculation();
+    document.getElementById('modal-plate-calculator')?.classList.remove('hidden');
+  }
+
+  closePlateCalculator() {
+    document.getElementById('modal-plate-calculator')?.classList.add('hidden');
+  }
+
+  adjustPlateCalcWeight(delta) {
+    const input = document.getElementById('plate-calc-weight-input');
+    if (!input) return;
+    const current = parseFloat(input.value) || 80;
+    const next = Math.max(20, Math.round((current + delta) * 10) / 10);
+    input.value = next;
+    this.renderPlateCalculation();
+  }
+
+  renderPlateCalculation() {
+    const weight = parseFloat(document.getElementById('plate-calc-weight-input')?.value) || 80;
+    const res = WorkoutEngine.calcBarbellPlates(weight);
+
+    const visual = document.getElementById('plate-calc-visual');
+    const summary = document.getElementById('plate-calc-text-summary');
+
+    if (visual) {
+      const plateClassMap = {
+        25: 'plate-25',
+        20: 'plate-20',
+        15: 'plate-15',
+        10: 'plate-10',
+        5: 'plate-5',
+        2.5: 'plate-2_5',
+        1.25: 'plate-1_25'
+      };
+
+      // Left plates (mirrored)
+      const leftPlatesHtml = [...res.platesPerSide].reverse().map(p => `
+        <div class="plate-disc ${plateClassMap[p] || 'plate-10'}" title="${p}kg">${p}</div>
+      `).join('');
+
+      // Right plates
+      const rightPlatesHtml = res.platesPerSide.map(p => `
+        <div class="plate-disc ${plateClassMap[p] || 'plate-10'}" title="${p}kg">${p}</div>
+      `).join('');
+
+      visual.innerHTML = `
+        <div class="bar-shaft"></div>
+        <div style="display:flex;align-items:center;gap:1px;">${leftPlatesHtml}</div>
+        <div class="bar-collar"></div>
+        <div class="bar-sleeve" style="width:70px;text-align:center;font-size:0.6rem;color:#000;font-weight:700;display:flex;align-items:center;justify-content:center;">杆 20kg</div>
+        <div class="bar-collar"></div>
+        <div style="display:flex;align-items:center;gap:1px;">${rightPlatesHtml}</div>
+        <div class="bar-shaft"></div>
+      `;
+    }
+
+    if (summary) {
+      if (res.platesPerSide.length === 0) {
+        summary.innerHTML = `<div>奥林匹克标准空杆 <b>20kg</b>（两边无需挂片）</div>`;
+      } else {
+        const platesCount = {};
+        res.platesPerSide.forEach(p => platesCount[p] = (platesCount[p] || 0) + 1);
+        const perSideStr = Object.entries(platesCount).map(([p, count]) => `<b>${p}kg</b> × ${count}块`).join(' + ');
+
+        summary.innerHTML = `
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <span>单侧配重：<b style="color:var(--accent-cyan);">${res.perSideWeight} kg</b></span>
+            <span style="color:var(--text-muted);">标准奥杆 20kg</span>
+          </div>
+          <div style="margin-top:4px;font-size:0.72rem;color:var(--text-secondary);">
+            👉 每边装片：${perSideStr}
+          </div>
+        `;
+      }
+    }
+  }
+
+  // ==================== Floating Rest Timer (组间休息计时器) ====================
+  startRestTimer(totalSeconds = 90) {
+    clearInterval(this.restTimerInterval);
+    this.restTimeRemaining = totalSeconds;
+
+    const timerEl = document.getElementById('floating-rest-timer');
+    const digitsEl = document.getElementById('rest-timer-digits');
+    if (timerEl) timerEl.classList.remove('hidden');
+
+    const updateDigits = () => {
+      const mm = String(Math.floor(this.restTimeRemaining / 60)).padStart(2, '0');
+      const ss = String(this.restTimeRemaining % 60).padStart(2, '0');
+      if (digitsEl) digitsEl.textContent = `${mm}:${ss}`;
+    };
+
+    updateDigits();
+
+    this.restTimerInterval = setInterval(() => {
+      this.restTimeRemaining--;
+      if (this.restTimeRemaining <= 0) {
+        clearInterval(this.restTimerInterval);
+        this.restTimerInterval = null;
+        if (timerEl) timerEl.classList.add('hidden');
+        if (typeof navigator !== 'undefined' && navigator.vibrate) {
+          try { navigator.vibrate([200, 100, 200]); } catch (e) {}
+        }
+        this.showToast('⏱️ 休息结束！开始下一组');
+      } else {
+        updateDigits();
+      }
+    }, 1000);
+  }
+
+  adjustRestTimer(deltaSeconds) {
+    this.restTimeRemaining = Math.max(5, (this.restTimeRemaining || 90) + deltaSeconds);
+    const mm = String(Math.floor(this.restTimeRemaining / 60)).padStart(2, '0');
+    const ss = String(this.restTimeRemaining % 60).padStart(2, '0');
+    const digitsEl = document.getElementById('rest-timer-digits');
+    if (digitsEl) digitsEl.textContent = `${mm}:${ss}`;
+  }
+
+  skipRestTimer() {
+    clearInterval(this.restTimerInterval);
+    this.restTimerInterval = null;
+    document.getElementById('floating-rest-timer')?.classList.add('hidden');
   }
 
   deleteDiet(id) {

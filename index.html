@@ -547,6 +547,16 @@
         <button class="gender-btn meal-type-btn" data-type="加餐/补剂">加餐</button>
       </div>
 
+      <!-- Cooking Oil / Sauce Mode Selector -->
+      <div style="display:flex;justify-content:space-between;align-items:center;margin:2px 0;">
+        <span style="font-size:0.7rem;color:var(--text-muted);">🍳 烹饪油脂档位：</span>
+        <div class="gender-toggle-row" style="margin:0;gap:4px;">
+          <button class="gender-btn oil-mode-btn" data-oil="0.5" onclick="window.app.setDietOilMode(0.5, this)" style="padding:3px 8px;font-size:0.68rem;">🌿少油/自烹</button>
+          <button class="gender-btn oil-mode-btn active" data-oil="1.0" onclick="window.app.setDietOilMode(1.0, this)" style="padding:3px 8px;font-size:0.68rem;">🍳标准外卖</button>
+          <button class="gender-btn oil-mode-btn" data-oil="1.5" onclick="window.app.setDietOilMode(1.5, this)" style="padding:3px 8px;font-size:0.68rem;">🔥餐馆重油</button>
+        </div>
+      </div>
+
       <div id="confirm-diet-items-box" style="background:var(--bg-input);padding:10px;border-radius:var(--radius-sm);border:1px solid var(--border-subtle);display:flex;flex-direction:column;gap:6px;font-size:0.75rem;"></div>
 
       <div class="form-group">
@@ -836,6 +846,56 @@
         <button class="btn-subtle" id="btn-cancel-reset">取消</button>
         <button class="btn-danger" id="btn-confirm-reset">确认彻底清空</button>
       </div>
+    </div>
+  </div>
+
+  <!-- MODAL: BARBELL PLATE CALCULATOR (杠铃片配重计算器) -->
+  <div class="modal-overlay hidden" id="modal-plate-calculator">
+    <div class="dialog-card">
+      <div class="sheet-header">
+        <div>
+          <h3 class="sheet-title">🏋️ 杠铃片配重计算器</h3>
+          <p class="sheet-subtitle">告别大脑缺氧算片，单边装片一目了然</p>
+        </div>
+        <button class="icon-btn" onclick="window.app.closePlateCalculator()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">目标总重量 (kg，包含20kg标准奥林匹克杆)</label>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button class="btn-subtle" onclick="window.app.adjustPlateCalcWeight(-2.5)" style="padding:6px 12px;font-weight:700;">-2.5</button>
+          <input type="number" step="2.5" id="plate-calc-weight-input" class="form-input" value="80" style="text-align:center;font-size:1.2rem;font-weight:800;color:var(--accent-cyan);" oninput="window.app.renderPlateCalculation()">
+          <button class="btn-subtle" onclick="window.app.adjustPlateCalcWeight(2.5)" style="padding:6px 12px;font-weight:700;">+2.5</button>
+        </div>
+      </div>
+
+      <!-- Barbell Graphic Visualization -->
+      <div id="plate-calc-visual" class="barbell-visual-wrapper"></div>
+
+      <!-- Text breakdown -->
+      <div id="plate-calc-text-summary" style="background:var(--bg-input);padding:10px 12px;border-radius:var(--radius-sm);border:1px solid var(--border-subtle);font-size:0.75rem;"></div>
+
+      <div class="dialog-actions-row">
+        <button class="btn-primary cyan-btn" onclick="window.app.closePlateCalculator()">✓ 明白，去举铁</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- FLOATING REST TIMER (组间休息计时器) -->
+  <div id="floating-rest-timer" class="floating-timer hidden">
+    <div class="timer-left">
+      <span class="timer-icon">⏱️</span>
+      <div>
+        <div class="timer-title">组间休息倒计时</div>
+        <div class="timer-digits" id="rest-timer-digits">01:30</div>
+      </div>
+    </div>
+    <div class="timer-right">
+      <button class="timer-btn" onclick="window.app.adjustRestTimer(-15)">-15s</button>
+      <button class="timer-btn" onclick="window.app.adjustRestTimer(30)">+30s</button>
+      <button class="timer-btn timer-btn-skip" onclick="window.app.skipRestTimer()">跳过</button>
     </div>
   </div>
 
