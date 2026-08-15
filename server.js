@@ -137,14 +137,23 @@ const server = http.createServer(async (req, res) => {
     req.on('end', async () => {
       try {
         const payload = JSON.parse(body || '{}');
-        const { text, type, apiKey, provider } = payload;
+        const { text, type } = payload;
         
         console.log(`[LLM API] Parse request type=${type}, text="${text?.slice(0, 30)}..."`);
         
-        // Return 200 with acknowledgment for client dispatcher
-        res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
-        res.end(JSON.stringify({ success: true, processed: true }));
+        if (type === 'WORKOUT') {
+          const { WorkoutEngine } = require('./js/workout.js');
+          const items = WorkoutEngine.parseWorkoutVoice(text || '');
+          res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
+          res.end(JSON.stringify(items));
+        } else {
+          const NutritionEngine = require('./js/nutrition.js');
+          const result = NutritionEngine.parseDietVoice(text || '');
+          res.writeHead(200, { 'Content-Type': 'application/json; charset=UTF-8' });
+          res.end(JSON.stringify(result));
+        }
       } catch (err) {
+        console.error('[LLM API Error]', err);
         res.writeHead(400, { 'Content-Type': 'application/json; charset=UTF-8' });
         res.end(JSON.stringify({ success: false, error: err.message }));
       }

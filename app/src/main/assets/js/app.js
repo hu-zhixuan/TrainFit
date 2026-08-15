@@ -1302,7 +1302,7 @@ class FitnessApp {
     document.getElementById('modal-voice-dictation').classList.add('hidden');
   }
 
-  submitVoiceParse() {
+  async submitVoiceParse() {
     const text = document.getElementById('voice-text-input').value.trim();
     if (!text) {
       this.showToast('请先说话或输入内容');
@@ -1310,15 +1310,33 @@ class FitnessApp {
     }
 
     this.closeVoiceSheet();
+    this.showToast('🧠 AI 大模型正在智能提炼...', 1500);
 
-    if (this.voiceMode === 'WORKOUT') {
-      const items = WorkoutEngine.parseWorkoutVoice(text);
-      this.parsedWorkoutBuffer = items;
-      this.showWorkoutConfirmModal(items);
-    } else {
-      const result = NutritionEngine.parseDietVoice(text);
-      this.parsedDietBuffer = result;
-      this.showDietConfirmModal(result);
+    try {
+      if (this.voiceMode === 'WORKOUT') {
+        const items = typeof AiService !== 'undefined' 
+          ? await AiService.parseWorkout(text)
+          : WorkoutEngine.parseWorkoutVoice(text);
+        this.parsedWorkoutBuffer = items;
+        this.showWorkoutConfirmModal(items);
+      } else {
+        const result = typeof AiService !== 'undefined'
+          ? await AiService.parseDiet(text)
+          : NutritionEngine.parseDietVoice(text);
+        this.parsedDietBuffer = result;
+        this.showDietConfirmModal(result);
+      }
+    } catch (err) {
+      console.error('[App] AI 解析异常降级:', err);
+      if (this.voiceMode === 'WORKOUT') {
+        const items = WorkoutEngine.parseWorkoutVoice(text);
+        this.parsedWorkoutBuffer = items;
+        this.showWorkoutConfirmModal(items);
+      } else {
+        const result = NutritionEngine.parseDietVoice(text);
+        this.parsedDietBuffer = result;
+        this.showDietConfirmModal(result);
+      }
     }
   }
 
