@@ -1,6 +1,6 @@
 /**
- * 练食AI · 极简 3 分区主逻辑 (吃/缺口 · 练/加片 · 历史走势)
- * 极致克制、纯净极简主义、0 假数据初始化与 Mifflin-St Jeor 基础代谢闭环
+ * 练食AI · 极简 3 分区主逻辑 (吃/缺口 · 练/加片 · 历史走势与时光回溯)
+ * 具备工业级 MediaRecorder 真实录音 + 微信式按住/点击双模语音 + 每日全景回溯与彩色卡片
  */
 
 const DEFAULT_PROFILE = {
@@ -23,6 +23,12 @@ function getTodayDateString(offsetDays = 0) {
   return d.toISOString().split('T')[0];
 }
 
+function shiftDateString(dateStr, deltaDays) {
+  const d = new Date(dateStr + 'T00:00:00');
+  d.setDate(d.getDate() + deltaDays);
+  return d.toISOString().split('T')[0];
+}
+
 class FitnessApp {
   constructor() {
     this.currentTab = 'diet';
@@ -33,21 +39,26 @@ class FitnessApp {
     this.parsedDietBuffer = null;
     this.onboardingGender = 'male';
     this.tutorialCurrentStep = 1;
+    this.currentAudioUrl = null;
+    this.audioPlayer = null;
+    this.retrospectiveDate = getTodayDateString();
 
     this.initData();
     this.bindEvents();
+    this.bindVoiceEvents();
+    this.bindRetrospectiveEvents();
     this.render();
     this.checkOnboarding();
   }
 
   initData() {
-    const cacheVer = localStorage.getItem('fit_cache_v4_minimal');
+    const cacheVer = localStorage.getItem('fit_cache_v5_pro');
     if (!cacheVer) {
       localStorage.removeItem('fit_workouts');
       localStorage.removeItem('fit_diet');
       localStorage.removeItem('fit_profile');
       localStorage.removeItem('fit_onboarded');
-      localStorage.setItem('fit_cache_v4_minimal', 'true');
+      localStorage.setItem('fit_cache_v5_pro', 'true');
     }
 
     const savedProfile = localStorage.getItem('fit_profile');
@@ -289,17 +300,6 @@ class FitnessApp {
       this.completeOnboarding();
     });
 
-    // Voice Modal Controls
-    document.getElementById('btn-close-voice-sheet')?.addEventListener('click', () => {
-      this.closeVoiceSheet();
-    });
-    document.getElementById('btn-toggle-mic')?.addEventListener('click', () => {
-      this.toggleMic();
-    });
-    document.getElementById('btn-submit-voice-parse')?.addEventListener('click', () => {
-      this.submitVoiceParse();
-    });
-
     // Confirmation Modals
     document.getElementById('btn-cancel-workout-confirm')?.addEventListener('click', () => {
       document.getElementById('modal-confirm-workouts').classList.add('hidden');
@@ -353,6 +353,346 @@ class FitnessApp {
     document.getElementById('btn-save-profile')?.addEventListener('click', () => {
       this.saveProfile();
     });
+
+    // Audio preview player
+    document.getElementById('btn-play-audio-preview')?.addEventListener('click', () => {
+      this.toggleAudioPreview();
+    });
+  }
+
+  /**
+   * WeChat Style Hold-to-Talk + Click-to-Record Dual Mode Binding
+   */
+  bindVoiceEvents() {
+    const micBtn = document.getElementById('btn-toggle-mic');
+    const closeBtn = document.getElementById('btn-close-voice-sheet');
+    const submitBtn = document.getElementById('btn-submit-voice-parse');
+
+    closeBtn?.addEventListener('click', () => {
+      this.closeVoiceSheet();
+    });
+
+    submitBtn?.addEventListener('click', () => {
+      this.submitVoiceParse();
+    });
+
+    if (!micBtn) return;
+
+    let holdTimer = null;
+    let isHolding = false;
+    let startY = 0;
+    let cancelSlideThreshold = 60; // px to cancel
+
+    const onPointerDown = (e) => {
+      e.preventDefault();
+      startY = e.clientY || (e.touches && e.touches[0] ? e.touches[0].clientY : 0);
+      isHolding = false;
+
+      holdTimer = setTimeout(async () => {
+        isHolding = true;
+        await this.startRecordingProcess(true);
+      }, 150);
+    };
+
+    const onPointerMove = (e) => {
+      if (!isHolding || !SpeechModule.isRecording) return;
+      const currentY = e.clientY || (e.touches && e.touches[0] ? e.touches[0].clientY : 0);
+      const deltaY = startY - currentY;
+      const label = document.getElementById('mic-status-label');
+      if (deltaY > cancelSlideThreshold) {
+        if (label) label.innerHTML = '<span style="color:var(--accent-red);">松开手指，取消录音</span>';
+        micBtn.classList.add('canceling');
+      } else {
+        if (label) label.innerHTML = '正在录音中... 松开完成识别';
+        micBtn.classList.remove('canceling');
+      }
+    };
+
+    const onPointerUp = async (e) => {
+      clearTimeout(holdTimer);
+      if (isHolding) {
+        isHolding = false;
+        const currentY = e.clientY || (e.changedTouches && e.changedTouches[0] ? e.changedTouches[0].clientY : 0);
+        const deltaY = startY - currentY;
+        const isCanceled = deltaY > cancelSlideThreshold;
+        micBtn.classList.remove('canceling');
+        await SpeechModule.stop(isCanceled);
+        if (isCanceled) {
+          this.showToast('已取消录音');
+        }
+      } else {
+        // Quick Click Mode: Toggle start / stop
+        if (SpeechModule.isRecording) {
+          await SpeechModule.stop(false);
+        } else {
+          await this.startRecordingProcess(false);
+        }
+      }
+    };
+
+    if (window.PointerEvent) {
+      micBtn.addEventListener('pointerdown', onPointerDown);
+      window.addEventListener('pointermove', onPointerMove);
+      window.addEventListener('pointerup', onPointerUp);
+    } else {
+      micBtn.addEventListener('touchstart', onPointerDown, { passive: false });
+      window.addEventListener('touchmove', onPointerMove, { passive: false });
+      window.addEventListener('touchend', onPointerUp);
+      micBtn.addEventListener('mousedown', onPointerDown);
+      window.addEventListener('mouseup', onPointerUp);
+    }
+  }
+
+  /**
+   * Daily Retrospective Time Machine Event Binding
+   */
+  bindRetrospectiveEvents() {
+    document.getElementById('btn-close-retro')?.addEventListener('click', () => {
+      document.getElementById('modal-day-retrospective').classList.add('hidden');
+    });
+
+    document.getElementById('btn-retro-close-bottom')?.addEventListener('click', () => {
+      document.getElementById('modal-day-retrospective').classList.add('hidden');
+    });
+
+    document.getElementById('btn-retro-prev-day')?.addEventListener('click', () => {
+      this.retrospectiveDate = shiftDateString(this.retrospectiveDate, -1);
+      this.openDayRetrospective(this.retrospectiveDate);
+    });
+
+    document.getElementById('btn-retro-next-day')?.addEventListener('click', () => {
+      this.retrospectiveDate = shiftDateString(this.retrospectiveDate, 1);
+      this.openDayRetrospective(this.retrospectiveDate);
+    });
+
+    document.getElementById('btn-retro-set-active-day')?.addEventListener('click', () => {
+      this.selectedDate = this.retrospectiveDate;
+      document.getElementById('modal-day-retrospective').classList.add('hidden');
+      this.switchTab('diet');
+      this.showToast(`已切换为查看: ${this.selectedDate}`);
+    });
+  }
+
+  /**
+   * Opens and renders the full retrospective view for a specific day with animated ring & colored cards
+   */
+  openDayRetrospective(dateStr) {
+    this.retrospectiveDate = dateStr;
+    const summary = this.getDaySummary(dateStr);
+    const isToday = dateStr === getTodayDateString();
+
+    const titleEl = document.getElementById('retro-date-title');
+    if (titleEl) {
+      titleEl.textContent = isToday ? `${dateStr} · 今天` : dateStr;
+    }
+
+    // Status Pill
+    const pill = document.getElementById('retro-status-pill');
+    const isTargetMet = summary.deficit >= summary.targetDeficit && summary.targetDeficit > 0;
+    const isDeficit = summary.deficit >= 0;
+
+    if (!summary.hasLogs && !isToday) {
+      pill.className = 'status-badge';
+      pill.textContent = '暂无打卡';
+    } else if (!isDeficit) {
+      pill.className = 'status-badge surplus';
+      pill.textContent = `热量盈余 +${Math.round(Math.abs(summary.deficit))} kcal`;
+    } else if (isTargetMet) {
+      pill.className = 'status-badge';
+      pill.textContent = `✓ 缺口达标 ${Math.round(summary.deficit)} kcal`;
+    } else {
+      pill.className = 'status-badge';
+      pill.textContent = `净缺口 ${Math.round(summary.deficit)} kcal`;
+    }
+
+    // Hero stats
+    document.getElementById('retro-net-deficit-num').textContent = Math.round(summary.deficit).toLocaleString();
+    document.getElementById('retro-total-burn').textContent = `${Math.round(summary.totalBurn)} kcal`;
+    document.getElementById('retro-intake').textContent = `${Math.round(summary.dietIntake)} kcal`;
+    document.getElementById('retro-target-deficit').textContent = `${this.profile.targetDeficitKcal} kcal`;
+
+    // Draw animated ring gauge
+    ChartEngine.drawRetrospectiveRing('retrospective-ring-canvas', summary.deficit, this.profile.targetDeficitKcal);
+
+    // Colored Card 1: 🥗 饮食营养全景
+    document.getElementById('retro-diet-total-cal').textContent = `${Math.round(summary.dietIntake)} kcal`;
+    document.getElementById('retro-macro-p').textContent = `${Math.round(summary.totalProtein)}/${this.profile.targetProteinG}g`;
+    document.getElementById('retro-macro-p-bar').style.width = `${Math.min((summary.totalProtein / this.profile.targetProteinG) * 100, 100)}%`;
+
+    document.getElementById('retro-macro-c').textContent = `${Math.round(summary.totalCarbs)}/${this.profile.targetCarbsG}g`;
+    document.getElementById('retro-macro-c-bar').style.width = `${Math.min((summary.totalCarbs / this.profile.targetCarbsG) * 100, 100)}%`;
+
+    document.getElementById('retro-macro-f').textContent = `${Math.round(summary.totalFat)}/${this.profile.targetFatG}g`;
+    document.getElementById('retro-macro-f-bar').style.width = `${Math.min((summary.totalFat / this.profile.targetFatG) * 100, 100)}%`;
+
+    const dayDiet = this.diet.filter(d => d.date === dateStr);
+    const dietContainer = document.getElementById('retro-diet-items-list');
+    if (dayDiet.length === 0) {
+      dietContainer.innerHTML = `<div style="font-size:0.7rem;color:var(--text-muted);text-align:center;padding:8px 0;">该日暂无饮食记录</div>`;
+    } else {
+      dietContainer.innerHTML = dayDiet.map(d => `
+        <div class="retro-item-pill">
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span class="tag-badge tag-orange">${d.mealType}</span>
+            <span style="font-weight:600;">${d.foodSummary}</span>
+          </div>
+          <span style="color:var(--accent-orange);font-weight:700;">${d.calories} kcal</span>
+        </div>
+      `).join('');
+    }
+
+    // Colored Card 2: 🏋️ 训练与加片全景
+    document.getElementById('retro-workout-vol').textContent = `${summary.totalVolume.toLocaleString()} kg 吨位`;
+    document.getElementById('retro-workout-sets').textContent = `${summary.totalSets} 组`;
+    document.getElementById('retro-workout-burn').textContent = `+${summary.workoutBurn} kcal`;
+
+    const dayWorkouts = this.workouts.filter(w => w.date === dateStr);
+    const workoutContainer = document.getElementById('retro-workout-items-list');
+    const advices = WorkoutEngine.generateOverloadAdvices(this.workouts);
+
+    if (dayWorkouts.length === 0) {
+      workoutContainer.innerHTML = `<div style="font-size:0.7rem;color:var(--text-muted);text-align:center;padding:8px 0;">该日暂无力量训练记录</div>`;
+    } else {
+      workoutContainer.innerHTML = dayWorkouts.map(w => {
+        const matchedAdvice = advices.find(a => a.exerciseName === w.exerciseName);
+        let adviceHtml = '';
+        if (matchedAdvice && matchedAdvice.status === 'READY_TO_ADD_PLATE') {
+          adviceHtml = `<div style="font-size:0.65rem;color:var(--accent-cyan);margin-top:2px;">⚡ 建议下次加片至 ${matchedAdvice.targetWeightKg}kg</div>`;
+        }
+
+        return `
+          <div class="retro-item-pill" style="flex-direction:column;align-items:stretch;gap:4px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <div style="display:flex;align-items:center;gap:6px;">
+                <span class="tag-badge tag-cyan">${w.muscleGroup}</span>
+                <span style="font-weight:600;">${w.exerciseName}</span>
+              </div>
+              <span style="color:var(--accent-cyan);font-weight:700;">
+                ${w.weightKg > 0 ? `${w.weightKg}kg × ` : '自重 × '}${w.sets}组 × ${w.reps}次
+              </span>
+            </div>
+            ${adviceHtml}
+          </div>
+        `;
+      }).join('');
+    }
+
+    const modal = document.getElementById('modal-day-retrospective');
+    if (modal) {
+      modal.classList.remove('hidden');
+    }
+  }
+
+  async startRecordingProcess(isHold = false) {
+    const textarea = document.getElementById('voice-text-input');
+    const baseText = textarea ? textarea.value.trim() : '';
+
+    this.updateMicUi(true, isHold);
+    document.getElementById('voice-audio-preview').style.display = 'none';
+
+    const started = await SpeechModule.start({
+      isHold,
+      onResult: (text, isFinal) => {
+        if (textarea && text) {
+          textarea.value = baseText ? `${baseText}，${text}` : text;
+        }
+      },
+      onVolumeChange: (volume) => {
+        this.updateWaveformBars(volume);
+      },
+      onTimerTick: (formattedTime) => {
+        const timerBadge = document.getElementById('mic-timer-badge');
+        if (timerBadge) {
+          timerBadge.style.display = 'inline-block';
+          timerBadge.textContent = formattedTime;
+        }
+      },
+      onEnd: (result) => {
+        this.updateMicUi(false);
+        this.updateWaveformBars(0);
+        const timerBadge = document.getElementById('mic-timer-badge');
+        if (timerBadge) timerBadge.style.display = 'none';
+
+        if (result && !result.isCanceled && result.audioUrl) {
+          this.currentAudioUrl = result.audioUrl;
+          const previewBar = document.getElementById('voice-audio-preview');
+          if (previewBar) {
+            previewBar.style.display = 'flex';
+          }
+          if (result.text && textarea) {
+            textarea.value = result.text;
+          }
+        }
+      },
+      onError: (errType) => {
+        this.updateMicUi(false);
+        this.updateWaveformBars(0);
+        if (errType === 'PERMISSION_DENIED') {
+          this.showToast('⚠️ 请允许麦克风录音权限');
+        } else if (errType === 'TOO_SHORT') {
+          this.showToast('说话时间太短');
+        }
+      }
+    });
+
+    if (!started) {
+      this.updateMicUi(false);
+    }
+  }
+
+  toggleAudioPreview() {
+    if (!this.currentAudioUrl) return;
+    if (this.audioPlayer) {
+      this.audioPlayer.pause();
+      this.audioPlayer = null;
+      document.getElementById('btn-play-audio-preview').textContent = '▶';
+      return;
+    }
+
+    const audio = new Audio(this.currentAudioUrl);
+    this.audioPlayer = audio;
+    document.getElementById('btn-play-audio-preview').textContent = '⏸';
+
+    audio.onended = () => {
+      this.audioPlayer = null;
+      document.getElementById('btn-play-audio-preview').textContent = '▶';
+    };
+
+    audio.onerror = () => {
+      this.audioPlayer = null;
+      document.getElementById('btn-play-audio-preview').textContent = '▶';
+    };
+
+    audio.play();
+  }
+
+  updateWaveformBars(volume) {
+    const bars = document.querySelectorAll('.waveform-bar');
+    if (!bars || bars.length === 0) return;
+
+    bars.forEach((bar, idx) => {
+      const mult = [0.5, 0.8, 1.3, 1.6, 1.3, 0.8, 0.5][idx] || 1.0;
+      const height = Math.max(3, Math.min(22, Math.round(volume * 22 * mult)));
+      bar.style.height = `${height}px`;
+      bar.classList.toggle('active', volume > 0.06);
+    });
+  }
+
+  updateMicUi(isRec, isHold = false) {
+    const btn = document.getElementById('btn-toggle-mic');
+    const ring = document.getElementById('mic-pulse-ring');
+    const label = document.getElementById('mic-status-label');
+
+    btn?.classList.toggle('recording', isRec);
+    ring?.classList.toggle('active', isRec);
+
+    if (label) {
+      if (isRec) {
+        label.innerHTML = isHold ? '正在录音... 松开手指识别' : '🎙️ 正在录音... 再次点击停止';
+      } else {
+        label.textContent = '按住麦克风说话，或点击开始录音';
+      }
+    }
   }
 
   resetAllDataToZero() {
@@ -574,27 +914,25 @@ class FitnessApp {
     document.getElementById('hist-total-volume').textContent = `${totalVol.toLocaleString()} kg`;
     document.getElementById('hist-active-days').textContent = `${activeDays} 天`;
 
-    // Charts
+    // Charts with interactive day retrospective on click
     ChartEngine.drawDeficitTrend('deficit-trend-canvas', historyData, this.profile.targetDeficitKcal);
     ChartEngine.drawVolumeTrend('volume-trend-canvas', historyData);
 
-    // History items
+    // History items timeline
     const container = document.getElementById('history-timeline-list');
     const pastRecords = historyData.filter(d => d.hasLogs || (d.isToday && (d.volume > 0 || d.intake > 0))).reverse();
 
     if (pastRecords.length === 0) {
-      container.innerHTML = `<div class="empty-state">暂无历史打卡记录</div>`;
+      container.innerHTML = `<div class="empty-state">暂无历史打卡记录，点击任意图表也可回溯</div>`;
       return;
     }
 
     container.innerHTML = pastRecords.map(d => {
-      const dayWorkouts = this.workouts.filter(w => w.date === d.date);
-      const dayDiet = this.diet.filter(diet => diet.date === d.date);
       const isToday = d.date === getTodayDateString();
 
       return `
-        <div class="history-item">
-          <div class="history-item-header" onclick="window.app.toggleHistoryCard('${d.date}')">
+        <div class="history-item" onclick="window.app.openDayRetrospective('${d.date}')" style="cursor:pointer;">
+          <div class="history-item-header">
             <div>
               <div class="history-item-date">${isToday ? `${d.date} · 今天` : d.date}</div>
               <div class="history-item-sub">摄入 ${d.intake} kcal · 举铁 ${d.volume.toLocaleString()} kg · 运动 +${d.burn} kcal</div>
@@ -603,48 +941,12 @@ class FitnessApp {
               <span class="tag-badge ${d.deficit >= this.profile.targetDeficitKcal ? 'tag-lime' : 'tag-cyan'}">
                 ${d.deficit >= 0 ? `净缺口 ${Math.round(d.deficit)}` : `盈余 +${Math.round(Math.abs(d.deficit))}`}
               </span>
-              <span id="icon-toggle-${d.date}" style="font-size:0.75rem;color:var(--text-muted);">▾</span>
-            </div>
-          </div>
-
-          <div class="history-item-body hidden" id="body-history-${d.date}">
-            <!-- 饮食 -->
-            <div style="display:flex;flex-direction:column;gap:4px;">
-              <div style="font-size:0.68rem;font-weight:700;color:var(--text-muted);">🥗 饮食 (${dayDiet.length})</div>
-              ${dayDiet.length > 0 ? dayDiet.map(m => `
-                <div style="display:flex;justify-content:space-between;font-size:0.72rem;">
-                  <span><b style="color:var(--accent-orange);">${m.mealType}</b> ${m.foodSummary}</span>
-                  <span style="color:var(--text-secondary);">${m.calories} kcal</span>
-                </div>
-              `).join('') : '<div style="font-size:0.68rem;color:var(--text-muted);">无饮食记录</div>'}
-            </div>
-
-            <!-- 训练 -->
-            <div style="display:flex;flex-direction:column;gap:4px;margin-top:4px;">
-              <div style="font-size:0.68rem;font-weight:700;color:var(--text-muted);">🏋️ 训练 (${dayWorkouts.length})</div>
-              ${dayWorkouts.length > 0 ? dayWorkouts.map(w => `
-                <div style="display:flex;justify-content:space-between;font-size:0.72rem;">
-                  <span><b style="color:var(--accent-cyan);">${w.muscleGroup}</b> ${w.exerciseName} (${w.weightKg > 0 ? w.weightKg + 'kg ' : '自重 '}${w.sets}x${w.reps})</span>
-                  <span style="color:var(--text-secondary);">${(w.weightKg * w.sets * w.reps).toLocaleString()} kg</span>
-                </div>
-              `).join('') : '<div style="font-size:0.68rem;color:var(--text-muted);">无训练记录</div>'}
+              <span style="font-size:0.75rem;color:var(--accent-cyan);font-weight:700;">回溯 ➔</span>
             </div>
           </div>
         </div>
       `;
     }).join('');
-  }
-
-  toggleHistoryCard(dateStr) {
-    const body = document.getElementById(`body-history-${dateStr}`);
-    const icon = document.getElementById(`icon-toggle-${dateStr}`);
-    if (body) {
-      const isHidden = body.classList.contains('hidden');
-      body.classList.toggle('hidden', !isHidden);
-      if (icon) {
-        icon.textContent = isHidden ? '▴' : '▾';
-      }
-    }
   }
 
   renderProfileForm() {
@@ -659,6 +961,16 @@ class FitnessApp {
     document.getElementById('input-target-protein').value = p.targetProteinG;
     document.getElementById('input-target-carbs').value = p.targetCarbsG;
     document.getElementById('input-target-fat').value = p.targetFatG;
+
+    const asrKey = localStorage.getItem('fit_asr_key') || '';
+    const asrInput = document.getElementById('input-asr-key');
+    if (asrInput) asrInput.value = asrKey;
+
+    const asrIndicator = document.getElementById('asr-status-indicator');
+    if (asrIndicator) {
+      asrIndicator.textContent = asrKey ? '✓ 云端大模型/ASR 已启用' : '默认本地高精引擎';
+      asrIndicator.style.color = asrKey ? 'var(--accent-lime)' : 'var(--accent-cyan)';
+    }
 
     document.querySelectorAll('.gender-btn').forEach(b => {
       if (!b.id || !b.id.startsWith('onboarding')) {
@@ -676,6 +988,13 @@ class FitnessApp {
     const carbs = parseFloat(document.getElementById('input-target-carbs').value) || 240;
     const fat = parseFloat(document.getElementById('input-target-fat').value) || 55;
 
+    const asrKey = document.getElementById('input-asr-key')?.value.trim() || '';
+    if (asrKey) {
+      localStorage.setItem('fit_asr_key', asrKey);
+    } else {
+      localStorage.removeItem('fit_asr_key');
+    }
+
     this.profile.heightCm = height;
     this.profile.weightKg = weight;
     this.profile.age = age;
@@ -687,7 +1006,7 @@ class FitnessApp {
     this.recalculateMetabolism();
     this.saveData();
     this.render();
-    this.showToast('✓ 档案与目标保存成功');
+    this.showToast('✓ 档案与设置已保存');
     this.switchTab('diet');
   }
 
@@ -744,19 +1063,21 @@ class FitnessApp {
     const desc = document.getElementById('voice-sheet-desc');
     const samplesContainer = document.getElementById('voice-samples-container');
     const textarea = document.getElementById('voice-text-input');
-    textarea.value = '';
+    const previewBar = document.getElementById('voice-audio-preview');
+    if (previewBar) previewBar.style.display = 'none';
+    if (textarea) textarea.value = '';
 
     if (mode === 'WORKOUT') {
-      title.textContent = '口喷记训练';
-      desc.textContent = '说出动作名称、组数、次数及公斤数';
+      title.textContent = '🎙️ 口喷记训练';
+      desc.textContent = '支持【按住说话】或【点击录音】，也可直接打字';
       samplesContainer.innerHTML = `
         <span class="sample-chip" onclick="window.app.fillVoiceSample('卧推80公斤做4组每组10个，上斜哑铃24公斤3组')">卧推80kg 4x10 + 上斜哑铃</span>
         <span class="sample-chip" onclick="window.app.fillVoiceSample('深蹲100公斤4组6次')">深蹲100kg 4x6</span>
         <span class="sample-chip" onclick="window.app.fillVoiceSample('引体向上4组8次自重')">引体向上 4x8 自重</span>
       `;
     } else {
-      title.textContent = '口喷记饮食';
-      desc.textContent = '说出吃了什么及大概分量规格';
+      title.textContent = '🎙️ 口喷记饮食';
+      desc.textContent = '支持【按住说话】或【点击录音】，也可直接打字';
       samplesContainer.innerHTML = `
         <span class="sample-chip" onclick="window.app.fillVoiceSample('中午吃了200克大米饭，200克黑椒鸡胸肉和一盘西兰花')">米饭200g + 鸡胸200g + 西兰花</span>
         <span class="sample-chip" onclick="window.app.fillVoiceSample('早上吃了2个水煮蛋大概100克，一杯牛奶250毫升')">蛋2个 + 牛奶250ml</span>
@@ -773,67 +1094,14 @@ class FitnessApp {
   }
 
   closeVoiceSheet() {
-    SpeechModule.stop();
+    SpeechModule.stop(true);
     this.updateMicUi(false);
     this.updateWaveformBars(0);
-    document.getElementById('modal-voice-dictation').classList.add('hidden');
-  }
-
-  toggleMic() {
-    const textarea = document.getElementById('voice-text-input');
-    if (SpeechModule.isRecording) {
-      SpeechModule.stop();
-      this.updateMicUi(false);
-      this.updateWaveformBars(0);
-    } else {
-      const baseText = textarea.value.trim();
-      this.updateMicUi(true);
-      SpeechModule.start(
-        (transcript) => {
-          if (transcript && transcript.trim()) {
-            textarea.value = baseText ? `${baseText}，${transcript}` : transcript;
-          }
-        },
-        () => {
-          this.updateMicUi(false);
-          this.updateWaveformBars(0);
-        },
-        (errorType) => {
-          this.updateMicUi(false);
-          this.updateWaveformBars(0);
-          if (errorType === 'NOT_SUPPORTED') {
-            this.showToast('💡 当前环境未开启原生语音，可直接打字或点击快捷示例');
-          } else if (errorType === 'not-allowed') {
-            this.showToast('⚠️ 麦克风权限未开启');
-          }
-        },
-        (volume) => {
-          this.updateWaveformBars(volume);
-        }
-      );
+    if (this.audioPlayer) {
+      this.audioPlayer.pause();
+      this.audioPlayer = null;
     }
-  }
-
-  updateWaveformBars(volume) {
-    const bars = document.querySelectorAll('.waveform-bar');
-    if (!bars || bars.length === 0) return;
-
-    bars.forEach((bar, idx) => {
-      const mult = [0.4, 0.7, 1.2, 1.5, 1.2, 0.7, 0.4][idx] || 1.0;
-      const height = Math.max(3, Math.min(20, Math.round(volume * 20 * mult)));
-      bar.style.height = `${height}px`;
-      bar.classList.toggle('active', volume > 0.08);
-    });
-  }
-
-  updateMicUi(isRec) {
-    const btn = document.getElementById('btn-toggle-mic');
-    const ring = document.getElementById('mic-pulse-ring');
-    const label = document.getElementById('mic-status-label');
-
-    btn.classList.toggle('recording', isRec);
-    ring.classList.toggle('active', isRec);
-    label.textContent = isRec ? '🎙️ 聆听中... 点击停止' : '点击麦克风说话，或在下方快速输入';
+    document.getElementById('modal-voice-dictation').classList.add('hidden');
   }
 
   submitVoiceParse() {

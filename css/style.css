@@ -1009,6 +1009,13 @@ body {
   cursor: pointer;
   z-index: 2;
   transition: all 0.2s ease;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+}
+
+.big-mic-btn:active {
+  transform: scale(0.95);
 }
 
 .big-mic-btn.recording {
@@ -1016,6 +1023,14 @@ body {
   border-color: var(--accent-red);
   color: #ffffff;
   box-shadow: 0 0 16px rgba(239, 68, 68, 0.5);
+}
+
+.big-mic-btn.canceling {
+  background: var(--bg-subtle);
+  border-color: var(--accent-red);
+  color: var(--accent-red);
+  transform: scale(0.85);
+  box-shadow: none;
 }
 
 .audio-waveform-bars {
@@ -1215,3 +1230,173 @@ body {
   from { opacity: 0; transform: translate(-50%, -6px); }
   to { opacity: 1; transform: translate(-50%, 0); }
 }
+
+/* ==========================================================================
+   Daily Time Machine Retrospective Modal & Colored Cards
+   ========================================================================== */
+.retrospective-card {
+  width: 94%;
+  max-width: 420px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.9);
+  max-height: 88vh;
+  overflow-y: auto;
+  animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.retrospective-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--border-subtle);
+  padding-bottom: 10px;
+}
+
+.retro-nav-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.retro-title {
+  font-size: 1.02rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+
+.retro-hero-box {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+}
+
+.retro-ring-wrapper {
+  position: relative;
+  width: 100px;
+  height: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.retro-ring-center {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.retro-ring-num {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.retro-ring-sub {
+  font-size: 0.6rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.retro-hero-stats {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.retro-stat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 0.72rem;
+}
+
+/* Colored Cards with subtle glowing gradients */
+.color-card {
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.color-card-diet {
+  background: linear-gradient(180deg, rgba(249, 115, 22, 0.08) 0%, rgba(24, 24, 27, 0.6) 100%);
+  border: 1px solid rgba(249, 115, 22, 0.25);
+  box-shadow: 0 4px 20px rgba(249, 115, 22, 0.05);
+}
+
+.color-card-workout {
+  background: linear-gradient(180deg, rgba(56, 189, 248, 0.08) 0%, rgba(24, 24, 27, 0.6) 100%);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  box-shadow: 0 4px 20px rgba(56, 189, 248, 0.05);
+}
+
+.color-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.color-card-title {
+  font-size: 0.82rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.color-card-badge {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  background: var(--bg-card);
+  padding: 2px 6px;
+  border-radius: var(--radius-xs);
+  border: 1px solid var(--border-subtle);
+}
+
+.retro-sub-stats {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+}
+
+.retro-items-container {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+.retro-item-pill {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 6px 8px;
+  border-radius: var(--radius-xs);
+  font-size: 0.72rem;
+}
+

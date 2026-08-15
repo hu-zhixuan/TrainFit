@@ -148,7 +148,7 @@
         </div>
       </section>
 
-      <!-- TAB 3: 历史走势 (HISTORY) -->
+      <!-- TAB 3: 历史走势与时光回溯 (HISTORY & TIME MACHINE) -->
       <section id="screen-history" class="screen-view">
         
         <!-- Segmented Period Switcher -->
@@ -181,7 +181,7 @@
         <div class="chart-box">
           <div class="chart-header">
             <span>每日热量缺口走势</span>
-            <span style="font-size:0.65rem;color:var(--text-muted);">绿色: 达标 | 红色: 盈余</span>
+            <span style="font-size:0.65rem;color:var(--accent-cyan);">💡 点击任意柱状图开启该日全景回溯</span>
           </div>
           <div class="canvas-wrapper">
             <canvas id="deficit-trend-canvas" width="340" height="170"></canvas>
@@ -192,6 +192,7 @@
         <div class="chart-box">
           <div class="chart-header">
             <span>训练举铁容量走势 (kg)</span>
+            <span style="font-size:0.65rem;color:var(--text-muted);">点击走势点可回溯</span>
           </div>
           <div class="canvas-wrapper">
             <canvas id="volume-trend-canvas" width="340" height="150"></canvas>
@@ -201,7 +202,7 @@
         <!-- Past Days Timeline -->
         <div class="list-container">
           <div class="list-header">
-            <span class="list-title">打卡历史明细</span>
+            <span class="list-title">打卡历史时光轴 (点击展开当日卡片)</span>
           </div>
           <div id="history-timeline-list" style="display:flex;flex-direction:column;gap:8px;"></div>
         </div>
@@ -280,8 +281,20 @@
           </div>
         </div>
 
+        <!-- Optional Cloud ASR & Free LLM Configuration -->
+        <div class="card">
+          <div class="form-group">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <label class="form-label" for="input-asr-key">云端免费 API Key (Groq / Gemini / OpenAI，可选)</label>
+              <span style="font-size:0.65rem;color:var(--accent-cyan);" id="asr-status-indicator">默认本地高精引擎</span>
+            </div>
+            <input type="password" id="input-asr-key" class="form-input" placeholder="输入 gsk_xxx (Groq) 或 AIzaSy... (Gemini)，可留空">
+            <span style="font-size:0.65rem;color:var(--text-muted);margin-top:2px;">留空时自动使用本地高精规则引擎与手机输入法语音，100% 免费</span>
+          </div>
+        </div>
+
         <button class="btn-primary cyan-btn large-btn" id="btn-save-profile">
-          ✓ 保存身体档案与代谢目标
+          ✓ 保存身体档案与设置
         </button>
 
         <div class="card" style="gap:8px;">
@@ -319,24 +332,24 @@
     </nav>
   </div>
 
-  <!-- MODAL: VOICE DICTATION SHEET -->
+  <!-- MODAL: VOICE DICTATION SHEET (WeChat Style Hold & Click Dual Mode) -->
   <div class="modal-overlay hidden" id="modal-voice-dictation">
     <div class="bottom-sheet-content">
       <div class="sheet-handle"></div>
       <div class="sheet-header">
         <div>
-          <h3 class="sheet-title" id="voice-sheet-title">口喷录入</h3>
-          <p class="sheet-subtitle" id="voice-sheet-desc">说出动作/组数/重量 或 吃什么及大概克数</p>
+          <h3 class="sheet-title" id="voice-sheet-title">🎙️ 口喷录入</h3>
+          <p class="sheet-subtitle" id="voice-sheet-desc">支持【按住说话】或【点击录音】，也可直接打字</p>
         </div>
         <button class="icon-btn" id="btn-close-voice-sheet">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
 
-      <!-- Center Big Mic with Waveform -->
+      <!-- Center Big Mic with Waveform and Live Timer -->
       <div class="mic-pulsing-wrapper">
         <div class="pulse-ring" id="mic-pulse-ring"></div>
-        <button class="big-mic-btn" id="btn-toggle-mic" title="点击开始/停止录音">
+        <button class="big-mic-btn" id="btn-toggle-mic" title="按住说话 或 点击录音">
           <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">
             <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>
           </svg>
@@ -351,19 +364,122 @@
           <div class="waveform-bar"></div>
         </div>
       </div>
-      <div class="mic-status-label" id="mic-status-label">点击麦克风说话，或在下方快速输入</div>
+      
+      <div style="display:flex;align-items:center;justify-content:center;gap:6px;">
+        <span class="status-badge" id="mic-timer-badge" style="display:none;">00:00</span>
+        <div class="mic-status-label" id="mic-status-label">按住麦克风说话，或点击开始录音</div>
+      </div>
+
+      <!-- Recorded Audio Playback Bar -->
+      <div id="voice-audio-preview" style="display:none;align-items:center;justify-content:space-between;background:var(--bg-input);padding:8px 12px;border-radius:var(--radius-sm);border:1px solid var(--border-subtle);font-size:0.75rem;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <button id="btn-play-audio-preview" style="background:var(--accent-cyan);border:none;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#000;font-size:0.65rem;">▶</button>
+          <span style="color:var(--text-secondary);">录音已就绪</span>
+        </div>
+        <span id="audio-preview-duration" style="color:var(--text-muted);font-variant-numeric:tabular-nums;">00:03</span>
+      </div>
 
       <!-- Quick sample pills -->
       <div class="quick-samples-box">
-        <div class="samples-title">快捷口喷示例：</div>
+        <div class="samples-title">快捷口喷示例（点击快速体验）：</div>
         <div class="samples-scroll" id="voice-samples-container"></div>
       </div>
 
-      <textarea id="voice-text-input" class="voice-textarea" rows="2" placeholder="说出或输入内容..."></textarea>
+      <textarea id="voice-text-input" class="voice-textarea" rows="2" placeholder="说出或输入内容... (支持搜狗/微信输入法语音键直接打字)"></textarea>
 
       <button class="btn-primary cyan-btn large-btn" id="btn-submit-voice-parse">
         🤖 AI 智能解析并提取
       </button>
+    </div>
+  </div>
+
+  <!-- MODAL: DAILY TIME MACHINE RETROSPECTIVE (历史全景回溯与彩色卡片) -->
+  <div class="modal-overlay hidden" id="modal-day-retrospective">
+    <div class="dialog-card retrospective-card">
+      <div class="retrospective-header">
+        <div class="retro-nav-group">
+          <button class="icon-btn" id="btn-retro-prev-day" title="前一天">‹</button>
+          <div>
+            <h3 class="retro-title" id="retro-date-title">2026-08-15</h3>
+            <span class="status-badge" id="retro-status-pill">达标</span>
+          </div>
+          <button class="icon-btn" id="btn-retro-next-day" title="后一天">›</button>
+        </div>
+        <button class="icon-btn" id="btn-close-retro" title="关闭回溯">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <!-- Retrospective Hero Summary Ring -->
+      <div class="retro-hero-box" id="retro-hero-box">
+        <div class="retro-ring-wrapper">
+          <canvas id="retrospective-ring-canvas" width="100" height="100"></canvas>
+          <div class="retro-ring-center">
+            <span class="retro-ring-num" id="retro-net-deficit-num">0</span>
+            <span class="retro-ring-sub">kcal 净缺口</span>
+          </div>
+        </div>
+        <div class="retro-hero-stats">
+          <div class="retro-stat-row">
+            <span class="stat-item-label">总消耗 (TDEE+运动)</span>
+            <b class="stat-item-val" id="retro-total-burn">0 kcal</b>
+          </div>
+          <div class="retro-stat-row">
+            <span class="stat-item-label">已摄入卡路里</span>
+            <b class="stat-item-val" style="color:var(--accent-orange);" id="retro-intake">0 kcal</b>
+          </div>
+          <div class="retro-stat-row">
+            <span class="stat-item-label">目标缺口要求</span>
+            <b class="stat-item-val" style="color:var(--accent-lime);" id="retro-target-deficit">450 kcal</b>
+          </div>
+        </div>
+      </div>
+
+      <!-- Colored Card 1: 🥗 饮食营养全景 (Warm Amber Glow) -->
+      <div class="color-card color-card-diet">
+        <div class="color-card-header">
+          <span class="color-card-title" style="color:var(--accent-orange);">🥗 饮食与营养全景</span>
+          <span class="color-card-badge" id="retro-diet-total-cal">0 kcal</span>
+        </div>
+        
+        <!-- Macros Bar -->
+        <div class="macro-pills-row" style="margin:4px 0 8px;">
+          <div class="macro-pill-item">
+            <div class="macro-pill-header"><span>蛋白</span><b id="retro-macro-p">0g</b></div>
+            <div class="macro-track"><div class="macro-fill cyan-fill" id="retro-macro-p-bar" style="width:0%"></div></div>
+          </div>
+          <div class="macro-pill-item">
+            <div class="macro-pill-header"><span>碳水</span><b id="retro-macro-c">0g</b></div>
+            <div class="macro-track"><div class="macro-fill lime-fill" id="retro-macro-c-bar" style="width:0%"></div></div>
+          </div>
+          <div class="macro-pill-item">
+            <div class="macro-pill-header"><span>脂肪</span><b id="retro-macro-f">0g</b></div>
+            <div class="macro-track"><div class="macro-fill yellow-fill" id="retro-macro-f-bar" style="width:0%"></div></div>
+          </div>
+        </div>
+
+        <div id="retro-diet-items-list" class="retro-items-container"></div>
+      </div>
+
+      <!-- Colored Card 2: 🏋️ 训练与加片全景 (Ice Cyan Glow) -->
+      <div class="color-card color-card-workout">
+        <div class="color-card-header">
+          <span class="color-card-title" style="color:var(--accent-cyan);">🏋️ 训练负荷与加片回溯</span>
+          <span class="color-card-badge" id="retro-workout-vol">0 kg 吨位</span>
+        </div>
+
+        <div class="retro-sub-stats">
+          <span>完成组数: <b id="retro-workout-sets">0 组</b></span>
+          <span>运动消耗: <b id="retro-workout-burn" style="color:var(--accent-lime);">+0 kcal</b></span>
+        </div>
+
+        <div id="retro-workout-items-list" class="retro-items-container"></div>
+      </div>
+
+      <div class="dialog-actions-row">
+        <button class="btn-subtle" id="btn-retro-close-bottom">关闭</button>
+        <button class="btn-primary cyan-btn" id="btn-retro-set-active-day">跳转为今日记录</button>
+      </div>
     </div>
   </div>
 
@@ -585,7 +701,7 @@
             <input type="number" id="onboarding-height" class="form-input" value="175" oninput="window.app.calcOnboardingTdee()">
           </div>
           <div class="form-group">
-            <label class="form-label">体重 (kg)</label>
+            <label class="form-label" for="onboarding-weight">体重 (kg)</label>
             <input type="number" step="0.5" id="onboarding-weight" class="form-input" value="72.0" oninput="window.app.calcOnboardingTdee()">
           </div>
           <div class="form-group">

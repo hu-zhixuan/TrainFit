@@ -1,5 +1,5 @@
 /**
- * 练食AI · 发丝级极简 Canvas 走势与仪表盘引擎 (支持正负双向坐标轴与高DPI视网膜屏)
+ * 练食AI · 发丝级极简 Canvas 走势、仪表盘与历史回溯动画引擎
  */
 
 const ChartEngine = {
@@ -50,6 +50,52 @@ const ChartEngine = {
     }
   },
 
+  drawRetrospectiveRing(canvasId, deficit, targetDeficit) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+
+    const width = 100;
+    const height = 100;
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+    canvas.style.width = width + 'px';
+    canvas.style.height = height + 'px';
+    ctx.scale(dpr, dpr);
+
+    ctx.clearRect(0, 0, width, height);
+
+    const centerX = width / 2;
+    const centerY = height / 2;
+    const radius = 40;
+    const lineWidth = 5;
+
+    // Track
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+    ctx.strokeStyle = '#222228';
+    ctx.lineWidth = lineWidth;
+    ctx.stroke();
+
+    const isSurplus = deficit < 0;
+    const safeTarget = Math.max(targetDeficit, 1);
+    const ratio = Math.max(0, Math.min(deficit / safeTarget, 1.0));
+    const strokeColor = isSurplus ? '#ef4444' : (deficit >= targetDeficit && targetDeficit > 0 ? '#10b981' : '#38bdf8');
+
+    const startAngle = -Math.PI / 2;
+    const sweepAngle = Math.min(ratio, 1.0) * Math.PI * 2;
+
+    if (ratio > 0) {
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, radius, startAngle, startAngle + sweepAngle);
+      ctx.strokeStyle = strokeColor;
+      ctx.lineWidth = lineWidth;
+      ctx.lineCap = 'round';
+      ctx.stroke();
+    }
+  },
+
   drawDeficitTrend(canvasId, daysData, targetDeficit) {
     const canvas = document.getElementById(canvasId);
     if (!canvas) return;
@@ -75,7 +121,6 @@ const ChartEngine = {
     const chartWidth = width - paddingLeft - paddingRight;
     const chartHeight = height - paddingTop - paddingBottom;
 
-    // Calculate dynamic upper and lower limits with negative support
     const maxVal = Math.max(...daysData.map(d => d.deficit || 0), targetDeficit, 500);
     const minVal = Math.min(...daysData.map(d => d.deficit || 0), 0);
 
@@ -89,7 +134,7 @@ const ChartEngine = {
 
     const yZero = getY(0);
 
-    // Draw horizontal grid lines & Y-axis labels
+    // Horizontal grid lines & Y-axis labels
     const gridSteps = lowerLimit < 0 ? 4 : 3;
     ctx.strokeStyle = '#23232a';
     ctx.lineWidth = 1;
@@ -108,7 +153,7 @@ const ChartEngine = {
       ctx.fillText(Math.round(val), paddingLeft - 6, y + 3);
     }
 
-    // Draw 0-Baseline if negative axis is active
+    // 0-Baseline
     if (lowerLimit < 0) {
       ctx.beginPath();
       ctx.strokeStyle = '#3f3f46';
@@ -118,7 +163,7 @@ const ChartEngine = {
       ctx.stroke();
     }
 
-    // Draw Target Deficit Dashed Line
+    // Target Deficit Dashed Line
     const targetY = getY(targetDeficit);
     ctx.beginPath();
     ctx.setLineDash([3, 3]);
@@ -129,7 +174,6 @@ const ChartEngine = {
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // Sample interval for dates
     const totalDays = daysData.length;
     const sampleStep = totalDays > 14 ? Math.ceil(totalDays / 5) : 1;
     const step = chartWidth / totalDays;
@@ -166,7 +210,7 @@ const ChartEngine = {
         ctx.fill();
       }
 
-      // Sampled Date Labels
+      // Date labels
       const isSampled = (index % sampleStep === 0) || (index === totalDays - 1);
       if (isSampled) {
         ctx.fillStyle = '#71717a';
@@ -175,6 +219,18 @@ const ChartEngine = {
         ctx.fillText(day.label || day.date.slice(5), x + barWidth / 2, height - 6);
       }
     });
+
+    // Attach click handler for interactive day retrospective
+    canvas.onclick = (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const clickX = e.clientX - rect.left;
+      if (clickX >= paddingLeft && clickX <= width - paddingRight) {
+        const clickedIdx = Math.floor((clickX - paddingLeft) / step);
+        if (daysData[clickedIdx] && window.app && window.app.openDayRetrospective) {
+          window.app.openDayRetrospective(daysData[clickedIdx].date);
+        }
+      }
+    };
   },
 
   drawVolumeTrend(canvasId, daysData) {
@@ -258,6 +314,18 @@ const ChartEngine = {
         ctx.fillText(day.label || day.date.slice(5), x, height - 6);
       }
     });
+
+    // Attach click handler for interactive day retrospective
+    canvas.onclick = (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const clickX = e.clientX - rect.left;
+      if (clickX >= paddingLeft && clickX <= width - paddingRight) {
+        const clickedIdx = Math.round((clickX - paddingLeft) / step);
+        if (daysData[clickedIdx] && window.app && window.app.openDayRetrospective) {
+          window.app.openDayRetrospective(daysData[clickedIdx].date);
+        }
+      }
+    };
   }
 };
 
