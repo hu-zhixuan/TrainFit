@@ -342,13 +342,9 @@ const SpeechModule = {
     const timeoutId = setTimeout(() => controller.abort(), 2800);
 
     try {
-      const customKey = localStorage.getItem('fit_asr_key') || '';
-      const headers = { 'Content-Type': audioBlob.type || 'audio/webm' };
-      if (customKey) headers['x-api-key'] = customKey;
-
       const response = await fetch('/api/transcribe', {
         method: 'POST',
-        headers,
+        headers: { 'Content-Type': audioBlob.type || 'audio/webm' },
         body: audioBlob,
         signal: controller.signal
       });

@@ -993,16 +993,6 @@ class FitnessApp {
     document.getElementById('input-target-carbs').value = p.targetCarbsG;
     document.getElementById('input-target-fat').value = p.targetFatG;
 
-    const asrKey = localStorage.getItem('fit_asr_key') || '';
-    const asrInput = document.getElementById('input-asr-key');
-    if (asrInput) asrInput.value = asrKey;
-
-    const asrIndicator = document.getElementById('asr-status-indicator');
-    if (asrIndicator) {
-      asrIndicator.textContent = asrKey ? '✓ 云端大模型/ASR 已启用' : '默认本地高精引擎';
-      asrIndicator.style.color = asrKey ? 'var(--accent-lime)' : 'var(--accent-cyan)';
-    }
-
     document.querySelectorAll('.gender-btn').forEach(b => {
       if (!b.id || !b.id.startsWith('onboarding')) {
         b.classList.toggle('active', b.dataset.gender === p.gender);
@@ -1197,13 +1187,6 @@ class FitnessApp {
     const protein = parseFloat(document.getElementById('input-target-protein').value) || 140;
     const carbs = parseFloat(document.getElementById('input-target-carbs').value) || 240;
     const fat = parseFloat(document.getElementById('input-target-fat').value) || 55;
-
-    const asrKey = document.getElementById('input-asr-key')?.value.trim() || '';
-    if (asrKey) {
-      localStorage.setItem('fit_asr_key', asrKey);
-    } else {
-      localStorage.removeItem('fit_asr_key');
-    }
 
     this.profile.heightCm = height;
     this.profile.weightKg = weight;
