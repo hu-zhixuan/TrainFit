@@ -71,6 +71,14 @@ class FitnessApp {
 
     const savedDiet = localStorage.getItem('fit_diet');
     this.diet = savedDiet ? JSON.parse(savedDiet) : [];
+
+    // Custom Routines & Active To-Do (R2)
+    const savedRoutines = localStorage.getItem('fit_custom_routines');
+    this.customRoutines = savedRoutines ? JSON.parse(savedRoutines) : this.getDefaultRoutines();
+
+    const savedActiveTodo = localStorage.getItem('fit_active_routine_todo');
+    this.activeRoutineTodo = savedActiveTodo ? JSON.parse(savedActiveTodo) : null;
+    this.editingRoutineId = null;
   }
 
   checkOnboarding() {
@@ -306,6 +314,37 @@ class FitnessApp {
     });
     document.getElementById('btn-save-confirmed-workouts')?.addEventListener('click', () => {
       this.saveConfirmedWorkouts();
+    });
+    document.getElementById('btn-modal-followup-voice')?.addEventListener('click', () => {
+      this.startFollowupVoiceDictation();
+    });
+
+    // Routine Section & Cyclical To-Do Buttons (R2)
+    document.getElementById('btn-open-routine-editor')?.addEventListener('click', () => {
+      this.openRoutineEditor();
+    });
+    document.getElementById('btn-close-routine-editor')?.addEventListener('click', () => {
+      this.closeRoutineEditor();
+    });
+    document.getElementById('btn-cancel-routine')?.addEventListener('click', () => {
+      this.closeRoutineEditor();
+    });
+    document.getElementById('btn-save-routine')?.addEventListener('click', () => {
+      this.saveCustomRoutine();
+    });
+    document.getElementById('btn-delete-routine')?.addEventListener('click', () => {
+      if (this.editingRoutineId) {
+        this.deleteCustomRoutine(this.editingRoutineId);
+      }
+    });
+    document.getElementById('btn-routine-add-exercise-row')?.addEventListener('click', () => {
+      this.addRoutineEditorExerciseRow();
+    });
+    document.getElementById('btn-reset-routine-cycle')?.addEventListener('click', () => {
+      this.resetActiveRoutineCycle();
+    });
+    document.getElementById('btn-close-active-routine')?.addEventListener('click', () => {
+      this.clearActiveRoutine();
     });
 
     document.getElementById('btn-cancel-diet-confirm')?.addEventListener('click', () => {
@@ -747,7 +786,9 @@ class FitnessApp {
     });
 
     this.render();
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (typeof window !== 'undefined' && typeof window.scrollTo === 'function') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   }
 
   render() {
@@ -849,11 +890,458 @@ class FitnessApp {
     `).join('');
   }
 
+  // ==========================================================================
+  // Routine Cards & Cyclical To-Do System (R2)
+  // ==========================================================================
+  getDefaultRoutines() {
+    return [
+      {
+        id: "default_chest",
+        name: "胸部推类经典分化",
+        muscleGroup: "胸部",
+        icon: "💥",
+        isCustom: false,
+        exercises: [
+          { name: "杠铃卧推", muscleGroup: "胸部", weightKg: 80, sets: 4, reps: 8 },
+          { name: "哑铃上斜卧推", muscleGroup: "胸部", weightKg: 24, sets: 4, reps: 10 },
+          { name: "双杠臂屈伸", muscleGroup: "胸部", weightKg: 0, sets: 3, reps: 10 },
+          { name: "绳索夹胸", muscleGroup: "胸部", weightKg: 15, sets: 4, reps: 12 }
+        ]
+      },
+      {
+        id: "default_back",
+        name: "背部拉类经典分化",
+        muscleGroup: "背部",
+        icon: "🦅",
+        isCustom: false,
+        exercises: [
+          { name: "传统硬拉", muscleGroup: "背部/臀腿", weightKg: 100, sets: 3, reps: 6 },
+          { name: "高位下拉", muscleGroup: "背部", weightKg: 50, sets: 4, reps: 10 },
+          { name: "杠铃划船", muscleGroup: "背部", weightKg: 60, sets: 4, reps: 8 },
+          { name: "引体向上", muscleGroup: "背部", weightKg: 0, sets: 3, reps: 8 }
+        ]
+      },
+      {
+        id: "default_legs",
+        name: "腿部力量强化分化",
+        muscleGroup: "腿部",
+        icon: "🦵",
+        isCustom: false,
+        exercises: [
+          { name: "杠铃深蹲", muscleGroup: "腿部", weightKg: 100, sets: 4, reps: 6 },
+          { name: "倒蹬", muscleGroup: "腿部", weightKg: 160, sets: 3, reps: 10 },
+          { name: "罗马尼亚硬拉", muscleGroup: "腿部", weightKg: 70, sets: 3, reps: 8 },
+          { name: "腿屈伸", muscleGroup: "腿部", weightKg: 40, sets: 3, reps: 12 }
+        ]
+      }
+    ];
+  }
+
+  saveRoutines() {
+    localStorage.setItem('fit_custom_routines', JSON.stringify(this.customRoutines));
+  }
+
+  saveActiveRoutineTodo() {
+    if (this.activeRoutineTodo) {
+      localStorage.setItem('fit_active_routine_todo', JSON.stringify(this.activeRoutineTodo));
+    } else {
+      localStorage.removeItem('fit_active_routine_todo');
+    }
+  }
+
+  getSmartHistoryRecommendations() {
+    if (!this.workouts || this.workouts.length === 0) {
+      return [];
+    }
+
+    const muscleExerciseMap = {};
+
+    this.workouts.forEach(w => {
+      const muscle = w.muscleGroup || '胸部';
+      if (!muscleExerciseMap[muscle]) muscleExerciseMap[muscle] = {};
+      muscleExerciseMap[muscle][w.exerciseName] = (muscleExerciseMap[muscle][w.exerciseName] || 0) + 1;
+    });
+
+    const recommendations = [];
+    const muscleGroups = Object.keys(muscleExerciseMap).sort((a, b) => {
+      const countA = Object.values(muscleExerciseMap[a]).reduce((s, v) => s + v, 0);
+      const countB = Object.values(muscleExerciseMap[b]).reduce((s, v) => s + v, 0);
+      return countB - countA;
+    });
+
+    muscleGroups.forEach((muscle, idx) => {
+      const exercisesObj = muscleExerciseMap[muscle];
+      const sortedExNames = Object.keys(exercisesObj).sort((a, b) => exercisesObj[b] - exercisesObj[a]);
+      if (sortedExNames.length >= 2) {
+        const topExercises = sortedExNames.slice(0, 4).map(name => {
+          const lastLog = this.workouts.find(w => w.exerciseName === name);
+          return {
+            name: name,
+            muscleGroup: muscle,
+            weightKg: lastLog ? lastLog.weightKg : 60,
+            sets: lastLog ? lastLog.sets : 4,
+            reps: lastLog ? lastLog.reps : 8
+          };
+        });
+
+        recommendations.push({
+          id: `rec_${muscle}_${idx}`,
+          name: `${muscle}常用训练循环`,
+          muscleGroup: muscle,
+          icon: '🔥',
+          isRecommendation: true,
+          badgeText: '🔥 历史常用',
+          exercises: topExercises
+        });
+      }
+    });
+
+    return recommendations.slice(0, 3);
+  }
+
+  getAllRoutines() {
+    const custom = Array.isArray(this.customRoutines) ? this.customRoutines : [];
+    const recommendations = this.getSmartHistoryRecommendations();
+    
+    if (custom.length === 0 && recommendations.length === 0) {
+      return this.getDefaultRoutines();
+    }
+    
+    return [...custom, ...recommendations];
+  }
+
+  renderRoutineSection() {
+    const scrollContainer = document.getElementById('routine-cards-scroll');
+    if (!scrollContainer) return;
+
+    const routines = this.getAllRoutines();
+    const activeRoutineId = this.activeRoutineTodo ? this.activeRoutineTodo.routineId : null;
+
+    let cardsHtml = routines.map(r => {
+      const isActive = activeRoutineId === r.id;
+      const badgeClass = r.isRecommendation ? 'recommendation' : (r.isCustom ? 'custom' : '');
+      const badgeLabel = r.badgeText || (r.isCustom ? '🌟 自定义' : '⚡ 推荐分化');
+      const exNames = r.exercises.map(e => e.name).join(' · ');
+
+      let statusText = '未激活';
+      if (isActive && this.activeRoutineTodo) {
+        const done = this.activeRoutineTodo.items.filter(i => i.completed).length;
+        const total = this.activeRoutineTodo.items.length;
+        statusText = done === total ? `✓ 全部完成 (${done}/${total})` : `进行中 (${done}/${total})`;
+      }
+
+      return `
+        <div class="routine-card ${isActive ? 'active' : ''}" onclick="window.app.selectRoutine('${r.id}')">
+          <span class="routine-card-badge ${badgeClass}">${badgeLabel}</span>
+          <div class="routine-card-title">${r.name}</div>
+          <div class="routine-card-meta">${exNames}</div>
+          <div class="routine-card-footer">
+            <span class="routine-card-status">${statusText}</span>
+            ${r.isCustom ? `<button class="routine-card-btn-edit" onclick="event.stopPropagation(); window.app.openRoutineEditor('${r.id}')" title="编辑计划">✏️</button>` : ''}
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    cardsHtml += `
+      <div class="routine-card-add" onclick="window.app.openRoutineEditor()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        <span style="font-size:0.72rem;font-weight:600;">+ 自定义计划</span>
+      </div>
+    `;
+
+    scrollContainer.innerHTML = cardsHtml;
+  }
+
+  selectRoutine(routineId) {
+    const allRoutines = this.getAllRoutines();
+    const routine = allRoutines.find(r => r.id === routineId);
+    if (!routine) return;
+
+    // Cyclical Re-activation: if already active, reset all items to clean completed: false
+    if (this.activeRoutineTodo && this.activeRoutineTodo.routineId === routineId) {
+      this.activeRoutineTodo.items.forEach(item => {
+        item.completed = false;
+      });
+      this.saveActiveRoutineTodo();
+      this.render();
+      this.showToast(`🔄 已重置【${routine.name}】进入新一轮训练循环！`);
+      return;
+    }
+
+    // Activate new routine into today's To-Do checklist
+    this.activeRoutineTodo = {
+      routineId: routine.id,
+      routineName: routine.name,
+      muscleGroup: routine.muscleGroup,
+      activatedDate: this.selectedDate,
+      items: routine.exercises.map((ex, idx) => ({
+        id: `todo_${Date.now()}_${idx}`,
+        exerciseName: ex.name,
+        muscleGroup: ex.muscleGroup || routine.muscleGroup,
+        targetWeightKg: ex.weightKg !== undefined ? ex.weightKg : 60,
+        targetSets: ex.sets || 4,
+        targetReps: ex.reps || 8,
+        completed: false
+      }))
+    };
+
+    this.saveActiveRoutineTodo();
+    this.render();
+    this.showToast(`⚡ 已加载【${routine.name}】训练清单！`);
+  }
+
+  renderActiveRoutineTodo() {
+    const container = document.getElementById('routine-todo-container');
+    if (!container) return;
+
+    if (!this.activeRoutineTodo || !this.activeRoutineTodo.items || this.activeRoutineTodo.items.length === 0) {
+      container.classList.add('hidden');
+      return;
+    }
+
+    container.classList.remove('hidden');
+
+    const doneCount = this.activeRoutineTodo.items.filter(i => i.completed).length;
+    const totalCount = this.activeRoutineTodo.items.length;
+
+    const titleEl = document.getElementById('routine-todo-title-text');
+    if (titleEl) titleEl.textContent = `⚡ ${this.activeRoutineTodo.routineName}`;
+
+    const badgeEl = document.getElementById('routine-todo-progress-badge');
+    if (badgeEl) {
+      badgeEl.textContent = doneCount === totalCount ? `✓ 全部完成 (${doneCount}/${totalCount})` : `${doneCount}/${totalCount}`;
+    }
+
+    const listEl = document.getElementById('routine-todo-list');
+    if (listEl) {
+      listEl.innerHTML = this.activeRoutineTodo.items.map(item => `
+        <div class="todo-item ${item.completed ? 'completed' : ''}" id="todo-item-${item.id}">
+          <div class="todo-item-left" onclick="window.app.toggleTodoItem('${item.id}')">
+            <div class="todo-checkbox">${item.completed ? '✓' : ''}</div>
+            <div class="todo-item-info">
+              <span class="todo-name">${item.exerciseName}</span>
+              <span class="todo-specs">${item.targetWeightKg > 0 ? `${item.targetWeightKg}kg × ` : '自重 × '}${item.targetSets}组 × ${item.targetReps}次</span>
+            </div>
+          </div>
+          <button class="btn-todo-log" onclick="window.app.logTodoItemDirectly('${item.id}')">直接打卡</button>
+        </div>
+      `).join('');
+    }
+  }
+
+  toggleTodoItem(itemId) {
+    if (!this.activeRoutineTodo || !this.activeRoutineTodo.items) return;
+    const item = this.activeRoutineTodo.items.find(i => i.id === itemId);
+    if (!item) return;
+
+    item.completed = !item.completed;
+    this.saveActiveRoutineTodo();
+    this.render();
+    this.showToast(item.completed ? `✓ 【${item.exerciseName}】已打卡完成` : `已取消【${item.exerciseName}】打卡`);
+  }
+
+  logTodoItemDirectly(itemId) {
+    if (!this.activeRoutineTodo || !this.activeRoutineTodo.items) return;
+    const item = this.activeRoutineTodo.items.find(i => i.id === itemId);
+    if (!item) return;
+
+    const isCompound = item.exerciseName.includes("卧推") || item.exerciseName.includes("深蹲") || item.exerciseName.includes("硬拉") || item.exerciseName.includes("划船") || item.exerciseName.includes("倒蹬");
+    const burn = isCompound ? Math.round(item.targetSets * 28 + (item.targetWeightKg * 0.45)) : Math.round(item.targetSets * 18 + (item.targetWeightKg * 0.2));
+
+    this.workouts.unshift({
+      id: "w_" + Date.now() + "_" + Math.random().toString(36).substr(2, 4),
+      date: this.selectedDate,
+      exerciseName: item.exerciseName,
+      muscleGroup: item.muscleGroup,
+      sets: item.targetSets,
+      reps: item.targetReps,
+      weightKg: item.targetWeightKg,
+      rpe: 8.0,
+      burnedCalories: burn,
+      notes: `清单打卡: ${this.activeRoutineTodo.routineName}`
+    });
+
+    item.completed = true;
+    this.saveData();
+    this.saveActiveRoutineTodo();
+    this.render();
+    this.startRestTimer(90);
+    this.showToast(`✓ 已打卡并记录【${item.exerciseName}】！`);
+  }
+
+  resetActiveRoutineCycle() {
+    if (!this.activeRoutineTodo || !this.activeRoutineTodo.items) return;
+    this.activeRoutineTodo.items.forEach(item => {
+      item.completed = false;
+    });
+    this.saveActiveRoutineTodo();
+    this.render();
+    this.showToast(`🔄 清单已重置，开启下一循环！`);
+  }
+
+  clearActiveRoutine() {
+    this.activeRoutineTodo = null;
+    localStorage.removeItem('fit_active_routine_todo');
+    this.render();
+    this.showToast('已收起训练清单');
+  }
+
+  getActiveTodos() {
+    if (!this.activeRoutineTodo || !this.activeRoutineTodo.items) return [];
+    return this.activeRoutineTodo.items.map(t => ({
+      name: t.exerciseName,
+      exerciseName: t.exerciseName,
+      muscleGroup: t.muscleGroup
+    }));
+  }
+
+  openRoutineEditor(routineId = null) {
+    this.editingRoutineId = routineId;
+    const modal = document.getElementById('modal-routine-editor');
+    const title = document.getElementById('routine-editor-title');
+    const nameInput = document.getElementById('routine-edit-name');
+    const muscleSelect = document.getElementById('routine-edit-muscle');
+    const list = document.getElementById('routine-edit-exercises-list');
+    const delBtn = document.getElementById('btn-delete-routine');
+
+    if (!modal) return;
+
+    if (routineId) {
+      const routine = this.customRoutines.find(r => r.id === routineId);
+      if (routine) {
+        title.textContent = '编辑训练循环计划';
+        nameInput.value = routine.name;
+        muscleSelect.value = routine.muscleGroup || '胸部';
+        if (delBtn) delBtn.classList.remove('hidden');
+        list.innerHTML = '';
+        routine.exercises.forEach(ex => {
+          this.addRoutineEditorExerciseRow(ex.name, ex.weightKg, ex.sets, ex.reps);
+        });
+      }
+    } else {
+      title.textContent = '新建训练循环计划';
+      nameInput.value = '';
+      muscleSelect.value = '胸部';
+      if (delBtn) delBtn.classList.add('hidden');
+      list.innerHTML = '';
+      this.addRoutineEditorExerciseRow('杠铃卧推', 80, 4, 8);
+      this.addRoutineEditorExerciseRow('哑铃上斜卧推', 24, 4, 10);
+      this.addRoutineEditorExerciseRow('双杠臂屈伸', 0, 3, 10);
+    }
+
+    modal.classList.remove('hidden');
+  }
+
+  closeRoutineEditor() {
+    const modal = document.getElementById('modal-routine-editor');
+    if (modal) modal.classList.add('hidden');
+    this.editingRoutineId = null;
+  }
+
+  addRoutineEditorExerciseRow(name = '', weight = 60, sets = 4, reps = 8) {
+    const list = document.getElementById('routine-edit-exercises-list');
+    if (!list) return;
+
+    const row = document.createElement('div');
+    row.className = 'routine-exercise-row';
+    row.style.cssText = 'display:flex;gap:6px;align-items:center;background:var(--bg-input);padding:6px 8px;border-radius:var(--radius-sm);border:1px solid var(--border-subtle);';
+    row.innerHTML = `
+      <input type="text" class="form-input routine-row-name" placeholder="动作名称" style="flex:1.2;font-size:0.75rem;padding:4px 6px;" value="${name}">
+      <input type="number" step="0.5" class="form-input routine-row-weight" placeholder="kg" style="width:52px;font-size:0.75rem;padding:4px 4px;text-align:center;" value="${weight}">
+      <span style="font-size:0.68rem;color:var(--text-muted);">kg</span>
+      <input type="number" class="form-input routine-row-sets" placeholder="组" style="width:40px;font-size:0.75rem;padding:4px 4px;text-align:center;" value="${sets}">
+      <span style="font-size:0.68rem;color:var(--text-muted);">组</span>
+      <input type="number" class="form-input routine-row-reps" placeholder="次" style="width:40px;font-size:0.75rem;padding:4px 4px;text-align:center;" value="${reps}">
+      <span style="font-size:0.68rem;color:var(--text-muted);">次</span>
+      <button type="button" class="btn-delete" onclick="this.parentElement.remove()" style="padding:2px 6px;color:var(--text-muted);background:transparent;border:none;cursor:pointer;font-size:0.8rem;" title="移除动作">✕</button>
+    `;
+    list.appendChild(row);
+  }
+
+  saveCustomRoutine() {
+    const nameInput = document.getElementById('routine-edit-name');
+    const muscleSelect = document.getElementById('routine-edit-muscle');
+    const name = nameInput ? nameInput.value.trim() : '';
+    const muscle = muscleSelect ? muscleSelect.value : '胸部';
+
+    if (!name) {
+      this.showToast('请输入计划名称');
+      return;
+    }
+
+    const rows = document.querySelectorAll('#routine-edit-exercises-list .routine-exercise-row');
+    const exercises = [];
+
+    rows.forEach(row => {
+      const exName = row.querySelector('.routine-row-name').value.trim();
+      const exWeight = parseFloat(row.querySelector('.routine-row-weight').value) || 0;
+      const exSets = parseInt(row.querySelector('.routine-row-sets').value, 10) || 4;
+      const exReps = parseInt(row.querySelector('.routine-row-reps').value, 10) || 8;
+
+      if (exName) {
+        exercises.push({
+          name: exName,
+          muscleGroup: muscle,
+          weightKg: exWeight,
+          sets: exSets,
+          reps: exReps
+        });
+      }
+    });
+
+    if (exercises.length === 0) {
+      this.showToast('请至少添加一个训练动作');
+      return;
+    }
+
+    const routineObj = {
+      id: this.editingRoutineId || `routine_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+      name: name,
+      muscleGroup: muscle,
+      icon: muscle === '胸部' ? '💥' : (muscle === '背部' ? '🦅' : (muscle === '腿部' ? '🦵' : (muscle === '肩部' ? '🛡️' : '⚡'))),
+      isCustom: true,
+      exercises: exercises
+    };
+
+    if (this.editingRoutineId) {
+      const idx = this.customRoutines.findIndex(r => r.id === this.editingRoutineId);
+      if (idx !== -1) {
+        this.customRoutines[idx] = routineObj;
+      } else {
+        this.customRoutines.push(routineObj);
+      }
+    } else {
+      this.customRoutines.push(routineObj);
+    }
+
+    this.saveRoutines();
+    this.closeRoutineEditor();
+    this.render();
+    this.showToast(`✓ 已保存计划【${name}】！`);
+  }
+
+  deleteCustomRoutine(routineId) {
+    if (!routineId) return;
+    this.customRoutines = this.customRoutines.filter(r => r.id !== routineId);
+    if (this.activeRoutineTodo && this.activeRoutineTodo.routineId === routineId) {
+      this.activeRoutineTodo = null;
+      localStorage.removeItem('fit_active_routine_todo');
+    }
+    this.saveRoutines();
+    this.closeRoutineEditor();
+    this.render();
+    this.showToast('已删除计划');
+  }
+
   renderWorkoutScreen() {
     const summary = this.getDaySummary(this.selectedDate);
     document.getElementById('workout-total-vol').textContent = `${summary.totalVolume.toLocaleString()} kg`;
     document.getElementById('workout-total-sets').textContent = `${summary.totalSets} 组`;
     document.getElementById('workout-total-burn').textContent = `+${summary.workoutBurn} kcal`;
+
+    this.renderRoutineSection();
+    this.renderActiveRoutineTodo();
 
     const dayWorkouts = this.workouts.filter(w => w.date === this.selectedDate);
     const container = document.getElementById('workout-items-list');
@@ -1273,6 +1761,14 @@ class FitnessApp {
         <span class="sample-chip" onclick="window.app.fillVoiceSample('深蹲100公斤4组6次')">深蹲100kg 4x6</span>
         <span class="sample-chip" onclick="window.app.fillVoiceSample('引体向上4组8次自重')">引体向上 4x8 自重</span>
       `;
+    } else if (mode === 'WORKOUT_FOLLOWUP') {
+      title.textContent = '🎙️ 补充训练参数';
+      desc.textContent = '说出缺失的重量、组数或次数 (如 "4组8次" 或 "80kg")';
+      samplesContainer.innerHTML = `
+        <span class="sample-chip" onclick="window.app.fillVoiceSample('4组8次')">4组8次</span>
+        <span class="sample-chip" onclick="window.app.fillVoiceSample('80公斤')">80公斤</span>
+        <span class="sample-chip" onclick="window.app.fillVoiceSample('自重4组10次')">自重4组10次</span>
+      `;
     } else {
       title.textContent = '🎙️ 口喷记饮食';
       desc.textContent = '支持【按住说话】或【点击录音】，也可直接打字';
@@ -1310,13 +1806,23 @@ class FitnessApp {
     }
 
     this.closeVoiceSheet();
-    this.showToast('🧠 AI 大模型正在智能提炼...', 1500);
+
+    if (this.voiceMode === 'WORKOUT_FOLLOWUP') {
+      const idx = this.parsedWorkoutBuffer.findIndex(i => !i.isComplete);
+      const targetIdx = idx !== -1 ? idx : 0;
+      if (this.parsedWorkoutBuffer[targetIdx]) {
+        this.parsedWorkoutBuffer[targetIdx] = WorkoutEngine.mergeWorkoutFactors(this.parsedWorkoutBuffer[targetIdx], text);
+      }
+      this.showWorkoutConfirmModal(this.parsedWorkoutBuffer);
+      return;
+    }
+
+    this.showToast('🧠 AI 正在智能提炼...', 1200);
 
     try {
       if (this.voiceMode === 'WORKOUT') {
-        const items = typeof AiService !== 'undefined' 
-          ? await AiService.parseWorkout(text)
-          : WorkoutEngine.parseWorkoutVoice(text);
+        const activeTodos = this.getActiveTodos();
+        const items = WorkoutEngine.parseWorkoutVoice(text, { activeTodos });
         this.parsedWorkoutBuffer = items;
         this.showWorkoutConfirmModal(items);
       } else {
@@ -1329,7 +1835,8 @@ class FitnessApp {
     } catch (err) {
       console.error('[App] AI 解析异常降级:', err);
       if (this.voiceMode === 'WORKOUT') {
-        const items = WorkoutEngine.parseWorkoutVoice(text);
+        const activeTodos = this.getActiveTodos();
+        const items = WorkoutEngine.parseWorkoutVoice(text, { activeTodos });
         this.parsedWorkoutBuffer = items;
         this.showWorkoutConfirmModal(items);
       } else {
@@ -1341,32 +1848,157 @@ class FitnessApp {
   }
 
   showWorkoutConfirmModal(items) {
+    this.parsedWorkoutBuffer = items || [];
+
+    let hasIncomplete = false;
+    let firstIncompleteItem = null;
+
+    this.parsedWorkoutBuffer.forEach(item => {
+      const missing = [];
+      if (!item.exerciseName || item.exerciseName === "综合力量训练") missing.push('exerciseName');
+      if (item.weightKg === null || item.weightKg === undefined || isNaN(item.weightKg) || item.weightKg < 0) missing.push('weightKg');
+      if (item.sets === null || item.sets === undefined || isNaN(item.sets) || item.sets < 1) missing.push('sets');
+      if (item.reps === null || item.reps === undefined || isNaN(item.reps) || item.reps < 1) missing.push('reps');
+
+      item.missingFactors = missing;
+      item.isComplete = missing.length === 0;
+
+      if (!item.isComplete) {
+        if (!item.followUpPrompt) {
+          item.followUpPrompt = WorkoutEngine.generateFollowUpPrompt ? WorkoutEngine.generateFollowUpPrompt(item) : (typeof generateFollowUpPrompt !== 'undefined' ? generateFollowUpPrompt(item) : "请补全缺失参数");
+        }
+        if (!hasIncomplete) {
+          hasIncomplete = true;
+          firstIncompleteItem = item;
+        }
+      }
+    });
+
+    const bubbleEl = document.getElementById('workout-followup-bubble');
+    const bubbleTextEl = document.getElementById('followup-bubble-text');
+    const chipsEl = document.getElementById('followup-quick-chips');
+    const voiceBarEl = document.getElementById('modal-followup-voice-bar');
+    const saveBtn = document.getElementById('btn-save-confirmed-workouts');
+
+    if (hasIncomplete && firstIncompleteItem) {
+      if (bubbleEl) {
+        bubbleEl.style.display = 'flex';
+        if (bubbleTextEl) {
+          bubbleTextEl.textContent = firstIncompleteItem.followUpPrompt || "已识别到部分参数，请问组数、次数或重量是多少？";
+        }
+      }
+      if (chipsEl) {
+        chipsEl.style.display = 'flex';
+        chipsEl.innerHTML = this.renderFollowupChipsHtml(firstIncompleteItem);
+      }
+      if (voiceBarEl) voiceBarEl.style.display = 'block';
+
+      if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.textContent = "请补全缺失参数";
+        saveBtn.classList.add('disabled');
+      }
+    } else {
+      if (bubbleEl) bubbleEl.style.display = 'none';
+      if (chipsEl) chipsEl.style.display = 'none';
+      if (voiceBarEl) voiceBarEl.style.display = 'none';
+
+      if (saveBtn) {
+        saveBtn.disabled = false;
+        saveBtn.textContent = "✓ 存入训练";
+        saveBtn.classList.remove('disabled');
+      }
+    }
+
     const container = document.getElementById('confirm-workouts-items-container');
-    container.innerHTML = items.map((item, idx) => `
-      <div style="background:var(--bg-input);padding:10px;border-radius:var(--radius-sm);border:1px solid var(--border-subtle);display:flex;justify-content:space-between;align-items:center;">
-        <div style="display:flex;align-items:center;gap:6px;">
-          <span class="tag-badge tag-cyan">${item.muscleGroup}</span>
-          <b style="font-size:0.85rem;">${item.exerciseName}</b>
-        </div>
-        <div style="display:flex;align-items:center;gap:4px;font-size:0.75rem;">
-          <input type="number" step="0.5" value="${item.weightKg}" onchange="window.app.updateWorkoutBuffer(${idx}, 'weightKg', this.value)" class="form-input" style="width:58px;padding:3px 5px;text-align:center;"> kg
-          <input type="number" value="${item.sets}" onchange="window.app.updateWorkoutBuffer(${idx}, 'sets', this.value)" class="form-input" style="width:40px;padding:3px 5px;text-align:center;"> 组
-          <input type="number" value="${item.reps}" onchange="window.app.updateWorkoutBuffer(${idx}, 'reps', this.value)" class="form-input" style="width:40px;padding:3px 5px;text-align:center;"> 次
-        </div>
-      </div>
-    `).join('');
+    if (container) {
+      container.innerHTML = this.parsedWorkoutBuffer.map((item, idx) => {
+        const isWeightMissing = item.weightKg === null || item.weightKg === undefined || isNaN(item.weightKg) || item.weightKg < 0;
+        const isSetsMissing = item.sets === null || item.sets === undefined || isNaN(item.sets) || item.sets < 1;
+        const isRepsMissing = item.reps === null || item.reps === undefined || isNaN(item.reps) || item.reps < 1;
+
+        return `
+          <div style="background:var(--bg-input);padding:10px 12px;border-radius:var(--radius-sm);border:1px solid ${!item.isComplete ? 'rgba(245,158,11,0.4)' : 'var(--border-subtle)'};display:flex;flex-direction:column;gap:8px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <div style="display:flex;align-items:center;gap:6px;">
+                <span class="tag-badge tag-cyan">${item.muscleGroup || '胸部'}</span>
+                <b style="font-size:0.85rem;">${item.exerciseName}</b>
+              </div>
+              ${!item.isComplete ? `<span class="factor-missing-badge">⚠️ 缺失参数</span>` : `<span style="font-size:0.7rem;color:var(--accent-lime);font-weight:600;">✓ 参数完整</span>`}
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;font-size:0.75rem;">
+              <div style="display:flex;align-items:center;gap:4px;">
+                <input type="number" step="0.5" value="${item.weightKg !== null && item.weightKg !== undefined ? item.weightKg : ''}" placeholder="重量" oninput="window.app.updateWorkoutBuffer(${idx}, 'weightKg', this.value)" class="form-input ${isWeightMissing ? 'input-invalid' : ''}" style="width:60px;padding:4px 5px;text-align:center;">
+                <span style="color:var(--text-muted);">kg</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:4px;">
+                <input type="number" value="${item.sets !== null && item.sets !== undefined ? item.sets : ''}" placeholder="组数" oninput="window.app.updateWorkoutBuffer(${idx}, 'sets', this.value)" class="form-input ${isSetsMissing ? 'input-invalid' : ''}" style="width:45px;padding:4px 5px;text-align:center;">
+                <span style="color:var(--text-muted);">组</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:4px;">
+                <input type="number" value="${item.reps !== null && item.reps !== undefined ? item.reps : ''}" placeholder="次数" oninput="window.app.updateWorkoutBuffer(${idx}, 'reps', this.value)" class="form-input ${isRepsMissing ? 'input-invalid' : ''}" style="width:45px;padding:4px 5px;text-align:center;">
+                <span style="color:var(--text-muted);">次</span>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
 
     document.getElementById('modal-confirm-workouts').classList.remove('hidden');
   }
 
+  renderFollowupChipsHtml(item) {
+    const missing = item.missingFactors || [];
+    const chips = [];
+    if (missing.includes('sets') || missing.includes('reps')) {
+      chips.push('4组×8次', '4组×10次', '5组×5次', '3组×12次');
+    }
+    if (missing.includes('weightKg')) {
+      chips.push('60kg', '80kg', '100kg', '自重 0kg');
+    }
+    if (chips.length === 0) {
+      chips.push('4组×8次', '4组×10次', '5组×5次', '3组×12次', '60kg', '80kg', '100kg', '自重 0kg');
+    }
+    return chips.map(chip => `
+      <span class="sample-chip" onclick="window.app.applyFollowupChip('${chip}')">${chip}</span>
+    `).join('');
+  }
+
+  applyFollowupChip(chipText) {
+    if (!this.parsedWorkoutBuffer || this.parsedWorkoutBuffer.length === 0) return;
+    const idx = this.parsedWorkoutBuffer.findIndex(i => !i.isComplete);
+    const targetIdx = idx !== -1 ? idx : 0;
+
+    if (this.parsedWorkoutBuffer[targetIdx]) {
+      this.parsedWorkoutBuffer[targetIdx] = WorkoutEngine.mergeWorkoutFactors(this.parsedWorkoutBuffer[targetIdx], chipText);
+      this.showWorkoutConfirmModal(this.parsedWorkoutBuffer);
+    }
+  }
+
+  startFollowupVoiceDictation() {
+    this.openVoiceSheet('WORKOUT_FOLLOWUP');
+  }
+
   updateWorkoutBuffer(index, field, value) {
     if (this.parsedWorkoutBuffer[index]) {
-      this.parsedWorkoutBuffer[index][field] = parseFloat(value) || 0;
+      if (value === '' || value === null || value === undefined) {
+        this.parsedWorkoutBuffer[index][field] = null;
+      } else {
+        this.parsedWorkoutBuffer[index][field] = field === 'weightKg' ? parseFloat(value) : parseInt(value, 10);
+      }
+      this.showWorkoutConfirmModal(this.parsedWorkoutBuffer);
     }
   }
 
   saveConfirmedWorkouts() {
     if (!this.parsedWorkoutBuffer || this.parsedWorkoutBuffer.length === 0) return;
+
+    const anyIncomplete = this.parsedWorkoutBuffer.some(i => !i.isComplete);
+    if (anyIncomplete) {
+      this.showToast('⚠️ 请先补全缺失参数');
+      return;
+    }
 
     this.parsedWorkoutBuffer.forEach(item => {
       this.workouts.unshift({
@@ -1377,13 +2009,22 @@ class FitnessApp {
         sets: item.sets,
         reps: item.reps,
         weightKg: item.weightKg,
-        rpe: 8.0,
-        burnedCalories: Math.round(item.burnedCalories),
+        rpe: item.rpe || 8.0,
+        burnedCalories: Math.round(item.burnedCalories || 0),
         notes: item.notes || "AI语音录入"
       });
+
+      // Contextual sync: mark active To-Do item completed if matched
+      if (this.activeRoutineTodo && this.activeRoutineTodo.items) {
+        const todoMatch = this.activeRoutineTodo.items.find(t => !t.completed && (t.exerciseName === item.exerciseName || item.exerciseName.includes(t.exerciseName) || t.exerciseName.includes(item.exerciseName)));
+        if (todoMatch) {
+          todoMatch.completed = true;
+        }
+      }
     });
 
     this.saveData();
+    this.saveActiveRoutineTodo();
     document.getElementById('modal-confirm-workouts').classList.add('hidden');
     this.render();
     this.showToast(`✓ 已存入 ${this.parsedWorkoutBuffer.length} 项训练`);
@@ -1687,3 +2328,10 @@ class FitnessApp {
 window.addEventListener('DOMContentLoaded', () => {
   window.app = new FitnessApp();
 });
+
+if (typeof window !== 'undefined') {
+  window.FitnessApp = FitnessApp;
+}
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { FitnessApp, DEFAULT_PROFILE, getTodayDateString, shiftDateString };
+}

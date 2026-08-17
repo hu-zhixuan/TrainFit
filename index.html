@@ -134,7 +134,35 @@
           </div>
         </div>
 
-        <!-- 2. Clean Voice Action Capsule -->
+        <!-- 2. Cyclical Routine Cards Section (R2) -->
+        <div class="routine-section">
+          <div class="routine-section-header">
+            <span class="routine-section-title">📋 训练分化与循环计划</span>
+            <button class="btn-subtle" id="btn-open-routine-editor" style="padding:2px 8px;font-size:0.72rem;color:var(--accent-cyan);">+ 新建计划</button>
+          </div>
+          <div class="routine-cards-scroll" id="routine-cards-scroll">
+            <!-- Dynamic Custom & Recommended Routine Cards -->
+          </div>
+        </div>
+
+        <!-- 3. Today's Active To-Do Checklist (R2) -->
+        <div class="routine-todo-container hidden" id="routine-todo-container">
+          <div class="routine-todo-header">
+            <div class="routine-todo-title">
+              <span id="routine-todo-title-text">⚡ 今日训练清单</span>
+              <span class="routine-todo-progress-pill" id="routine-todo-progress-badge">0/0</span>
+            </div>
+            <div class="routine-todo-actions">
+              <button class="btn-subtle" id="btn-reset-routine-cycle" style="padding:2px 8px;font-size:0.68rem;color:var(--accent-cyan);" title="重置本轮循环并重新打卡">🔄 重置循环</button>
+              <button class="btn-subtle" id="btn-close-active-routine" style="padding:2px 6px;font-size:0.7rem;" title="收起清单">✕</button>
+            </div>
+          </div>
+          <div class="todo-list" id="routine-todo-list">
+            <!-- Dynamic To-Do Items with Opacity 0.5 & Line-through on Complete -->
+          </div>
+        </div>
+
+        <!-- 4. Clean Voice Action Capsule -->
         <div class="action-capsule-row">
           <button class="btn-action-primary cyan-action" id="btn-hero-workout-voice">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
@@ -145,7 +173,7 @@
           <button class="btn-action-subtle" id="btn-manual-add-workout">+ 手动加动作</button>
         </div>
 
-        <!-- 3. Workouts List with Overload Badges -->
+        <!-- 5. Workouts List with Overload Badges -->
         <div class="list-container">
           <div class="list-header">
             <span class="list-title" id="workout-list-title">今日动作与加片建议 (0)</span>
@@ -513,15 +541,37 @@
     </div>
   </div>
 
-  <!-- MODAL: CONFIRM WORKOUTS -->
+  <!-- MODAL: CONFIRM WORKOUTS (R1: Multi-turn Voice Follow-Up Dialog) -->
   <div class="modal-overlay hidden" id="modal-confirm-workouts">
     <div class="dialog-card">
       <div class="sheet-header">
         <div>
           <h3 class="sheet-title">AI 提取到训练项目</h3>
-          <p class="sheet-subtitle">核对动作、组数与重量</p>
+          <p class="sheet-subtitle">核对动作、组数与重量（全部要素完整方可存入）</p>
         </div>
       </div>
+
+      <!-- Assistant Voice Follow-up Bubble (R1) -->
+      <div class="assistant-voice-bubble" id="workout-followup-bubble" style="display:none;">
+        <div class="assistant-avatar">🤖</div>
+        <div class="assistant-speech-content" id="followup-bubble-text">
+          已识别到深蹲 100kg，请问做了几组、每组几次？
+        </div>
+      </div>
+
+      <!-- Contextual Quick-Fill Chips (R1) -->
+      <div class="followup-chips-container" id="followup-quick-chips" style="display:none;">
+        <!-- Dynamic chips based on missing factors -->
+      </div>
+
+      <!-- Followup Voice Dictation Bar -->
+      <div class="modal-followup-voice-bar" id="modal-followup-voice-bar" style="display:none;margin-bottom:8px;">
+        <button class="btn-action-primary cyan-action" id="btn-modal-followup-voice" style="padding:6px 12px;font-size:0.75rem;width:100%;justify-content:center;">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+          <span>🎙️ 语音补充参数 (说出如 "4组8次" 或 "80kg")</span>
+        </button>
+      </div>
+
       <div id="confirm-workouts-items-container" style="display:flex;flex-direction:column;gap:8px;"></div>
       <div class="dialog-actions-row">
         <button class="btn-subtle" id="btn-cancel-workout-confirm">取消</button>
@@ -647,6 +697,55 @@
       <div class="dialog-actions-row">
         <button class="btn-subtle" id="btn-cancel-manual-workout">取消</button>
         <button class="btn-primary cyan-btn" id="btn-save-manual-workout">✓ 保存训练</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: ROUTINE EDITOR (Create / Edit Custom Routine) (R2) -->
+  <div class="modal-overlay hidden" id="modal-routine-editor">
+    <div class="dialog-card">
+      <div class="sheet-header">
+        <div>
+          <h3 class="sheet-title" id="routine-editor-title">新建训练循环计划</h3>
+          <p class="sheet-subtitle">自定义专属分化动作库与目标组次</p>
+        </div>
+        <button class="btn-subtle" id="btn-close-routine-editor" style="padding:4px 8px;font-size:0.8rem;">✕</button>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">计划名称</label>
+        <input type="text" id="routine-edit-name" class="form-input" placeholder="例如：胸肌撕裂者 / 腿部强化日">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">主要肌群</label>
+        <select id="routine-edit-muscle" class="form-input">
+          <option value="胸部">胸部</option>
+          <option value="背部">背部</option>
+          <option value="腿部">腿部</option>
+          <option value="肩部">肩部</option>
+          <option value="手臂">手臂</option>
+          <option value="核心">核心</option>
+          <option value="全身">全身</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <label class="form-label" style="margin:0;">包含训练动作</label>
+          <button class="btn-subtle" id="btn-routine-add-exercise-row" style="padding:2px 8px;font-size:0.72rem;color:var(--accent-cyan);">+ 添加动作</button>
+        </div>
+        <div id="routine-edit-exercises-list" style="display:flex;flex-direction:column;gap:8px;max-height:220px;overflow-y:auto;padding-right:2px;">
+          <!-- Dynamic exercise rows -->
+        </div>
+      </div>
+
+      <input type="hidden" id="routine-edit-id" value="">
+
+      <div class="dialog-actions-row">
+        <button class="btn-delete hidden" id="btn-delete-routine" style="background:rgba(239,68,68,0.15);color:#ef4444;border:1px solid rgba(239,68,68,0.3);padding:8px 14px;border-radius:var(--radius-sm);font-weight:600;font-size:0.75rem;">删除计划</button>
+        <button class="btn-subtle" id="btn-cancel-routine">取消</button>
+        <button class="btn-primary cyan-btn" id="btn-save-routine">保存计划</button>
       </div>
     </div>
   </div>

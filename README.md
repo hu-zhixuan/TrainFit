@@ -7,12 +7,12 @@
   专为硬核力量训练者与科学减脂人群打造 —— <b>口喷记录</b> · <b>自动超负荷加片建议</b> · <b>热量缺口动态闭环</b>。
 </p>
 
-### 📥 [ 👉 点击这里直接下载最新 Android APK 安装包 (TrainFit-v1.1.1.apk) 👈 ](https://github.com/QD8-png/TrainFit/releases/download/v1.1.1/TrainFit-v1.1.apk)
+### 📥 [ 👉 点击这里直接下载最新 Android APK 安装包 (TrainFit-v1.1.2.apk) 👈 ](https://github.com/QD8-png/TrainFit/releases/download/v1.1.2/TrainFit-v1.1.2.apk)
 
 > 💡 **多通道下载指引**：
-> - 🚀 **官方 Release 直链（推荐，极速）**：[TrainFit-v1.1.1.apk (GitHub Releases v1.1.1)](https://github.com/QD8-png/TrainFit/releases/download/v1.1.1/TrainFit-v1.1.apk)
+> - 🚀 **官方 Release 直链（推荐，极速）**：[TrainFit-v1.1.2.apk (GitHub Releases v1.1.2)](https://github.com/QD8-png/TrainFit/releases/download/v1.1.2/TrainFit-v1.1.2.apk)
 > - 📦 **GitHub Releases 发行页**：[查看全部版本与更新日志](https://github.com/QD8-png/TrainFit/releases)
-> - 🔗 **仓库备用直链**：[TrainFit-v1.1.apk (Raw 源码库直链)](https://github.com/QD8-png/TrainFit/raw/main/downloads/TrainFit-v1.1.apk)
+> - 🔗 **仓库备用直链**：[TrainFit-v1.1.2.apk (Raw 源码库直链)](https://github.com/QD8-png/TrainFit/raw/main/downloads/TrainFit-v1.1.2.apk)
 > - ⚡ **永久最新指向**：[TrainFit-Latest.apk (永远指向最新版)](https://github.com/QD8-png/TrainFit/raw/main/downloads/TrainFit-Latest.apk)
 
 [✨ 功能特性](#-核心功能亮点) • [📐 科学模型](#-底层数理与算法模型) • [🚀 快速开始](#-快速上手与运行) • [📱 手机安装](#-导出-apk--手机安装) • [📂 项目架构](#-项目工程结构)
@@ -33,35 +33,39 @@
 
 ## 🌟 核心功能亮点
 
-### 1. 🎙️ 全能中式口喷引擎 (Voice Dictation)
+### 1. 🎙️ 全能中式口喷与多轮智能要素补全助手 (Voice Dictation & Factor Completion)
+- **多轮智能补全**：严格校验动作名、重量、组数、次数四大核心要素。口喷要素不全（如仅说*“深蹲100kg”*或*“卧推”*）时，自动弹出交互式智能追问气泡，支持持续说话、点击预设快捷胶囊或键盘快速补全，缺失时严格阻断保存。
+- **上下文自适应偏置与同音纠偏**：引入高星开源语音规范化与编辑距离纠偏算法，自动纠偏*“卧腿$\rightarrow$卧推”*、*“四组八哥$\rightarrow$4组8个”*、*“划川$\rightarrow$划船”*；当激活 To-Do 清单时，口喷识别自适应偏置优先命中当前计划动作。
 - **口喷记饮食**：自动识别菜品、零食、外卖与饮料，支持精细生活量词与修饰换算（*“一大碗米饭”* $\rightarrow$ 300g，*“半斤酱牛肉”* $\rightarrow$ 250g，*“两听可乐”* $\rightarrow$ 660ml）。
-- **口喷记训练**：自动解析中文数字与动作组数（*“卧推八十公斤四组八次，上斜哑铃二十六公斤三组”* $\rightarrow$ 自动拆解多项动作、组数、重量与 RPE 强度）。
-- **零延迟高精度**：内置多实体窗口扫描算法，断续录音防冲刷，无需标点符号也能 100% 精准识别。
 
-### 2. ⚡ 科学超负荷加片建议 (Progressive Overload)
+### 2. 📋 循环训练 To-Do 待办清单与自定义卡片 (Cyclical Routine To-Do List)
+- **自定义动作组卡片**：用户可自由创建、命名、编辑与删除专属训练计划卡片（如“胸背轰炸日”、“推力进阶日”），并结合用户高频历史自动智能推荐。
+- **循环执行与一键重置**：点击顶部卡片一键导入今日待办清单；完成单项点击打钩自动划线置灰（0.5透明度）；再次点击顶部卡片或重置按钮即可重置全选状态，开启下一轮训练循环。
+
+### 3. ⚡ 科学超负荷加片建议 (Progressive Overload)
 - 基于**双重累进加载法（Double Progression Model）**；
 - 每次记录训练动作后，系统自动根据完成组数、次数及 RPE 疲劳度判断是否满足超负荷门槛；
 - 达标时自动在动作卡片上生成加片徽章（如：*“⚡ 满足超负荷标准！下次目标加片至 82.5kg (8次)”*），指引每次训练稳步突破。
 
-### 3. 🏋️ 杠铃配重算片器 (Barbell Plate Calculator)
+### 4. 🏋️ 杠铃配重算片器 (Barbell Plate Calculator)
 - 自动扣除 **20kg 标准奥林匹克杠**；
 - 采用 **贪心匹配算法**，支持红25kg、蓝20kg、黄15kg、绿10kg、白5kg、黑2.5kg、灰1.25kg 彩色杠铃片；
 - 拟物化绘制杠铃片图解与每边挂片清单，告别大重量训练时的大脑缺氧算片。
 
-### 4. ⚡ Epley 1RM 极限力量预估
+### 5. ⚡ Epley 1RM 极限力量预估
 - 在动作卡片上实时计算并展示 **1RM 力量极限**：$1\text{RM} = W \times (1 + R / 30)$；
 - 重量 $\ge 20\text{kg}$ 的复合杠铃动作自动点亮 **`[⚡ 算片]`** 快捷按钮。
 
-### 5. 🎯 每日热量缺口与四大宏量预设 (Macros Closed-Loop)
+### 6. 🎯 每日热量缺口与四大宏量预设 (Macros Closed-Loop)
 - 顶部环形仪表盘实时动态联动：
   $$\text{今日净缺口} = (\text{TDEE} + \text{训练运动消耗}) - \text{全天饮食总摄入}$$
 - 提供 **四大经典健身预设**（高蛋白刷脂 4:4:2、均衡减脂 4:4:2、增肌充碳 5:3:2、低碳生酮 2:1:7）与三色能量比例实时演算。
 
-### 6. 🥢 800+ 中餐高精库与烹饪吸油档位
+### 7. 🥢 800+ 中餐高精库与烹饪吸油档位
 - 覆盖八大菜系、外卖快餐、家常炒菜与复合菜品（如盖浇饭、便当、麻辣烫）；
 - 支持 **中餐生熟转化系数** 与 **9 大烹饪吸油率档位微调**。
 
-### 7. 🎨 德系/瑞士极简工精风 UI (Swiss Minimalist Dark)
+### 8. 🎨 德系/瑞士极简工精风 UI (Swiss Minimalist Dark)
 - 告别臃肿的圆泡泡，采用 4px~6px 结构感硬朗微倒角与深邃黑曜石材质；
 - 发丝级精密分割线，无视觉噪点，专注数据本身。
 
