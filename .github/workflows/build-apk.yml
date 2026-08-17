@@ -47,36 +47,36 @@ jobs:
           mkdir -p release-apk
           APK_PATH=$(find app/build/outputs/apk/ -name "*.apk" | head -n 1)
           echo "Found APK at: $APK_PATH"
-          cp "$APK_PATH" release-apk/TrainFit-v1.3.apk
+          cp "$APK_PATH" release-apk/TrainFit-v1.4.apk
           cp "$APK_PATH" release-apk/TrainFit-Latest.apk
           ls -lh release-apk/
 
       - name: Upload APK Artifact to Actions
         uses: actions/upload-artifact@v4
         with:
-          name: TrainFit-v1.3-APK
-          path: release-apk/TrainFit-v1.3.apk
+          name: TrainFit-v1.4-APK
+          path: release-apk/TrainFit-v1.4.apk
           retention-days: 30
 
       - name: Commit and Push APK directly to repo
         run: |
           mkdir -p downloads
-          cp release-apk/TrainFit-v1.3.apk downloads/TrainFit-v1.3.apk
-          cp release-apk/TrainFit-v1.3.apk downloads/TrainFit-Latest.apk
+          cp release-apk/TrainFit-v1.4.apk downloads/TrainFit-v1.4.apk
+          cp release-apk/TrainFit-v1.4.apk downloads/TrainFit-Latest.apk
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -f downloads/TrainFit-v1.3.apk downloads/TrainFit-Latest.apk
-          git commit -m "chore(release): upload pre-built TrainFit-v1.3.apk binary [skip ci]" || echo "No changes to commit"
+          git add -f downloads/TrainFit-v1.4.apk downloads/TrainFit-Latest.apk
+          git commit -m "chore(release): upload pre-built TrainFit-v1.4.apk binary [skip ci]" || echo "No changes to commit"
           git push origin main
 
       - name: Publish APK to GitHub Releases
         uses: softprops/action-gh-release@v2
         continue-on-error: true
         with:
-          tag_name: v1.3
-          name: "TrainFit v1.3 AI 智能重磅版 (Android APK)"
+          tag_name: v1.4
+          name: "TrainFit v1.4 AI 智能重磅版 (Android APK)"
           body: |
-            ### 🏋️‍♂️ 练食AI (TrainFit) v1.3 核心升级
+            ### 🏋️‍♂️ 练食AI (TrainFit) v1.4 核心升级
 
             - ☀️ **瑞士纯净「白天模式」与「黑夜极简」自由切换**：顶部栏常驻切换按钮与设置面板独立卡片，精调冷调哑光纸白基底、黑曜石深冷黑字阶与发丝级边框，强光下举铁清晰可辨；
             - 🎙️ **口播动作序列自动生成置顶计划 Card**：口播录入一组动作序列后，系统不仅存入训练，还会自动提炼生成置顶的专属训练计划 Card，随时点击导入或重载；
@@ -90,11 +90,11 @@ jobs:
             - 🥢 **800+ 临床级中餐营养数据库与 9 大烹饪吸油率矩阵**；
             - 📱 **AndroidX Webkit 高性能离线架构**：安装包仅 2.3MB，冷启动毫秒级秒开，与电脑端体验 100% 像素级一致。
 
-            **📥 直接点击下方 Assets 中的 `TrainFit-v1.3.apk` 或 `TrainFit-Latest.apk` 即可下载安装。**
+            **📥 直接点击下方 Assets 中的 `TrainFit-v1.4.apk` 或 `TrainFit-Latest.apk` 即可下载安装。**
           draft: false
           prerelease: false
           files: |
-            release-apk/TrainFit-v1.3.apk
+            release-apk/TrainFit-v1.4.apk
             release-apk/TrainFit-Latest.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
