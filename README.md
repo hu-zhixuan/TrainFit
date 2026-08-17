@@ -7,12 +7,12 @@
   专为硬核力量训练者与科学减脂人群打造 —— <b>口喷记录</b> · <b>自动超负荷加片建议</b> · <b>热量缺口动态闭环</b>。
 </p>
 
-### 📥 [ 👉 点击这里直接下载最新 Android APK 安装包 (TrainFit-v1.1.2.apk) 👈 ](https://github.com/QD8-png/TrainFit/releases/download/v1.1.2/TrainFit-v1.1.2.apk)
+### 📥 [ 👉 点击这里直接下载最新 Android APK 安装包 (TrainFit-v1.3.apk) 👈 ](https://github.com/QD8-png/TrainFit/releases/download/v1.3/TrainFit-v1.3.apk)
 
 > 💡 **多通道下载指引**：
-> - 🚀 **官方 Release 直链（推荐，极速）**：[TrainFit-v1.1.2.apk (GitHub Releases v1.1.2)](https://github.com/QD8-png/TrainFit/releases/download/v1.1.2/TrainFit-v1.1.2.apk)
+> - 🚀 **官方 Release 直链（推荐，极速）**：[TrainFit-v1.3.apk (GitHub Releases v1.3)](https://github.com/QD8-png/TrainFit/releases/download/v1.3/TrainFit-v1.3.apk)
 > - 📦 **GitHub Releases 发行页**：[查看全部版本与更新日志](https://github.com/QD8-png/TrainFit/releases)
-> - 🔗 **仓库备用直链**：[TrainFit-v1.1.2.apk (Raw 源码库直链)](https://github.com/QD8-png/TrainFit/raw/main/downloads/TrainFit-v1.1.2.apk)
+> - 🔗 **仓库备用直链**：[TrainFit-v1.3.apk (Raw 源码库直链)](https://github.com/QD8-png/TrainFit/raw/main/downloads/TrainFit-v1.3.apk)
 > - ⚡ **永久最新指向**：[TrainFit-Latest.apk (永远指向最新版)](https://github.com/QD8-png/TrainFit/raw/main/downloads/TrainFit-Latest.apk)
 
 [✨ 功能特性](#-核心功能亮点) • [📐 科学模型](#-底层数理与算法模型) • [🚀 快速开始](#-快速上手与运行) • [📱 手机安装](#-导出-apk--手机安装) • [📂 项目架构](#-项目工程结构)
@@ -34,7 +34,7 @@
 ## 🌟 核心功能亮点
 
 ### 1. 🎙️ 全能中式口喷与多轮智能要素补全助手 (Voice Dictation & Factor Completion)
-- **多轮智能补全**：严格校验动作名、重量、组数、次数四大核心要素。口喷要素不全（如仅说*“深蹲100kg”*或*“卧推”*）时，自动弹出交互式智能追问气泡，支持持续说话、点击预设快捷胶囊或键盘快速补全，缺失时严格阻断保存。
+- **多轮智能补全与内嵌录音**：严格校验动作名、重量、组数、次数四大核心要素。口喷要素不全时，自动唤起智能追问气泡，支持**弹窗内嵌极速语音收音（呼吸脉冲红点 + 毫秒计时 + 实时文字流）**、一键快捷胶囊或打字快速补全，彻底解决键盘跳焦弹走问题，缺失时严格阻断保存。
 - **上下文自适应偏置与同音纠偏**：引入高星开源语音规范化与编辑距离纠偏算法，自动纠偏*“卧腿$\rightarrow$卧推”*、*“四组八哥$\rightarrow$4组8个”*、*“划川$\rightarrow$划船”*；当激活 To-Do 清单时，口喷识别自适应偏置优先命中当前计划动作。
 - **口喷记饮食**：自动识别菜品、零食、外卖与饮料，支持精细生活量词与修饰换算（*“一大碗米饭”* $\rightarrow$ 300g，*“半斤酱牛肉”* $\rightarrow$ 250g，*“两听可乐”* $\rightarrow$ 660ml）。
 
