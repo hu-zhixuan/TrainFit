@@ -942,6 +942,24 @@ const WorkoutEngine = {
       platesPerSide,
       remainder: current
     };
+  },
+
+  validateWorkoutFactors(item) {
+    if (!item) return item;
+    const missing = [];
+    if (!item.exerciseName || item.exerciseName === "综合力量训练") missing.push('exerciseName');
+    if (item.weightKg === null || item.weightKg === undefined || isNaN(item.weightKg) || item.weightKg < 0) missing.push('weightKg');
+    if (item.sets === null || item.sets === undefined || isNaN(item.sets) || item.sets < 1) missing.push('sets');
+    if (item.reps === null || item.reps === undefined || isNaN(item.reps) || item.reps < 1) missing.push('reps');
+
+    item.missingFactors = missing;
+    item.isComplete = missing.length === 0;
+    if (!item.isComplete) {
+      item.followUpPrompt = typeof generateFollowUpPrompt !== 'undefined' ? generateFollowUpPrompt(item) : "请补全缺失参数";
+    } else {
+      item.followUpPrompt = '';
+    }
+    return item;
   }
 };
 
