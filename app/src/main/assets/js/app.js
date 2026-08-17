@@ -310,13 +310,20 @@ class FitnessApp {
 
     // Confirmation Modals
     document.getElementById('btn-cancel-workout-confirm')?.addEventListener('click', () => {
+      this.stopInlineFollowupRecording(true);
       document.getElementById('modal-confirm-workouts').classList.add('hidden');
     });
     document.getElementById('btn-save-confirmed-workouts')?.addEventListener('click', () => {
       this.saveConfirmedWorkouts();
     });
     document.getElementById('btn-modal-followup-voice')?.addEventListener('click', () => {
-      this.startFollowupVoiceDictation();
+      this.toggleInlineFollowupRecording();
+    });
+    document.getElementById('btn-followup-recording-cancel')?.addEventListener('click', () => {
+      this.stopInlineFollowupRecording(true);
+    });
+    document.getElementById('btn-followup-recording-finish')?.addEventListener('click', () => {
+      this.stopInlineFollowupRecording(false);
     });
 
     // Routine Section & Cyclical To-Do Buttons (R2)
@@ -1854,25 +1861,59 @@ class FitnessApp {
     let firstIncompleteItem = null;
 
     this.parsedWorkoutBuffer.forEach(item => {
-      const missing = [];
-      if (!item.exerciseName || item.exerciseName === "综合力量训练") missing.push('exerciseName');
-      if (item.weightKg === null || item.weightKg === undefined || isNaN(item.weightKg) || item.weightKg < 0) missing.push('weightKg');
-      if (item.sets === null || item.sets === undefined || isNaN(item.sets) || item.sets < 1) missing.push('sets');
-      if (item.reps === null || item.reps === undefined || isNaN(item.reps) || item.reps < 1) missing.push('reps');
-
-      item.missingFactors = missing;
-      item.isComplete = missing.length === 0;
-
-      if (!item.isComplete) {
-        if (!item.followUpPrompt) {
-          item.followUpPrompt = WorkoutEngine.generateFollowUpPrompt ? WorkoutEngine.generateFollowUpPrompt(item) : (typeof generateFollowUpPrompt !== 'undefined' ? generateFollowUpPrompt(item) : "请补全缺失参数");
-        }
-        if (!hasIncomplete) {
-          hasIncomplete = true;
-          firstIncompleteItem = item;
-        }
+      WorkoutEngine.validateWorkoutFactors ? WorkoutEngine.validateWorkoutFactors(item) : null;
+      if (!item.isComplete && !item.followUpPrompt) {
+        item.followUpPrompt = WorkoutEngine.generateFollowUpPrompt ? WorkoutEngine.generateFollowUpPrompt(item) : "请补全缺失参数";
       }
     });
+
+    const container = document.getElementById('confirm-workouts-items-container');
+    if (container) {
+      container.innerHTML = this.parsedWorkoutBuffer.map((item, idx) => {
+        const isWeightMissing = item.weightKg === null || item.weightKg === undefined || isNaN(item.weightKg) || item.weightKg < 0;
+        const isSetsMissing = item.sets === null || item.sets === undefined || isNaN(item.sets) || item.sets < 1;
+        const isRepsMissing = item.reps === null || item.reps === undefined || isNaN(item.reps) || item.reps < 1;
+
+        return `
+          <div class="confirm-workout-card" id="confirm-workout-card-${idx}" style="background:var(--bg-input);padding:10px 12px;border-radius:var(--radius-sm);border:1px solid ${!item.isComplete ? 'rgba(245,158,11,0.4)' : 'var(--border-subtle)'};display:flex;flex-direction:column;gap:8px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <div style="display:flex;align-items:center;gap:6px;">
+                <span class="tag-badge tag-cyan">${item.muscleGroup || '胸部'}</span>
+                <b style="font-size:0.85rem;">${item.exerciseName}</b>
+              </div>
+              <div id="confirm-workout-badge-${idx}">
+                ${!item.isComplete ? `<span class="factor-missing-badge">⚠️ 缺失参数</span>` : `<span style="font-size:0.7rem;color:var(--accent-lime);font-weight:600;">✓ 参数完整</span>`}
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;font-size:0.75rem;">
+              <div style="display:flex;align-items:center;gap:4px;">
+                <input type="number" step="0.5" id="input-confirm-weight-${idx}" value="${item.weightKg !== null && item.weightKg !== undefined ? item.weightKg : ''}" placeholder="重量" oninput="window.app.updateWorkoutBuffer(${idx}, 'weightKg', this.value)" class="form-input ${isWeightMissing ? 'input-invalid' : ''}" style="width:64px;padding:5px 6px;text-align:center;">
+                <span style="color:var(--text-muted);">kg</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:4px;">
+                <input type="number" id="input-confirm-sets-${idx}" value="${item.sets !== null && item.sets !== undefined ? item.sets : ''}" placeholder="组数" oninput="window.app.updateWorkoutBuffer(${idx}, 'sets', this.value)" class="form-input ${isSetsMissing ? 'input-invalid' : ''}" style="width:48px;padding:5px 6px;text-align:center;">
+                <span style="color:var(--text-muted);">组</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:4px;">
+                <input type="number" id="input-confirm-reps-${idx}" value="${item.reps !== null && item.reps !== undefined ? item.reps : ''}" placeholder="次数" oninput="window.app.updateWorkoutBuffer(${idx}, 'reps', this.value)" class="form-input ${isRepsMissing ? 'input-invalid' : ''}" style="width:48px;padding:5px 6px;text-align:center;">
+                <span style="color:var(--text-muted);">次</span>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    this.resetInlineFollowupRecordingUI();
+    this.updateWorkoutConfirmModalUI();
+    document.getElementById('modal-confirm-workouts').classList.remove('hidden');
+  }
+
+  updateWorkoutConfirmModalUI() {
+    if (!this.parsedWorkoutBuffer) return;
+
+    const anyIncomplete = this.parsedWorkoutBuffer.some(i => !i.isComplete);
+    const firstIncompleteItem = this.parsedWorkoutBuffer.find(i => !i.isComplete);
 
     const bubbleEl = document.getElementById('workout-followup-bubble');
     const bubbleTextEl = document.getElementById('followup-bubble-text');
@@ -1880,11 +1921,11 @@ class FitnessApp {
     const voiceBarEl = document.getElementById('modal-followup-voice-bar');
     const saveBtn = document.getElementById('btn-save-confirmed-workouts');
 
-    if (hasIncomplete && firstIncompleteItem) {
+    if (anyIncomplete && firstIncompleteItem) {
       if (bubbleEl) {
         bubbleEl.style.display = 'flex';
         if (bubbleTextEl) {
-          bubbleTextEl.textContent = firstIncompleteItem.followUpPrompt || "已识别到部分参数，请问组数、次数或重量是多少？";
+          bubbleTextEl.textContent = firstIncompleteItem.followUpPrompt || (WorkoutEngine.generateFollowUpPrompt ? WorkoutEngine.generateFollowUpPrompt(firstIncompleteItem) : "请补全缺失参数");
         }
       }
       if (chipsEl) {
@@ -1910,42 +1951,39 @@ class FitnessApp {
       }
     }
 
-    const container = document.getElementById('confirm-workouts-items-container');
-    if (container) {
-      container.innerHTML = this.parsedWorkoutBuffer.map((item, idx) => {
-        const isWeightMissing = item.weightKg === null || item.weightKg === undefined || isNaN(item.weightKg) || item.weightKg < 0;
-        const isSetsMissing = item.sets === null || item.sets === undefined || isNaN(item.sets) || item.sets < 1;
-        const isRepsMissing = item.reps === null || item.reps === undefined || isNaN(item.reps) || item.reps < 1;
+    // Update individual cards and inputs in place without tearing down DOM nodes
+    this.parsedWorkoutBuffer.forEach((item, idx) => {
+      const cardEl = document.getElementById(`confirm-workout-card-${idx}`);
+      const badgeEl = document.getElementById(`confirm-workout-badge-${idx}`);
+      const weightInput = document.getElementById(`input-confirm-weight-${idx}`);
+      const setsInput = document.getElementById(`input-confirm-sets-${idx}`);
+      const repsInput = document.getElementById(`input-confirm-reps-${idx}`);
 
-        return `
-          <div style="background:var(--bg-input);padding:10px 12px;border-radius:var(--radius-sm);border:1px solid ${!item.isComplete ? 'rgba(245,158,11,0.4)' : 'var(--border-subtle)'};display:flex;flex-direction:column;gap:8px;">
-            <div style="display:flex;justify-content:space-between;align-items:center;">
-              <div style="display:flex;align-items:center;gap:6px;">
-                <span class="tag-badge tag-cyan">${item.muscleGroup || '胸部'}</span>
-                <b style="font-size:0.85rem;">${item.exerciseName}</b>
-              </div>
-              ${!item.isComplete ? `<span class="factor-missing-badge">⚠️ 缺失参数</span>` : `<span style="font-size:0.7rem;color:var(--accent-lime);font-weight:600;">✓ 参数完整</span>`}
-            </div>
-            <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;font-size:0.75rem;">
-              <div style="display:flex;align-items:center;gap:4px;">
-                <input type="number" step="0.5" value="${item.weightKg !== null && item.weightKg !== undefined ? item.weightKg : ''}" placeholder="重量" oninput="window.app.updateWorkoutBuffer(${idx}, 'weightKg', this.value)" class="form-input ${isWeightMissing ? 'input-invalid' : ''}" style="width:60px;padding:4px 5px;text-align:center;">
-                <span style="color:var(--text-muted);">kg</span>
-              </div>
-              <div style="display:flex;align-items:center;gap:4px;">
-                <input type="number" value="${item.sets !== null && item.sets !== undefined ? item.sets : ''}" placeholder="组数" oninput="window.app.updateWorkoutBuffer(${idx}, 'sets', this.value)" class="form-input ${isSetsMissing ? 'input-invalid' : ''}" style="width:45px;padding:4px 5px;text-align:center;">
-                <span style="color:var(--text-muted);">组</span>
-              </div>
-              <div style="display:flex;align-items:center;gap:4px;">
-                <input type="number" value="${item.reps !== null && item.reps !== undefined ? item.reps : ''}" placeholder="次数" oninput="window.app.updateWorkoutBuffer(${idx}, 'reps', this.value)" class="form-input ${isRepsMissing ? 'input-invalid' : ''}" style="width:45px;padding:4px 5px;text-align:center;">
-                <span style="color:var(--text-muted);">次</span>
-              </div>
-            </div>
-          </div>
-        `;
-      }).join('');
-    }
+      const isWeightMissing = item.weightKg === null || item.weightKg === undefined || isNaN(item.weightKg) || item.weightKg < 0;
+      const isSetsMissing = item.sets === null || item.sets === undefined || isNaN(item.sets) || item.sets < 1;
+      const isRepsMissing = item.reps === null || item.reps === undefined || isNaN(item.reps) || item.reps < 1;
 
-    document.getElementById('modal-confirm-workouts').classList.remove('hidden');
+      if (cardEl) {
+        cardEl.style.borderColor = !item.isComplete ? 'rgba(245,158,11,0.4)' : 'var(--border-subtle)';
+      }
+      if (badgeEl) {
+        badgeEl.innerHTML = !item.isComplete
+          ? `<span class="factor-missing-badge">⚠️ 缺失参数</span>`
+          : `<span style="font-size:0.7rem;color:var(--accent-lime);font-weight:600;">✓ 参数完整</span>`;
+      }
+      if (weightInput) {
+        if (isWeightMissing) weightInput.classList.add('input-invalid');
+        else weightInput.classList.remove('input-invalid');
+      }
+      if (setsInput) {
+        if (isSetsMissing) setsInput.classList.add('input-invalid');
+        else setsInput.classList.remove('input-invalid');
+      }
+      if (repsInput) {
+        if (isRepsMissing) repsInput.classList.add('input-invalid');
+        else repsInput.classList.remove('input-invalid');
+      }
+    });
   }
 
   renderFollowupChipsHtml(item) {
@@ -1972,22 +2010,165 @@ class FitnessApp {
 
     if (this.parsedWorkoutBuffer[targetIdx]) {
       this.parsedWorkoutBuffer[targetIdx] = WorkoutEngine.mergeWorkoutFactors(this.parsedWorkoutBuffer[targetIdx], chipText);
-      this.showWorkoutConfirmModal(this.parsedWorkoutBuffer);
+      const updated = this.parsedWorkoutBuffer[targetIdx];
+
+      // Update input fields in the DOM
+      const weightInput = document.getElementById(`input-confirm-weight-${targetIdx}`);
+      const setsInput = document.getElementById(`input-confirm-sets-${targetIdx}`);
+      const repsInput = document.getElementById(`input-confirm-reps-${targetIdx}`);
+
+      if (weightInput && updated.weightKg !== null && updated.weightKg !== undefined) {
+        weightInput.value = updated.weightKg;
+      }
+      if (setsInput && updated.sets !== null && updated.sets !== undefined) {
+        setsInput.value = updated.sets;
+      }
+      if (repsInput && updated.reps !== null && updated.reps !== undefined) {
+        repsInput.value = updated.reps;
+      }
+
+      this.updateWorkoutConfirmModalUI();
+      this.showToast(`✓ 已补全：${chipText}`);
     }
   }
 
-  startFollowupVoiceDictation() {
-    this.openVoiceSheet('WORKOUT_FOLLOWUP');
+  updateWorkoutBuffer(index, field, value) {
+    if (!this.parsedWorkoutBuffer || !this.parsedWorkoutBuffer[index]) return;
+
+    if (value === '' || value === null || value === undefined) {
+      this.parsedWorkoutBuffer[index][field] = null;
+    } else {
+      const num = parseFloat(value);
+      this.parsedWorkoutBuffer[index][field] = isNaN(num) ? null : (field === 'weightKg' ? num : Math.round(num));
+    }
+
+    // Re-validate in place
+    if (WorkoutEngine.validateWorkoutFactors) {
+      this.parsedWorkoutBuffer[index] = WorkoutEngine.validateWorkoutFactors(this.parsedWorkoutBuffer[index]);
+    }
+
+    // Update UI in place WITHOUT recreating DOM elements or losing input focus
+    this.updateWorkoutConfirmModalUI();
   }
 
-  updateWorkoutBuffer(index, field, value) {
-    if (this.parsedWorkoutBuffer[index]) {
-      if (value === '' || value === null || value === undefined) {
-        this.parsedWorkoutBuffer[index][field] = null;
-      } else {
-        this.parsedWorkoutBuffer[index][field] = field === 'weightKg' ? parseFloat(value) : parseInt(value, 10);
+  toggleInlineFollowupRecording() {
+    if (this.isInlineFollowupRecording) {
+      this.stopInlineFollowupRecording(false);
+    } else {
+      this.startInlineFollowupRecording();
+    }
+  }
+
+  async startInlineFollowupRecording() {
+    const recordingBox = document.getElementById('modal-followup-recording-box');
+    const voiceBtn = document.getElementById('btn-modal-followup-voice');
+    const statusText = document.getElementById('followup-recording-status');
+    const timerText = document.getElementById('followup-recording-timer');
+    const liveText = document.getElementById('followup-recording-live-text');
+
+    if (!SpeechModule.isMediaRecorderSupported() && !SpeechModule.isWebSpeechSupported()) {
+      this.showToast('⚠️ 当前浏览器不支持语音录音');
+      return;
+    }
+
+    this.isInlineFollowupRecording = true;
+    if (recordingBox) recordingBox.style.display = 'block';
+    if (voiceBtn) {
+      voiceBtn.style.background = 'rgba(239,68,68,0.2)';
+      voiceBtn.style.borderColor = '#ef4444';
+      voiceBtn.innerHTML = `
+        <span class="recording-pulse-dot" style="width:10px;height:10px;border-radius:50%;background:#ef4444;display:inline-block;margin-right:6px;"></span>
+        <span>🔴 正在倾听中... (点击结束)</span>
+      `;
+    }
+    if (statusText) statusText.textContent = '正在录音倾听中... (请说出参数)';
+    if (timerText) timerText.textContent = '00:00';
+    if (liveText) liveText.textContent = '“请直接说：4组8次、80公斤 或 5组5个”';
+
+    const started = await SpeechModule.start({
+      isHold: false,
+      onTimerTick: (formatted) => {
+        if (timerText) timerText.textContent = formatted;
+      },
+      onResult: (text, isFinal) => {
+        if (liveText && text) {
+          liveText.textContent = `“${text}”`;
+        }
+      },
+      onEnd: ({ isCanceled, text }) => {
+        this.resetInlineFollowupRecordingUI();
+        if (!isCanceled && text && text.trim()) {
+          this.applyFollowupVoiceResult(text.trim());
+        } else if (!isCanceled) {
+          this.showToast('⚠️ 未检测到有效声音，请重试或手动输入');
+        }
+      },
+      onError: (type) => {
+        this.resetInlineFollowupRecordingUI();
+        if (type === 'PERMISSION_DENIED') {
+          this.showToast('⚠️ 麦克风权限被拒绝，请在手机设置中允许');
+        } else {
+          this.showToast('⚠️ 录音识别超时或未检测到声音');
+        }
       }
-      this.showWorkoutConfirmModal(this.parsedWorkoutBuffer);
+    });
+
+    if (!started) {
+      this.resetInlineFollowupRecordingUI();
+    }
+  }
+
+  stopInlineFollowupRecording(isCancel = false) {
+    if (!this.isInlineFollowupRecording) return;
+    this.isInlineFollowupRecording = false;
+    SpeechModule.stop(isCancel);
+  }
+
+  resetInlineFollowupRecordingUI() {
+    this.isInlineFollowupRecording = false;
+    const recordingBox = document.getElementById('modal-followup-recording-box');
+    const voiceBtn = document.getElementById('btn-modal-followup-voice');
+    if (recordingBox) recordingBox.style.display = 'none';
+    if (voiceBtn) {
+      voiceBtn.style.background = '';
+      voiceBtn.style.borderColor = '';
+      voiceBtn.innerHTML = `
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+        <span>🎙️ 语音补充参数 (说出如 "4组8次" 或 "80kg")</span>
+      `;
+    }
+  }
+
+  applyFollowupVoiceResult(transcribedText) {
+    if (!this.parsedWorkoutBuffer || this.parsedWorkoutBuffer.length === 0) return;
+    const idx = this.parsedWorkoutBuffer.findIndex(i => !i.isComplete);
+    const targetIdx = idx !== -1 ? idx : 0;
+
+    if (this.parsedWorkoutBuffer[targetIdx]) {
+      this.parsedWorkoutBuffer[targetIdx] = WorkoutEngine.mergeWorkoutFactors(this.parsedWorkoutBuffer[targetIdx], transcribedText);
+      const updated = this.parsedWorkoutBuffer[targetIdx];
+
+      // Update inputs in the DOM
+      const weightInput = document.getElementById(`input-confirm-weight-${targetIdx}`);
+      const setsInput = document.getElementById(`input-confirm-sets-${targetIdx}`);
+      const repsInput = document.getElementById(`input-confirm-reps-${targetIdx}`);
+
+      if (weightInput && updated.weightKg !== null && updated.weightKg !== undefined) {
+        weightInput.value = updated.weightKg;
+      }
+      if (setsInput && updated.sets !== null && updated.sets !== undefined) {
+        setsInput.value = updated.sets;
+      }
+      if (repsInput && updated.reps !== null && updated.reps !== undefined) {
+        repsInput.value = updated.reps;
+      }
+
+      this.updateWorkoutConfirmModalUI();
+      if (updated.isComplete) {
+        this.showToast(`✓ 语音补全成功：${updated.exerciseName} ${updated.weightKg}kg ${updated.sets}组${updated.reps}次`);
+      } else {
+        this.showToast(`✓ 语音已识别：“${transcribedText}”，请补全剩余参数`);
+      }
     }
   }
 

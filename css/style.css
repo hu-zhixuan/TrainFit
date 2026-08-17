@@ -2017,3 +2017,13 @@ body {
   pointer-events: none;
 }
 
+@keyframes recordingPulse {
+  0% { transform: scale(0.9); opacity: 0.7; box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+  50% { transform: scale(1.15); opacity: 1; box-shadow: 0 0 8px 3px rgba(239, 68, 68, 0.6); }
+  100% { transform: scale(0.9); opacity: 0.7; box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+}
+
+.recording-pulse-dot {
+  animation: recordingPulse 1.2s infinite ease-in-out;
+}
+

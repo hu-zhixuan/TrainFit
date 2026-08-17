@@ -168,6 +168,46 @@ runTest('1.4: Strict Save Blocker prevents saving when incomplete', () => {
   assert.strictEqual(app.workouts[1].exerciseName, "杠铃卧推");
 });
 
+runTest('1.5: updateWorkoutBuffer preserves buffer and updates values incrementally', () => {
+  const app = new FitnessApp();
+  app.parsedWorkoutBuffer = [
+    { exerciseName: "哑铃卧推", muscleGroup: "胸部", weightKg: null, sets: null, reps: null, isComplete: false, missingFactors: ['weightKg', 'sets', 'reps'] }
+  ];
+
+  // User types '4' into weight
+  app.updateWorkoutBuffer(0, 'weightKg', '4');
+  assert.strictEqual(app.parsedWorkoutBuffer[0].weightKg, 4);
+  assert.strictEqual(app.parsedWorkoutBuffer[0].isComplete, false);
+
+  // User continues typing '45' into weight
+  app.updateWorkoutBuffer(0, 'weightKg', '45');
+  assert.strictEqual(app.parsedWorkoutBuffer[0].weightKg, 45);
+  assert.strictEqual(app.parsedWorkoutBuffer[0].isComplete, false);
+
+  // User types '4' into sets
+  app.updateWorkoutBuffer(0, 'sets', '4');
+  assert.strictEqual(app.parsedWorkoutBuffer[0].sets, 4);
+
+  // User types '10' into reps
+  app.updateWorkoutBuffer(0, 'reps', '10');
+  assert.strictEqual(app.parsedWorkoutBuffer[0].reps, 10);
+  assert.strictEqual(app.parsedWorkoutBuffer[0].isComplete, true);
+});
+
+runTest('1.6: applyFollowupVoiceResult merges voice recognized parameters into incomplete buffer', () => {
+  const app = new FitnessApp();
+  app.parsedWorkoutBuffer = [
+    { exerciseName: "杠铃卧推", muscleGroup: "胸部", weightKg: 80, sets: null, reps: null, isComplete: false, missingFactors: ['sets', 'reps'] }
+  ];
+
+  // Spoken voice "4组8个"
+  app.applyFollowupVoiceResult('4组8个');
+  assert.strictEqual(app.parsedWorkoutBuffer[0].weightKg, 80);
+  assert.strictEqual(app.parsedWorkoutBuffer[0].sets, 4);
+  assert.strictEqual(app.parsedWorkoutBuffer[0].reps, 8);
+  assert.strictEqual(app.parsedWorkoutBuffer[0].isComplete, true);
+});
+
 // ============================================================================
 // PART 2: R2 Cyclical Routine To-Do System
 // ============================================================================

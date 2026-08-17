@@ -564,12 +564,26 @@
         <!-- Dynamic chips based on missing factors -->
       </div>
 
-      <!-- Followup Voice Dictation Bar -->
-      <div class="modal-followup-voice-bar" id="modal-followup-voice-bar" style="display:none;margin-bottom:8px;">
-        <button class="btn-action-primary cyan-action" id="btn-modal-followup-voice" style="padding:6px 12px;font-size:0.75rem;width:100%;justify-content:center;">
+      <!-- Followup Voice Dictation Bar & Inline Recorder -->
+      <div class="modal-followup-voice-bar" id="modal-followup-voice-bar" style="display:none;margin-bottom:10px;">
+        <button class="btn-action-primary cyan-action" id="btn-modal-followup-voice" style="padding:8px 12px;font-size:0.75rem;width:100%;justify-content:center;transition:all 0.2s ease;">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
           <span>🎙️ 语音补充参数 (说出如 "4组8次" 或 "80kg")</span>
         </button>
+        <div id="modal-followup-recording-box" style="display:none;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.3);border-radius:var(--radius-sm);padding:8px 10px;text-align:center;margin-top:6px;">
+          <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:4px;">
+            <span class="recording-pulse-dot" style="width:8px;height:8px;border-radius:50%;background:#ef4444;display:inline-block;"></span>
+            <span style="font-size:0.75rem;font-weight:700;color:#ef4444;" id="followup-recording-status">正在录音倾听中... (请说出参数)</span>
+            <span style="font-size:0.7rem;color:var(--text-muted);font-family:var(--font-mono);" id="followup-recording-timer">00:00</span>
+          </div>
+          <div id="followup-recording-live-text" style="font-size:0.75rem;color:var(--text-main);min-height:18px;margin-bottom:6px;font-style:italic;">
+            "请直接说：4组8次、80公斤 或 5组5个"
+          </div>
+          <div style="display:flex;gap:6px;justify-content:center;">
+            <button class="btn-subtle" id="btn-followup-recording-cancel" style="padding:4px 10px;font-size:0.7rem;">取消</button>
+            <button class="btn-primary" id="btn-followup-recording-finish" style="background:#ef4444;border-color:#ef4444;padding:4px 12px;font-size:0.7rem;">✓ 结束并填入</button>
+          </div>
+        </div>
       </div>
 
       <div id="confirm-workouts-items-container" style="display:flex;flex-direction:column;gap:8px;"></div>
