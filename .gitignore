@@ -8,3 +8,5 @@ node_modules/
 npm-debug.log
 local.properties
 .system_generated/
+.agents/
+ORIGINAL_REQUEST.md
