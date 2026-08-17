@@ -79,6 +79,66 @@ class FitnessApp {
     const savedActiveTodo = localStorage.getItem('fit_active_routine_todo');
     this.activeRoutineTodo = savedActiveTodo ? JSON.parse(savedActiveTodo) : null;
     this.editingRoutineId = null;
+    this.initTheme();
+  }
+
+  // ==================== Theme Management (Light / Dark Mode) ====================
+  initTheme() {
+    let savedTheme = 'dark';
+    try {
+      savedTheme = localStorage.getItem('trainfit_theme') || 'dark';
+    } catch (e) {}
+    this.setTheme(savedTheme, false);
+  }
+
+  setTheme(theme, save = true) {
+    this.currentTheme = theme === 'light' ? 'light' : 'dark';
+    if (typeof document !== 'undefined') {
+      if (document.body && document.body.classList) {
+        if (this.currentTheme === 'light') {
+          document.body.classList.add('theme-light');
+        } else {
+          document.body.classList.remove('theme-light');
+        }
+      }
+      if (document.documentElement && typeof document.documentElement.setAttribute === 'function') {
+        document.documentElement.setAttribute('data-theme', this.currentTheme === 'light' ? 'light' : 'dark');
+      }
+
+      const iconEl = typeof document.getElementById === 'function' ? document.getElementById('theme-toggle-icon') : null;
+      if (iconEl) iconEl.textContent = this.currentTheme === 'light' ? '🌙' : '☀️';
+
+      const badgeEl = typeof document.getElementById === 'function' ? document.getElementById('current-theme-badge') : null;
+      if (badgeEl) badgeEl.textContent = this.currentTheme === 'light' ? '☀️ 纯净白昼' : '🌙 黑夜极简';
+
+      const btnDark = typeof document.getElementById === 'function' ? document.getElementById('btn-theme-dark') : null;
+      const btnLight = typeof document.getElementById === 'function' ? document.getElementById('btn-theme-light') : null;
+      if (btnDark && btnDark.classList && typeof btnDark.classList.toggle === 'function') {
+        btnDark.classList.toggle('active', this.currentTheme === 'dark');
+      }
+      if (btnLight && btnLight.classList && typeof btnLight.classList.toggle === 'function') {
+        btnLight.classList.toggle('active', this.currentTheme === 'light');
+      }
+
+      if (typeof document.querySelector === 'function') {
+        const metaThemeColor = document.querySelector('meta[name="theme-color"]');
+        if (metaThemeColor && typeof metaThemeColor.setAttribute === 'function') {
+          metaThemeColor.setAttribute('content', this.currentTheme === 'light' ? '#f4f6f9' : '#09090b');
+        }
+      }
+    }
+
+    if (save) {
+      try {
+        localStorage.setItem('trainfit_theme', this.currentTheme);
+      } catch (e) {}
+      this.showToast(this.currentTheme === 'light' ? '☀️ 已切换至白天纯净模式' : '🌙 已切换至黑夜极简模式');
+    }
+  }
+
+  toggleTheme() {
+    const next = this.currentTheme === 'light' ? 'dark' : 'light';
+    this.setTheme(next, true);
   }
 
   checkOnboarding() {
@@ -1065,25 +1125,28 @@ class FitnessApp {
     const routine = allRoutines.find(r => r.id === routineId);
     if (!routine) return;
 
-    // Cyclical Re-activation: if already active, reset all items to clean completed: false
+    // Cyclical Re-activation: if clicked on already active routine, reset all items to false and reload!
     if (this.activeRoutineTodo && this.activeRoutineTodo.routineId === routineId) {
       this.activeRoutineTodo.items.forEach(item => {
         item.completed = false;
       });
+      // Restore original sequence
+      this.activeRoutineTodo.items.sort((a, b) => (a.initialIndex || 0) - (b.initialIndex || 0));
       this.saveActiveRoutineTodo();
       this.render();
-      this.showToast(`🔄 已重置【${routine.name}】进入新一轮训练循环！`);
+      this.showToast(`🔄 已重新加载【${routine.name}】训练计划！`);
       return;
     }
 
-    // Activate new routine into today's To-Do checklist
+    // Activate routine into today's To-Do checklist
     this.activeRoutineTodo = {
       routineId: routine.id,
       routineName: routine.name,
       muscleGroup: routine.muscleGroup,
       activatedDate: this.selectedDate,
       items: routine.exercises.map((ex, idx) => ({
-        id: `todo_${Date.now()}_${idx}`,
+        id: `todo_${Date.now()}_${idx}_${Math.random().toString(36).substr(2, 4)}`,
+        initialIndex: idx,
         exerciseName: ex.name,
         muscleGroup: ex.muscleGroup || routine.muscleGroup,
         targetWeightKg: ex.weightKg !== undefined ? ex.weightKg : 60,
@@ -1095,7 +1158,7 @@ class FitnessApp {
 
     this.saveActiveRoutineTodo();
     this.render();
-    this.showToast(`⚡ 已加载【${routine.name}】训练清单！`);
+    this.showToast(`📋 已选择【${routine.name}】训练计划！`);
   }
 
   renderActiveRoutineTodo() {
@@ -1111,29 +1174,62 @@ class FitnessApp {
 
     const doneCount = this.activeRoutineTodo.items.filter(i => i.completed).length;
     const totalCount = this.activeRoutineTodo.items.length;
+    const allDone = doneCount === totalCount && totalCount > 0;
 
     const titleEl = document.getElementById('routine-todo-title-text');
     if (titleEl) titleEl.textContent = `⚡ ${this.activeRoutineTodo.routineName}`;
 
     const badgeEl = document.getElementById('routine-todo-progress-badge');
     if (badgeEl) {
-      badgeEl.textContent = doneCount === totalCount ? `✓ 全部完成 (${doneCount}/${totalCount})` : `${doneCount}/${totalCount}`;
+      badgeEl.textContent = allDone ? `🎉 全部完成 (${doneCount}/${totalCount})` : `${doneCount}/${totalCount}`;
+      badgeEl.style.color = allDone ? 'var(--accent-lime)' : 'var(--accent-cyan)';
     }
+
+    // Sort: uncompleted items on top (in natural plan order), completed items sink to bottom
+    const uncompletedItems = this.activeRoutineTodo.items.filter(i => !i.completed).sort((a, b) => (a.initialIndex || 0) - (b.initialIndex || 0));
+    const completedItems = this.activeRoutineTodo.items.filter(i => i.completed).sort((a, b) => (a.initialIndex || 0) - (b.initialIndex || 0));
+    const sortedDisplayItems = [...uncompletedItems, ...completedItems];
 
     const listEl = document.getElementById('routine-todo-list');
     if (listEl) {
-      listEl.innerHTML = this.activeRoutineTodo.items.map(item => `
-        <div class="todo-item ${item.completed ? 'completed' : ''}" id="todo-item-${item.id}">
-          <div class="todo-item-left" onclick="window.app.toggleTodoItem('${item.id}')">
-            <div class="todo-checkbox">${item.completed ? '✓' : ''}</div>
-            <div class="todo-item-info">
-              <span class="todo-name">${item.exerciseName}</span>
-              <span class="todo-specs">${item.targetWeightKg > 0 ? `${item.targetWeightKg}kg × ` : '自重 × '}${item.targetSets}组 × ${item.targetReps}次</span>
-            </div>
+      if (allDone) {
+        listEl.innerHTML = `
+          <div class="todo-completed-banner">
+            <div style="font-size:1.3rem;margin-bottom:3px;">🎉</div>
+            <b style="font-size:0.86rem;color:var(--accent-lime);">本组训练计划已全部完成！</b>
+            <div style="font-size:0.7rem;color:var(--text-muted);margin-top:2px;">所有动作均已打钩并滑至底部置灰。点击上方计划 Card 可随时重新加载开启新循环。</div>
           </div>
-          <button class="btn-todo-log" onclick="window.app.logTodoItemDirectly('${item.id}')">直接打卡</button>
-        </div>
-      `).join('');
+          ${completedItems.map(item => `
+            <div class="todo-item completed" id="todo-item-${item.id}">
+              <div class="todo-item-left" onclick="window.app.toggleTodoItem('${item.id}')">
+                <div class="todo-checkbox checked">✓</div>
+                <div class="todo-item-info">
+                  <span class="todo-name">${item.exerciseName}</span>
+                  <span class="todo-specs">${item.targetWeightKg > 0 ? `${item.targetWeightKg}kg × ` : '自重 × '}${item.targetSets}组 × ${item.targetReps}次</span>
+                </div>
+              </div>
+              <span class="todo-done-tag" onclick="window.app.toggleTodoItem('${item.id}')">✓ 已完成</span>
+            </div>
+          `).join('')}
+        `;
+      } else {
+        listEl.innerHTML = sortedDisplayItems.map(item => `
+          <div class="todo-item ${item.completed ? 'completed' : ''}" id="todo-item-${item.id}">
+            <div class="todo-item-left" onclick="window.app.toggleTodoItem('${item.id}')">
+              <div class="todo-checkbox ${item.completed ? 'checked' : ''}">${item.completed ? '✓' : ''}</div>
+              <div class="todo-item-info">
+                <span class="todo-name">${item.exerciseName}</span>
+                <span class="todo-specs">${item.targetWeightKg > 0 ? `${item.targetWeightKg}kg × ` : '自重 × '}${item.targetSets}组 × ${item.targetReps}次</span>
+              </div>
+            </div>
+            ${item.completed ? `
+              <span class="todo-done-tag" onclick="window.app.toggleTodoItem('${item.id}')">✓ 已完成</span>
+            ` : `
+              <button class="btn-todo-log" onclick="window.app.logTodoItemDirectly('${item.id}')">打卡</button>
+            `}
+          </div>
+        `).join('');
+      }
     }
   }
 
@@ -1145,7 +1241,19 @@ class FitnessApp {
     item.completed = !item.completed;
     this.saveActiveRoutineTodo();
     this.render();
-    this.showToast(item.completed ? `✓ 【${item.exerciseName}】已打卡完成` : `已取消【${item.exerciseName}】打卡`);
+
+    const doneCount = this.activeRoutineTodo.items.filter(i => i.completed).length;
+    const totalCount = this.activeRoutineTodo.items.length;
+
+    if (item.completed) {
+      if (doneCount === totalCount) {
+        this.showToast(`🎉 恭喜！本组【${this.activeRoutineTodo.routineName}】全部动作已顺利完成！`);
+      } else {
+        this.showToast(`✓ 【${item.exerciseName}】已打钩完成并滑至底部 (剩余 ${totalCount - doneCount} 项)`);
+      }
+    } else {
+      this.showToast(`已恢复【${item.exerciseName}】为待完成`);
+    }
   }
 
   logTodoItemDirectly(itemId) {
@@ -1173,7 +1281,6 @@ class FitnessApp {
     this.saveData();
     this.saveActiveRoutineTodo();
     this.render();
-    this.startRestTimer(90);
     this.showToast(`✓ 已打卡并记录【${item.exerciseName}】！`);
   }
 
@@ -1182,6 +1289,7 @@ class FitnessApp {
     this.activeRoutineTodo.items.forEach(item => {
       item.completed = false;
     });
+    this.activeRoutineTodo.items.sort((a, b) => (a.initialIndex || 0) - (b.initialIndex || 0));
     this.saveActiveRoutineTodo();
     this.render();
     this.showToast(`🔄 清单已重置，开启下一循环！`);
@@ -1746,7 +1854,6 @@ class FitnessApp {
     this.closeManualWorkoutModal();
     this.render();
     this.showToast(`✓ 已添加：${name}`);
-    this.startRestTimer(90);
   }
 
   openVoiceSheet(mode) {
@@ -2206,10 +2313,57 @@ class FitnessApp {
 
     this.saveData();
     this.saveActiveRoutineTodo();
-    document.getElementById('modal-confirm-workouts').classList.add('hidden');
+
+    // 自动将口播/录入的一组序列生成并沉淀为置顶训练计划 Card
+    if (this.parsedWorkoutBuffer && this.parsedWorkoutBuffer.length >= 1) {
+      const muscleList = Array.from(new Set(this.parsedWorkoutBuffer.map(i => i.muscleGroup || '综合力量'))).join('/');
+      const routineName = this.parsedWorkoutBuffer.length === 1
+        ? `${this.parsedWorkoutBuffer[0].exerciseName}专项组`
+        : `${muscleList}分化序列 (${this.parsedWorkoutBuffer.length}动作)`;
+
+      if (!Array.isArray(this.customRoutines)) this.customRoutines = [];
+      const existingRoutine = this.customRoutines.find(r => 
+        r.exercises &&
+        r.exercises.length === this.parsedWorkoutBuffer.length &&
+        r.exercises.every((e, idx) => e.name === this.parsedWorkoutBuffer[idx].exerciseName)
+      );
+
+      let routineIdToActivate = null;
+      if (!existingRoutine) {
+        const newRoutine = {
+          id: "routine_auto_" + Date.now(),
+          name: routineName,
+          muscleGroup: muscleList,
+          isCustom: true,
+          isAutoGenerated: true,
+          badgeText: "🎙️ 口播生成",
+          exercises: this.parsedWorkoutBuffer.map(i => ({
+            name: i.exerciseName,
+            muscleGroup: i.muscleGroup || '综合力量',
+            weightKg: i.weightKg !== null && i.weightKg !== undefined ? i.weightKg : 60,
+            sets: i.sets || 4,
+            reps: i.reps || 8
+          }))
+        };
+        this.customRoutines.unshift(newRoutine);
+        this.saveData();
+        routineIdToActivate = newRoutine.id;
+      } else {
+        routineIdToActivate = existingRoutine.id;
+      }
+
+      // 如果当前没有激活的计划清单，自动激活该计划为今日待办
+      if (!this.activeRoutineTodo) {
+        this.selectRoutine(routineIdToActivate);
+      }
+    }
+
+    if (typeof document !== 'undefined') {
+      const modal = document.getElementById('modal-confirm-workouts');
+      if (modal) modal.classList.add('hidden');
+    }
     this.render();
-    this.showToast(`✓ 已存入 ${this.parsedWorkoutBuffer.length} 项训练`);
-    this.startRestTimer(90);
+    this.showToast(`✓ 已存入 ${this.parsedWorkoutBuffer.length} 项训练并生成计划卡片`);
     this.switchTab('workout');
   }
 
@@ -2431,53 +2585,6 @@ class FitnessApp {
         `;
       }
     }
-  }
-
-  // ==================== Floating Rest Timer (组间休息计时器) ====================
-  startRestTimer(totalSeconds = 90) {
-    clearInterval(this.restTimerInterval);
-    this.restTimeRemaining = totalSeconds;
-
-    const timerEl = document.getElementById('floating-rest-timer');
-    const digitsEl = document.getElementById('rest-timer-digits');
-    if (timerEl) timerEl.classList.remove('hidden');
-
-    const updateDigits = () => {
-      const mm = String(Math.floor(this.restTimeRemaining / 60)).padStart(2, '0');
-      const ss = String(this.restTimeRemaining % 60).padStart(2, '0');
-      if (digitsEl) digitsEl.textContent = `${mm}:${ss}`;
-    };
-
-    updateDigits();
-
-    this.restTimerInterval = setInterval(() => {
-      this.restTimeRemaining--;
-      if (this.restTimeRemaining <= 0) {
-        clearInterval(this.restTimerInterval);
-        this.restTimerInterval = null;
-        if (timerEl) timerEl.classList.add('hidden');
-        if (typeof navigator !== 'undefined' && navigator.vibrate) {
-          try { navigator.vibrate([200, 100, 200]); } catch (e) {}
-        }
-        this.showToast('⏱️ 休息结束！开始下一组');
-      } else {
-        updateDigits();
-      }
-    }, 1000);
-  }
-
-  adjustRestTimer(deltaSeconds) {
-    this.restTimeRemaining = Math.max(5, (this.restTimeRemaining || 90) + deltaSeconds);
-    const mm = String(Math.floor(this.restTimeRemaining / 60)).padStart(2, '0');
-    const ss = String(this.restTimeRemaining % 60).padStart(2, '0');
-    const digitsEl = document.getElementById('rest-timer-digits');
-    if (digitsEl) digitsEl.textContent = `${mm}:${ss}`;
-  }
-
-  skipRestTimer() {
-    clearInterval(this.restTimerInterval);
-    this.restTimerInterval = null;
-    document.getElementById('floating-rest-timer')?.classList.add('hidden');
   }
 
   deleteDiet(id) {

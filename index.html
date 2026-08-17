@@ -25,6 +25,9 @@
         <span class="header-date" id="header-date-indicator">今天</span>
       </div>
       <div class="header-actions">
+        <button class="icon-btn" id="btn-toggle-theme" onclick="window.app.toggleTheme()" aria-label="切换白天/黑夜模式" title="切换白天/黑夜模式">
+          <span id="theme-toggle-icon" style="font-size:0.95rem;">☀️</span>
+        </button>
         <button class="icon-btn" id="btn-open-tutorial" aria-label="新手教程" title="查看新手教程">
           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>
@@ -251,6 +254,20 @@
           <div>
             <h2 style="font-size:1.02rem;font-weight:800;">身体档案与日常代谢</h2>
             <p style="font-size:0.68rem;color:var(--text-muted);">Mifflin-St Jeor 基础代谢 BMR & TDEE</p>
+          </div>
+        </div>
+
+        <!-- 🎨 Theme Setting Card -->
+        <div class="card">
+          <div class="form-group" style="margin-bottom:0;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+              <label class="form-label" style="margin:0;font-size:0.82rem;font-weight:700;">🎨 显示模式与界面风格</label>
+              <span class="status-badge" id="current-theme-badge" style="font-size:0.68rem;padding:2px 8px;">🌙 黑夜极简</span>
+            </div>
+            <div class="gender-toggle-row" id="profile-theme-toggle-row">
+              <button class="gender-btn active" id="btn-theme-dark" onclick="window.app.setTheme('dark')">🌙 沉浸黑夜</button>
+              <button class="gender-btn" id="btn-theme-light" onclick="window.app.setTheme('light')">☀️ 纯净白昼</button>
+            </div>
           </div>
         </div>
 
@@ -993,22 +1010,6 @@
       <div class="dialog-actions-row">
         <button class="btn-primary cyan-btn" onclick="window.app.closePlateCalculator()">✓ 明白，去举铁</button>
       </div>
-    </div>
-  </div>
-
-  <!-- FLOATING REST TIMER (组间休息计时器) -->
-  <div id="floating-rest-timer" class="floating-timer hidden">
-    <div class="timer-left">
-      <span class="timer-icon">⏱️</span>
-      <div>
-        <div class="timer-title">组间休息倒计时</div>
-        <div class="timer-digits" id="rest-timer-digits">01:30</div>
-      </div>
-    </div>
-    <div class="timer-right">
-      <button class="timer-btn" onclick="window.app.adjustRestTimer(-15)">-15s</button>
-      <button class="timer-btn" onclick="window.app.adjustRestTimer(30)">+30s</button>
-      <button class="timer-btn timer-btn-skip" onclick="window.app.skipRestTimer()">跳过</button>
     </div>
   </div>
 

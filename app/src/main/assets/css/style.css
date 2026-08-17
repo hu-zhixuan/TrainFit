@@ -50,6 +50,74 @@
   --sar: env(safe-area-inset-right, 0px);
 }
 
+/* ==========================================================================
+   白天模式 · 瑞士纯净极简 (Swiss Minimalist Light Theme)
+   ========================================================================== */
+:root[data-theme="light"],
+body.theme-light {
+  /* Matte Clean Light Palette */
+  --bg-app: #f4f6f9;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f8fafc;
+  --bg-subtle: #e9eef4;
+  --bg-input: #ffffff;
+  
+  /* Hairline Precision Borders */
+  --border: #e2e8f0;
+  --border-subtle: #edf2f7;
+  --border-focus: #0284c7;
+
+  /* Functional Accents */
+  --accent-lime: #16a34a;
+  --accent-lime-bg: rgba(22, 163, 74, 0.08);
+  
+  --accent-cyan: #0284c7;
+  --accent-cyan-bg: rgba(2, 132, 199, 0.08);
+  
+  --accent-orange: #d97706;
+  --accent-orange-bg: rgba(217, 119, 6, 0.08);
+
+  --accent-red: #dc2626;
+  --accent-red-bg: rgba(220, 38, 38, 0.08);
+
+  /* Typography */
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #8c9ba5;
+}
+
+body.theme-light {
+  background-color: #e2e8f0;
+}
+
+body.theme-light .app-viewport {
+  box-shadow: 0 0 35px rgba(0, 0, 0, 0.08);
+}
+
+body.theme-light .app-header {
+  background: rgba(244, 246, 249, 0.9);
+  border-bottom: 1px solid var(--border);
+}
+
+body.theme-light .bottom-nav-bar {
+  background: rgba(255, 255, 255, 0.94);
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.03);
+}
+
+body.theme-light .dialog-card,
+body.theme-light .action-sheet {
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.12);
+}
+
+body.theme-light .form-input {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+body.theme-light .brand-dot {
+  box-shadow: 0 0 8px rgba(2, 132, 199, 0.4);
+}
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -1148,87 +1216,6 @@ body {
   margin-top: 2px;
 }
 
-/* Floating Rest Timer */
-.floating-timer {
-  position: fixed;
-  bottom: 68px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: calc(100% - 32px);
-  max-width: 440px;
-  background: rgba(18, 22, 28, 0.95);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(56, 189, 248, 0.35);
-  border-radius: var(--radius-md);
-  padding: 10px 14px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  z-index: 99;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6), 0 0 12px rgba(56, 189, 248, 0.2);
-  animation: slideUpFloat 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.floating-timer.hidden {
-  display: none;
-}
-
-@keyframes slideUpFloat {
-  from { transform: translate(-50%, 20px); opacity: 0; }
-  to { transform: translate(-50%, 0); opacity: 1; }
-}
-
-.timer-left {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.timer-icon {
-  font-size: 1.1rem;
-}
-
-.timer-title {
-  font-size: 0.68rem;
-  color: var(--text-muted);
-  font-weight: 600;
-}
-
-.timer-digits {
-  font-size: 1.15rem;
-  font-weight: 800;
-  color: var(--accent-cyan);
-  font-variant-numeric: tabular-nums;
-}
-
-.timer-right {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.timer-btn {
-  background: var(--bg-card);
-  border: 1px solid var(--border-subtle);
-  color: var(--text-primary);
-  border-radius: var(--radius-sm);
-  padding: 4px 8px;
-  font-size: 0.7rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.timer-btn:active {
-  transform: scale(0.92);
-}
-
-.timer-btn-skip {
-  background: rgba(239, 68, 68, 0.15);
-  border-color: rgba(239, 68, 68, 0.3);
-  color: var(--accent-red);
-}
-
 /* Visual Barbell Plate Display */
 .barbell-visual-wrapper {
   display: flex;
@@ -1848,25 +1835,28 @@ body {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  transition: all 0.3s ease;
 }
 
 .todo-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: var(--bg-input);
-  border: 1px solid var(--border-subtle);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  padding: 8px 10px;
+  padding: 9px 12px;
   gap: 8px;
-  transition: opacity 0.25s ease, filter 0.25s ease, background 0.2s ease;
+  transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.35s ease, background 0.3s ease, border-color 0.3s ease;
   user-select: none;
 }
 
 .todo-item.completed {
-  opacity: 0.5;
-  filter: grayscale(0.5);
-  background: var(--bg-app);
+  opacity: 0.38;
+  filter: grayscale(0.65);
+  background: var(--bg-subtle);
+  border-color: transparent;
+  transform: translateY(2px) scale(0.99);
 }
 
 .todo-item.completed .todo-name,
@@ -1885,10 +1875,10 @@ body {
 }
 
 .todo-checkbox {
-  width: 19px;
-  height: 19px;
+  width: 20px;
+  height: 20px;
   border-radius: 4px;
-  border: 1.5px solid var(--border-subtle);
+  border: 1.5px solid var(--border-focus);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1896,15 +1886,17 @@ body {
   flex-shrink: 0;
   background: var(--bg-card);
   color: transparent;
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   font-weight: 800;
-  transition: all 0.15s ease;
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
+.todo-checkbox.checked,
 .todo-item.completed .todo-checkbox {
   background: var(--accent-lime);
   border-color: var(--accent-lime);
   color: #000;
+  transform: scale(1.05);
 }
 
 .todo-item-info {
@@ -1921,6 +1913,7 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  transition: color 0.2s ease;
 }
 
 .todo-specs {
@@ -1947,8 +1940,26 @@ body {
   color: #000;
 }
 
-.todo-item.completed .btn-todo-log {
-  display: none;
+.todo-done-tag {
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--bg-card);
+  padding: 2px 7px;
+  border-radius: var(--radius-xs);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.todo-completed-banner {
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  text-align: center;
+  margin-bottom: 8px;
+  animation: fadeInSlide 0.3s ease-out;
 }
 
 /* ==========================================================================

@@ -412,6 +412,87 @@ runTest('2.8: Active To-Do contextual biasing in voice parsing & auto-completion
   assert.strictEqual(matchedTodo.completed, true);
 });
 
+runTest('2.9: Theme switching between Light and Dark mode', () => {
+  localStorage.clear();
+  const app = new FitnessApp();
+  assert.strictEqual(app.currentTheme, 'dark');
+
+  app.setTheme('light');
+  assert.strictEqual(app.currentTheme, 'light');
+  assert.strictEqual(localStorage.getItem('trainfit_theme'), 'light');
+
+  app.toggleTheme();
+  assert.strictEqual(app.currentTheme, 'dark');
+  assert.strictEqual(localStorage.getItem('trainfit_theme'), 'dark');
+});
+
+runTest('2.10: Auto-routine Card generation from spoken workout sequence', () => {
+  localStorage.clear();
+  const app = new FitnessApp();
+  app.customRoutines = [];
+  app.activeRoutineTodo = null;
+
+  // User speaks a sequence: 卧推 + 哑铃上斜 + 绳索夹胸
+  app.parsedWorkoutBuffer = [
+    { exerciseName: "杠铃卧推", muscleGroup: "胸部", weightKg: 80, sets: 4, reps: 8, isComplete: true },
+    { exerciseName: "哑铃上斜卧推", muscleGroup: "胸部", weightKg: 26, sets: 3, reps: 10, isComplete: true },
+    { exerciseName: "绳索夹胸", muscleGroup: "胸部", weightKg: 15, sets: 4, reps: 12, isComplete: true }
+  ];
+
+  app.saveConfirmedWorkouts();
+
+  // Must auto-create a custom routine card
+  assert.ok(app.customRoutines.length >= 1);
+  const autoRoutine = app.customRoutines[0];
+  assert.ok(autoRoutine.name.includes("胸部") && autoRoutine.name.includes("3动作"));
+  assert.strictEqual(autoRoutine.exercises.length, 3);
+  assert.strictEqual(autoRoutine.isCustom, true);
+
+  // Must auto-activate into activeRoutineTodo
+  assert.ok(app.activeRoutineTodo);
+  assert.strictEqual(app.activeRoutineTodo.routineId, autoRoutine.id);
+  assert.strictEqual(app.activeRoutineTodo.items.length, 3);
+});
+
+runTest('2.11: To-Do List sink-to-bottom and celebratory completion cycle', () => {
+  localStorage.clear();
+  const app = new FitnessApp();
+  app.customRoutines = [
+    {
+      id: "test_routine_1",
+      name: "胸腿分化",
+      muscleGroup: "胸腿",
+      exercises: [
+        { name: "杠铃深蹲", weightKg: 100, sets: 4, reps: 6 },
+        { name: "杠铃卧推", weightKg: 80, sets: 4, reps: 8 },
+        { name: "硬拉", weightKg: 120, sets: 4, reps: 6 }
+      ]
+    }
+  ];
+  app.activeRoutineTodo = {
+    routineId: "test_routine_1",
+    routineName: "胸腿分化",
+    items: [
+      { id: "t1", initialIndex: 0, exerciseName: "杠铃深蹲", completed: false },
+      { id: "t2", initialIndex: 1, exerciseName: "杠铃卧推", completed: false },
+      { id: "t3", initialIndex: 2, exerciseName: "硬拉", completed: false }
+    ]
+  };
+
+  // Complete item t1 (深蹲)
+  app.toggleTodoItem("t1");
+  assert.strictEqual(app.activeRoutineTodo.items[0].completed, true);
+
+  // Complete all items
+  app.toggleTodoItem("t2");
+  app.toggleTodoItem("t3");
+  assert.ok(app.activeRoutineTodo.items.every(i => i.completed));
+
+  // Re-activation: clicking routine card resets all items
+  app.selectRoutine("test_routine_1");
+  assert.ok(app.activeRoutineTodo.items.every(i => i.completed === false));
+});
+
 console.log('\n================================================================');
 console.log(`  Test Execution Summary:`);
 console.log(`  Total:  ${passedTests + failedTests}`);
