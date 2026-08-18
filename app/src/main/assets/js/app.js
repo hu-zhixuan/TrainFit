@@ -3,6 +3,130 @@
  * 具备工业级 MediaRecorder 真实录音 + 微信式按住/点击双模语音 + 每日全景回溯与彩色卡片
  */
 
+const HapticEngine = {
+  vibrate(pattern) {
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+      try { navigator.vibrate(pattern); } catch (e) {}
+    }
+  },
+  tap() { this.vibrate(15); },
+  setComplete() { this.vibrate([30, 40, 45]); },
+  prRecord() { this.vibrate([60, 40, 90, 40, 160]); }
+};
+
+const ConfettiEngine = {
+  canvas: null,
+  ctx: null,
+  particles: [],
+  animating: false,
+  colors: ['#38bdf8', '#10b981', '#f59e0b', '#ec4899', '#a855f7', '#fbbf24', '#ffffff'],
+
+  init() {
+    if (typeof document === 'undefined') return;
+    let cvs = document.getElementById('fx-confetti-canvas');
+    if (!cvs && document.body && typeof document.createElement === 'function') {
+      cvs = document.createElement('canvas');
+      cvs.id = 'fx-confetti-canvas';
+      document.body.appendChild(cvs);
+    }
+    if (!cvs || typeof cvs.getContext !== 'function') return;
+    this.canvas = cvs;
+    this.ctx = cvs.getContext('2d');
+    this.resize();
+    if (typeof window !== 'undefined') {
+      window.addEventListener('resize', () => this.resize());
+    }
+  },
+
+  resize() {
+    if (!this.canvas || typeof window === 'undefined') return;
+    this.canvas.width = (window.innerWidth || 360) * (window.devicePixelRatio || 1);
+    this.canvas.height = (window.innerHeight || 640) * (window.devicePixelRatio || 1);
+    if (this.ctx && typeof this.ctx.scale === 'function') {
+      this.ctx.scale(window.devicePixelRatio || 1, window.devicePixelRatio || 1);
+    }
+  },
+
+  fire(options = {}) {
+    this.init();
+    if (!this.canvas || !this.ctx) return;
+    const count = options.count || 60;
+    const originX = options.x || window.innerWidth / 2;
+    const originY = options.y || window.innerHeight * 0.32;
+
+    for (let i = 0; i < count; i++) {
+      const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.6;
+      const speed = Math.random() * 9 + 4.5;
+      this.particles.push({
+        x: originX,
+        y: originY,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed - 3.8,
+        size: Math.random() * 6 + 4,
+        color: this.colors[Math.floor(Math.random() * this.colors.length)],
+        rotation: Math.random() * 360,
+        rSpeed: (Math.random() - 0.5) * 16,
+        alpha: 1,
+        life: Math.random() * 45 + 45
+      });
+    }
+
+    if (!this.animating) {
+      this.renderLoop();
+    }
+  },
+
+  renderLoop() {
+    if (!this.ctx || !this.canvas) return;
+    this.animating = true;
+    this.ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+
+    for (let i = this.particles.length - 1; i >= 0; i--) {
+      const p = this.particles[i];
+      p.x += p.vx;
+      p.y += p.vy;
+      p.vy += 0.24; // gravity
+      p.vx *= 0.98; // air drag
+      p.rotation += p.rSpeed;
+      p.alpha -= 1 / p.life;
+
+      if (p.alpha <= 0 || p.y > window.innerHeight) {
+        this.particles.splice(i, 1);
+        continue;
+      }
+
+      this.ctx.save();
+      this.ctx.globalAlpha = Math.max(0, p.alpha);
+      this.ctx.translate(p.x, p.y);
+      this.ctx.rotate((p.rotation * Math.PI) / 180);
+      this.ctx.fillStyle = p.color;
+      this.ctx.shadowBlur = 8;
+      this.ctx.shadowColor = p.color;
+      this.ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.65);
+      this.ctx.restore();
+    }
+
+    if (this.particles.length > 0) {
+      requestAnimationFrame(() => this.renderLoop());
+    } else {
+      this.animating = false;
+      this.ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+    }
+  }
+};
+
+function getMuscleGroupBadge(muscle) {
+  const m = muscle || '力量';
+  if (m.includes('胸')) return `<span class="muscle-badge muscle-badge-chest">🎯 ${m}</span>`;
+  if (m.includes('背')) return `<span class="muscle-badge muscle-badge-back">🦅 ${m}</span>`;
+  if (m.includes('腿') || m.includes('臀') || m.includes('蹲')) return `<span class="muscle-badge muscle-badge-legs">🦵 ${m}</span>`;
+  if (m.includes('肩') || m.includes('推举') || m.includes('飞鸟')) return `<span class="muscle-badge muscle-badge-shoulders">🛡️ ${m}</span>`;
+  if (m.includes('臂') || m.includes('二头') || m.includes('三头') || m.includes('弯举')) return `<span class="muscle-badge muscle-badge-arms">⚡ ${m}</span>`;
+  if (m.includes('腹') || m.includes('核心')) return `<span class="muscle-badge muscle-badge-core">💎 ${m}</span>`;
+  if (m.includes('有氧') || m.includes('跑') || m.includes('骑')) return `<span class="muscle-badge muscle-badge-core">🏃 ${m}</span>`;
+  return `<span class="muscle-badge muscle-badge-chest">💪 ${m}</span>`;
+}
+
 const DEFAULT_PROFILE = {
   gender: "male",
   heightCm: 175,
@@ -1173,10 +1297,8 @@ class FitnessApp {
 
   renderActiveRoutineTodo() {
     const container = document.getElementById('routine-todo-container');
-    if (!container) return;
-
-    if (!this.activeRoutineTodo || !this.activeRoutineTodo.items || this.activeRoutineTodo.items.length === 0) {
-      container.classList.add('hidden');
+    if (!container || !this.activeRoutineTodo) {
+      container?.classList.add('hidden');
       return;
     }
 
@@ -1205,16 +1327,19 @@ class FitnessApp {
       if (allDone) {
         listEl.innerHTML = `
           <div class="todo-completed-banner">
-            <div style="font-size:1.3rem;margin-bottom:3px;">🎉</div>
-            <b style="font-size:0.86rem;color:var(--accent-lime);">本组训练计划已全部完成！</b>
-            <div style="font-size:0.7rem;color:var(--text-muted);margin-top:2px;">所有动作均已打钩并滑至底部置灰。点击上方计划 Card 可随时重新加载开启新循环。</div>
+            <div style="font-size:1.4rem;margin-bottom:4px;">🎉</div>
+            <b style="font-size:0.9rem;color:var(--accent-lime);">本组训练计划已全部完成！</b>
+            <div style="font-size:0.72rem;color:var(--text-muted);margin-top:3px;">所有动作均已打钩并滑至底部置灰。点击上方计划 Card 可随时重新加载开启新循环。</div>
           </div>
           ${completedItems.map(item => `
             <div class="todo-item completed" id="todo-item-${item.id}">
               <div class="todo-item-left" onclick="window.app.toggleTodoItem('${item.id}')">
                 <div class="todo-checkbox checked">✓</div>
                 <div class="todo-item-info">
-                  <span class="todo-name">${item.exerciseName}</span>
+                  <div style="display:flex;align-items:center;gap:6px;">
+                    ${getMuscleGroupBadge(item.muscleGroup)}
+                    <span class="todo-name">${item.exerciseName}</span>
+                  </div>
                   <span class="todo-specs">${item.targetWeightKg > 0 ? `${item.targetWeightKg}kg × ` : '自重 × '}${item.targetSets}组 × ${item.targetReps}次</span>
                 </div>
               </div>
@@ -1228,7 +1353,10 @@ class FitnessApp {
             <div class="todo-item-left" onclick="window.app.toggleTodoItem('${item.id}')">
               <div class="todo-checkbox ${item.completed ? 'checked' : ''}">${item.completed ? '✓' : ''}</div>
               <div class="todo-item-info">
-                <span class="todo-name">${item.exerciseName}</span>
+                <div style="display:flex;align-items:center;gap:6px;">
+                  ${getMuscleGroupBadge(item.muscleGroup)}
+                  <span class="todo-name">${item.exerciseName}</span>
+                </div>
                 <span class="todo-specs">${item.targetWeightKg > 0 ? `${item.targetWeightKg}kg × ` : '自重 × '}${item.targetSets}组 × ${item.targetReps}次</span>
               </div>
             </div>
@@ -1256,12 +1384,16 @@ class FitnessApp {
     const totalCount = this.activeRoutineTodo.items.length;
 
     if (item.completed) {
-      if (doneCount === totalCount) {
+      if (doneCount === totalCount && totalCount > 0) {
+        HapticEngine.prRecord();
+        ConfettiEngine.fire({ count: 75 });
         this.showToast(`🎉 恭喜！本组【${this.activeRoutineTodo.routineName}】全部动作已顺利完成！`);
       } else {
+        HapticEngine.setComplete();
         this.showToast(`✓ 【${item.exerciseName}】已打钩完成并滑至底部 (剩余 ${totalCount - doneCount} 项)`);
       }
     } else {
+      HapticEngine.tap();
       this.showToast(`已恢复【${item.exerciseName}】为待完成`);
     }
   }
@@ -1291,25 +1423,36 @@ class FitnessApp {
     this.saveData();
     this.saveActiveRoutineTodo();
     this.render();
-    this.showToast(`✓ 已打卡并记录【${item.exerciseName}】！`);
+
+    const doneCount = this.activeRoutineTodo.items.filter(i => i.completed).length;
+    const totalCount = this.activeRoutineTodo.items.length;
+    if (doneCount === totalCount && totalCount > 0) {
+      HapticEngine.prRecord();
+      ConfettiEngine.fire({ count: 80 });
+      this.showToast(`🎉 太棒了！【${item.exerciseName}】已记录，整组训练全部达成！`);
+    } else {
+      HapticEngine.setComplete();
+      this.showToast(`✓ 已打卡并记录【${item.exerciseName}】！`);
+    }
   }
 
   resetActiveRoutineCycle() {
     if (!this.activeRoutineTodo || !this.activeRoutineTodo.items) return;
+    HapticEngine.tap();
     this.activeRoutineTodo.items.forEach(item => {
       item.completed = false;
     });
     this.activeRoutineTodo.items.sort((a, b) => (a.initialIndex || 0) - (b.initialIndex || 0));
     this.saveActiveRoutineTodo();
     this.render();
-    this.showToast(`🔄 清单已重置，开启下一循环！`);
+    this.showToast(`🔄 已重置【${this.activeRoutineTodo.routineName}】！可开始新一轮打卡`);
   }
 
-  clearActiveRoutine() {
+  closeActiveRoutine() {
     this.activeRoutineTodo = null;
     localStorage.removeItem('fit_active_routine_todo');
     this.render();
-    this.showToast('已收起训练清单');
+    this.showToast('已关闭今日训练清单');
   }
 
   getActiveTodos() {
@@ -1317,133 +1460,143 @@ class FitnessApp {
     return this.activeRoutineTodo.items.map(t => ({
       name: t.exerciseName,
       exerciseName: t.exerciseName,
-      muscleGroup: t.muscleGroup
+      muscleGroup: t.muscleGroup,
+      weightKg: t.targetWeightKg,
+      sets: t.targetSets,
+      reps: t.targetReps,
+      completed: t.completed
     }));
   }
 
   openRoutineEditor(routineId = null) {
     this.editingRoutineId = routineId;
     const modal = document.getElementById('modal-routine-editor');
-    const title = document.getElementById('routine-editor-title');
-    const nameInput = document.getElementById('routine-edit-name');
-    const muscleSelect = document.getElementById('routine-edit-muscle');
-    const list = document.getElementById('routine-edit-exercises-list');
-    const delBtn = document.getElementById('btn-delete-routine');
-
-    if (!modal) return;
+    const titleEl = document.getElementById('routine-editor-title');
+    const nameInput = document.getElementById('routine-name-input');
+    const deleteBtn = document.getElementById('btn-delete-routine');
 
     if (routineId) {
-      const routine = this.customRoutines.find(r => r.id === routineId);
-      if (routine) {
-        title.textContent = '编辑训练循环计划';
-        nameInput.value = routine.name;
-        muscleSelect.value = routine.muscleGroup || '胸部';
-        if (delBtn) delBtn.classList.remove('hidden');
-        list.innerHTML = '';
-        routine.exercises.forEach(ex => {
-          this.addRoutineEditorExerciseRow(ex.name, ex.weightKg, ex.sets, ex.reps);
-        });
+      const r = this.customRoutines.find(item => item.id === routineId);
+      if (r) {
+        titleEl.textContent = '✏️ 编辑训练计划';
+        nameInput.value = r.name;
+        deleteBtn.style.display = 'inline-block';
+        this.editorExercisesBuffer = JSON.parse(JSON.stringify(r.exercises || []));
       }
     } else {
-      title.textContent = '新建训练循环计划';
+      titleEl.textContent = '✨ 新建训练计划';
       nameInput.value = '';
-      muscleSelect.value = '胸部';
-      if (delBtn) delBtn.classList.add('hidden');
-      list.innerHTML = '';
-      this.addRoutineEditorExerciseRow('杠铃卧推', 80, 4, 8);
-      this.addRoutineEditorExerciseRow('哑铃上斜卧推', 24, 4, 10);
-      this.addRoutineEditorExerciseRow('双杠臂屈伸', 0, 3, 10);
+      deleteBtn.style.display = 'none';
+      this.editorExercisesBuffer = [];
     }
 
+    this.renderEditorExercisesList();
     modal.classList.remove('hidden');
   }
 
   closeRoutineEditor() {
-    const modal = document.getElementById('modal-routine-editor');
-    if (modal) modal.classList.add('hidden');
+    document.getElementById('modal-routine-editor').classList.add('hidden');
     this.editingRoutineId = null;
+    this.editorExercisesBuffer = [];
   }
 
-  addRoutineEditorExerciseRow(name = '', weight = 60, sets = 4, reps = 8) {
-    const list = document.getElementById('routine-edit-exercises-list');
-    if (!list) return;
+  addExerciseToEditor() {
+    const nameInput = document.getElementById('routine-ex-name-input');
+    const muscleSelect = document.getElementById('routine-ex-muscle-select');
+    const weightInput = document.getElementById('routine-ex-weight-input');
+    const setsInput = document.getElementById('routine-ex-sets-input');
+    const repsInput = document.getElementById('routine-ex-reps-input');
 
-    const row = document.createElement('div');
-    row.className = 'routine-exercise-row';
-    row.style.cssText = 'display:flex;gap:6px;align-items:center;background:var(--bg-input);padding:6px 8px;border-radius:var(--radius-sm);border:1px solid var(--border-subtle);';
-    row.innerHTML = `
-      <input type="text" class="form-input routine-row-name" placeholder="动作名称" style="flex:1.2;font-size:0.75rem;padding:4px 6px;" value="${name}">
-      <input type="number" step="0.5" class="form-input routine-row-weight" placeholder="kg" style="width:52px;font-size:0.75rem;padding:4px 4px;text-align:center;" value="${weight}">
-      <span style="font-size:0.68rem;color:var(--text-muted);">kg</span>
-      <input type="number" class="form-input routine-row-sets" placeholder="组" style="width:40px;font-size:0.75rem;padding:4px 4px;text-align:center;" value="${sets}">
-      <span style="font-size:0.68rem;color:var(--text-muted);">组</span>
-      <input type="number" class="form-input routine-row-reps" placeholder="次" style="width:40px;font-size:0.75rem;padding:4px 4px;text-align:center;" value="${reps}">
-      <span style="font-size:0.68rem;color:var(--text-muted);">次</span>
-      <button type="button" class="btn-delete" onclick="this.parentElement.remove()" style="padding:2px 6px;color:var(--text-muted);background:transparent;border:none;cursor:pointer;font-size:0.8rem;" title="移除动作">✕</button>
-    `;
-    list.appendChild(row);
-  }
-
-  saveCustomRoutine() {
-    const nameInput = document.getElementById('routine-edit-name');
-    const muscleSelect = document.getElementById('routine-edit-muscle');
-    const name = nameInput ? nameInput.value.trim() : '';
-    const muscle = muscleSelect ? muscleSelect.value : '胸部';
-
+    const name = nameInput.value.trim();
     if (!name) {
-      this.showToast('请输入计划名称');
+      this.showToast('请输入动作名称');
       return;
     }
 
-    const rows = document.querySelectorAll('#routine-edit-exercises-list .routine-exercise-row');
-    const exercises = [];
+    const muscle = muscleSelect.value;
+    const weight = parseFloat(weightInput.value) || 0;
+    const sets = parseInt(setsInput.value, 10) || 4;
+    const reps = parseInt(repsInput.value, 10) || 8;
 
-    rows.forEach(row => {
-      const exName = row.querySelector('.routine-row-name').value.trim();
-      const exWeight = parseFloat(row.querySelector('.routine-row-weight').value) || 0;
-      const exSets = parseInt(row.querySelector('.routine-row-sets').value, 10) || 4;
-      const exReps = parseInt(row.querySelector('.routine-row-reps').value, 10) || 8;
-
-      if (exName) {
-        exercises.push({
-          name: exName,
-          muscleGroup: muscle,
-          weightKg: exWeight,
-          sets: exSets,
-          reps: exReps
-        });
-      }
+    this.editorExercisesBuffer.push({
+      name,
+      muscleGroup: muscle,
+      weightKg: weight,
+      sets,
+      reps
     });
 
-    if (exercises.length === 0) {
+    nameInput.value = '';
+    weightInput.value = '';
+    setsInput.value = '4';
+    repsInput.value = '8';
+
+    this.renderEditorExercisesList();
+  }
+
+  removeExerciseFromEditor(index) {
+    this.editorExercisesBuffer.splice(index, 1);
+    this.renderEditorExercisesList();
+  }
+
+  renderEditorExercisesList() {
+    const listEl = document.getElementById('routine-editor-exercises-list');
+    if (!listEl) return;
+
+    if (this.editorExercisesBuffer.length === 0) {
+      listEl.innerHTML = `<div style="font-size:0.75rem;color:var(--text-muted);text-align:center;padding:12px 0;">暂未添加动作，请在下方输入动作并点击【+ 加入】</div>`;
+      return;
+    }
+
+    listEl.innerHTML = this.editorExercisesBuffer.map((ex, idx) => `
+      <div style="display:flex;align-items:center;justify-content:space-between;background:var(--bg-subtle);padding:8px 10px;border-radius:var(--radius-xs);font-size:0.75rem;">
+        <div>
+          <b>${idx + 1}. ${ex.name}</b>
+          <span style="color:var(--accent-cyan);margin-left:6px;">${ex.weightKg > 0 ? `${ex.weightKg}kg` : '自重'} × ${ex.sets}组 × ${ex.reps}次</span>
+        </div>
+        <button onclick="window.app.removeExerciseFromEditor(${idx})" style="background:transparent;border:none;color:var(--accent-red);cursor:pointer;font-size:0.8rem;">✕</button>
+      </div>
+    `).join('');
+  }
+
+  saveRoutineFromEditor() {
+    const nameInput = document.getElementById('routine-name-input');
+    const name = nameInput.value.trim() || '我的专属分化训练';
+
+    if (this.editorExercisesBuffer.length === 0) {
       this.showToast('请至少添加一个训练动作');
       return;
     }
 
-    const routineObj = {
-      id: this.editingRoutineId || `routine_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
-      name: name,
-      muscleGroup: muscle,
-      icon: muscle === '胸部' ? '💥' : (muscle === '背部' ? '🦅' : (muscle === '腿部' ? '🦵' : (muscle === '肩部' ? '🛡️' : '⚡'))),
-      isCustom: true,
-      exercises: exercises
-    };
-
     if (this.editingRoutineId) {
       const idx = this.customRoutines.findIndex(r => r.id === this.editingRoutineId);
       if (idx !== -1) {
-        this.customRoutines[idx] = routineObj;
-      } else {
-        this.customRoutines.push(routineObj);
+        this.customRoutines[idx].name = name;
+        this.customRoutines[idx].exercises = JSON.parse(JSON.stringify(this.editorExercisesBuffer));
       }
     } else {
-      this.customRoutines.push(routineObj);
+      const newRoutine = {
+        id: "routine_" + Date.now(),
+        name: name,
+        muscleGroup: this.editorExercisesBuffer[0]?.muscleGroup || '力量',
+        icon: "⚡",
+        isCustom: true,
+        badgeText: "🌟 自定义",
+        exercises: JSON.parse(JSON.stringify(this.editorExercisesBuffer))
+      };
+      this.customRoutines.unshift(newRoutine);
     }
 
     this.saveRoutines();
     this.closeRoutineEditor();
     this.render();
-    this.showToast(`✓ 已保存计划【${name}】！`);
+    this.showToast('✓ 训练计划已保存！');
+  }
+
+  deleteCurrentEditingRoutine() {
+    if (!this.editingRoutineId) return;
+    this.deleteCustomRoutine(this.editingRoutineId);
+    this.closeRoutineEditor();
   }
 
   deleteCustomRoutine(routineId) {
@@ -1454,8 +1607,9 @@ class FitnessApp {
       localStorage.removeItem('fit_active_routine_todo');
     }
     this.saveRoutines();
-    this.closeRoutineEditor();
-    this.render();
+    if (typeof this.render === 'function') {
+      this.render();
+    }
     this.showToast('已删除计划');
   }
 
@@ -1492,8 +1646,8 @@ class FitnessApp {
       if (matchedAdvice) {
         if (matchedAdvice.status === 'READY_TO_ADD_PLATE') {
           overloadBadgeHtml = `
-            <div class="overload-badge">
-              <span>⚡ <b>AI 加片建议</b>：下次目标加片至 <b>${matchedAdvice.targetWeightKg}kg</b> (${matchedAdvice.targetReps}次)</span>
+            <div class="overload-trophy-badge">
+              <span>🏆 <b>AI 超负荷加片</b>：下次目标加片至 <b>${matchedAdvice.targetWeightKg}kg</b> (${matchedAdvice.targetReps}次)</span>
             </div>
           `;
         } else {
@@ -1512,7 +1666,7 @@ class FitnessApp {
         <div class="record-card">
           <div class="record-row-top">
             <div class="record-name-group">
-              <span class="tag-badge tag-cyan">${w.muscleGroup}</span>
+              ${getMuscleGroupBadge(w.muscleGroup)}
               <span class="record-name">${w.exerciseName}</span>
               ${isBarbell ? `<button onclick="window.app.openPlateCalculator(${w.weightKg})" class="btn-subtle" style="padding:1px 6px;font-size:0.65rem;border-radius:4px;color:var(--accent-cyan);border:1px solid rgba(56,189,248,0.3);cursor:pointer;background:transparent;">⚡ 算片</button>` : ''}
             </div>
@@ -2567,30 +2721,36 @@ class FitnessApp {
 
       visual.innerHTML = `
         <div class="bar-shaft"></div>
-        <div style="display:flex;align-items:center;gap:1px;">${leftPlatesHtml}</div>
+        <div style="display:flex;align-items:center;gap:2px;">${leftPlatesHtml}</div>
         <div class="bar-collar"></div>
-        <div class="bar-sleeve" style="width:70px;text-align:center;font-size:0.6rem;color:#000;font-weight:700;display:flex;align-items:center;justify-content:center;">杆 20kg</div>
+        <div class="bar-sleeve" style="width:76px;text-align:center;font-size:0.65rem;color:#09090b;background:linear-gradient(180deg, #e2e8f0 0%, #cbd5e1 50%, #94a3b8 100%);padding:4px 0;border-radius:3px;font-weight:800;display:flex;align-items:center;justify-content:center;box-shadow:inset 0 1px 0 rgba(255,255,255,0.4);">
+          🏋️ 奥杆 20kg
+        </div>
         <div class="bar-collar"></div>
-        <div style="display:flex;align-items:center;gap:1px;">${rightPlatesHtml}</div>
+        <div style="display:flex;align-items:center;gap:2px;">${rightPlatesHtml}</div>
         <div class="bar-shaft"></div>
       `;
     }
 
     if (summary) {
       if (res.platesPerSide.length === 0) {
-        summary.innerHTML = `<div>奥林匹克标准空杆 <b>20kg</b>（两边无需挂片）</div>`;
+        summary.innerHTML = `
+          <div style="font-size:0.82rem;font-weight:700;color:var(--accent-lime);text-align:center;">
+            ⚡ 奥林匹克标准空杆 <b>20kg</b>（两边无需挂片）
+          </div>
+        `;
       } else {
         const platesCount = {};
         res.platesPerSide.forEach(p => platesCount[p] = (platesCount[p] || 0) + 1);
-        const perSideStr = Object.entries(platesCount).map(([p, count]) => `<b>${p}kg</b> × ${count}块`).join(' + ');
+        const perSideStr = Object.entries(platesCount).map(([p, count]) => `<b style="color:var(--text-primary);">${p}kg</b> × ${count}块`).join(' + ');
 
         summary.innerHTML = `
-          <div style="display:flex;justify-content:space-between;align-items:center;">
-            <span>单侧配重：<b style="color:var(--accent-cyan);">${res.perSideWeight} kg</b></span>
-            <span style="color:var(--text-muted);">标准奥杆 20kg</span>
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--border-subtle);">
+            <span>单侧装片：<b style="color:var(--accent-cyan);font-size:0.95rem;">${res.perSideWeight} kg</b></span>
+            <span style="color:var(--text-muted);font-size:0.75rem;">标准奥杆 20kg</span>
           </div>
-          <div style="margin-top:4px;font-size:0.72rem;color:var(--text-secondary);">
-            👉 每边装片：${perSideStr}
+          <div style="margin-top:6px;font-size:0.75rem;color:var(--text-secondary);line-height:1.4;">
+            👉 <b>单边挂片方案</b>：${perSideStr}
           </div>
         `;
       }

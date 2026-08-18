@@ -6,6 +6,7 @@ import android.graphics.Color
 import android.os.Bundle
 import android.view.View
 import android.view.ViewGroup
+import android.webkit.RenderProcessGoneDetail
 import android.webkit.PermissionRequest
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
@@ -75,7 +76,6 @@ class MainActivity : ComponentActivity() {
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
             setBackgroundColor(darkBgColor)
-            setLayerType(View.LAYER_TYPE_HARDWARE, null)
         }
 
         // Configure WebSettings for high performance & offline persistence
@@ -84,7 +84,7 @@ class MainActivity : ComponentActivity() {
             domStorageEnabled = true
             databaseEnabled = true
             cacheMode = WebSettings.LOAD_DEFAULT
-            mediaPlaybackRequiresUserGesture = false
+            mediaPlaybackRequiresUserGesture = true // Prevent audio hijack on launch
             allowFileAccess = false
             allowContentAccess = false
             useWideViewPort = true
@@ -101,7 +101,7 @@ class MainActivity : ComponentActivity() {
             .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this))
             .build()
 
-        // Intercept asset requests via WebViewClient
+        // Intercept asset requests & handle background render process crash recovery
         webView.webViewClient = object : WebViewClient() {
             override fun shouldInterceptRequest(
                 view: WebView,
@@ -114,9 +114,23 @@ class MainActivity : ComponentActivity() {
                 super.onPageFinished(view, url)
                 view?.setBackgroundColor(darkBgColor)
             }
+
+            override fun onRenderProcessGone(
+                view: WebView?,
+                detail: RenderProcessGoneDetail?
+            ): Boolean {
+                // Prevent black screen & app crash if render process was killed in background
+                if (view != null) {
+                    val parent = view.parent as? ViewGroup
+                    parent?.removeView(view)
+                    view.destroy()
+                    setupWebView()
+                }
+                return true
+            }
         }
 
-        // Handle Audio Capture WebChromeClient permission requests
+        // Handle On-Demand Audio Capture permission requests only
         webView.webChromeClient = object : WebChromeClient() {
             override fun onPermissionRequest(request: PermissionRequest?) {
                 if (request == null) return
@@ -164,6 +178,36 @@ class MainActivity : ComponentActivity() {
                 }
             }
         })
+    }
+
+    override fun onPause() {
+        super.onPause()
+        if (::webView.isInitialized) {
+            webView.onPause()
+            webView.pauseTimers()
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::webView.isInitialized) {
+            webView.onResume()
+            webView.resumeTimers()
+        }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        if (::webView.isInitialized) {
+            webView.saveState(outState)
+        }
+    }
+
+    override fun onRestoreInstanceState(savedInstanceState: Bundle) {
+        super.onRestoreInstanceState(savedInstanceState)
+        if (::webView.isInitialized) {
+            webView.restoreState(savedInstanceState)
+        }
     }
 
     override fun onDestroy() {

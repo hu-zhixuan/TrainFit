@@ -384,20 +384,40 @@ const SpeechModule = {
   cleanup() {
     if (this.mediaStream) {
       try {
-        this.mediaStream.getTracks().forEach(track => track.stop());
+        this.mediaStream.getTracks().forEach(track => {
+          track.stop();
+          track.enabled = false;
+        });
       } catch (e) {}
       this.mediaStream = null;
     }
 
     if (this.audioContext) {
       try {
-        this.audioContext.close();
+        if (this.audioContext.state !== 'closed') {
+          this.audioContext.close();
+        }
       } catch (e) {}
       this.audioContext = null;
       this.analyser = null;
     }
   }
 };
+
+if (typeof document !== 'undefined') {
+  // Automatically release microphone and abort recording when page is hidden / backgrounded
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden && SpeechModule && SpeechModule.isRecording) {
+      SpeechModule.stop(true);
+    }
+  });
+
+  window.addEventListener('pagehide', () => {
+    if (SpeechModule && SpeechModule.isRecording) {
+      SpeechModule.stop(true);
+    }
+  });
+}
 
 if (typeof window !== 'undefined') {
   window.SpeechModule = SpeechModule;
