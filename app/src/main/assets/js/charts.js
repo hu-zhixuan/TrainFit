@@ -19,6 +19,7 @@ const ChartEngine = {
 
     ctx.clearRect(0, 0, width, height);
 
+    const isLight = typeof document !== 'undefined' && document.body && document.body.classList.contains('theme-light');
     const centerX = width / 2;
     const centerY = height / 2;
     const radius = 54;
@@ -27,14 +28,14 @@ const ChartEngine = {
     // Background track ring
     ctx.beginPath();
     ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
-    ctx.strokeStyle = '#18181b';
+    ctx.strokeStyle = isLight ? '#e2e8f0' : '#18181b';
     ctx.lineWidth = lineWidth;
     ctx.stroke();
 
     const isSurplus = deficit < 0;
     const safeTarget = Math.max(targetDeficit, 1);
     const ratio = Math.max(0, Math.min(deficit / safeTarget, 1.0));
-    const strokeColor = isSurplus ? '#ef4444' : (deficit >= targetDeficit && targetDeficit > 0 ? '#10b981' : '#38bdf8');
+    const strokeColor = isSurplus ? (isLight ? '#dc2626' : '#ef4444') : (deficit >= targetDeficit && targetDeficit > 0 ? (isLight ? '#16a34a' : '#10b981') : (isLight ? '#0284c7' : '#38bdf8'));
 
     // Foreground progress arc
     const startAngle = -Math.PI / 2;
@@ -66,6 +67,7 @@ const ChartEngine = {
 
     ctx.clearRect(0, 0, width, height);
 
+    const isLight = typeof document !== 'undefined' && document.body && document.body.classList.contains('theme-light');
     const centerX = width / 2;
     const centerY = height / 2;
     const radius = 40;
@@ -74,14 +76,14 @@ const ChartEngine = {
     // Track
     ctx.beginPath();
     ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
-    ctx.strokeStyle = '#222228';
+    ctx.strokeStyle = isLight ? '#e2e8f0' : '#222228';
     ctx.lineWidth = lineWidth;
     ctx.stroke();
 
     const isSurplus = deficit < 0;
     const safeTarget = Math.max(targetDeficit, 1);
     const ratio = Math.max(0, Math.min(deficit / safeTarget, 1.0));
-    const strokeColor = isSurplus ? '#ef4444' : (deficit >= targetDeficit && targetDeficit > 0 ? '#10b981' : '#38bdf8');
+    const strokeColor = isSurplus ? (isLight ? '#dc2626' : '#ef4444') : (deficit >= targetDeficit && targetDeficit > 0 ? (isLight ? '#16a34a' : '#10b981') : (isLight ? '#0284c7' : '#38bdf8'));
 
     const startAngle = -Math.PI / 2;
     const sweepAngle = Math.min(ratio, 1.0) * Math.PI * 2;
@@ -114,6 +116,7 @@ const ChartEngine = {
 
     if (!daysData || daysData.length === 0) return;
 
+    const isLight = typeof document !== 'undefined' && document.body && document.body.classList.contains('theme-light');
     const paddingLeft = 38;
     const paddingBottom = 26;
     const paddingTop = 18;
@@ -136,7 +139,7 @@ const ChartEngine = {
 
     // Horizontal grid lines & Y-axis labels
     const gridSteps = lowerLimit < 0 ? 4 : 3;
-    ctx.strokeStyle = '#23232a';
+    ctx.strokeStyle = isLight ? '#e2e8f0' : '#23232a';
     ctx.lineWidth = 1;
     for (let i = 0; i <= gridSteps; i++) {
       const val = upperLimit - (totalRange / gridSteps) * i;
@@ -147,7 +150,7 @@ const ChartEngine = {
       ctx.lineTo(width - paddingRight, y);
       ctx.stroke();
 
-      ctx.fillStyle = '#71717a';
+      ctx.fillStyle = isLight ? '#64748b' : '#71717a';
       ctx.font = '10px sans-serif';
       ctx.textAlign = 'right';
       ctx.fillText(Math.round(val), paddingLeft - 6, y + 3);
@@ -156,7 +159,7 @@ const ChartEngine = {
     // 0-Baseline
     if (lowerLimit < 0) {
       ctx.beginPath();
-      ctx.strokeStyle = '#3f3f46';
+      ctx.strokeStyle = isLight ? '#cbd5e1' : '#3f3f46';
       ctx.lineWidth = 1.2;
       ctx.moveTo(paddingLeft, yZero);
       ctx.lineTo(width - paddingRight, yZero);
@@ -167,7 +170,7 @@ const ChartEngine = {
     const targetY = getY(targetDeficit);
     ctx.beginPath();
     ctx.setLineDash([3, 3]);
-    ctx.strokeStyle = '#10b981';
+    ctx.strokeStyle = isLight ? '#16a34a' : '#10b981';
     ctx.lineWidth = 1;
     ctx.moveTo(paddingLeft, targetY);
     ctx.lineTo(width - paddingRight, targetY);
@@ -251,6 +254,7 @@ const ChartEngine = {
 
     if (!daysData || daysData.length === 0) return;
 
+    const isLight = typeof document !== 'undefined' && document.body && document.body.classList.contains('theme-light');
     const paddingLeft = 40;
     const paddingBottom = 26;
     const paddingTop = 18;
@@ -261,7 +265,7 @@ const ChartEngine = {
     const maxVol = Math.max(...daysData.map(d => d.volume || 0), 1500) * 1.25;
 
     // Grid
-    ctx.strokeStyle = '#23232a';
+    ctx.strokeStyle = isLight ? '#e2e8f0' : '#23232a';
     ctx.lineWidth = 1;
     for (let i = 0; i <= 2; i++) {
       const y = paddingTop + (chartHeight / 2) * i;
@@ -271,7 +275,7 @@ const ChartEngine = {
       ctx.stroke();
 
       const labelVal = Math.round((maxVol - (maxVol / 2) * i) / 1000) + 't';
-      ctx.fillStyle = '#71717a';
+      ctx.fillStyle = isLight ? '#64748b' : '#71717a';
       ctx.font = '10px sans-serif';
       ctx.textAlign = 'right';
       ctx.fillText(labelVal, paddingLeft - 6, y + 3);
@@ -290,7 +294,7 @@ const ChartEngine = {
       else ctx.lineTo(x, y);
     });
 
-    ctx.strokeStyle = '#38bdf8';
+    ctx.strokeStyle = isLight ? '#0284c7' : '#38bdf8';
     ctx.lineWidth = 2;
     ctx.stroke();
 
@@ -302,13 +306,13 @@ const ChartEngine = {
       if (day.volume > 0 || totalDays <= 7) {
         ctx.beginPath();
         ctx.arc(x, y, 3, 0, Math.PI * 2);
-        ctx.fillStyle = '#38bdf8';
+        ctx.fillStyle = isLight ? '#0284c7' : '#38bdf8';
         ctx.fill();
       }
 
       const isSampled = (index % sampleStep === 0) || (index === totalDays - 1);
       if (isSampled) {
-        ctx.fillStyle = '#71717a';
+        ctx.fillStyle = isLight ? '#64748b' : '#71717a';
         ctx.font = '10px sans-serif';
         ctx.textAlign = 'center';
         ctx.fillText(day.label || day.date.slice(5), x, height - 6);

@@ -86,36 +86,114 @@ body.theme-light {
   --text-muted: #8c9ba5;
 }
 
+html[data-theme="light"],
 body.theme-light {
   background-color: #e2e8f0;
 }
 
 body.theme-light .app-viewport {
+  background-color: var(--bg-app);
   box-shadow: 0 0 35px rgba(0, 0, 0, 0.08);
 }
 
 body.theme-light .app-header {
-  background: rgba(244, 246, 249, 0.9);
+  background: rgba(244, 246, 249, 0.92);
   border-bottom: 1px solid var(--border);
 }
 
 body.theme-light .bottom-nav-bar {
   background: rgba(255, 255, 255, 0.94);
   border-top: 1px solid var(--border);
-  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.03);
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.04);
+}
+
+body.theme-light .deficit-hero {
+  background: #ffffff;
+  border-color: var(--border);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+}
+
+body.theme-light .color-card-diet {
+  background: linear-gradient(180deg, rgba(217, 119, 6, 0.06) 0%, #ffffff 100%);
+  border-color: rgba(217, 119, 6, 0.2);
+}
+
+body.theme-light .color-card-workout {
+  background: linear-gradient(180deg, rgba(2, 132, 199, 0.06) 0%, #ffffff 100%);
+  border-color: rgba(2, 132, 199, 0.2);
+}
+
+body.theme-light .toast {
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid #cbd5e1;
+  color: #0f172a;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+}
+
+body.theme-light .modal-overlay {
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
 body.theme-light .dialog-card,
-body.theme-light .action-sheet {
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.12);
+body.theme-light .action-sheet,
+body.theme-light .bottom-sheet-content,
+body.theme-light .retrospective-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  box-shadow: 0 20px 48px rgba(15, 23, 42, 0.16);
 }
 
 body.theme-light .form-input {
+  background: #ffffff;
+  border-color: #cbd5e1;
+  color: #0f172a;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+body.theme-light select.form-input option {
+  background: #ffffff;
+  color: #0f172a;
 }
 
 body.theme-light .brand-dot {
   box-shadow: 0 0 8px rgba(2, 132, 199, 0.4);
+}
+
+body.theme-light .routine-card.active {
+  background: rgba(2, 132, 199, 0.08);
+  border-color: var(--accent-cyan);
+  box-shadow: 0 4px 16px rgba(2, 132, 199, 0.14);
+}
+
+body.theme-light .sample-chip {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+  color: #334155;
+}
+
+body.theme-light .sample-chip:hover {
+  background: #ffffff;
+  color: var(--text-primary);
+  border-color: var(--accent-cyan);
+}
+
+body.theme-light .sample-chip.active {
+  background: var(--accent-cyan);
+  color: #ffffff;
+  border-color: var(--accent-cyan);
+}
+
+body.theme-light .todo-done-tag {
+  background: #f1f5f9;
+  border-color: #e2e8f0;
+  color: #64748b;
+}
+
+body.theme-light .empty-state {
+  background: #ffffff;
+  border-color: #cbd5e1;
 }
 
 * {
@@ -1654,35 +1732,43 @@ body {
 
 .routine-card {
   flex: 0 0 auto;
-  min-width: 152px;
-  max-width: 190px;
+  min-width: 154px;
+  max-width: 195px;
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  padding: 10px 12px;
+  padding: 11px 13px;
   display: flex;
   flex-direction: column;
   gap: 6px;
   cursor: pointer;
   position: relative;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.25s ease, border-color 0.2s ease, background 0.2s ease;
   user-select: none;
   -webkit-user-select: none;
 }
 
 .routine-card:hover {
-  border-color: rgba(56, 189, 248, 0.4);
-  transform: translateY(-1px);
+  border-color: var(--accent-cyan);
+  transform: translateY(-2.5px) scale(1.015);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
 }
 
 .routine-card:active {
-  transform: scale(0.98);
+  transform: scale(0.96);
 }
 
 .routine-card.active {
   border-color: var(--accent-cyan);
-  background: rgba(56, 189, 248, 0.08);
-  box-shadow: 0 0 14px rgba(56, 189, 248, 0.22);
+  background: var(--accent-cyan-bg);
+  box-shadow: 0 0 16px rgba(56, 189, 248, 0.24);
+  animation: cardPulseGlow 3.5s infinite ease-in-out;
+}
+
+@keyframes cardPulseGlow {
+  0% { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.35); }
+  50% { box-shadow: 0 0 18px 2px rgba(56, 189, 248, 0.2); }
+  100% { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.35); }
 }
 
 .routine-card-badge {
@@ -1847,8 +1933,14 @@ body {
   border-radius: var(--radius-sm);
   padding: 9px 12px;
   gap: 8px;
-  transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.35s ease, background 0.3s ease, border-color 0.3s ease;
+  transition: transform 0.38s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.35s ease, background 0.3s ease, border-color 0.3s ease, box-shadow 0.25s ease;
   user-select: none;
+  position: relative;
+}
+
+.todo-item:hover {
+  border-color: var(--border-focus);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.05);
 }
 
 .todo-item.completed {
@@ -1856,7 +1948,8 @@ body {
   filter: grayscale(0.65);
   background: var(--bg-subtle);
   border-color: transparent;
-  transform: translateY(2px) scale(0.99);
+  transform: translateY(3px) scale(0.985);
+  box-shadow: none;
 }
 
 .todo-item.completed .todo-name,
@@ -1888,7 +1981,13 @@ body {
   color: transparent;
   font-size: 0.75rem;
   font-weight: 800;
-  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+  position: relative;
+}
+
+.todo-checkbox:hover {
+  transform: scale(1.1);
+  border-color: var(--accent-lime);
 }
 
 .todo-checkbox.checked,
@@ -1897,6 +1996,13 @@ body {
   border-color: var(--accent-lime);
   color: #000;
   transform: scale(1.05);
+  animation: checkboxSpring 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes checkboxSpring {
+  0% { transform: scale(0.7) rotate(-10deg); }
+  50% { transform: scale(1.25) rotate(4deg); }
+  100% { transform: scale(1.05) rotate(0); }
 }
 
 .todo-item-info {
@@ -1931,13 +2037,18 @@ body {
   color: var(--accent-cyan);
   border-radius: var(--radius-xs);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
   white-space: nowrap;
 }
 
 .btn-todo-log:hover {
   background: var(--accent-cyan);
   color: #000;
+  transform: translateY(-1px);
+}
+
+.btn-todo-log:active {
+  transform: scale(0.92);
 }
 
 .todo-done-tag {
@@ -1950,16 +2061,34 @@ body {
   border: 1px solid var(--border);
   cursor: pointer;
   white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.todo-done-tag:hover {
+  border-color: var(--border-focus);
+  color: var(--text-primary);
 }
 
 .todo-completed-banner {
-  background: rgba(16, 185, 129, 0.08);
-  border: 1px solid rgba(16, 185, 129, 0.25);
+  background: linear-gradient(90deg, rgba(16, 185, 129, 0.08) 0%, rgba(16, 185, 129, 0.18) 50%, rgba(16, 185, 129, 0.08) 100%);
+  background-size: 200% 100%;
+  border: 1px solid rgba(16, 185, 129, 0.35);
   border-radius: var(--radius-md);
   padding: 12px 14px;
   text-align: center;
   margin-bottom: 8px;
-  animation: fadeInSlide 0.3s ease-out;
+  animation: celebrationBounce 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) forwards, bannerShimmer 4s infinite linear;
+}
+
+@keyframes celebrationBounce {
+  0% { transform: scale(0.85) translateY(-6px); opacity: 0; }
+  60% { transform: scale(1.03) translateY(2px); }
+  100% { transform: scale(1) translateY(0); opacity: 1; }
+}
+
+@keyframes bannerShimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
 }
 
 /* ==========================================================================
@@ -2036,5 +2165,14 @@ body {
 
 .recording-pulse-dot {
   animation: recordingPulse 1.2s infinite ease-in-out;
+}
+
+.theme-icon-rotate {
+  animation: themeIconSpin 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes themeIconSpin {
+  0% { transform: rotate(-90deg) scale(0.5); opacity: 0; }
+  100% { transform: rotate(0) scale(1); opacity: 1; }
 }
 

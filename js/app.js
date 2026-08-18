@@ -106,7 +106,14 @@ class FitnessApp {
       }
 
       const iconEl = typeof document.getElementById === 'function' ? document.getElementById('theme-toggle-icon') : null;
-      if (iconEl) iconEl.textContent = this.currentTheme === 'light' ? '🌙' : '☀️';
+      if (iconEl) {
+        iconEl.textContent = this.currentTheme === 'light' ? '🌙' : '☀️';
+        if (iconEl.classList) {
+          iconEl.classList.remove('theme-icon-rotate');
+          void iconEl.offsetWidth;
+          iconEl.classList.add('theme-icon-rotate');
+        }
+      }
 
       const badgeEl = typeof document.getElementById === 'function' ? document.getElementById('current-theme-badge') : null;
       if (badgeEl) badgeEl.textContent = this.currentTheme === 'light' ? '☀️ 纯净白昼' : '🌙 黑夜极简';
@@ -132,6 +139,9 @@ class FitnessApp {
       try {
         localStorage.setItem('trainfit_theme', this.currentTheme);
       } catch (e) {}
+      if (typeof this.render === 'function' && this.workouts) {
+        this.render();
+      }
       this.showToast(this.currentTheme === 'light' ? '☀️ 已切换至白天纯净模式' : '🌙 已切换至黑夜极简模式');
     }
   }
