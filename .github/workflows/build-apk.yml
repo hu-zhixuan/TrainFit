@@ -47,62 +47,62 @@ jobs:
           mkdir -p release-apk
           APK_PATH=$(find app/build/outputs/apk/ -name "*.apk" | head -n 1)
           echo "Found APK at: $APK_PATH"
-          cp "$APK_PATH" release-apk/TrainFit-v1.4.apk
+          cp "$APK_PATH" release-apk/TrainFit-v1.5.apk
           cp "$APK_PATH" release-apk/TrainFit-Latest.apk
           ls -lh release-apk/
 
       - name: Upload APK Artifact to Actions
         uses: actions/upload-artifact@v4
         with:
-          name: TrainFit-v1.4-APK
-          path: release-apk/TrainFit-v1.4.apk
+          name: TrainFit-v1.5-APK
+          path: release-apk/TrainFit-v1.5.apk
           retention-days: 30
 
       - name: Commit and Push APK directly to repo
         run: |
           mkdir -p downloads
-          cp release-apk/TrainFit-v1.4.apk downloads/TrainFit-v1.4.apk
-          cp release-apk/TrainFit-v1.4.apk downloads/TrainFit-Latest.apk
+          cp release-apk/TrainFit-v1.5.apk downloads/TrainFit-v1.5.apk
+          cp release-apk/TrainFit-v1.5.apk downloads/TrainFit-Latest.apk
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -f downloads/TrainFit-v1.4.apk downloads/TrainFit-Latest.apk
-          git commit -m "chore(release): upload pre-built TrainFit-v1.4.apk binary [skip ci]" || echo "No changes to commit"
+          git add -f downloads/TrainFit-v1.5.apk downloads/TrainFit-Latest.apk
+          git commit -m "chore(release): upload pre-built TrainFit-v1.5.apk binary [skip ci]" || echo "No changes to commit"
           git push origin main
 
       - name: Publish APK to GitHub Releases
         uses: softprops/action-gh-release@v2
         continue-on-error: true
         with:
-          tag_name: v1.4
-          name: "TrainFit v1.4 AI 智能重磅版 (Android APK)"
+          tag_name: v1.5
+          name: "TrainFit v1.5 多巴胺视效与后台音频稳定性重磅升级版 (Android APK)"
           body: |
-            ### 🏋️‍♂️ 练食AI (TrainFit) v1.4 核心升级
+            ### 🏋️‍♂️ 练食AI (TrainFit) v1.5 核心升级
 
-            - ✨ **全新「工精微动效系统」（Micro-Animations）**：
-              - **To-Do 打钩 Q 弹回弹**：打卡触发物理阻尼弹性回弹微动效，手感干脆利落；
-              - **平滑滑动下沉置底**：勾选动作以优雅贝塞尔曲线平滑下沉置底并置灰（0.38透明度），未完成动作保持在上方；
-              - **全组完成祝贺流光横幅**：全部完成触发弹跳入场与 4s 粒子呼吸扫光横幅；
-              - **计划 Card 呼吸微光晕**：当前激活卡片低频呼吸发光，Hover 悬停微升；
-              - **日月模式切换旋转**：点击顶部切换按钮触发 90° 弹性微旋转动效。
-            - ☀️ **瑞士纯净「白天模式」全景优化**：
-              - 修复英雄卡片暗色遮罩问题，采用冷调哑光纸白底色（#ffffff）搭配发丝微阴影；
-              - Canvas 走势图与环形仪表盘全量自适应黑夜/白昼双色阶渲染，阳光下字阶清晰锐利；
-              - 模态弹窗与 Toast 全面适配轻盈白昼霜雾毛玻璃风格。
-            - 🎙️ **口播动作序列自动生成置顶计划 Card**：口播录入一组动作序列后，系统自动提炼生成置顶的专属计划 Card（如【胸部分化序列 (3动作)】），随时点击选择或重载；
-            - 📱 **软键盘与弹窗交互无缝保持**：彻底修复补全参数时输入数字软键盘弹走跳焦问题，支持流畅连续输入任意重量与组数；
-            - 🎙️ **弹窗内嵌极速语音补全（Inline Voice Recorder）**：呼吸红点脉冲 + 毫秒级录音计时 + 实时文字流，一键自动槽位增量填入；
-            - 🗣️ **多轮语音要素补全助手（Multi-turn Factor Completion）**：自动校验动作、重量、组数、次数4大核心要素，智能追问气泡，快捷 Chip 胶囊一键补全；
-            - 🧠 **上下文自适应偏置与健身同音词模糊纠偏（Additive Contextual & Phonetic Fuzzy AI）**；
-            - 🏋️‍♂️ **杠铃片智能配重算片器与 Epley 1RM 极限力量预估**：自动扣除 20kg 奥林匹克标准杆，智能贪心匹配彩色杠铃片装片图解，达标自动点亮超负荷加片建议；
-            - 🎯 **四大经典宏量预设与碳蛋脂热量缺口动态闭环**；
-            - 🥢 **800+ 临床级中餐营养数据库与 9 大烹饪吸油率矩阵**；
-            - 📱 **AndroidX Webkit 高性能离线架构**：安装包仅 2.3MB，冷启动毫秒级秒开，与电脑端体验 100% 像素级一致。
+            - 🛡️ **麦克风音频焦点智能隔离（Audio Focus Isolation）**：
+              - 彻底解决启动 App 时抢占音频焦点导致后台音乐（网易云/QQ音乐/Spotify）被打断的问题；
+              - 仅在用户显式录音时调起麦克风，录音结束或切出后台瞬间自动释放硬件音频流通道，边听歌边举铁无缝进行。
+            - ⚡ **Android 后台挂起防黑屏与生命周期崩溃自愈（Lifecycle & GPU Crash Recovery）**：
+              - 深度适配 Activity `onPause` / `onResume` 生命周期与 WebView 定时器休眠唤醒；
+              - 内置 `onRenderProcessGone` 崩溃自愈保护，后台长时间挂起再切回秒级恢复，彻底告别卡退与黑屏。
+            - 🎉 **全景多巴胺礼花动效引擎（ConfettiEngine）**：
+              - 零依赖 60 FPS Canvas 礼花引擎，当 To-Do 清单整组训练动作全部完成或触发超负荷突破时，激发全屏绚丽五彩粒子礼花庆祝！
+            - 🎯 **动态肌群发光微标（Dynamic Muscle Badges）**：
+              - 为各个训练动作注入专属发光微标：胸大肌 🎯、背阔肌 🦅、臀腿下肢 🦵、三角肩部 🛡️、手臂肱肌 ⚡、核心 💎。
+            - 🏆 **金色超负荷突破奖杯徽章（Overload Trophy Badge）**：
+              - 满足超负荷加载门槛时，动作卡片自动点亮金色奖杯发光徽章，高亮提示下次目标加片重量。
+            - 🏋️‍♂️ **3D 拟真奥运标准彩色杠铃片可视化（Barbell Plate Visualizer）**：
+              - 配备红 25kg、蓝 20kg、黄 15kg、绿 10kg、白 5kg、黑 2.5kg、银 1.25kg 标准奥运色彩与滑入落锁动效。
+            - 📳 **触觉振动反馈（HapticEngine）**：
+              - 针对轻触、完成单项打卡、达成整组 PR 分别调校了细腻干脆的触感振动节律。
+            - ☀️ **瑞士纯净「白天模式」与「黑夜极简」全景双色阶自适应**。
+            - 📋 **循环训练 To-Do 待办清单与口播序列自动生成 Card**。
+            - 🎙️ **全能中式口喷与多轮智能要素补全助手**。
 
-            **📥 直接点击下方 Assets 中的 `TrainFit-v1.4.apk` 或 `TrainFit-Latest.apk` 即可下载安装。**
+            **📥 直接点击下方 Assets 中的 `TrainFit-v1.5.apk` 或 `TrainFit-Latest.apk` 即可下载安装。**
           draft: false
           prerelease: false
           files: |
-            release-apk/TrainFit-v1.4.apk
+            release-apk/TrainFit-v1.5.apk
             release-apk/TrainFit-Latest.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
