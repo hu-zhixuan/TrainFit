@@ -483,6 +483,9 @@ b, .num { font-variant-numeric: tabular-nums; }
 .btn-primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .btn-wide { flex: 2; }
 .btn-danger { color: var(--danger); background: var(--danger-soft); border-color: transparent; }
+.btn-voice { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.btn-voice.hidden { display: none; }
+.btn-voice.on { color: var(--danger); background: var(--danger-soft); border-color: transparent; }
 
 /* ---------- 底部 dock ---------- */
 .dock {
@@ -546,7 +549,6 @@ b, .num { font-variant-numeric: tabular-nums; }
 }
 .mic-btn.ql-busy { opacity: 0.6; }
 .mic-hint { font-size: 0.68rem; color: var(--text-3); white-space: nowrap; }
-body.ql-open .dock { visibility: hidden; }
 
 /* ---------- 底部面板 ---------- */
 .sheet-overlay {
@@ -606,7 +608,9 @@ body.ql-open .dock { visibility: hidden; }
 @media (prefers-reduced-motion: reduce) {
   .ql-orb::before, .ql-orb::after, .spinner, .view.active { animation: none; }
 }
-.ql-status-row { justify-content: center; display: flex; align-items: center; gap: 8px; font-size: 0.9rem; font-weight: 600; color: var(--text-2); }
+.sheet-overlay[data-state="idle"] .ql-dot { display: none; }
+.sheet-overlay[data-state="listening"] .ql-status-row { justify-content: center; }
+.ql-status-row { display: flex; align-items: center; gap: 8px; font-size: 0.9rem; font-weight: 600; color: var(--text-2); }
 .ql-dot { width: 10px; height: 10px; flex: none; border-radius: 50%; background: var(--text-3); }
 .sheet-overlay[data-state="listening"] .ql-dot { display: none; }
 .sheet-overlay[data-state="processing"] .ql-dot { background: var(--danger); animation: pulse 1s ease-in-out infinite; }
