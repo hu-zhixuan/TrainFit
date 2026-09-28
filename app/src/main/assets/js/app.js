@@ -1,2784 +1,739 @@
 /**
- * 练食AI · 极简 3 分区主逻辑 (吃/缺口 · 练/加片 · 历史走势与时光回溯)
- * 具备工业级 MediaRecorder 真实录音 + 微信式按住/点击双模语音 + 每日全景回溯与彩色卡片
+ * 练食AI · 精简版
+ *
+ * 两页：今天（还能吃多少 + 当天所有记录）、趋势（每天缺口 + 动作进步）；设置在右上角。
+ * 记录靠底部按钮一口气说完（见 quick_log.js），记错了点一下改。
+ * 数据沿用旧版 localStorage：fit_profile / fit_workouts / fit_diet。
  */
 
-const HapticEngine = {
-  vibrate(pattern) {
-    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-      try { navigator.vibrate(pattern); } catch (e) {}
-    }
-  },
-  tap() { this.vibrate(15); },
-  setComplete() { this.vibrate([30, 40, 45]); },
-  prRecord() { this.vibrate([60, 40, 90, 40, 160]); }
-};
-
-const ConfettiEngine = {
-  canvas: null,
-  ctx: null,
-  particles: [],
-  animating: false,
-  colors: ['#38bdf8', '#10b981', '#f59e0b', '#ec4899', '#a855f7', '#fbbf24', '#ffffff'],
-
-  init() {
-    if (typeof document === 'undefined') return;
-    let cvs = document.getElementById('fx-confetti-canvas');
-    if (!cvs && document.body && typeof document.createElement === 'function') {
-      cvs = document.createElement('canvas');
-      cvs.id = 'fx-confetti-canvas';
-      document.body.appendChild(cvs);
-    }
-    if (!cvs || typeof cvs.getContext !== 'function') return;
-    this.canvas = cvs;
-    this.ctx = cvs.getContext('2d');
-    this.resize();
-    if (typeof window !== 'undefined') {
-      window.addEventListener('resize', () => this.resize());
-    }
-  },
-
-  resize() {
-    if (!this.canvas || typeof window === 'undefined') return;
-    this.canvas.width = (window.innerWidth || 360) * (window.devicePixelRatio || 1);
-    this.canvas.height = (window.innerHeight || 640) * (window.devicePixelRatio || 1);
-    if (this.ctx && typeof this.ctx.scale === 'function') {
-      this.ctx.scale(window.devicePixelRatio || 1, window.devicePixelRatio || 1);
-    }
-  },
-
-  fire(options = {}) {
-    this.init();
-    if (!this.canvas || !this.ctx) return;
-    const count = options.count || 60;
-    const originX = options.x || window.innerWidth / 2;
-    const originY = options.y || window.innerHeight * 0.32;
-
-    for (let i = 0; i < count; i++) {
-      const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.6;
-      const speed = Math.random() * 9 + 4.5;
-      this.particles.push({
-        x: originX,
-        y: originY,
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed - 3.8,
-        size: Math.random() * 6 + 4,
-        color: this.colors[Math.floor(Math.random() * this.colors.length)],
-        rotation: Math.random() * 360,
-        rSpeed: (Math.random() - 0.5) * 16,
-        alpha: 1,
-        life: Math.random() * 45 + 45
-      });
-    }
-
-    if (!this.animating) {
-      this.renderLoop();
-    }
-  },
-
-  renderLoop() {
-    if (!this.ctx || !this.canvas) return;
-    this.animating = true;
-    this.ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
-
-    for (let i = this.particles.length - 1; i >= 0; i--) {
-      const p = this.particles[i];
-      p.x += p.vx;
-      p.y += p.vy;
-      p.vy += 0.24; // gravity
-      p.vx *= 0.98; // air drag
-      p.rotation += p.rSpeed;
-      p.alpha -= 1 / p.life;
-
-      if (p.alpha <= 0 || p.y > window.innerHeight) {
-        this.particles.splice(i, 1);
-        continue;
-      }
-
-      this.ctx.save();
-      this.ctx.globalAlpha = Math.max(0, p.alpha);
-      this.ctx.translate(p.x, p.y);
-      this.ctx.rotate((p.rotation * Math.PI) / 180);
-      this.ctx.fillStyle = p.color;
-      this.ctx.shadowBlur = 8;
-      this.ctx.shadowColor = p.color;
-      this.ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.65);
-      this.ctx.restore();
-    }
-
-    if (this.particles.length > 0) {
-      requestAnimationFrame(() => this.renderLoop());
-    } else {
-      this.animating = false;
-      this.ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
-    }
-  }
-};
-
-function getMuscleGroupBadge(muscle) {
-  const m = muscle || '力量';
-  if (m.includes('胸')) return `<span class="muscle-badge muscle-badge-chest">🎯 ${m}</span>`;
-  if (m.includes('背')) return `<span class="muscle-badge muscle-badge-back">🦅 ${m}</span>`;
-  if (m.includes('腿') || m.includes('臀') || m.includes('蹲')) return `<span class="muscle-badge muscle-badge-legs">🦵 ${m}</span>`;
-  if (m.includes('肩') || m.includes('推举') || m.includes('飞鸟')) return `<span class="muscle-badge muscle-badge-shoulders">🛡️ ${m}</span>`;
-  if (m.includes('臂') || m.includes('二头') || m.includes('三头') || m.includes('弯举')) return `<span class="muscle-badge muscle-badge-arms">⚡ ${m}</span>`;
-  if (m.includes('腹') || m.includes('核心')) return `<span class="muscle-badge muscle-badge-core">💎 ${m}</span>`;
-  if (m.includes('有氧') || m.includes('跑') || m.includes('骑')) return `<span class="muscle-badge muscle-badge-core">🏃 ${m}</span>`;
-  return `<span class="muscle-badge muscle-badge-chest">💪 ${m}</span>`;
-}
-
-const DEFAULT_PROFILE = {
-  gender: "male",
-  heightCm: 175,
-  weightKg: 72.0,
-  age: 26,
-  bmr: 1650,
-  tdee: 2392,
-  goalType: "fat_loss",
-  targetDeficitKcal: 450,
-  targetProteinG: 144,
-  targetCarbsG: 238,
-  targetFatG: 58
-};
-
-// 用本地日期（不能用 toISOString，那是 UTC：北京时间 0–8 点会被记到前一天）
+// ---------------------------------------------------------------------------
+// 日期（一律用本地日期；toISOString 是 UTC，北京时间 0–8 点会算到前一天）
+// ---------------------------------------------------------------------------
 function formatLocalDate(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
-
 function getTodayDateString(offsetDays = 0) {
   const d = new Date();
   if (offsetDays !== 0) d.setDate(d.getDate() + offsetDays);
   return formatLocalDate(d);
 }
-
 function shiftDateString(dateStr, deltaDays) {
   const d = new Date(dateStr + 'T00:00:00');
   d.setDate(d.getDate() + deltaDays);
   return formatLocalDate(d);
 }
 
+const DEFAULT_PROFILE = {
+  gender: 'male',
+  heightCm: 175,
+  weightKg: 72.0,
+  age: 26,
+  bmr: 1650,
+  tdee: 2392,
+  goalType: 'fat_loss',
+  targetDeficitKcal: 450,
+  targetProteinG: 144,
+  targetCarbsG: 238,
+  targetFatG: 58
+};
+
+const GOAL_DEFICIT = { fat_loss: 450, maintain: 0, muscle_gain: -250 };
+const MEAL_TYPES = ['早餐', '午餐', '晚餐', '加餐/补剂'];
+const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
+const PENDING_KEY = 'tf_pending';
+
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function fmt(n) { return Math.round(n || 0).toLocaleString('zh-CN'); }
+function round1(n) { return Math.round((n || 0) * 10) / 10; }
+function load(key, fallback) {
+  try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch (e) { return fallback; }
+}
+function store(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) {}
+}
+/** 记录的时间戳：新记录有 ts，旧记录从 id（w_1727…）里取 */
+function recordTs(r) {
+  if (r.ts) return r.ts;
+  const m = /_(\d{12,})/.exec(r.id || '');
+  return m ? Number(m[1]) : 0;
+}
+function hhmm(ts) {
+  if (!ts) return '';
+  const d = new Date(ts);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+function isCompound(name) {
+  return /卧推|深蹲|硬拉|划船|推举|倒蹬|腿举/.test(name || '');
+}
+
 class FitnessApp {
   constructor() {
-    this.currentTab = 'diet';
     this.selectedDate = getTodayDateString();
-    this.historyRange = 'WEEK';
-    this.voiceMode = 'DIET'; // 'DIET' | 'WORKOUT'
-    this.parsedWorkoutBuffer = [];
-    this.parsedDietBuffer = null;
-    this.onboardingGender = 'male';
-    this.tutorialCurrentStep = 1;
-    this.currentAudioUrl = null;
-    this.audioPlayer = null;
-    this.retrospectiveDate = getTodayDateString();
+    this.view = 'today';
+    this.trendDays = 7;
+    this.pending = [];
+    this.editing = null;
 
-    this.initData();
-    this.bindEvents();
-    this.bindVoiceEvents();
-    this.bindRetrospectiveEvents();
-    this.render();
-    this.checkOnboarding();
-  }
-
-  initData() {
-    const cacheVer = localStorage.getItem('fit_cache_v5_pro');
-    if (!cacheVer) {
-      localStorage.removeItem('fit_workouts');
-      localStorage.removeItem('fit_diet');
-      localStorage.removeItem('fit_profile');
-      localStorage.removeItem('fit_onboarded');
-      localStorage.setItem('fit_cache_v5_pro', 'true');
+    const savedProfile = load('fit_profile', null);
+    this.profile = Object.assign({}, DEFAULT_PROFILE, savedProfile || {});
+    // 旧版里改过身体数据的，不再提示去设置
+    if (savedProfile && !('customized' in savedProfile) &&
+        (savedProfile.heightCm !== DEFAULT_PROFILE.heightCm || savedProfile.weightKg !== DEFAULT_PROFILE.weightKg || savedProfile.age !== DEFAULT_PROFILE.age)) {
+      this.profile.customized = true;
     }
-
-    const savedProfile = localStorage.getItem('fit_profile');
-    this.profile = savedProfile ? JSON.parse(savedProfile) : { ...DEFAULT_PROFILE };
+    this.workouts = load('fit_workouts', []);
+    this.diet = load('fit_diet', []);
     this.recalculateMetabolism();
 
-    // Clean 0 initial state
-    const savedWorkouts = localStorage.getItem('fit_workouts');
-    this.workouts = savedWorkouts ? JSON.parse(savedWorkouts) : [];
+    // 上次没整理完就关了 App 的，恢复成「失败，可重试」
+    this.pending = load(PENDING_KEY, []).map(p => Object.assign(p, { status: 'failed', error: '上次没整理完' }));
 
-    const savedDiet = localStorage.getItem('fit_diet');
-    this.diet = savedDiet ? JSON.parse(savedDiet) : [];
+    this.bindEvents();
+    this.applyTheme(load('trainfit_theme_v2', null) || this.legacyTheme());
+    this.render();
 
-    // Custom Routines & Active To-Do (R2)
-    const savedRoutines = localStorage.getItem('fit_custom_routines');
-    this.customRoutines = savedRoutines ? JSON.parse(savedRoutines) : this.getDefaultRoutines();
-
-    const savedActiveTodo = localStorage.getItem('fit_active_routine_todo');
-    this.activeRoutineTodo = savedActiveTodo ? JSON.parse(savedActiveTodo) : null;
-    this.editingRoutineId = null;
-    this.initTheme();
-  }
-
-  // ==================== Theme Management (Light / Dark Mode) ====================
-  initTheme() {
-    let savedTheme = 'dark';
-    try {
-      savedTheme = localStorage.getItem('trainfit_theme') || 'dark';
-    } catch (e) {}
-    this.setTheme(savedTheme, false);
-  }
-
-  setTheme(theme, save = true) {
-    this.currentTheme = theme === 'light' ? 'light' : 'dark';
-    if (typeof document !== 'undefined') {
-      if (document.body && document.body.classList) {
-        if (this.currentTheme === 'light') {
-          document.body.classList.add('theme-light');
-        } else {
-          document.body.classList.remove('theme-light');
-        }
-      }
-      if (document.documentElement && typeof document.documentElement.setAttribute === 'function') {
-        document.documentElement.setAttribute('data-theme', this.currentTheme === 'light' ? 'light' : 'dark');
-      }
-
-      const iconEl = typeof document.getElementById === 'function' ? document.getElementById('theme-toggle-icon') : null;
-      if (iconEl) {
-        iconEl.textContent = this.currentTheme === 'light' ? '🌙' : '☀️';
-        if (iconEl.classList) {
-          iconEl.classList.remove('theme-icon-rotate');
-          void iconEl.offsetWidth;
-          iconEl.classList.add('theme-icon-rotate');
-        }
-      }
-
-      const badgeEl = typeof document.getElementById === 'function' ? document.getElementById('current-theme-badge') : null;
-      if (badgeEl) badgeEl.textContent = this.currentTheme === 'light' ? '☀️ 纯净白昼' : '🌙 黑夜极简';
-
-      const btnDark = typeof document.getElementById === 'function' ? document.getElementById('btn-theme-dark') : null;
-      const btnLight = typeof document.getElementById === 'function' ? document.getElementById('btn-theme-light') : null;
-      if (btnDark && btnDark.classList && typeof btnDark.classList.toggle === 'function') {
-        btnDark.classList.toggle('active', this.currentTheme === 'dark');
-      }
-      if (btnLight && btnLight.classList && typeof btnLight.classList.toggle === 'function') {
-        btnLight.classList.toggle('active', this.currentTheme === 'light');
-      }
-
-      if (typeof document.querySelector === 'function') {
-        const metaThemeColor = document.querySelector('meta[name="theme-color"]');
-        if (metaThemeColor && typeof metaThemeColor.setAttribute === 'function') {
-          metaThemeColor.setAttribute('content', this.currentTheme === 'light' ? '#f4f6f9' : '#09090b');
-        }
-      }
-    }
-
-    if (save) {
-      try {
-        localStorage.setItem('trainfit_theme', this.currentTheme);
-      } catch (e) {}
-      if (typeof this.render === 'function' && this.workouts) {
+    // 跨天了自动回到今天
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden && this.lastToday && this.lastToday !== getTodayDateString() && this.selectedDate === this.lastToday) {
+        this.selectedDate = getTodayDateString();
         this.render();
       }
-      this.showToast(this.currentTheme === 'light' ? '☀️ 已切换至白天纯净模式' : '🌙 已切换至黑夜极简模式');
-    }
+    });
   }
 
-  toggleTheme() {
-    const next = this.currentTheme === 'light' ? 'dark' : 'light';
-    this.setTheme(next, true);
+  legacyTheme() {
+    try { return localStorage.getItem('trainfit_theme') || 'system'; } catch (e) { return 'system'; }
   }
 
-  checkOnboarding() {
-    const isOnboarded = localStorage.getItem('fit_onboarded');
-    if (!isOnboarded) {
-      this.openTutorialModal(1);
-    }
-  }
-
-  openTutorialModal(startStep = 1) {
-    this.tutorialCurrentStep = startStep;
-    this.nextTutorialStep(startStep);
-    const modal = document.getElementById('modal-onboarding');
-    if (modal) {
-      modal.classList.remove('hidden');
-    }
-  }
-
-  closeTutorialModal() {
-    const modal = document.getElementById('modal-onboarding');
-    if (modal) {
-      modal.classList.add('hidden');
-    }
-  }
-
-  nextTutorialStep(stepNum) {
-    this.tutorialCurrentStep = stepNum;
-    for (let i = 1; i <= 3; i++) {
-      const slide = document.getElementById(`tutorial-slide-${i}`);
-      const dot = document.getElementById(`onboarding-dot-${i}`);
-      if (slide) slide.classList.toggle('active', i === stepNum);
-      if (dot) dot.classList.toggle('active', i === stepNum);
-    }
-    if (stepNum === 3) {
-      this.calcOnboardingTdee();
-    }
-  }
-
-  skipToProfileStep() {
-    this.nextTutorialStep(3);
-  }
-
-  setOnboardingGender(gender) {
-    this.onboardingGender = gender;
-    document.getElementById('onboarding-gender-male').classList.toggle('active', gender === 'male');
-    document.getElementById('onboarding-gender-female').classList.toggle('active', gender === 'female');
-    this.calcOnboardingTdee();
-  }
-
-  calcOnboardingTdee() {
-    const height = parseFloat(document.getElementById('onboarding-height').value) || 175;
-    const weight = parseFloat(document.getElementById('onboarding-weight').value) || 72;
-    const age = parseInt(document.getElementById('onboarding-age').value, 10) || 26;
-    const isMale = this.onboardingGender === 'male';
-
-    const bmr = isMale
-      ? (10 * weight + 6.25 * height - 5 * age + 5)
-      : (10 * weight + 6.25 * height - 5 * age - 161);
-    const tdee = Math.round(bmr * 1.45);
-
-    const preview = document.getElementById('onboarding-calc-preview');
-    if (preview) {
-      preview.innerHTML = `预估基础代谢 BMR: <b>${Math.round(bmr)}</b> kcal | 预估日常总消耗 TDEE: <b>${tdee}</b> kcal`;
-    }
-  }
-
-  completeOnboarding() {
-    const height = parseFloat(document.getElementById('onboarding-height').value) || 175;
-    const weight = parseFloat(document.getElementById('onboarding-weight').value) || 72;
-    const age = parseInt(document.getElementById('onboarding-age').value, 10) || 26;
-    const deficit = parseFloat(document.getElementById('onboarding-deficit').value) || 450;
-
-    this.profile.gender = this.onboardingGender;
-    this.profile.heightCm = height;
-    this.profile.weightKg = weight;
-    this.profile.age = age;
-    this.profile.targetDeficitKcal = deficit;
-    this.profile.targetProteinG = Math.round(weight * 2.0);
-    this.profile.targetCarbsG = Math.round(weight * 3.3);
-    this.profile.targetFatG = Math.round(weight * 0.8);
-
-    this.recalculateMetabolism();
-    this.saveData();
-    localStorage.setItem('fit_onboarded', 'true');
-
-    this.closeTutorialModal();
-    this.render();
-    this.showToast('🚀 身体参数初始化完成！');
-  }
-
+  // ======================= 数据 =======================
   saveData() {
-    localStorage.setItem('fit_profile', JSON.stringify(this.profile));
-    localStorage.setItem('fit_workouts', JSON.stringify(this.workouts));
-    localStorage.setItem('fit_diet', JSON.stringify(this.diet));
+    store('fit_profile', this.profile);
+    store('fit_workouts', this.workouts);
+    store('fit_diet', this.diet);
+  }
+
+  savePending() {
+    store(PENDING_KEY, this.pending.map(p => ({ id: p.id, text: p.text, date: p.date, ts: p.ts })));
   }
 
   recalculateMetabolism() {
     const { gender, heightCm, weightKg, age } = this.profile;
-    const isMale = gender === 'male';
-    const bmr = isMale
-      ? (10 * weightKg + 6.25 * heightCm - 5 * age + 5)
-      : (10 * weightKg + 6.25 * heightCm - 5 * age - 161);
-    const tdee = Math.round(bmr * 1.45);
+    const bmr = 10 * weightKg + 6.25 * heightCm - 5 * age + (gender === 'female' ? -161 : 5);
     this.profile.bmr = Math.round(bmr);
-    this.profile.tdee = tdee;
-  }
-
-  onProfileParamChange() {
-    const height = parseFloat(document.getElementById('input-height').value) || 175;
-    const weight = parseFloat(document.getElementById('input-weight').value) || 72;
-    const age = parseInt(document.getElementById('input-age').value, 10) || 26;
-    const isMale = this.profile.gender === 'male';
-
-    const bmr = isMale
-      ? (10 * weight + 6.25 * height - 5 * age + 5)
-      : (10 * weight + 6.25 * height - 5 * age - 161);
-    const tdee = Math.round(bmr * 1.45);
-
-    document.getElementById('profile-bmr-display').textContent = `${Math.round(bmr)} kcal`;
-    document.getElementById('profile-tdee-display').textContent = `${tdee} kcal`;
+    this.profile.tdee = Math.round(bmr * 1.45);
   }
 
   getDaySummary(dateStr) {
-    const isToday = dateStr === getTodayDateString();
-    const dayWorkouts = this.workouts.filter(w => w.date === dateStr);
-    const dayDiet = this.diet.filter(d => d.date === dateStr);
-
-    const hasLogs = dayWorkouts.length > 0 || dayDiet.length > 0;
-
-    const workoutBurn = dayWorkouts.reduce((sum, w) => sum + (w.burnedCalories || 0), 0);
-    const totalVolume = dayWorkouts.reduce((sum, w) => sum + (w.weightKg * w.sets * w.reps), 0);
-    const totalSets = dayWorkouts.reduce((sum, w) => sum + w.sets, 0);
-
-    const dietIntake = dayDiet.reduce((sum, d) => sum + d.calories, 0);
-    const totalProtein = dayDiet.reduce((sum, d) => sum + (d.proteinG || 0), 0);
-    const totalCarbs = dayDiet.reduce((sum, d) => sum + (d.carbsG || 0), 0);
-    const totalFat = dayDiet.reduce((sum, d) => sum + (d.fatG || 0), 0);
-
+    const ws = this.workouts.filter(w => w.date === dateStr);
+    const ds = this.diet.filter(d => d.date === dateStr);
+    const workoutBurn = ws.reduce((s, w) => s + (w.burnedCalories || 0), 0);
+    const intake = ds.reduce((s, d) => s + (d.calories || 0), 0);
+    const protein = ds.reduce((s, d) => s + (d.proteinG || 0), 0);
     const totalBurn = this.profile.tdee + workoutBurn;
-
-    let deficit = 0;
-    if (hasLogs || isToday) {
-      deficit = totalBurn - dietIntake;
-    }
-
+    const budget = totalBurn - (this.profile.targetDeficitKcal || 0);
     return {
       date: dateStr,
-      isToday,
-      hasLogs,
-      tdee: this.profile.tdee,
+      hasLogs: ws.length > 0 || ds.length > 0,
+      hasDiet: ds.length > 0,
       workoutBurn,
+      intake,
+      protein: round1(protein),
       totalBurn,
-      totalVolume,
-      totalSets,
-      dietIntake,
-      totalProtein: Math.round(totalProtein * 10) / 10,
-      totalCarbs: Math.round(totalCarbs * 10) / 10,
-      totalFat: Math.round(totalFat * 10) / 10,
-      deficit,
-      targetDeficit: this.profile.targetDeficitKcal,
-      workoutCount: dayWorkouts.length,
-      dietCount: dayDiet.length
+      budget,
+      remaining: budget - intake,
+      deficit: totalBurn - intake,
+      totalVolume: ws.reduce((s, w) => s + (w.weightKg || 0) * (w.sets || 0) * (w.reps || 0), 0)
     };
   }
 
+  /** 某个动作：最近一次成绩 + 下次建议（双重累进） */
+  exerciseProgress(name) {
+    const logs = this.workouts
+      .filter(w => w.exerciseName === name && !w.durationMin)
+      .sort((a, b) => (b.date === a.date ? recordTs(b) - recordTs(a) : (b.date > a.date ? 1 : -1)));
+    if (!logs.length) return null;
+    const last = logs[0];
+    const compound = isCompound(name);
+    const cap = compound ? 8 : 12;
+    const step = compound ? 2.5 : 1;
+    let next;
+    if (last.weightKg > 0 && last.reps >= cap && last.sets >= 3) {
+      next = { kind: 'weight', text: `下次试 ${round1(last.weightKg + step)}kg`, weightKg: round1(last.weightKg + step), reps: Math.max(6, last.reps - 2) };
+    } else if (last.reps < cap) {
+      next = { kind: 'reps', text: `下次冲 ${last.reps + 1} 次`, weightKg: last.weightKg, reps: last.reps + 1 };
+    } else {
+      next = { kind: 'keep', text: '保持，练扎实', weightKg: last.weightKg, reps: last.reps };
+    }
+    const best = logs.reduce((m, w) => Math.max(m, w.weightKg || 0), 0);
+    return { last, next, count: logs.length, best, isLatest: (id) => id === last.id };
+  }
+
+  // ======================= 界面事件 =======================
   bindEvents() {
-    // 3 Tab Navigation
-    document.querySelectorAll('.nav-item').forEach(btn => {
-      btn.addEventListener('click', () => {
-        this.switchTab(btn.dataset.tab);
-      });
-    });
+    const $ = (id) => document.getElementById(id);
 
-    // Tutorial Buttons
-    document.getElementById('btn-open-tutorial')?.addEventListener('click', () => {
-      this.openTutorialModal(1);
-    });
-    document.getElementById('btn-profile-reopen-tutorial')?.addEventListener('click', () => {
-      this.openTutorialModal(1);
-    });
+    document.querySelectorAll('.dock-tab').forEach(b => b.addEventListener('click', () => this.switchView(b.dataset.view)));
+    $('btn-settings').addEventListener('click', () => this.switchView(this.view === 'settings' ? 'today' : 'settings'));
+    $('date-prev').addEventListener('click', () => this.shiftDate(-1));
+    $('date-next').addEventListener('click', () => this.shiftDate(1));
+    $('date-label').addEventListener('click', () => { this.selectedDate = getTodayDateString(); this.render(); });
+    $('setup-hint').addEventListener('click', () => this.switchView('settings'));
 
-    // Profile Screen
-    document.getElementById('btn-open-profile')?.addEventListener('click', () => {
-      this.switchTab('profile');
-    });
-    document.getElementById('btn-profile-back')?.addEventListener('click', () => {
-      this.switchTab('diet');
-    });
+    // 左右滑动切换日期
+    let sx = 0, sy = 0;
+    const today = $('view-today');
+    today.addEventListener('touchstart', (e) => { sx = e.touches[0].clientX; sy = e.touches[0].clientY; }, { passive: true });
+    today.addEventListener('touchend', (e) => {
+      const dx = e.changedTouches[0].clientX - sx;
+      const dy = e.changedTouches[0].clientY - sy;
+      if (Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 1.5) this.shiftDate(dx > 0 ? -1 : 1);
+    }, { passive: true });
 
-    // Reset Data
-    document.getElementById('btn-open-reset-modal')?.addEventListener('click', () => {
-      document.getElementById('modal-reset-confirm').classList.remove('hidden');
-    });
-    document.getElementById('btn-cancel-reset')?.addEventListener('click', () => {
-      document.getElementById('modal-reset-confirm').classList.add('hidden');
-    });
-    document.getElementById('btn-confirm-reset')?.addEventListener('click', () => {
-      this.resetAllDataToZero();
-    });
-
-    // Voice Action Buttons
-    document.getElementById('btn-hero-diet-voice')?.addEventListener('click', () => {
-      this.openVoiceSheet('DIET');
-    });
-    document.getElementById('btn-hero-workout-voice')?.addEventListener('click', () => {
-      this.openVoiceSheet('WORKOUT');
-    });
-
-    // Manual Add buttons
-    document.getElementById('btn-manual-add-diet')?.addEventListener('click', () => {
-      this.openVoiceSheet('DIET');
-    });
-    document.getElementById('btn-manual-add-workout')?.addEventListener('click', () => {
-      this.openManualWorkoutModal();
-    });
-
-    // Manual Workout Form Controls
-    document.getElementById('btn-cancel-manual-workout')?.addEventListener('click', () => {
-      this.closeManualWorkoutModal();
-    });
-    document.getElementById('btn-save-manual-workout')?.addEventListener('click', () => {
-      this.saveManualWorkout();
-    });
-
-    // Onboarding Button
-    document.getElementById('btn-complete-onboarding')?.addEventListener('click', () => {
-      this.completeOnboarding();
-    });
-
-    // Confirmation Modals
-    document.getElementById('btn-cancel-workout-confirm')?.addEventListener('click', () => {
-      this.stopInlineFollowupRecording(true);
-      document.getElementById('modal-confirm-workouts').classList.add('hidden');
-    });
-    document.getElementById('btn-save-confirmed-workouts')?.addEventListener('click', () => {
-      this.saveConfirmedWorkouts();
-    });
-    document.getElementById('btn-modal-followup-voice')?.addEventListener('click', () => {
-      this.toggleInlineFollowupRecording();
-    });
-    document.getElementById('btn-followup-recording-cancel')?.addEventListener('click', () => {
-      this.stopInlineFollowupRecording(true);
-    });
-    document.getElementById('btn-followup-recording-finish')?.addEventListener('click', () => {
-      this.stopInlineFollowupRecording(false);
-    });
-
-    // Routine Section & Cyclical To-Do Buttons (R2)
-    document.getElementById('btn-open-routine-editor')?.addEventListener('click', () => {
-      this.openRoutineEditor();
-    });
-    document.getElementById('btn-close-routine-editor')?.addEventListener('click', () => {
-      this.closeRoutineEditor();
-    });
-    document.getElementById('btn-cancel-routine')?.addEventListener('click', () => {
-      this.closeRoutineEditor();
-    });
-    document.getElementById('btn-save-routine')?.addEventListener('click', () => {
-      this.saveCustomRoutine();
-    });
-    document.getElementById('btn-delete-routine')?.addEventListener('click', () => {
-      if (this.editingRoutineId) {
-        this.deleteCustomRoutine(this.editingRoutineId);
+    $('timeline').addEventListener('click', (e) => {
+      const act = e.target.closest('[data-act]');
+      if (act) {
+        e.stopPropagation();
+        const id = act.dataset.id;
+        if (act.dataset.act === 'retry') this.retryPending(id);
+        else if (act.dataset.act === 'drop') this.dropPending(id);
+        else if (act.dataset.act === 'edit-text') this.editPendingText(id);
+        return;
       }
-    });
-    document.getElementById('btn-routine-add-exercise-row')?.addEventListener('click', () => {
-      this.addRoutineEditorExerciseRow();
-    });
-    document.getElementById('btn-reset-routine-cycle')?.addEventListener('click', () => {
-      this.resetActiveRoutineCycle();
-    });
-    document.getElementById('btn-close-active-routine')?.addEventListener('click', () => {
-      this.clearActiveRoutine();
+      const item = e.target.closest('.item[data-kind]');
+      if (item) this.openEditor(item.dataset.kind, item.dataset.id);
     });
 
-    document.getElementById('btn-cancel-diet-confirm')?.addEventListener('click', () => {
-      document.getElementById('modal-confirm-diet').classList.add('hidden');
-    });
-    document.getElementById('btn-save-confirmed-diet')?.addEventListener('click', () => {
-      this.saveConfirmedDiet();
-    });
-
-    // Meal type selector in confirm modal
-    document.querySelectorAll('.meal-type-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        document.querySelectorAll('.meal-type-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        if (this.parsedDietBuffer) {
-          this.parsedDietBuffer.mealType = btn.dataset.type;
-        }
-      });
+    // 趋势
+    $('trend-range').addEventListener('click', (e) => {
+      const b = e.target.closest('.seg-btn');
+      if (!b) return;
+      this.trendDays = Number(b.dataset.range);
+      this.renderTrend();
     });
 
-    // History Period
-    document.querySelectorAll('.period-seg-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        document.querySelectorAll('.period-seg-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        this.historyRange = btn.dataset.range;
-        this.renderHistoryScreen();
-      });
-    });
+    // 设置
+    this.bindSettings();
 
-    // Profile Settings
-    document.querySelectorAll('.gender-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        if (btn.id && btn.id.startsWith('onboarding')) return;
-        document.querySelectorAll('.gender-btn').forEach(b => {
-          if (!b.id || !b.id.startsWith('onboarding')) b.classList.remove('active');
-        });
-        btn.classList.add('active');
-        this.profile.gender = btn.dataset.gender || 'male';
-        this.recalculateMetabolism();
-        this.onProfileParamChange();
-      });
-    });
+    // 编辑
+    $('edit-form').addEventListener('submit', (e) => { e.preventDefault(); this.saveEditor(); });
+    $('edit-cancel').addEventListener('click', () => this.closeEditor());
+    $('edit-delete').addEventListener('click', () => this.deleteEditing());
+    $('edit-overlay').addEventListener('click', (e) => { if (e.target.id === 'edit-overlay') this.closeEditor(); });
 
-    document.getElementById('btn-save-profile')?.addEventListener('click', () => {
-      this.saveProfile();
-    });
-
-    // Audio preview player
-    document.getElementById('btn-play-audio-preview')?.addEventListener('click', () => {
-      this.toggleAudioPreview();
+    // 安卓返回键：WebView 有历史就先后退，这里用 hash 管理弹层和页面
+    window.addEventListener('popstate', () => {
+      if (!$('edit-overlay').classList.contains('hidden')) this.closeEditor(true);
+      else if (this.view !== 'today') this.switchView('today', true);
     });
   }
 
-  /**
-   * WeChat Style Hold-to-Talk + Click-to-Record Dual Mode Binding
-   */
-  bindVoiceEvents() {
-    const micBtn = document.getElementById('btn-toggle-mic');
-    const closeBtn = document.getElementById('btn-close-voice-sheet');
-    const submitBtn = document.getElementById('btn-submit-voice-parse');
-
-    closeBtn?.addEventListener('click', () => {
-      this.closeVoiceSheet();
-    });
-
-    submitBtn?.addEventListener('click', () => {
-      this.submitVoiceParse();
-    });
-
-    if (!micBtn) return;
-
-    let holdTimer = null;
-    let isHolding = false;
-    let startY = 0;
-    let cancelSlideThreshold = 60; // px to cancel
-
-    const onPointerDown = (e) => {
-      e.preventDefault();
-      startY = e.clientY || (e.touches && e.touches[0] ? e.touches[0].clientY : 0);
-      isHolding = false;
-
-      holdTimer = setTimeout(async () => {
-        isHolding = true;
-        await this.startRecordingProcess(true);
-      }, 150);
-    };
-
-    const onPointerMove = (e) => {
-      if (!isHolding || !SpeechModule.isRecording) return;
-      const currentY = e.clientY || (e.touches && e.touches[0] ? e.touches[0].clientY : 0);
-      const deltaY = startY - currentY;
-      const label = document.getElementById('mic-status-label');
-      if (deltaY > cancelSlideThreshold) {
-        if (label) label.innerHTML = '<span style="color:var(--accent-red);">松开手指，取消录音</span>';
-        micBtn.classList.add('canceling');
-      } else {
-        if (label) label.innerHTML = '正在录音中... 松开完成识别';
-        micBtn.classList.remove('canceling');
-      }
-    };
-
-    const onPointerUp = async (e) => {
-      clearTimeout(holdTimer);
-      if (isHolding) {
-        isHolding = false;
-        const currentY = e.clientY || (e.changedTouches && e.changedTouches[0] ? e.changedTouches[0].clientY : 0);
-        const deltaY = startY - currentY;
-        const isCanceled = deltaY > cancelSlideThreshold;
-        micBtn.classList.remove('canceling');
-        await SpeechModule.stop(isCanceled);
-        if (isCanceled) {
-          this.showToast('已取消录音');
-        }
-      } else {
-        // Quick Click Mode: Toggle start / stop
-        if (SpeechModule.isRecording) {
-          await SpeechModule.stop(false);
-        } else {
-          await this.startRecordingProcess(false);
-        }
-      }
-    };
-
-    if (window.PointerEvent) {
-      micBtn.addEventListener('pointerdown', onPointerDown);
-      window.addEventListener('pointermove', onPointerMove);
-      window.addEventListener('pointerup', onPointerUp);
-    } else {
-      micBtn.addEventListener('touchstart', onPointerDown, { passive: false });
-      window.addEventListener('touchmove', onPointerMove, { passive: false });
-      window.addEventListener('touchend', onPointerUp);
-      micBtn.addEventListener('mousedown', onPointerDown);
-      window.addEventListener('mouseup', onPointerUp);
-    }
-  }
-
-  /**
-   * Daily Retrospective Time Machine Event Binding
-   */
-  bindRetrospectiveEvents() {
-    document.getElementById('btn-close-retro')?.addEventListener('click', () => {
-      document.getElementById('modal-day-retrospective').classList.add('hidden');
-    });
-
-    document.getElementById('btn-retro-close-bottom')?.addEventListener('click', () => {
-      document.getElementById('modal-day-retrospective').classList.add('hidden');
-    });
-
-    document.getElementById('btn-retro-prev-day')?.addEventListener('click', () => {
-      this.retrospectiveDate = shiftDateString(this.retrospectiveDate, -1);
-      this.openDayRetrospective(this.retrospectiveDate);
-    });
-
-    document.getElementById('btn-retro-next-day')?.addEventListener('click', () => {
-      this.retrospectiveDate = shiftDateString(this.retrospectiveDate, 1);
-      this.openDayRetrospective(this.retrospectiveDate);
-    });
-
-    document.getElementById('btn-retro-set-active-day')?.addEventListener('click', () => {
-      this.selectedDate = this.retrospectiveDate;
-      document.getElementById('modal-day-retrospective').classList.add('hidden');
-      this.switchTab('diet');
-      this.showToast(`已切换为查看: ${this.selectedDate}`);
-    });
-  }
-
-  /**
-   * Opens and renders the full retrospective view for a specific day with animated ring & colored cards
-   */
-  openDayRetrospective(dateStr) {
-    this.retrospectiveDate = dateStr;
-    const summary = this.getDaySummary(dateStr);
-    const isToday = dateStr === getTodayDateString();
-
-    const titleEl = document.getElementById('retro-date-title');
-    if (titleEl) {
-      titleEl.textContent = isToday ? `${dateStr} · 今天` : dateStr;
-    }
-
-    // Status Pill
-    const pill = document.getElementById('retro-status-pill');
-    const isTargetMet = summary.deficit >= summary.targetDeficit && summary.targetDeficit > 0;
-    const isDeficit = summary.deficit >= 0;
-
-    if (!summary.hasLogs && !isToday) {
-      pill.className = 'status-badge';
-      pill.textContent = '暂无打卡';
-    } else if (!isDeficit) {
-      pill.className = 'status-badge surplus';
-      pill.textContent = `热量盈余 +${Math.round(Math.abs(summary.deficit))} kcal`;
-    } else if (isTargetMet) {
-      pill.className = 'status-badge';
-      pill.textContent = `✓ 缺口达标 ${Math.round(summary.deficit)} kcal`;
-    } else {
-      pill.className = 'status-badge';
-      pill.textContent = `净缺口 ${Math.round(summary.deficit)} kcal`;
-    }
-
-    // Hero stats
-    document.getElementById('retro-net-deficit-num').textContent = Math.round(summary.deficit).toLocaleString();
-    document.getElementById('retro-total-burn').textContent = `${Math.round(summary.totalBurn)} kcal`;
-    document.getElementById('retro-intake').textContent = `${Math.round(summary.dietIntake)} kcal`;
-    document.getElementById('retro-target-deficit').textContent = `${this.profile.targetDeficitKcal} kcal`;
-
-    // Draw animated ring gauge
-    ChartEngine.drawRetrospectiveRing('retrospective-ring-canvas', summary.deficit, this.profile.targetDeficitKcal);
-
-    // Colored Card 1: 🥗 饮食营养全景
-    document.getElementById('retro-diet-total-cal').textContent = `${Math.round(summary.dietIntake)} kcal`;
-    document.getElementById('retro-macro-p').textContent = `${Math.round(summary.totalProtein)}/${this.profile.targetProteinG}g`;
-    document.getElementById('retro-macro-p-bar').style.width = `${Math.min((summary.totalProtein / this.profile.targetProteinG) * 100, 100)}%`;
-
-    document.getElementById('retro-macro-c').textContent = `${Math.round(summary.totalCarbs)}/${this.profile.targetCarbsG}g`;
-    document.getElementById('retro-macro-c-bar').style.width = `${Math.min((summary.totalCarbs / this.profile.targetCarbsG) * 100, 100)}%`;
-
-    document.getElementById('retro-macro-f').textContent = `${Math.round(summary.totalFat)}/${this.profile.targetFatG}g`;
-    document.getElementById('retro-macro-f-bar').style.width = `${Math.min((summary.totalFat / this.profile.targetFatG) * 100, 100)}%`;
-
-    const dayDiet = this.diet.filter(d => d.date === dateStr);
-    const dietContainer = document.getElementById('retro-diet-items-list');
-    if (dayDiet.length === 0) {
-      dietContainer.innerHTML = `<div style="font-size:0.7rem;color:var(--text-muted);text-align:center;padding:8px 0;">该日暂无饮食记录</div>`;
-    } else {
-      dietContainer.innerHTML = dayDiet.map(d => `
-        <div class="retro-item-pill">
-          <div style="display:flex;align-items:center;gap:6px;">
-            <span class="tag-badge tag-orange">${d.mealType}</span>
-            <span style="font-weight:600;">${d.foodSummary}</span>
-          </div>
-          <span style="color:var(--accent-orange);font-weight:700;">${d.calories} kcal</span>
-        </div>
-      `).join('');
-    }
-
-    // Colored Card 2: 🏋️ 训练与加片全景
-    document.getElementById('retro-workout-vol').textContent = `${summary.totalVolume.toLocaleString()} kg 吨位`;
-    document.getElementById('retro-workout-sets').textContent = `${summary.totalSets} 组`;
-    document.getElementById('retro-workout-burn').textContent = `+${summary.workoutBurn} kcal`;
-
-    const dayWorkouts = this.workouts.filter(w => w.date === dateStr);
-    const workoutContainer = document.getElementById('retro-workout-items-list');
-    const advices = WorkoutEngine.generateOverloadAdvices(this.workouts);
-
-    if (dayWorkouts.length === 0) {
-      workoutContainer.innerHTML = `<div style="font-size:0.7rem;color:var(--text-muted);text-align:center;padding:8px 0;">该日暂无力量训练记录</div>`;
-    } else {
-      workoutContainer.innerHTML = dayWorkouts.map(w => {
-        const matchedAdvice = w.durationMin ? null : advices.find(a => a.exerciseName === w.exerciseName);
-        let adviceHtml = '';
-        if (matchedAdvice && matchedAdvice.status === 'READY_TO_ADD_PLATE') {
-          adviceHtml = `<div style="font-size:0.65rem;color:var(--accent-cyan);margin-top:2px;">⚡ 建议下次加片至 ${matchedAdvice.targetWeightKg}kg</div>`;
-        }
-
-        return `
-          <div class="retro-item-pill" style="flex-direction:column;align-items:stretch;gap:4px;">
-            <div style="display:flex;justify-content:space-between;align-items:center;">
-              <div style="display:flex;align-items:center;gap:6px;">
-                <span class="tag-badge tag-cyan">${w.muscleGroup}</span>
-                <span style="font-weight:600;">${w.exerciseName}</span>
-              </div>
-              <span style="color:var(--accent-cyan);font-weight:700;">
-                ${w.weightKg > 0 ? `${w.weightKg}kg × ` : '自重 × '}${w.sets}组 × ${w.reps}次
-              </span>
-            </div>
-            ${adviceHtml}
-          </div>
-        `;
-      }).join('');
-    }
-
-    const modal = document.getElementById('modal-day-retrospective');
-    if (modal) {
-      modal.classList.remove('hidden');
-    }
-  }
-
-  async startRecordingProcess(isHold = false) {
-    const textarea = document.getElementById('voice-text-input');
-    const baseText = textarea ? textarea.value.trim() : '';
-
-    this.updateMicUi(true, isHold);
-    document.getElementById('voice-audio-preview').style.display = 'none';
-
-    const started = await SpeechModule.start({
-      isHold,
-      onResult: (text, isFinal) => {
-        if (textarea && text) {
-          textarea.value = baseText ? `${baseText}，${text}` : text;
-        }
-      },
-      onVolumeChange: (volume) => {
-        this.updateWaveformBars(volume);
-      },
-      onTimerTick: (formattedTime) => {
-        const timerBadge = document.getElementById('mic-timer-badge');
-        if (timerBadge) {
-          timerBadge.style.display = 'inline-block';
-          timerBadge.textContent = formattedTime;
-        }
-      },
-      onTranscribingState: (isTranscribing) => {
-        const transcribingBanner = document.getElementById('voice-transcribing-banner');
-        const micBtn = document.getElementById('btn-toggle-mic');
-        const submitBtn = document.getElementById('btn-submit-voice-parse');
-        const statusLabel = document.getElementById('mic-status-label');
-        const textarea = document.getElementById('voice-text-input');
-
-        if (isTranscribing) {
-          transcribingBanner?.classList.remove('hidden');
-          micBtn?.classList.add('transcribing');
-          if (statusLabel) statusLabel.innerHTML = '<span style="color:var(--accent-cyan);">⚡ 正在极速转译语音中...</span>';
-          if (submitBtn) {
-            submitBtn.disabled = true;
-            submitBtn.innerHTML = '⏳ 正在转译语音...';
-          }
-          if (textarea && !textarea.value) {
-            textarea.placeholder = '⚡ 正在转译您的语音内容...';
-          }
-        } else {
-          transcribingBanner?.classList.add('hidden');
-          micBtn?.classList.remove('transcribing');
-          if (statusLabel) statusLabel.textContent = '按住麦克风说话，或点击开始录音';
-          if (submitBtn) {
-            submitBtn.disabled = false;
-            submitBtn.innerHTML = '🤖 AI 智能解析并提取';
-          }
-          if (textarea) {
-            textarea.placeholder = '说出或输入内容... (支持搜狗/微信输入法语音键直接打字)';
-          }
-        }
-      },
-      onEnd: (result) => {
-        this.updateMicUi(false);
-        this.updateWaveformBars(0);
-        const timerBadge = document.getElementById('mic-timer-badge');
-        if (timerBadge) timerBadge.style.display = 'none';
-
-        if (result && !result.isCanceled && result.audioUrl) {
-          this.currentAudioUrl = result.audioUrl;
-          const previewBar = document.getElementById('voice-audio-preview');
-          if (previewBar) {
-            previewBar.style.display = 'flex';
-          }
-          if (result.text && textarea) {
-            textarea.value = result.text;
-          }
-        }
-      },
-      onError: (errType) => {
-        this.updateMicUi(false);
-        this.updateWaveformBars(0);
-        if (errType === 'PERMISSION_DENIED') {
-          this.showToast('⚠️ 请允许麦克风录音权限');
-        } else if (errType === 'TOO_SHORT') {
-          this.showToast('说话时间太短');
-        }
-      }
-    });
-
-    if (!started) {
-      this.updateMicUi(false);
-    }
-  }
-
-  toggleAudioPreview() {
-    if (!this.currentAudioUrl) return;
-    if (this.audioPlayer) {
-      this.audioPlayer.pause();
-      this.audioPlayer = null;
-      document.getElementById('btn-play-audio-preview').textContent = '▶';
-      return;
-    }
-
-    const audio = new Audio(this.currentAudioUrl);
-    this.audioPlayer = audio;
-    document.getElementById('btn-play-audio-preview').textContent = '⏸';
-
-    audio.onended = () => {
-      this.audioPlayer = null;
-      document.getElementById('btn-play-audio-preview').textContent = '▶';
-    };
-
-    audio.onerror = () => {
-      this.audioPlayer = null;
-      document.getElementById('btn-play-audio-preview').textContent = '▶';
-    };
-
-    audio.play();
-  }
-
-  updateWaveformBars(volume) {
-    const bars = document.querySelectorAll('.waveform-bar');
-    if (!bars || bars.length === 0) return;
-
-    bars.forEach((bar, idx) => {
-      const mult = [0.5, 0.8, 1.3, 1.6, 1.3, 0.8, 0.5][idx] || 1.0;
-      const height = Math.max(3, Math.min(22, Math.round(volume * 22 * mult)));
-      bar.style.height = `${height}px`;
-      bar.classList.toggle('active', volume > 0.06);
-    });
-  }
-
-  updateMicUi(isRec, isHold = false) {
-    const btn = document.getElementById('btn-toggle-mic');
-    const ring = document.getElementById('mic-pulse-ring');
-    const label = document.getElementById('mic-status-label');
-
-    btn?.classList.toggle('recording', isRec);
-    ring?.classList.toggle('active', isRec);
-
-    if (label) {
-      if (isRec) {
-        label.innerHTML = isHold ? '正在录音... 松开手指识别' : '🎙️ 正在录音... 再次点击停止';
-      } else {
-        label.textContent = '按住麦克风说话，或点击开始录音';
-      }
-    }
-  }
-
-  resetAllDataToZero() {
-    this.workouts = [];
-    this.diet = [];
-    this.saveData();
-    document.getElementById('modal-reset-confirm').classList.add('hidden');
+  switchView(view, fromBack) {
+    const prev = this.view;
+    if (window.QuickLog && prev !== view) window.QuickLog.hideSnack();
+    this.view = view;
+    document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + view));
+    document.querySelectorAll('.dock-tab').forEach(b => b.classList.toggle('active', b.dataset.view === view));
+    const isToday = view === 'today';
+    document.getElementById('date-switch').classList.toggle('hidden', !isToday);
+    const title = document.getElementById('view-title');
+    title.classList.toggle('hidden', isToday);
+    title.textContent = view === 'trend' ? '趋势' : view === 'settings' ? '设置' : '';
+    if (!fromBack && prev === 'today' && view !== 'today') history.pushState({ v: view }, '');
+    else if (!fromBack && prev !== 'today' && view === 'today' && history.state && history.state.v) history.back();
+    window.scrollTo(0, 0);
     this.render();
-    this.showToast('🗑️ 已彻底清空历史记录，恢复 0 状态');
-    this.switchTab('diet');
   }
 
-  switchTab(tab) {
-    this.currentTab = tab;
-    document.querySelectorAll('.screen-view').forEach(s => s.classList.remove('active'));
-    const target = document.getElementById(`screen-${tab}`);
-    if (target) target.classList.add('active');
-
-    document.querySelectorAll('.nav-item').forEach(item => {
-      item.classList.toggle('active', item.dataset.tab === tab);
-    });
-
+  shiftDate(delta) {
+    const next = shiftDateString(this.selectedDate, delta);
+    if (next > getTodayDateString()) return;
+    this.selectedDate = next;
     this.render();
-    if (typeof window !== 'undefined' && typeof window.scrollTo === 'function') {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
   }
 
+  // ======================= 渲染 =======================
   render() {
-    this.updateHeaderDate();
-
-    if (this.currentTab === 'diet') {
-      this.renderDietScreen();
-    } else if (this.currentTab === 'workout') {
-      this.renderWorkoutScreen();
-    } else if (this.currentTab === 'history') {
-      this.renderHistoryScreen();
-    } else if (this.currentTab === 'profile') {
-      this.renderProfileForm();
-    }
+    this.lastToday = getTodayDateString();
+    if (this.view === 'today') this.renderToday();
+    else if (this.view === 'trend') this.renderTrend();
+    else if (this.view === 'settings') this.renderSettings();
   }
 
-  updateHeaderDate() {
-    const d = new Date();
-    const months = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
-    const el = document.getElementById('header-date-indicator');
-    if (el) {
-      el.textContent = `今天 · ${months[d.getMonth()]}${d.getDate()}日`;
-    }
+  dateLabel(dateStr) {
+    const today = getTodayDateString();
+    const d = new Date(dateStr + 'T00:00:00');
+    const md = `${d.getMonth() + 1}月${d.getDate()}日`;
+    if (dateStr === today) return '今天 · ' + md;
+    if (dateStr === shiftDateString(today, -1)) return '昨天 · ' + md;
+    return `${md} 周${WEEKDAYS[d.getDay()]}`;
   }
 
-  renderDietScreen() {
-    const summary = this.getDaySummary(this.selectedDate);
+  renderToday() {
+    const $ = (id) => document.getElementById(id);
+    const date = this.selectedDate;
+    const isToday = date === getTodayDateString();
+    const s = this.getDaySummary(date);
 
-    // Deficit Numbers
-    document.getElementById('diet-net-deficit-num').textContent = Math.round(summary.deficit).toLocaleString();
-    document.getElementById('diet-total-burn-num').textContent = `${Math.round(summary.totalBurn)} kcal`;
-    document.getElementById('diet-intake-num').textContent = `${Math.round(summary.dietIntake)} kcal`;
+    $('date-label').textContent = this.dateLabel(date);
+    $('date-next').disabled = isToday;
 
-    // Remaining intake allowance
-    const remainingKcal = Math.round(summary.totalBurn - summary.targetDeficit - summary.dietIntake);
-    const remEl = document.getElementById('diet-remaining-num');
-    if (remEl) {
-      remEl.textContent = `${Math.max(0, remainingKcal)} kcal`;
-    }
+    const over = s.remaining < 0;
+    $('hero').classList.toggle('over', over);
+    $('hero-label').textContent = over ? (isToday ? '今天已经超出' : '这天超出了') : (isToday ? '今天还能吃' : '这天还剩');
+    $('hero-num').textContent = fmt(Math.abs(s.remaining));
+    const pct = s.budget > 0 ? Math.min(100, (s.intake / s.budget) * 100) : 100;
+    $('hero-meter').style.width = pct + '%';
+    $('st-intake').textContent = fmt(s.intake);
+    $('st-burn').textContent = s.workoutBurn ? '+' + fmt(s.workoutBurn) : '0';
+    $('st-protein').textContent = `${fmt(s.protein)} / ${fmt(this.profile.targetProteinG)}g`;
 
-    // Status Badge
-    const pill = document.getElementById('diet-status-pill');
-    const isTargetMet = summary.deficit >= summary.targetDeficit && summary.targetDeficit > 0;
-    const isDeficit = summary.deficit >= 0;
+    $('setup-hint').classList.toggle('hidden', !!this.profile.customized);
 
-    if (!isDeficit) {
-      pill.className = 'status-badge surplus';
-      pill.textContent = `热量盈余 +${Math.round(Math.abs(summary.deficit))} kcal`;
-    } else if (isTargetMet) {
-      pill.className = 'status-badge';
-      pill.textContent = `✓ 缺口达标 ${Math.round(summary.deficit)} kcal`;
-    } else {
-      const pct = summary.targetDeficit > 0 ? Math.round((summary.deficit / summary.targetDeficit) * 100) : 0;
-      pill.className = 'status-badge';
-      pill.textContent = `缺口进行中 ${pct}%`;
-    }
+    // 时间线：整理中的 + 训练 + 饮食，按时间倒序
+    const rows = [];
+    this.pending.filter(p => p.date === date).forEach(p => rows.push({ kind: 'pending', ts: p.ts, rec: p }));
+    this.workouts.filter(w => w.date === date).forEach(w => rows.push({ kind: 'workout', ts: recordTs(w), rec: w }));
+    this.diet.filter(d => d.date === date).forEach(d => rows.push({ kind: 'meal', ts: recordTs(d), rec: d }));
+    rows.sort((a, b) => (a.kind === 'pending' ? -1 : 0) - (b.kind === 'pending' ? -1 : 0) || b.ts - a.ts);
 
-    // Macros
-    document.getElementById('macro-p-txt').textContent = `${Math.round(summary.totalProtein)}/${this.profile.targetProteinG}g`;
-    document.getElementById('macro-p-bar').style.width = `${Math.min((summary.totalProtein / this.profile.targetProteinG) * 100, 100)}%`;
-
-    document.getElementById('macro-c-txt').textContent = `${Math.round(summary.totalCarbs)}/${this.profile.targetCarbsG}g`;
-    document.getElementById('macro-c-bar').style.width = `${Math.min((summary.totalCarbs / this.profile.targetCarbsG) * 100, 100)}%`;
-
-    document.getElementById('macro-f-txt').textContent = `${Math.round(summary.totalFat)}/${this.profile.targetFatG}g`;
-    document.getElementById('macro-f-bar').style.width = `${Math.min((summary.totalFat / this.profile.targetFatG) * 100, 100)}%`;
-
-    // Render Meals List
-    const dayDiet = this.diet.filter(d => d.date === this.selectedDate);
-    const container = document.getElementById('diet-items-list');
-    document.getElementById('diet-list-title').textContent = `今日饮食 (${dayDiet.length})`;
-
-    if (dayDiet.length === 0) {
-      container.innerHTML = `
-        <div class="empty-state">
-          🥗 今日暂无饮食记录<br>
-          点击上方【🎙️ 口喷记饮食】说出吃了什么，即刻计算热量
-        </div>
-      `;
+    $('list-head').textContent = rows.length ? `记录 · ${rows.filter(r => r.kind !== 'pending').length} 条` : '记录';
+    const tl = $('timeline');
+    if (!rows.length) {
+      tl.innerHTML = isToday
+        ? `<div class="empty">按住下面的按钮，把今天<b>练了什么、吃了什么</b>一口气说完<br>比如「卧推80公斤4组8个，中午吃了黄焖鸡米饭」<br>松手就记好了，不用等</div>`
+        : `<div class="empty">这天没有记录</div>`;
       return;
     }
-
-    container.innerHTML = dayDiet.map(d => `
-      <div class="record-card">
-        <div class="record-row-top">
-          <div class="record-name-group">
-            <span class="tag-badge tag-orange">${d.mealType}</span>
-            <span class="record-name">${d.foodSummary}</span>
-          </div>
-          <button class="btn-delete" onclick="window.app.deleteDiet('${d.id}')" title="删除记录">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-          </button>
-        </div>
-        <div class="record-row-bottom">
-          <span class="record-stat-highlight" style="color:var(--accent-orange);">${d.calories} kcal</span>
-          <span>蛋白 ${d.proteinG || 0}g · 碳水 ${d.carbsG || 0}g · 脂肪 ${d.fatG || 0}g</span>
-        </div>
-      </div>
-    `).join('');
+    tl.innerHTML = rows.map(r => this.renderRow(r)).join('');
   }
 
-  // ==========================================================================
-  // Routine Cards & Cyclical To-Do System (R2)
-  // ==========================================================================
-  getDefaultRoutines() {
-    return [
-      {
-        id: "default_chest",
-        name: "胸部推类经典分化",
-        muscleGroup: "胸部",
-        icon: "💥",
-        isCustom: false,
-        exercises: [
-          { name: "杠铃卧推", muscleGroup: "胸部", weightKg: 80, sets: 4, reps: 8 },
-          { name: "哑铃上斜卧推", muscleGroup: "胸部", weightKg: 24, sets: 4, reps: 10 },
-          { name: "双杠臂屈伸", muscleGroup: "胸部", weightKg: 0, sets: 3, reps: 10 },
-          { name: "绳索夹胸", muscleGroup: "胸部", weightKg: 15, sets: 4, reps: 12 }
-        ]
-      },
-      {
-        id: "default_back",
-        name: "背部拉类经典分化",
-        muscleGroup: "背部",
-        icon: "🦅",
-        isCustom: false,
-        exercises: [
-          { name: "传统硬拉", muscleGroup: "背部/臀腿", weightKg: 100, sets: 3, reps: 6 },
-          { name: "高位下拉", muscleGroup: "背部", weightKg: 50, sets: 4, reps: 10 },
-          { name: "杠铃划船", muscleGroup: "背部", weightKg: 60, sets: 4, reps: 8 },
-          { name: "引体向上", muscleGroup: "背部", weightKg: 0, sets: 3, reps: 8 }
-        ]
-      },
-      {
-        id: "default_legs",
-        name: "腿部力量强化分化",
-        muscleGroup: "腿部",
-        icon: "🦵",
-        isCustom: false,
-        exercises: [
-          { name: "杠铃深蹲", muscleGroup: "腿部", weightKg: 100, sets: 4, reps: 6 },
-          { name: "倒蹬", muscleGroup: "腿部", weightKg: 160, sets: 3, reps: 10 },
-          { name: "罗马尼亚硬拉", muscleGroup: "腿部", weightKg: 70, sets: 3, reps: 8 },
-          { name: "腿屈伸", muscleGroup: "腿部", weightKg: 40, sets: 3, reps: 12 }
-        ]
-      }
-    ];
-  }
-
-  saveRoutines() {
-    localStorage.setItem('fit_custom_routines', JSON.stringify(this.customRoutines));
-  }
-
-  saveActiveRoutineTodo() {
-    if (this.activeRoutineTodo) {
-      localStorage.setItem('fit_active_routine_todo', JSON.stringify(this.activeRoutineTodo));
-    } else {
-      localStorage.removeItem('fit_active_routine_todo');
-    }
-  }
-
-  getSmartHistoryRecommendations() {
-    if (!this.workouts || this.workouts.length === 0) {
-      return [];
-    }
-
-    const muscleExerciseMap = {};
-
-    this.workouts.forEach(w => {
-      const muscle = w.muscleGroup || '胸部';
-      if (!muscleExerciseMap[muscle]) muscleExerciseMap[muscle] = {};
-      muscleExerciseMap[muscle][w.exerciseName] = (muscleExerciseMap[muscle][w.exerciseName] || 0) + 1;
-    });
-
-    const recommendations = [];
-    const muscleGroups = Object.keys(muscleExerciseMap).sort((a, b) => {
-      const countA = Object.values(muscleExerciseMap[a]).reduce((s, v) => s + v, 0);
-      const countB = Object.values(muscleExerciseMap[b]).reduce((s, v) => s + v, 0);
-      return countB - countA;
-    });
-
-    muscleGroups.forEach((muscle, idx) => {
-      const exercisesObj = muscleExerciseMap[muscle];
-      const sortedExNames = Object.keys(exercisesObj).sort((a, b) => exercisesObj[b] - exercisesObj[a]);
-      if (sortedExNames.length >= 2) {
-        const topExercises = sortedExNames.slice(0, 4).map(name => {
-          const lastLog = this.workouts.find(w => w.exerciseName === name);
-          return {
-            name: name,
-            muscleGroup: muscle,
-            weightKg: lastLog ? lastLog.weightKg : 60,
-            sets: lastLog ? lastLog.sets : 4,
-            reps: lastLog ? lastLog.reps : 8
-          };
-        });
-
-        recommendations.push({
-          id: `rec_${muscle}_${idx}`,
-          name: `${muscle}常用训练循环`,
-          muscleGroup: muscle,
-          icon: '🔥',
-          isRecommendation: true,
-          badgeText: '🔥 历史常用',
-          exercises: topExercises
-        });
-      }
-    });
-
-    return recommendations.slice(0, 3);
-  }
-
-  getAllRoutines() {
-    const custom = Array.isArray(this.customRoutines) ? this.customRoutines : [];
-    const recommendations = this.getSmartHistoryRecommendations();
-    
-    if (custom.length === 0 && recommendations.length === 0) {
-      return this.getDefaultRoutines();
-    }
-    
-    return [...custom, ...recommendations];
-  }
-
-  renderRoutineSection() {
-    const scrollContainer = document.getElementById('routine-cards-scroll');
-    if (!scrollContainer) return;
-
-    const routines = this.getAllRoutines();
-    const activeRoutineId = this.activeRoutineTodo ? this.activeRoutineTodo.routineId : null;
-
-    let cardsHtml = routines.map(r => {
-      const isActive = activeRoutineId === r.id;
-      const badgeClass = r.isRecommendation ? 'recommendation' : (r.isCustom ? 'custom' : '');
-      const badgeLabel = r.badgeText || (r.isCustom ? '🌟 自定义' : '⚡ 推荐分化');
-      const exNames = r.exercises.map(e => e.name).join(' · ');
-
-      let statusText = '未激活';
-      if (isActive && this.activeRoutineTodo) {
-        const done = this.activeRoutineTodo.items.filter(i => i.completed).length;
-        const total = this.activeRoutineTodo.items.length;
-        statusText = done === total ? `✓ 全部完成 (${done}/${total})` : `进行中 (${done}/${total})`;
-      }
-
+  renderRow(r) {
+    const x = r.rec;
+    if (r.kind === 'pending') {
+      const failed = x.status === 'failed';
       return `
-        <div class="routine-card ${isActive ? 'active' : ''}" onclick="window.app.selectRoutine('${r.id}')">
-          <span class="routine-card-badge ${badgeClass}">${badgeLabel}</span>
-          <div class="routine-card-title">${r.name}</div>
-          <div class="routine-card-meta">${exNames}</div>
-          <div class="routine-card-footer">
-            <span class="routine-card-status">${statusText}</span>
-            ${r.isCustom ? `<button class="routine-card-btn-edit" onclick="event.stopPropagation(); window.app.openRoutineEditor('${r.id}')" title="编辑计划">✏️</button>` : ''}
+        <div class="item pending ${failed ? 'failed' : ''}">
+          <div class="item-icon">${failed ? '!' : '<div class="spinner"></div>'}</div>
+          <div class="item-main">
+            <div class="item-title">${failed ? esc(x.error || '没整理出来') : '正在整理…'}</div>
+            <div class="item-sub">「${esc(x.text)}」</div>
           </div>
+          ${failed ? `<div class="pending-actions">
+            <button class="chip" data-act="drop" data-id="${esc(x.id)}" type="button">删除</button>
+            <button class="chip" data-act="edit-text" data-id="${esc(x.id)}" type="button">改字</button>
+            <button class="chip chip-primary" data-act="retry" data-id="${esc(x.id)}" type="button">重试</button>
+          </div>` : ''}
+        </div>`;
+    }
+    if (r.kind === 'meal') {
+      const macro = [x.proteinG ? `蛋白 ${round1(x.proteinG)}g` : '', x.carbsG ? `碳水 ${round1(x.carbsG)}g` : '', x.fatG ? `脂肪 ${round1(x.fatG)}g` : ''].filter(Boolean).join(' · ');
+      return `
+        <button class="item" data-kind="meal" data-id="${esc(x.id)}" type="button">
+          <div class="item-icon">🍽️</div>
+          <div class="item-main">
+            <div class="item-title"><span class="tag tag-meal">${esc((x.mealType || '').replace('/补剂', ''))}</span>${esc(x.foodSummary)}</div>
+            <div class="item-sub">${esc(hhmm(r.ts))}${macro ? ' · ' + macro : ''}</div>
+          </div>
+          <div class="item-value">${fmt(x.calories)}<small>kcal</small></div>
+        </button>`;
+    }
+    // workout
+    let value;
+    const parts = [];
+    if (r.ts) parts.push(esc(hhmm(r.ts)));
+    if (x.durationMin) {
+      value = `${fmt(x.durationMin)}<small>分钟</small>`;
+      parts.push(`消耗约 ${fmt(x.burnedCalories)} kcal`);
+    } else {
+      value = `${x.weightKg > 0 ? round1(x.weightKg) + 'kg' : '自重'}<small>${fmt(x.sets)} 组 × ${fmt(x.reps)} 次</small>`;
+      if (x.muscleGroup) parts.push(esc(x.muscleGroup));
+      const p = this.exerciseProgress(x.exerciseName);
+      if (x.notes && /估计/.test(x.notes)) parts.push('有数字是估的，点开改');
+      else if (p && p.isLatest(x.id) && p.next.kind !== 'keep') parts.push(`<span class="up">${esc(p.next.text)}</span>`);
+    }
+    return `
+      <button class="item" data-kind="workout" data-id="${esc(x.id)}" type="button">
+        <div class="item-icon">${x.durationMin ? '🏃' : '🏋️'}</div>
+        <div class="item-main">
+          <div class="item-title"><span class="tag tag-lift">训练</span>${esc(x.exerciseName)}</div>
+          <div class="item-sub">${parts.join(' · ')}</div>
         </div>
-      `;
-    }).join('');
-
-    cardsHtml += `
-      <div class="routine-card-add" onclick="window.app.openRoutineEditor()">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-        <span style="font-size:0.72rem;font-weight:600;">+ 自定义计划</span>
-      </div>
-    `;
-
-    scrollContainer.innerHTML = cardsHtml;
+        <div class="item-value">${value}</div>
+      </button>`;
   }
 
-  selectRoutine(routineId) {
-    const allRoutines = this.getAllRoutines();
-    const routine = allRoutines.find(r => r.id === routineId);
-    if (!routine) return;
+  // ----------------------- 趋势 -----------------------
+  renderTrend() {
+    const $ = (id) => document.getElementById(id);
+    document.querySelectorAll('#trend-range .seg-btn').forEach(b => b.classList.toggle('active', Number(b.dataset.range) === this.trendDays));
 
-    // Cyclical Re-activation: if clicked on already active routine, reset all items to false and reload!
-    if (this.activeRoutineTodo && this.activeRoutineTodo.routineId === routineId) {
-      this.activeRoutineTodo.items.forEach(item => {
-        item.completed = false;
-      });
-      // Restore original sequence
-      this.activeRoutineTodo.items.sort((a, b) => (a.initialIndex || 0) - (b.initialIndex || 0));
-      this.saveActiveRoutineTodo();
-      this.render();
-      this.showToast(`🔄 已重新加载【${routine.name}】训练计划！`);
+    const today = getTodayDateString();
+    const days = [];
+    for (let i = this.trendDays - 1; i >= 0; i--) {
+      const date = shiftDateString(today, -i);
+      const s = this.getDaySummary(date);
+      days.push({ date, summary: s, value: s.hasDiet ? s.deficit : null });
+    }
+    const logged = days.filter(d => d.value !== null);
+    const total = logged.reduce((a, d) => a + d.value, 0);
+    $('tr-avg').textContent = logged.length ? fmt(total / logged.length) : '–';
+    $('tr-fat').textContent = logged.length ? (total / 7700).toFixed(2) : '–';
+    $('tr-days').textContent = days.filter(d => d.summary.hasLogs).length;
+
+    this.drawDeficitChart($('trend-chart'), days);
+    this.renderProgressList($('progress-list'));
+  }
+
+  drawDeficitChart(el, days) {
+    const target = this.profile.targetDeficitKcal || 0;
+    const vals = days.map(d => d.value).filter(v => v !== null);
+    if (!vals.length) {
+      el.innerHTML = `<div class="chart-empty">记几天饮食后，这里会显示每天的热量缺口</div>`;
       return;
     }
-
-    // Activate routine into today's To-Do checklist
-    this.activeRoutineTodo = {
-      routineId: routine.id,
-      routineName: routine.name,
-      muscleGroup: routine.muscleGroup,
-      activatedDate: this.selectedDate,
-      items: routine.exercises.map((ex, idx) => ({
-        id: `todo_${Date.now()}_${idx}_${Math.random().toString(36).substr(2, 4)}`,
-        initialIndex: idx,
-        exerciseName: ex.name,
-        muscleGroup: ex.muscleGroup || routine.muscleGroup,
-        targetWeightKg: ex.weightKg !== undefined ? ex.weightKg : 60,
-        targetSets: ex.sets || 4,
-        targetReps: ex.reps || 8,
-        completed: false
-      }))
+    const W = 340, H = 180, padL = 40, padR = 6, padT = 10, padB = 22;
+    const iw = W - padL - padR, ih = H - padT - padB;
+    let max = Math.max(target, ...vals, 0);
+    let min = Math.min(0, ...vals, target);
+    const niceStep = (range) => {
+      const raw = range / 3;
+      const mag = Math.pow(10, Math.floor(Math.log10(raw || 1)));
+      const n = raw / mag;
+      return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10) * mag;
     };
+    const step = niceStep(max - min || 500);
+    max = Math.ceil(max / step) * step || step;
+    min = Math.floor(min / step) * step;
+    const y = (v) => padT + ((max - v) / (max - min)) * ih;
+    const n = days.length;
+    const slot = iw / n;
+    const gap = n > 14 ? 2 : 6;
+    const bw = Math.max(2, slot - gap);
+    const r = Math.min(4, bw / 2);
 
-    this.saveActiveRoutineTodo();
-    this.render();
-    this.showToast(`📋 已选择【${routine.name}】训练计划！`);
-  }
-
-  renderActiveRoutineTodo() {
-    const container = document.getElementById('routine-todo-container');
-    if (!container || !this.activeRoutineTodo) {
-      container?.classList.add('hidden');
-      return;
+    let grid = '';
+    for (let v = min; v <= max + 0.001; v += step) {
+      grid += `<line class="${v === 0 ? 'zero' : 'grid'}" x1="${padL}" x2="${W - padR}" y1="${y(v)}" y2="${y(v)}"/>`;
+      grid += `<text class="axis-text" x="${padL - 6}" y="${y(v) + 3}" text-anchor="end">${fmt(v)}</text>`;
     }
-
-    container.classList.remove('hidden');
-
-    const doneCount = this.activeRoutineTodo.items.filter(i => i.completed).length;
-    const totalCount = this.activeRoutineTodo.items.length;
-    const allDone = doneCount === totalCount && totalCount > 0;
-
-    const titleEl = document.getElementById('routine-todo-title-text');
-    if (titleEl) titleEl.textContent = `⚡ ${this.activeRoutineTodo.routineName}`;
-
-    const badgeEl = document.getElementById('routine-todo-progress-badge');
-    if (badgeEl) {
-      badgeEl.textContent = allDone ? `🎉 全部完成 (${doneCount}/${totalCount})` : `${doneCount}/${totalCount}`;
-      badgeEl.style.color = allDone ? 'var(--accent-lime)' : 'var(--accent-cyan)';
-    }
-
-    // Sort: uncompleted items on top (in natural plan order), completed items sink to bottom
-    const uncompletedItems = this.activeRoutineTodo.items.filter(i => !i.completed).sort((a, b) => (a.initialIndex || 0) - (b.initialIndex || 0));
-    const completedItems = this.activeRoutineTodo.items.filter(i => i.completed).sort((a, b) => (a.initialIndex || 0) - (b.initialIndex || 0));
-    const sortedDisplayItems = [...uncompletedItems, ...completedItems];
-
-    const listEl = document.getElementById('routine-todo-list');
-    if (listEl) {
-      if (allDone) {
-        listEl.innerHTML = `
-          <div class="todo-completed-banner">
-            <div style="font-size:1.4rem;margin-bottom:4px;">🎉</div>
-            <b style="font-size:0.9rem;color:var(--accent-lime);">本组训练计划已全部完成！</b>
-            <div style="font-size:0.72rem;color:var(--text-muted);margin-top:3px;">所有动作均已打钩并滑至底部置灰。点击上方计划 Card 可随时重新加载开启新循环。</div>
-          </div>
-          ${completedItems.map(item => `
-            <div class="todo-item completed" id="todo-item-${item.id}">
-              <div class="todo-item-left" onclick="window.app.toggleTodoItem('${item.id}')">
-                <div class="todo-checkbox checked">✓</div>
-                <div class="todo-item-info">
-                  <div style="display:flex;align-items:center;gap:6px;">
-                    ${getMuscleGroupBadge(item.muscleGroup)}
-                    <span class="todo-name">${item.exerciseName}</span>
-                  </div>
-                  <span class="todo-specs">${item.targetWeightKg > 0 ? `${item.targetWeightKg}kg × ` : '自重 × '}${item.targetSets}组 × ${item.targetReps}次</span>
-                </div>
-              </div>
-              <span class="todo-done-tag" onclick="window.app.toggleTodoItem('${item.id}')">✓ 已完成</span>
-            </div>
-          `).join('')}
-        `;
-      } else {
-        listEl.innerHTML = sortedDisplayItems.map(item => `
-          <div class="todo-item ${item.completed ? 'completed' : ''}" id="todo-item-${item.id}">
-            <div class="todo-item-left" onclick="window.app.toggleTodoItem('${item.id}')">
-              <div class="todo-checkbox ${item.completed ? 'checked' : ''}">${item.completed ? '✓' : ''}</div>
-              <div class="todo-item-info">
-                <div style="display:flex;align-items:center;gap:6px;">
-                  ${getMuscleGroupBadge(item.muscleGroup)}
-                  <span class="todo-name">${item.exerciseName}</span>
-                </div>
-                <span class="todo-specs">${item.targetWeightKg > 0 ? `${item.targetWeightKg}kg × ` : '自重 × '}${item.targetSets}组 × ${item.targetReps}次</span>
-              </div>
-            </div>
-            ${item.completed ? `
-              <span class="todo-done-tag" onclick="window.app.toggleTodoItem('${item.id}')">✓ 已完成</span>
-            ` : `
-              <button class="btn-todo-log" onclick="window.app.logTodoItemDirectly('${item.id}')">打卡</button>
-            `}
-          </div>
-        `).join('');
+    const y0 = y(0);
+    let bars = '';
+    let labels = '';
+    days.forEach((d, i) => {
+      const x = padL + i * slot + (slot - bw) / 2;
+      const md = d.date.slice(5).replace('-', '/').replace(/^0/, '');
+      const showLabel = n <= 7 || i % 5 === (n - 1) % 5;
+      if (showLabel) labels += `<text class="axis-text" x="${x + bw / 2}" y="${H - 6}" text-anchor="middle">${n <= 7 ? '周' + WEEKDAYS[new Date(d.date + 'T00:00:00').getDay()] : md}</text>`;
+      if (d.value !== null && d.value !== 0) {
+        const pos = d.value > 0;
+        const top = pos ? y(d.value) : y0;
+        const h = Math.max(1, Math.abs(y(d.value) - y0));
+        // 数据端圆角、基线端直角
+        const path = pos
+          ? `M${x},${y0} V${top + r} Q${x},${top} ${x + r},${top} H${x + bw - r} Q${x + bw},${top} ${x + bw},${top + r} V${y0} Z`
+          : `M${x},${y0} V${y0 + h - r} Q${x},${y0 + h} ${x + r},${y0 + h} H${x + bw - r} Q${x + bw},${y0 + h} ${x + bw},${y0 + h - r} V${y0} Z`;
+        bars += `<path class="${pos ? 'bar-pos' : 'bar-neg'}" d="${path}"/>`;
       }
-    }
-  }
-
-  toggleTodoItem(itemId) {
-    if (!this.activeRoutineTodo || !this.activeRoutineTodo.items) return;
-    const item = this.activeRoutineTodo.items.find(i => i.id === itemId);
-    if (!item) return;
-
-    item.completed = !item.completed;
-    this.saveActiveRoutineTodo();
-    this.render();
-
-    const doneCount = this.activeRoutineTodo.items.filter(i => i.completed).length;
-    const totalCount = this.activeRoutineTodo.items.length;
-
-    if (item.completed) {
-      if (doneCount === totalCount && totalCount > 0) {
-        HapticEngine.prRecord();
-        ConfettiEngine.fire({ count: 75 });
-        this.showToast(`🎉 恭喜！本组【${this.activeRoutineTodo.routineName}】全部动作已顺利完成！`);
-      } else {
-        HapticEngine.setComplete();
-        this.showToast(`✓ 【${item.exerciseName}】已打钩完成并滑至底部 (剩余 ${totalCount - doneCount} 项)`);
-      }
-    } else {
-      HapticEngine.tap();
-      this.showToast(`已恢复【${item.exerciseName}】为待完成`);
-    }
-  }
-
-  logTodoItemDirectly(itemId) {
-    if (!this.activeRoutineTodo || !this.activeRoutineTodo.items) return;
-    const item = this.activeRoutineTodo.items.find(i => i.id === itemId);
-    if (!item) return;
-
-    const isCompound = item.exerciseName.includes("卧推") || item.exerciseName.includes("深蹲") || item.exerciseName.includes("硬拉") || item.exerciseName.includes("划船") || item.exerciseName.includes("倒蹬");
-    const burn = isCompound ? Math.round(item.targetSets * 28 + (item.targetWeightKg * 0.45)) : Math.round(item.targetSets * 18 + (item.targetWeightKg * 0.2));
-
-    this.workouts.unshift({
-      id: "w_" + Date.now() + "_" + Math.random().toString(36).substr(2, 4),
-      date: this.selectedDate,
-      exerciseName: item.exerciseName,
-      muscleGroup: item.muscleGroup,
-      sets: item.targetSets,
-      reps: item.targetReps,
-      weightKg: item.targetWeightKg,
-      rpe: 8.0,
-      burnedCalories: burn,
-      notes: `清单打卡: ${this.activeRoutineTodo.routineName}`
+      const tip = d.value === null ? '没记饮食' : (d.value >= 0 ? `缺口 ${fmt(d.value)} kcal` : `超出 ${fmt(-d.value)} kcal`);
+      bars += `<rect class="bar-hit" data-date="${d.date}" data-tip="${esc(md + ' · ' + tip)}" x="${padL + i * slot}" y="${padT}" width="${slot}" height="${ih}"><title>${esc(md + ' ' + tip)}</title></rect>`;
     });
+    const targetLine = target > 0 ? `<line class="target" x1="${padL}" x2="${W - padR}" y1="${y(target)}" y2="${y(target)}"/>` : '';
 
-    item.completed = true;
-    this.saveData();
-    this.saveActiveRoutineTodo();
-    this.render();
+    el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="每天热量缺口柱状图">${grid}${targetLine}${bars}${labels}</svg><div class="chart-tip hidden"></div>`;
 
-    const doneCount = this.activeRoutineTodo.items.filter(i => i.completed).length;
-    const totalCount = this.activeRoutineTodo.items.length;
-    if (doneCount === totalCount && totalCount > 0) {
-      HapticEngine.prRecord();
-      ConfettiEngine.fire({ count: 80 });
-      this.showToast(`🎉 太棒了！【${item.exerciseName}】已记录，整组训练全部达成！`);
-    } else {
-      HapticEngine.setComplete();
-      this.showToast(`✓ 已打卡并记录【${item.exerciseName}】！`);
-    }
-  }
-
-  resetActiveRoutineCycle() {
-    if (!this.activeRoutineTodo || !this.activeRoutineTodo.items) return;
-    HapticEngine.tap();
-    this.activeRoutineTodo.items.forEach(item => {
-      item.completed = false;
-    });
-    this.activeRoutineTodo.items.sort((a, b) => (a.initialIndex || 0) - (b.initialIndex || 0));
-    this.saveActiveRoutineTodo();
-    this.render();
-    this.showToast(`🔄 已重置【${this.activeRoutineTodo.routineName}】！可开始新一轮打卡`);
-  }
-
-  closeActiveRoutine() {
-    this.activeRoutineTodo = null;
-    localStorage.removeItem('fit_active_routine_todo');
-    this.render();
-    this.showToast('已关闭今日训练清单');
-  }
-
-  getActiveTodos() {
-    if (!this.activeRoutineTodo || !this.activeRoutineTodo.items) return [];
-    return this.activeRoutineTodo.items.map(t => ({
-      name: t.exerciseName,
-      exerciseName: t.exerciseName,
-      muscleGroup: t.muscleGroup,
-      weightKg: t.targetWeightKg,
-      sets: t.targetSets,
-      reps: t.targetReps,
-      completed: t.completed
-    }));
-  }
-
-  openRoutineEditor(routineId = null) {
-    this.editingRoutineId = routineId;
-    const modal = document.getElementById('modal-routine-editor');
-    const titleEl = document.getElementById('routine-editor-title');
-    const nameInput = document.getElementById('routine-name-input');
-    const deleteBtn = document.getElementById('btn-delete-routine');
-
-    if (routineId) {
-      const r = this.customRoutines.find(item => item.id === routineId);
-      if (r) {
-        titleEl.textContent = '✏️ 编辑训练计划';
-        nameInput.value = r.name;
-        deleteBtn.style.display = 'inline-block';
-        this.editorExercisesBuffer = JSON.parse(JSON.stringify(r.exercises || []));
-      }
-    } else {
-      titleEl.textContent = '✨ 新建训练计划';
-      nameInput.value = '';
-      deleteBtn.style.display = 'none';
-      this.editorExercisesBuffer = [];
-    }
-
-    this.renderEditorExercisesList();
-    modal.classList.remove('hidden');
-  }
-
-  closeRoutineEditor() {
-    document.getElementById('modal-routine-editor').classList.add('hidden');
-    this.editingRoutineId = null;
-    this.editorExercisesBuffer = [];
-  }
-
-  addExerciseToEditor() {
-    const nameInput = document.getElementById('routine-ex-name-input');
-    const muscleSelect = document.getElementById('routine-ex-muscle-select');
-    const weightInput = document.getElementById('routine-ex-weight-input');
-    const setsInput = document.getElementById('routine-ex-sets-input');
-    const repsInput = document.getElementById('routine-ex-reps-input');
-
-    const name = nameInput.value.trim();
-    if (!name) {
-      this.showToast('请输入动作名称');
-      return;
-    }
-
-    const muscle = muscleSelect.value;
-    const weight = parseFloat(weightInput.value) || 0;
-    const sets = parseInt(setsInput.value, 10) || 4;
-    const reps = parseInt(repsInput.value, 10) || 8;
-
-    this.editorExercisesBuffer.push({
-      name,
-      muscleGroup: muscle,
-      weightKg: weight,
-      sets,
-      reps
-    });
-
-    nameInput.value = '';
-    weightInput.value = '';
-    setsInput.value = '4';
-    repsInput.value = '8';
-
-    this.renderEditorExercisesList();
-  }
-
-  removeExerciseFromEditor(index) {
-    this.editorExercisesBuffer.splice(index, 1);
-    this.renderEditorExercisesList();
-  }
-
-  renderEditorExercisesList() {
-    const listEl = document.getElementById('routine-editor-exercises-list');
-    if (!listEl) return;
-
-    if (this.editorExercisesBuffer.length === 0) {
-      listEl.innerHTML = `<div style="font-size:0.75rem;color:var(--text-muted);text-align:center;padding:12px 0;">暂未添加动作，请在下方输入动作并点击【+ 加入】</div>`;
-      return;
-    }
-
-    listEl.innerHTML = this.editorExercisesBuffer.map((ex, idx) => `
-      <div style="display:flex;align-items:center;justify-content:space-between;background:var(--bg-subtle);padding:8px 10px;border-radius:var(--radius-xs);font-size:0.75rem;">
-        <div>
-          <b>${idx + 1}. ${ex.name}</b>
-          <span style="color:var(--accent-cyan);margin-left:6px;">${ex.weightKg > 0 ? `${ex.weightKg}kg` : '自重'} × ${ex.sets}组 × ${ex.reps}次</span>
-        </div>
-        <button onclick="window.app.removeExerciseFromEditor(${idx})" style="background:transparent;border:none;color:var(--accent-red);cursor:pointer;font-size:0.8rem;">✕</button>
-      </div>
-    `).join('');
-  }
-
-  saveRoutineFromEditor() {
-    const nameInput = document.getElementById('routine-name-input');
-    const name = nameInput.value.trim() || '我的专属分化训练';
-
-    if (this.editorExercisesBuffer.length === 0) {
-      this.showToast('请至少添加一个训练动作');
-      return;
-    }
-
-    if (this.editingRoutineId) {
-      const idx = this.customRoutines.findIndex(r => r.id === this.editingRoutineId);
-      if (idx !== -1) {
-        this.customRoutines[idx].name = name;
-        this.customRoutines[idx].exercises = JSON.parse(JSON.stringify(this.editorExercisesBuffer));
-      }
-    } else {
-      const newRoutine = {
-        id: "routine_" + Date.now(),
-        name: name,
-        muscleGroup: this.editorExercisesBuffer[0]?.muscleGroup || '力量',
-        icon: "⚡",
-        isCustom: true,
-        badgeText: "🌟 自定义",
-        exercises: JSON.parse(JSON.stringify(this.editorExercisesBuffer))
-      };
-      this.customRoutines.unshift(newRoutine);
-    }
-
-    this.saveRoutines();
-    this.closeRoutineEditor();
-    this.render();
-    this.showToast('✓ 训练计划已保存！');
-  }
-
-  deleteCurrentEditingRoutine() {
-    if (!this.editingRoutineId) return;
-    this.deleteCustomRoutine(this.editingRoutineId);
-    this.closeRoutineEditor();
-  }
-
-  deleteCustomRoutine(routineId) {
-    if (!routineId) return;
-    this.customRoutines = this.customRoutines.filter(r => r.id !== routineId);
-    if (this.activeRoutineTodo && this.activeRoutineTodo.routineId === routineId) {
-      this.activeRoutineTodo = null;
-      localStorage.removeItem('fit_active_routine_todo');
-    }
-    this.saveRoutines();
-    if (typeof this.render === 'function') {
-      this.render();
-    }
-    this.showToast('已删除计划');
-  }
-
-  renderWorkoutScreen() {
-    const summary = this.getDaySummary(this.selectedDate);
-    document.getElementById('workout-total-vol').textContent = `${summary.totalVolume.toLocaleString()} kg`;
-    document.getElementById('workout-total-sets').textContent = `${summary.totalSets} 组`;
-    document.getElementById('workout-total-burn').textContent = `+${summary.workoutBurn} kcal`;
-
-    this.renderRoutineSection();
-    this.renderActiveRoutineTodo();
-
-    const dayWorkouts = this.workouts.filter(w => w.date === this.selectedDate);
-    const container = document.getElementById('workout-items-list');
-    document.getElementById('workout-list-title').textContent = `今日动作与加片建议 (${dayWorkouts.length})`;
-
-    if (dayWorkouts.length === 0) {
-      container.innerHTML = `
-        <div class="empty-state">
-          🏋️ 今日暂无训练记录<br>
-          点击上方【🎙️ 口喷记训练】或【+ 手动加动作】添加训练
-        </div>
-      `;
-      return;
-    }
-
-    // Overload Advices
-    const advices = WorkoutEngine.generateOverloadAdvices(this.workouts);
-
-    container.innerHTML = dayWorkouts.map(w => {
-      const matchedAdvice = w.durationMin ? null : advices.find(a => a.exerciseName === w.exerciseName);
-
-      let overloadBadgeHtml = '';
-      if (matchedAdvice) {
-        if (matchedAdvice.status === 'READY_TO_ADD_PLATE') {
-          overloadBadgeHtml = `
-            <div class="overload-trophy-badge">
-              <span>🏆 <b>AI 超负荷加片</b>：下次目标加片至 <b>${matchedAdvice.targetWeightKg}kg</b> (${matchedAdvice.targetReps}次)</span>
-            </div>
-          `;
-        } else {
-          overloadBadgeHtml = `
-            <div class="overload-badge" style="background:var(--bg-subtle);border-color:var(--border-subtle);color:var(--text-secondary);">
-              <span>📈 <b>AI 进阶建议</b>：下次目标冲击 <b>${matchedAdvice.targetReps}次</b> 积累容量</span>
-            </div>
-          `;
-        }
-      }
-
-      const est1RM = WorkoutEngine.calc1RM(w.weightKg, w.reps);
-      const isBarbell = w.weightKg >= 20 && (w.exerciseName.includes("卧推") || w.exerciseName.includes("深蹲") || w.exerciseName.includes("硬拉") || w.exerciseName.includes("推举") || w.exerciseName.includes("杠铃"));
-
-      return `
-        <div class="record-card">
-          <div class="record-row-top">
-            <div class="record-name-group">
-              ${getMuscleGroupBadge(w.muscleGroup)}
-              <span class="record-name">${w.exerciseName}</span>
-              ${isBarbell ? `<button onclick="window.app.openPlateCalculator(${w.weightKg})" class="btn-subtle" style="padding:1px 6px;font-size:0.65rem;border-radius:4px;color:var(--accent-cyan);border:1px solid rgba(56,189,248,0.3);cursor:pointer;background:transparent;">⚡ 算片</button>` : ''}
-            </div>
-            <button class="btn-delete" onclick="window.app.deleteWorkout('${w.id}')" title="删除动作">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-            </button>
-          </div>
-          <div class="record-row-bottom">
-            ${w.durationMin ? `
-            <span class="record-stat-highlight" style="color:var(--accent-cyan);">⏱ ${w.durationMin} 分钟</span>
-            <span>消耗约 ${w.burnedCalories || 0} kcal</span>
-            ` : `
-            <span class="record-stat-highlight" style="color:var(--accent-cyan);">
-              ${w.weightKg > 0 ? `${w.weightKg}kg × ` : '自重 × '}${w.sets}组 × ${w.reps}次
-            </span>
-            <span>${est1RM > 0 ? `预估1RM: ${est1RM}kg · ` : ''}吨位: ${(w.weightKg * w.sets * w.reps).toLocaleString()}kg</span>
-            `}
-          </div>
-          ${overloadBadgeHtml}
-        </div>
-      `;
-    }).join('');
-  }
-
-  renderHistoryScreen() {
-    const daysCount = this.historyRange === 'MONTH' ? 30 : 7;
-    const historyData = [];
-
-    for (let i = daysCount - 1; i >= 0; i--) {
-      const dStr = getTodayDateString(-i);
-      const summary = this.getDaySummary(dStr);
-      historyData.push({
-        date: dStr,
-        label: dStr.slice(5),
-        hasLogs: summary.hasLogs,
-        isToday: summary.isToday,
-        deficit: summary.hasLogs ? summary.deficit : 0,
-        volume: summary.totalVolume,
-        burn: summary.workoutBurn,
-        intake: summary.dietIntake
+    const tipEl = el.querySelector('.chart-tip');
+    const svg = el.querySelector('svg');
+    el.querySelectorAll('.bar-hit').forEach(h => {
+      h.addEventListener('mouseenter', () => {
+        const box = svg.getBoundingClientRect();
+        const scale = box.width / W;
+        const [md, text] = h.dataset.tip.split(' · ');
+        tipEl.innerHTML = `<span>${esc(md)}</span> ${esc(text)}`;
+        tipEl.style.left = (Number(h.getAttribute('x')) + slot / 2) * scale + 'px';
+        tipEl.style.top = (padT * scale) + 'px';
+        tipEl.classList.remove('hidden');
       });
-    }
+      h.addEventListener('mouseleave', () => tipEl.classList.add('hidden'));
+      h.addEventListener('click', () => {
+        this.selectedDate = h.dataset.date;
+        this.switchView('today');
+      });
+    });
+  }
 
-    const trackedDays = historyData.filter(d => d.hasLogs || (d.isToday && (d.volume > 0 || d.intake > 0)));
-    const totalDeficit = trackedDays.reduce((s, d) => s + d.deficit, 0);
-    const activeDays = trackedDays.length;
-    const avgDeficit = activeDays > 0 ? Math.round(totalDeficit / activeDays) : 0;
-    const totalVol = historyData.reduce((s, d) => s + d.volume, 0);
-
-    document.getElementById('hist-total-deficit').textContent = `${Math.round(totalDeficit).toLocaleString()} kcal`;
-    document.getElementById('hist-avg-deficit').textContent = `${avgDeficit} kcal`;
-    document.getElementById('hist-total-volume').textContent = `${totalVol.toLocaleString()} kg`;
-    document.getElementById('hist-active-days').textContent = `${activeDays} 天`;
-
-    // Charts with interactive day retrospective on click
-    ChartEngine.drawDeficitTrend('deficit-trend-canvas', historyData, this.profile.targetDeficitKcal);
-    ChartEngine.drawVolumeTrend('volume-trend-canvas', historyData);
-
-    // History items timeline
-    const container = document.getElementById('history-timeline-list');
-    const pastRecords = historyData.filter(d => d.hasLogs || (d.isToday && (d.volume > 0 || d.intake > 0))).reverse();
-
-    if (pastRecords.length === 0) {
-      container.innerHTML = `<div class="empty-state">暂无历史打卡记录，点击任意图表也可回溯</div>`;
+  renderProgressList(el) {
+    const names = [];
+    this.workouts
+      .filter(w => !w.durationMin)
+      .sort((a, b) => (b.date === a.date ? recordTs(b) - recordTs(a) : (b.date > a.date ? 1 : -1)))
+      .forEach(w => { if (!names.includes(w.exerciseName)) names.push(w.exerciseName); });
+    if (!names.length) {
+      el.innerHTML = `<div class="empty">记几次力量训练后，这里会告诉你每个动作下次该加重量还是加次数</div>`;
       return;
     }
-
-    container.innerHTML = pastRecords.map(d => {
-      const isToday = d.date === getTodayDateString();
-
+    el.innerHTML = names.slice(0, 12).map(name => {
+      const p = this.exerciseProgress(name);
+      const l = p.last;
+      const d = new Date(l.date + 'T00:00:00');
       return `
-        <div class="history-item" onclick="window.app.openDayRetrospective('${d.date}')" style="cursor:pointer;">
-          <div class="history-item-header">
-            <div>
-              <div class="history-item-date">${isToday ? `${d.date} · 今天` : d.date}</div>
-              <div class="history-item-sub">摄入 ${d.intake} kcal · 举铁 ${d.volume.toLocaleString()} kg · 运动 +${d.burn} kcal</div>
-            </div>
-            <div style="display:flex;align-items:center;gap:6px;">
-              <span class="tag-badge ${d.deficit >= this.profile.targetDeficitKcal ? 'tag-lime' : 'tag-cyan'}">
-                ${d.deficit >= 0 ? `净缺口 ${Math.round(d.deficit)}` : `盈余 +${Math.round(Math.abs(d.deficit))}`}
-              </span>
-              <span style="font-size:0.75rem;color:var(--accent-cyan);font-weight:700;">回溯 ➔</span>
-            </div>
-          </div>
-        </div>
-      `;
+        <div class="progress-item">
+          <div class="progress-name">${esc(name)}</div>
+          <div class="progress-last">${l.weightKg > 0 ? round1(l.weightKg) + 'kg' : '自重'} × ${l.sets} × ${l.reps}</div>
+          <div class="progress-sub">${d.getMonth() + 1}/${d.getDate()} · 共 ${p.count} 次${p.best > 0 ? ` · 最重 ${round1(p.best)}kg` : ''}</div>
+          <div class="progress-next">${esc(p.next.text)}</div>
+        </div>`;
     }).join('');
   }
 
-  renderProfileForm() {
-    const p = this.profile;
-    document.getElementById('profile-bmr-display').textContent = `${p.bmr} kcal`;
-    document.getElementById('profile-tdee-display').textContent = `${p.tdee} kcal`;
-
-    document.getElementById('input-height').value = p.heightCm;
-    document.getElementById('input-weight').value = p.weightKg;
-    document.getElementById('input-age').value = p.age;
-    document.getElementById('input-target-deficit').value = p.targetDeficitKcal;
-    document.getElementById('input-target-protein').value = p.targetProteinG;
-    document.getElementById('input-target-carbs').value = p.targetCarbsG;
-    document.getElementById('input-target-fat').value = p.targetFatG;
-
-    document.querySelectorAll('.gender-btn').forEach(b => {
-      if (!b.id || !b.id.startsWith('onboarding')) {
-        b.classList.toggle('active', b.dataset.gender === p.gender);
-      }
+  // ----------------------- 设置 -----------------------
+  bindSettings() {
+    const $ = (id) => document.getElementById(id);
+    const segPick = (id, fn) => $(id).addEventListener('click', (e) => {
+      const b = e.target.closest('.seg-btn');
+      if (b) fn(b.dataset.value);
     });
 
-    this.updateProfileMacroRatioBar();
+    segPick('set-gender', (v) => { this.profile.gender = v; this.onProfileChange(); });
+    segPick('set-goal', (v) => {
+      this.profile.goalType = v;
+      this.profile.targetDeficitKcal = GOAL_DEFICIT[v];
+      this.onProfileChange();
+    });
+    segPick('set-theme', (v) => { this.applyTheme(v); store('trainfit_theme_v2', v); this.renderSettings(); });
+
+    const num = (id, key, min, max) => $(id).addEventListener('change', () => {
+      const v = parseFloat($(id).value);
+      if (Number.isFinite(v) && v >= min && v <= max) {
+        // 蛋白质目标之前是自动算的（体重×2 或默认值）才跟着体重变
+        const autoProtein = !this.profile.proteinTouched &&
+          (this.profile.targetProteinG === Math.round(this.profile.weightKg * 2) || this.profile.targetProteinG === DEFAULT_PROFILE.targetProteinG);
+        this.profile[key] = key === 'weightKg' ? round1(v) : Math.round(v);
+        if (key === 'weightKg' && autoProtein) this.profile.targetProteinG = Math.round(this.profile.weightKg * 2);
+        if (key === 'targetProteinG') this.profile.proteinTouched = true;
+        this.onProfileChange();
+      } else {
+        this.renderSettings();
+      }
+    });
+    num('set-height', 'heightCm', 100, 250);
+    num('set-weight', 'weightKg', 30, 250);
+    num('set-age', 'age', 10, 100);
+    num('set-deficit', 'targetDeficitKcal', -2000, 2000);
+    num('set-protein', 'targetProteinG', 20, 400);
+
+    $('set-clear').addEventListener('click', () => {
+      if (!confirm('清空所有训练和饮食记录？身体数据会保留。此操作不能撤销。')) return;
+      this.workouts = [];
+      this.diet = [];
+      this.pending = [];
+      this.saveData();
+      this.savePending();
+      this.showToast('已清空');
+      this.renderSettings();
+    });
   }
 
-  // ==================== Custom Macro Targets Logic ====================
-  openCustomMacrosModal() {
-    document.getElementById('custom-macro-p').value = this.profile.targetProteinG;
-    document.getElementById('custom-macro-c').value = this.profile.targetCarbsG;
-    document.getElementById('custom-macro-f').value = this.profile.targetFatG;
-
-    this.updateCustomMacroModalCalc();
-    document.getElementById('modal-custom-macros')?.classList.remove('hidden');
-  }
-
-  closeCustomMacrosModal() {
-    document.getElementById('modal-custom-macros')?.classList.add('hidden');
-  }
-
-  setCustomMacroPreset(presetType) {
-    const weight = this.profile.weightKg || 72;
-    const targetCal = Math.max(1200, (this.profile.tdee || 2392) - (this.profile.targetDeficitKcal || 450));
-
-    let p = Math.round(weight * 2.0);
-    let f = Math.round(weight * 0.8);
-    let c = Math.max(50, Math.round((targetCal - p * 4 - f * 9) / 4));
-
-    if (presetType === 'high_protein') {
-      p = Math.round(weight * 2.2);
-      f = Math.round(weight * 0.7);
-      c = Math.max(40, Math.round((targetCal - p * 4 - f * 9) / 4));
-    } else if (presetType === 'balanced') {
-      p = Math.round(weight * 1.6);
-      f = Math.round(weight * 0.8);
-      c = Math.max(50, Math.round((targetCal - p * 4 - f * 9) / 4));
-    } else if (presetType === 'bulking') {
-      p = Math.round(weight * 1.8);
-      f = Math.round(weight * 0.7);
-      c = Math.max(80, Math.round((targetCal - p * 4 - f * 9) / 4));
-    } else if (presetType === 'low_carb') {
-      c = Math.round(weight * 0.5); // ~35-40g
-      p = Math.round(weight * 2.0);
-      f = Math.max(30, Math.round((targetCal - p * 4 - c * 4) / 9));
-    }
-
-    document.getElementById('custom-macro-p').value = p;
-    document.getElementById('custom-macro-c').value = c;
-    document.getElementById('custom-macro-f').value = f;
-
-    this.updateCustomMacroModalCalc();
-  }
-
-  onCustomMacroInputChange() {
-    this.updateCustomMacroModalCalc();
-  }
-
-  updateCustomMacroModalCalc() {
-    const p = parseFloat(document.getElementById('custom-macro-p').value) || 0;
-    const c = parseFloat(document.getElementById('custom-macro-c').value) || 0;
-    const f = parseFloat(document.getElementById('custom-macro-f').value) || 0;
-
-    const totalCal = Math.round(p * 4 + c * 4 + f * 9);
-    const targetDietCal = (this.profile.tdee || 2392) - (this.profile.targetDeficitKcal || 450);
-
-    const totalCalEl = document.getElementById('custom-macro-total-cal');
-    if (totalCalEl) {
-      totalCalEl.textContent = `${totalCal} kcal`;
-      const diff = totalCal - targetDietCal;
-      totalCalEl.style.color = Math.abs(diff) <= 80 ? 'var(--accent-lime)' : 'var(--accent-cyan)';
-    }
-
-    const targetCalEl = document.getElementById('custom-macro-target-diet-cal');
-    if (targetCalEl) {
-      targetCalEl.textContent = `${targetDietCal} kcal (TDEE ${this.profile.tdee} - 缺口 ${this.profile.targetDeficitKcal})`;
-    }
-
-    const safeTotal = Math.max(1, totalCal);
-    const pPct = Math.round((p * 4 / safeTotal) * 100);
-    const cPct = Math.round((c * 4 / safeTotal) * 100);
-    const fPct = Math.max(0, 100 - pPct - cPct);
-
-    const segP = document.getElementById('custom-seg-p');
-    const segC = document.getElementById('custom-seg-c');
-    const segF = document.getElementById('custom-seg-f');
-
-    if (segP) { segP.style.width = `${pPct}%`; segP.textContent = `蛋 ${pPct}%`; }
-    if (segC) { segC.style.width = `${cPct}%`; segC.textContent = `碳 ${cPct}%`; }
-    if (segF) { segF.style.width = `${fPct}%`; segF.textContent = `脂 ${fPct}%`; }
-  }
-
-  saveCustomMacros() {
-    const p = parseFloat(document.getElementById('custom-macro-p').value) || 140;
-    const c = parseFloat(document.getElementById('custom-macro-c').value) || 240;
-    const f = parseFloat(document.getElementById('custom-macro-f').value) || 55;
-
-    this.profile.targetProteinG = p;
-    this.profile.targetCarbsG = c;
-    this.profile.targetFatG = f;
-
-    this.saveData();
-    this.closeCustomMacrosModal();
-    this.render();
-    this.showToast(`✓ 碳蛋脂目标已更新：蛋 ${p}g / 碳 ${c}g / 脂 ${f}g`);
-  }
-
-  // Profile Screen Macro Helpers
-  applyMacroPreset(presetType) {
-    const weight = parseFloat(document.getElementById('input-weight').value) || this.profile.weightKg || 72;
-    const height = parseFloat(document.getElementById('input-height').value) || this.profile.heightCm || 175;
-    const age = parseInt(document.getElementById('input-age').value, 10) || this.profile.age || 26;
-    const isMale = this.profile.gender === 'male';
-    const deficit = parseFloat(document.getElementById('input-target-deficit').value) || 450;
-
-    const bmr = isMale
-      ? (10 * weight + 6.25 * height - 5 * age + 5)
-      : (10 * weight + 6.25 * height - 5 * age - 161);
-    const tdee = Math.round(bmr * 1.45);
-    const targetCal = Math.max(1200, tdee - deficit);
-
-    let p = Math.round(weight * 2.0);
-    let f = Math.round(weight * 0.8);
-    let c = Math.max(50, Math.round((targetCal - p * 4 - f * 9) / 4));
-
-    if (presetType === 'high_protein') {
-      p = Math.round(weight * 2.2);
-      f = Math.round(weight * 0.7);
-      c = Math.max(40, Math.round((targetCal - p * 4 - f * 9) / 4));
-    } else if (presetType === 'balanced') {
-      p = Math.round(weight * 1.6);
-      f = Math.round(weight * 0.8);
-      c = Math.max(50, Math.round((targetCal - p * 4 - f * 9) / 4));
-    } else if (presetType === 'bulking') {
-      p = Math.round(weight * 1.8);
-      f = Math.round(weight * 0.7);
-      c = Math.max(80, Math.round((targetCal - p * 4 - f * 9) / 4));
-    } else if (presetType === 'low_carb') {
-      c = Math.round(weight * 0.5);
-      p = Math.round(weight * 2.0);
-      f = Math.max(30, Math.round((targetCal - p * 4 - c * 4) / 9));
-    }
-
-    document.getElementById('input-target-protein').value = p;
-    document.getElementById('input-target-carbs').value = c;
-    document.getElementById('input-target-fat').value = f;
-
-    this.updateProfileMacroRatioBar();
-    this.showToast('已应用预设配比');
-  }
-
-  onProfileDeficitChange() {
-    this.updateProfileMacroRatioBar();
-  }
-
-  onProfileMacroInputChange() {
-    this.updateProfileMacroRatioBar();
-  }
-
-  updateProfileMacroRatioBar() {
-    const p = parseFloat(document.getElementById('input-target-protein')?.value) || 0;
-    const c = parseFloat(document.getElementById('input-target-carbs')?.value) || 0;
-    const f = parseFloat(document.getElementById('input-target-fat')?.value) || 0;
-
-    const totalCal = Math.round(p * 4 + c * 4 + f * 9);
-    const badge = document.getElementById('profile-macro-cal-badge');
-    if (badge) {
-      badge.textContent = `配比: ${totalCal} kcal`;
-    }
-
-    const safeTotal = Math.max(1, totalCal);
-    const pPct = Math.round((p * 4 / safeTotal) * 100);
-    const cPct = Math.round((c * 4 / safeTotal) * 100);
-    const fPct = Math.max(0, 100 - pPct - cPct);
-
-    const segP = document.getElementById('profile-seg-p');
-    const segC = document.getElementById('profile-seg-c');
-    const segF = document.getElementById('profile-seg-f');
-
-    if (segP) { segP.style.width = `${pPct}%`; segP.textContent = `蛋 ${pPct}%`; }
-    if (segC) { segC.style.width = `${cPct}%`; segC.textContent = `碳 ${cPct}%`; }
-    if (segF) { segF.style.width = `${fPct}%`; segF.textContent = `脂 ${fPct}%`; }
-  }
-
-  saveProfile() {
-    const height = parseFloat(document.getElementById('input-height').value) || 175;
-    const weight = parseFloat(document.getElementById('input-weight').value) || 72;
-    const age = parseInt(document.getElementById('input-age').value, 10) || 26;
-    const targetDeficit = parseFloat(document.getElementById('input-target-deficit').value) || 450;
-    const protein = parseFloat(document.getElementById('input-target-protein').value) || 140;
-    const carbs = parseFloat(document.getElementById('input-target-carbs').value) || 240;
-    const fat = parseFloat(document.getElementById('input-target-fat').value) || 55;
-
-    this.profile.heightCm = height;
-    this.profile.weightKg = weight;
-    this.profile.age = age;
-    this.profile.targetDeficitKcal = targetDeficit;
-    this.profile.targetProteinG = protein;
-    this.profile.targetCarbsG = carbs;
-    this.profile.targetFatG = fat;
-
+  onProfileChange() {
+    this.profile.customized = true;
     this.recalculateMetabolism();
     this.saveData();
-    this.render();
-    this.showToast('✓ 档案与设置已保存');
-    this.switchTab('diet');
+    this.renderSettings();
+    this.showToast('已保存');
   }
 
-  openManualWorkoutModal() {
-    document.getElementById('modal-manual-workout').classList.remove('hidden');
+  renderSettings() {
+    const $ = (id) => document.getElementById(id);
+    const p = this.profile;
+    const setSeg = (id, v) => document.querySelectorAll(`#${id} .seg-btn`).forEach(b => b.classList.toggle('active', b.dataset.value === v));
+    setSeg('set-gender', p.gender);
+    setSeg('set-goal', p.goalType || 'fat_loss');
+    setSeg('set-theme', this.theme);
+    const setVal = (id, v) => { if (document.activeElement !== $(id)) $(id).value = v; };
+    setVal('set-height', p.heightCm);
+    setVal('set-weight', p.weightKg);
+    setVal('set-age', p.age);
+    setVal('set-deficit', p.targetDeficitKcal);
+    setVal('set-protein', p.targetProteinG);
+    const budget = p.tdee - (p.targetDeficitKcal || 0);
+    $('set-tdee-note').textContent = `每天日常消耗约 ${fmt(p.tdee)} kcal（不含训练）。按目标，不训练的日子大约吃 ${fmt(budget)} kcal。`;
+    const days = new Set([...this.workouts, ...this.diet].map(r => r.date)).size;
+    $('set-data-note').textContent = `共 ${this.workouts.length} 条训练、${this.diet.length} 条饮食，覆盖 ${days} 天。`;
   }
 
-  closeManualWorkoutModal() {
-    document.getElementById('modal-manual-workout').classList.add('hidden');
-  }
-
-  fillManualExercise(name, muscle, weight, sets, reps) {
-    document.getElementById('manual-exercise-name').value = name;
-    document.getElementById('manual-exercise-muscle').value = muscle;
-    document.getElementById('manual-exercise-weight').value = weight;
-    document.getElementById('manual-exercise-sets').value = sets;
-    document.getElementById('manual-exercise-reps').value = reps;
-  }
-
-  saveManualWorkout() {
-    const name = document.getElementById('manual-exercise-name').value.trim() || '力量训练';
-    const muscle = document.getElementById('manual-exercise-muscle').value || '复合训练';
-    const weight = parseFloat(document.getElementById('manual-exercise-weight').value) || 0;
-    const sets = parseInt(document.getElementById('manual-exercise-sets').value, 10) || 4;
-    const reps = parseInt(document.getElementById('manual-exercise-reps').value, 10) || 8;
-
-    const isCompound = name.includes("卧推") || name.includes("深蹲") || name.includes("硬拉") || name.includes("划船") || name.includes("推举");
-    const burn = Math.round(isCompound ? (sets * 28 + weight * 0.45) : (sets * 18 + weight * 0.2));
-
-    const item = {
-      id: "w_" + Date.now(),
-      date: this.selectedDate,
-      exerciseName: name,
-      muscleGroup: muscle,
-      sets,
-      reps,
-      weightKg: weight,
-      rpe: 8.0,
-      burnedCalories: burn,
-      notes: `手动记录: ${weight > 0 ? weight + 'kg ' : '自重 '}${sets}组 x ${reps}次`
-    };
-
-    this.workouts.unshift(item);
-    this.saveData();
-    this.closeManualWorkoutModal();
-    this.render();
-    this.showToast(`✓ 已添加：${name}`);
-  }
-
-  openVoiceSheet(mode) {
-    this.voiceMode = mode;
-    const modal = document.getElementById('modal-voice-dictation');
-    const title = document.getElementById('voice-sheet-title');
-    const desc = document.getElementById('voice-sheet-desc');
-    const samplesContainer = document.getElementById('voice-samples-container');
-    const textarea = document.getElementById('voice-text-input');
-    const previewBar = document.getElementById('voice-audio-preview');
-    if (previewBar) previewBar.style.display = 'none';
-    if (textarea) textarea.value = '';
-
-    if (mode === 'WORKOUT') {
-      title.textContent = '🎙️ 口喷记训练';
-      desc.textContent = '支持【按住说话】或【点击录音】，也可直接打字';
-      samplesContainer.innerHTML = `
-        <span class="sample-chip" onclick="window.app.fillVoiceSample('卧推80公斤做4组每组10个，上斜哑铃24公斤3组')">卧推80kg 4x10 + 上斜哑铃</span>
-        <span class="sample-chip" onclick="window.app.fillVoiceSample('深蹲100公斤4组6次')">深蹲100kg 4x6</span>
-        <span class="sample-chip" onclick="window.app.fillVoiceSample('引体向上4组8次自重')">引体向上 4x8 自重</span>
-      `;
-    } else if (mode === 'WORKOUT_FOLLOWUP') {
-      title.textContent = '🎙️ 补充训练参数';
-      desc.textContent = '说出缺失的重量、组数或次数 (如 "4组8次" 或 "80kg")';
-      samplesContainer.innerHTML = `
-        <span class="sample-chip" onclick="window.app.fillVoiceSample('4组8次')">4组8次</span>
-        <span class="sample-chip" onclick="window.app.fillVoiceSample('80公斤')">80公斤</span>
-        <span class="sample-chip" onclick="window.app.fillVoiceSample('自重4组10次')">自重4组10次</span>
-      `;
-    } else {
-      title.textContent = '🎙️ 口喷记饮食';
-      desc.textContent = '支持【按住说话】或【点击录音】，也可直接打字';
-      samplesContainer.innerHTML = `
-        <span class="sample-chip" onclick="window.app.fillVoiceSample('中午吃了200克大米饭，200克黑椒鸡胸肉和一盘西兰花')">米饭200g + 鸡胸200g + 西兰花</span>
-        <span class="sample-chip" onclick="window.app.fillVoiceSample('早上吃了2个水煮蛋大概100克，一杯牛奶250毫升')">蛋2个 + 牛奶250ml</span>
-        <span class="sample-chip" onclick="window.app.fillVoiceSample('1勺乳清蛋白粉配1根香蕉')">蛋白粉1勺 + 香蕉1根</span>
-      `;
-    }
-
-    this.updateWaveformBars(0);
-    modal.classList.remove('hidden');
-  }
-
-  fillVoiceSample(text) {
-    document.getElementById('voice-text-input').value = text;
-  }
-
-  closeVoiceSheet() {
-    SpeechModule.stop(true);
-    this.updateMicUi(false);
-    this.updateWaveformBars(0);
-    if (this.audioPlayer) {
-      this.audioPlayer.pause();
-      this.audioPlayer = null;
-    }
-    document.getElementById('modal-voice-dictation').classList.add('hidden');
-  }
-
-  async submitVoiceParse() {
-    const text = document.getElementById('voice-text-input').value.trim();
-    if (!text) {
-      this.showToast('请先说话或输入内容');
-      return;
-    }
-
-    this.closeVoiceSheet();
-
-    if (this.voiceMode === 'WORKOUT_FOLLOWUP') {
-      const idx = this.parsedWorkoutBuffer.findIndex(i => !i.isComplete);
-      const targetIdx = idx !== -1 ? idx : 0;
-      if (this.parsedWorkoutBuffer[targetIdx]) {
-        this.parsedWorkoutBuffer[targetIdx] = WorkoutEngine.mergeWorkoutFactors(this.parsedWorkoutBuffer[targetIdx], text);
-      }
-      this.showWorkoutConfirmModal(this.parsedWorkoutBuffer);
-      return;
-    }
-
-    this.showToast('🧠 AI 正在智能提炼...', 1200);
-
-    try {
-      if (this.voiceMode === 'WORKOUT') {
-        const activeTodos = this.getActiveTodos();
-        const items = WorkoutEngine.parseWorkoutVoice(text, { activeTodos });
-        this.parsedWorkoutBuffer = items;
-        this.showWorkoutConfirmModal(items);
-      } else {
-        const result = typeof AiService !== 'undefined'
-          ? await AiService.parseDiet(text)
-          : NutritionEngine.parseDietVoice(text);
-        this.parsedDietBuffer = result;
-        this.showDietConfirmModal(result);
-      }
-    } catch (err) {
-      console.error('[App] AI 解析异常降级:', err);
-      if (this.voiceMode === 'WORKOUT') {
-        const activeTodos = this.getActiveTodos();
-        const items = WorkoutEngine.parseWorkoutVoice(text, { activeTodos });
-        this.parsedWorkoutBuffer = items;
-        this.showWorkoutConfirmModal(items);
-      } else {
-        const result = NutritionEngine.parseDietVoice(text);
-        this.parsedDietBuffer = result;
-        this.showDietConfirmModal(result);
-      }
+  applyTheme(theme) {
+    this.theme = ['light', 'dark', 'system'].includes(theme) ? theme : 'system';
+    const root = document.documentElement;
+    if (this.theme === 'system') root.removeAttribute('data-theme');
+    else root.setAttribute('data-theme', this.theme);
+    try { localStorage.setItem('trainfit_theme', this.theme); } catch (e) {}
+    const light = this.theme === 'light' || (this.theme === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches);
+    try { window.TrainFitNative && window.TrainFitNative.setSystemBarsLight && window.TrainFitNative.setSystemBarsLight(!!light); } catch (e) {}
+    if (!this._mqBound && window.matchMedia) {
+      this._mqBound = true;
+      window.matchMedia('(prefers-color-scheme: light)').addEventListener?.('change', () => { if (this.theme === 'system') this.applyTheme('system'); });
     }
   }
 
-  showWorkoutConfirmModal(items) {
-    this.parsedWorkoutBuffer = items || [];
+  // ======================= 修改记录 =======================
+  openEditor(kind, id) {
+    const list = kind === 'meal' ? this.diet : this.workouts;
+    const rec = list.find(r => r.id === id);
+    if (!rec) return;
+    this.editing = { kind, id };
+    const f = document.getElementById('edit-fields');
+    const input = (name, label, value, type = 'number', extra = '') =>
+      `<label class="field"><span class="field-label">${label}</span><input class="input" name="${name}" type="${type}" value="${esc(value)}" ${type === 'number' ? 'inputmode="decimal" step="any"' : ''} ${extra}></label>`;
 
-    let hasIncomplete = false;
-    let firstIncompleteItem = null;
-
-    this.parsedWorkoutBuffer.forEach(item => {
-      WorkoutEngine.validateWorkoutFactors ? WorkoutEngine.validateWorkoutFactors(item) : null;
-      if (!item.isComplete && !item.followUpPrompt) {
-        item.followUpPrompt = WorkoutEngine.generateFollowUpPrompt ? WorkoutEngine.generateFollowUpPrompt(item) : "请补全缺失参数";
-      }
-    });
-
-    const container = document.getElementById('confirm-workouts-items-container');
-    if (container) {
-      container.innerHTML = this.parsedWorkoutBuffer.map((item, idx) => {
-        const isWeightMissing = item.weightKg === null || item.weightKg === undefined || isNaN(item.weightKg) || item.weightKg < 0;
-        const isSetsMissing = item.sets === null || item.sets === undefined || isNaN(item.sets) || item.sets < 1;
-        const isRepsMissing = item.reps === null || item.reps === undefined || isNaN(item.reps) || item.reps < 1;
-
-        return `
-          <div class="confirm-workout-card" id="confirm-workout-card-${idx}" style="background:var(--bg-input);padding:10px 12px;border-radius:var(--radius-sm);border:1px solid ${!item.isComplete ? 'rgba(245,158,11,0.4)' : 'var(--border-subtle)'};display:flex;flex-direction:column;gap:8px;">
-            <div style="display:flex;justify-content:space-between;align-items:center;">
-              <div style="display:flex;align-items:center;gap:6px;">
-                <span class="tag-badge tag-cyan">${item.muscleGroup || '胸部'}</span>
-                <b style="font-size:0.85rem;">${item.exerciseName}</b>
-              </div>
-              <div id="confirm-workout-badge-${idx}">
-                ${!item.isComplete ? `<span class="factor-missing-badge">⚠️ 缺失参数</span>` : `<span style="font-size:0.7rem;color:var(--accent-lime);font-weight:600;">✓ 参数完整</span>`}
-              </div>
-            </div>
-            <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;font-size:0.75rem;">
-              <div style="display:flex;align-items:center;gap:4px;">
-                <input type="number" step="0.5" id="input-confirm-weight-${idx}" value="${item.weightKg !== null && item.weightKg !== undefined ? item.weightKg : ''}" placeholder="重量" oninput="window.app.updateWorkoutBuffer(${idx}, 'weightKg', this.value)" class="form-input ${isWeightMissing ? 'input-invalid' : ''}" style="width:64px;padding:5px 6px;text-align:center;">
-                <span style="color:var(--text-muted);">kg</span>
-              </div>
-              <div style="display:flex;align-items:center;gap:4px;">
-                <input type="number" id="input-confirm-sets-${idx}" value="${item.sets !== null && item.sets !== undefined ? item.sets : ''}" placeholder="组数" oninput="window.app.updateWorkoutBuffer(${idx}, 'sets', this.value)" class="form-input ${isSetsMissing ? 'input-invalid' : ''}" style="width:48px;padding:5px 6px;text-align:center;">
-                <span style="color:var(--text-muted);">组</span>
-              </div>
-              <div style="display:flex;align-items:center;gap:4px;">
-                <input type="number" id="input-confirm-reps-${idx}" value="${item.reps !== null && item.reps !== undefined ? item.reps : ''}" placeholder="次数" oninput="window.app.updateWorkoutBuffer(${idx}, 'reps', this.value)" class="form-input ${isRepsMissing ? 'input-invalid' : ''}" style="width:48px;padding:5px 6px;text-align:center;">
-                <span style="color:var(--text-muted);">次</span>
-              </div>
-            </div>
-          </div>
-        `;
-      }).join('');
-    }
-
-    this.resetInlineFollowupRecordingUI();
-    this.updateWorkoutConfirmModalUI();
-    document.getElementById('modal-confirm-workouts').classList.remove('hidden');
-  }
-
-  updateWorkoutConfirmModalUI() {
-    if (!this.parsedWorkoutBuffer) return;
-
-    const anyIncomplete = this.parsedWorkoutBuffer.some(i => !i.isComplete);
-    const firstIncompleteItem = this.parsedWorkoutBuffer.find(i => !i.isComplete);
-
-    const bubbleEl = document.getElementById('workout-followup-bubble');
-    const bubbleTextEl = document.getElementById('followup-bubble-text');
-    const chipsEl = document.getElementById('followup-quick-chips');
-    const voiceBarEl = document.getElementById('modal-followup-voice-bar');
-    const saveBtn = document.getElementById('btn-save-confirmed-workouts');
-
-    if (anyIncomplete && firstIncompleteItem) {
-      if (bubbleEl) {
-        bubbleEl.style.display = 'flex';
-        if (bubbleTextEl) {
-          bubbleTextEl.textContent = firstIncompleteItem.followUpPrompt || (WorkoutEngine.generateFollowUpPrompt ? WorkoutEngine.generateFollowUpPrompt(firstIncompleteItem) : "请补全缺失参数");
-        }
-      }
-      if (chipsEl) {
-        chipsEl.style.display = 'flex';
-        chipsEl.innerHTML = this.renderFollowupChipsHtml(firstIncompleteItem);
-      }
-      if (voiceBarEl) voiceBarEl.style.display = 'block';
-
-      if (saveBtn) {
-        saveBtn.disabled = true;
-        saveBtn.textContent = "请补全缺失参数";
-        saveBtn.classList.add('disabled');
-      }
-    } else {
-      if (bubbleEl) bubbleEl.style.display = 'none';
-      if (chipsEl) chipsEl.style.display = 'none';
-      if (voiceBarEl) voiceBarEl.style.display = 'none';
-
-      if (saveBtn) {
-        saveBtn.disabled = false;
-        saveBtn.textContent = "✓ 存入训练";
-        saveBtn.classList.remove('disabled');
-      }
-    }
-
-    // Update individual cards and inputs in place without tearing down DOM nodes
-    this.parsedWorkoutBuffer.forEach((item, idx) => {
-      const cardEl = document.getElementById(`confirm-workout-card-${idx}`);
-      const badgeEl = document.getElementById(`confirm-workout-badge-${idx}`);
-      const weightInput = document.getElementById(`input-confirm-weight-${idx}`);
-      const setsInput = document.getElementById(`input-confirm-sets-${idx}`);
-      const repsInput = document.getElementById(`input-confirm-reps-${idx}`);
-
-      const isWeightMissing = item.weightKg === null || item.weightKg === undefined || isNaN(item.weightKg) || item.weightKg < 0;
-      const isSetsMissing = item.sets === null || item.sets === undefined || isNaN(item.sets) || item.sets < 1;
-      const isRepsMissing = item.reps === null || item.reps === undefined || isNaN(item.reps) || item.reps < 1;
-
-      if (cardEl) {
-        cardEl.style.borderColor = !item.isComplete ? 'rgba(245,158,11,0.4)' : 'var(--border-subtle)';
-      }
-      if (badgeEl) {
-        badgeEl.innerHTML = !item.isComplete
-          ? `<span class="factor-missing-badge">⚠️ 缺失参数</span>`
-          : `<span style="font-size:0.7rem;color:var(--accent-lime);font-weight:600;">✓ 参数完整</span>`;
-      }
-      if (weightInput) {
-        if (isWeightMissing) weightInput.classList.add('input-invalid');
-        else weightInput.classList.remove('input-invalid');
-      }
-      if (setsInput) {
-        if (isSetsMissing) setsInput.classList.add('input-invalid');
-        else setsInput.classList.remove('input-invalid');
-      }
-      if (repsInput) {
-        if (isRepsMissing) repsInput.classList.add('input-invalid');
-        else repsInput.classList.remove('input-invalid');
-      }
-    });
-  }
-
-  renderFollowupChipsHtml(item) {
-    const missing = item.missingFactors || [];
-    const chips = [];
-    if (missing.includes('sets') || missing.includes('reps')) {
-      chips.push('4组×8次', '4组×10次', '5组×5次', '3组×12次');
-    }
-    if (missing.includes('weightKg')) {
-      chips.push('60kg', '80kg', '100kg', '自重 0kg');
-    }
-    if (chips.length === 0) {
-      chips.push('4组×8次', '4组×10次', '5组×5次', '3组×12次', '60kg', '80kg', '100kg', '自重 0kg');
-    }
-    return chips.map(chip => `
-      <span class="sample-chip" onclick="window.app.applyFollowupChip('${chip}')">${chip}</span>
-    `).join('');
-  }
-
-  applyFollowupChip(chipText) {
-    if (!this.parsedWorkoutBuffer || this.parsedWorkoutBuffer.length === 0) return;
-    const idx = this.parsedWorkoutBuffer.findIndex(i => !i.isComplete);
-    const targetIdx = idx !== -1 ? idx : 0;
-
-    if (this.parsedWorkoutBuffer[targetIdx]) {
-      this.parsedWorkoutBuffer[targetIdx] = WorkoutEngine.mergeWorkoutFactors(this.parsedWorkoutBuffer[targetIdx], chipText);
-      const updated = this.parsedWorkoutBuffer[targetIdx];
-
-      // Update input fields in the DOM
-      const weightInput = document.getElementById(`input-confirm-weight-${targetIdx}`);
-      const setsInput = document.getElementById(`input-confirm-sets-${targetIdx}`);
-      const repsInput = document.getElementById(`input-confirm-reps-${targetIdx}`);
-
-      if (weightInput && updated.weightKg !== null && updated.weightKg !== undefined) {
-        weightInput.value = updated.weightKg;
-      }
-      if (setsInput && updated.sets !== null && updated.sets !== undefined) {
-        setsInput.value = updated.sets;
-      }
-      if (repsInput && updated.reps !== null && updated.reps !== undefined) {
-        repsInput.value = updated.reps;
-      }
-
-      this.updateWorkoutConfirmModalUI();
-      this.showToast(`✓ 已补全：${chipText}`);
-    }
-  }
-
-  updateWorkoutBuffer(index, field, value) {
-    if (!this.parsedWorkoutBuffer || !this.parsedWorkoutBuffer[index]) return;
-
-    if (value === '' || value === null || value === undefined) {
-      this.parsedWorkoutBuffer[index][field] = null;
-    } else {
-      const num = parseFloat(value);
-      this.parsedWorkoutBuffer[index][field] = isNaN(num) ? null : (field === 'weightKg' ? num : Math.round(num));
-    }
-
-    // Re-validate in place
-    if (WorkoutEngine.validateWorkoutFactors) {
-      this.parsedWorkoutBuffer[index] = WorkoutEngine.validateWorkoutFactors(this.parsedWorkoutBuffer[index]);
-    }
-
-    // Update UI in place WITHOUT recreating DOM elements or losing input focus
-    this.updateWorkoutConfirmModalUI();
-  }
-
-  toggleInlineFollowupRecording() {
-    if (this.isInlineFollowupRecording) {
-      this.stopInlineFollowupRecording(false);
-    } else {
-      this.startInlineFollowupRecording();
-    }
-  }
-
-  async startInlineFollowupRecording() {
-    const recordingBox = document.getElementById('modal-followup-recording-box');
-    const voiceBtn = document.getElementById('btn-modal-followup-voice');
-    const statusText = document.getElementById('followup-recording-status');
-    const timerText = document.getElementById('followup-recording-timer');
-    const liveText = document.getElementById('followup-recording-live-text');
-
-    if (!SpeechModule.isMediaRecorderSupported() && !SpeechModule.isWebSpeechSupported()) {
-      this.showToast('⚠️ 当前浏览器不支持语音录音');
-      return;
-    }
-
-    this.isInlineFollowupRecording = true;
-    if (recordingBox) recordingBox.style.display = 'block';
-    if (voiceBtn) {
-      voiceBtn.style.background = 'rgba(239,68,68,0.2)';
-      voiceBtn.style.borderColor = '#ef4444';
-      voiceBtn.innerHTML = `
-        <span class="recording-pulse-dot" style="width:10px;height:10px;border-radius:50%;background:#ef4444;display:inline-block;margin-right:6px;"></span>
-        <span>🔴 正在倾听中... (点击结束)</span>
-      `;
-    }
-    if (statusText) statusText.textContent = '正在录音倾听中... (请说出参数)';
-    if (timerText) timerText.textContent = '00:00';
-    if (liveText) liveText.textContent = '“请直接说：4组8次、80公斤 或 5组5个”';
-
-    const started = await SpeechModule.start({
-      isHold: false,
-      onTimerTick: (formatted) => {
-        if (timerText) timerText.textContent = formatted;
-      },
-      onResult: (text, isFinal) => {
-        if (liveText && text) {
-          liveText.textContent = `“${text}”`;
-        }
-      },
-      onEnd: ({ isCanceled, text }) => {
-        this.resetInlineFollowupRecordingUI();
-        if (!isCanceled && text && text.trim()) {
-          this.applyFollowupVoiceResult(text.trim());
-        } else if (!isCanceled) {
-          this.showToast('⚠️ 未检测到有效声音，请重试或手动输入');
-        }
-      },
-      onError: (type) => {
-        this.resetInlineFollowupRecordingUI();
-        if (type === 'PERMISSION_DENIED') {
-          this.showToast('⚠️ 麦克风权限被拒绝，请在手机设置中允许');
-        } else {
-          this.showToast('⚠️ 录音识别超时或未检测到声音');
-        }
-      }
-    });
-
-    if (!started) {
-      this.resetInlineFollowupRecordingUI();
-    }
-  }
-
-  stopInlineFollowupRecording(isCancel = false) {
-    if (!this.isInlineFollowupRecording) return;
-    this.isInlineFollowupRecording = false;
-    SpeechModule.stop(isCancel);
-  }
-
-  resetInlineFollowupRecordingUI() {
-    this.isInlineFollowupRecording = false;
-    const recordingBox = document.getElementById('modal-followup-recording-box');
-    const voiceBtn = document.getElementById('btn-modal-followup-voice');
-    if (recordingBox) recordingBox.style.display = 'none';
-    if (voiceBtn) {
-      voiceBtn.style.background = '';
-      voiceBtn.style.borderColor = '';
-      voiceBtn.innerHTML = `
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
-        <span>🎙️ 语音补充参数 (说出如 "4组8次" 或 "80kg")</span>
-      `;
-    }
-  }
-
-  applyFollowupVoiceResult(transcribedText) {
-    if (!this.parsedWorkoutBuffer || this.parsedWorkoutBuffer.length === 0) return;
-    const idx = this.parsedWorkoutBuffer.findIndex(i => !i.isComplete);
-    const targetIdx = idx !== -1 ? idx : 0;
-
-    if (this.parsedWorkoutBuffer[targetIdx]) {
-      this.parsedWorkoutBuffer[targetIdx] = WorkoutEngine.mergeWorkoutFactors(this.parsedWorkoutBuffer[targetIdx], transcribedText);
-      const updated = this.parsedWorkoutBuffer[targetIdx];
-
-      // Update inputs in the DOM
-      const weightInput = document.getElementById(`input-confirm-weight-${targetIdx}`);
-      const setsInput = document.getElementById(`input-confirm-sets-${targetIdx}`);
-      const repsInput = document.getElementById(`input-confirm-reps-${targetIdx}`);
-
-      if (weightInput && updated.weightKg !== null && updated.weightKg !== undefined) {
-        weightInput.value = updated.weightKg;
-      }
-      if (setsInput && updated.sets !== null && updated.sets !== undefined) {
-        setsInput.value = updated.sets;
-      }
-      if (repsInput && updated.reps !== null && updated.reps !== undefined) {
-        repsInput.value = updated.reps;
-      }
-
-      this.updateWorkoutConfirmModalUI();
-      if (updated.isComplete) {
-        this.showToast(`✓ 语音补全成功：${updated.exerciseName} ${updated.weightKg}kg ${updated.sets}组${updated.reps}次`);
-      } else {
-        this.showToast(`✓ 语音已识别：“${transcribedText}”，请补全剩余参数`);
-      }
-    }
-  }
-
-  saveConfirmedWorkouts() {
-    if (!this.parsedWorkoutBuffer || this.parsedWorkoutBuffer.length === 0) return;
-
-    const anyIncomplete = this.parsedWorkoutBuffer.some(i => !i.isComplete);
-    if (anyIncomplete) {
-      this.showToast('⚠️ 请先补全缺失参数');
-      return;
-    }
-
-    this.parsedWorkoutBuffer.forEach(item => {
-      this.workouts.unshift({
-        id: "w_" + Date.now() + "_" + Math.random().toString(36).substr(2, 4),
-        date: this.selectedDate,
-        exerciseName: item.exerciseName,
-        muscleGroup: item.muscleGroup,
-        sets: item.sets,
-        reps: item.reps,
-        weightKg: item.weightKg,
-        rpe: item.rpe || 8.0,
-        burnedCalories: Math.round(item.burnedCalories || 0),
-        notes: item.notes || "AI语音录入"
+    if (kind === 'meal') {
+      document.getElementById('edit-title').textContent = '修改饮食';
+      f.innerHTML = `
+        <div class="seg seg-sm" id="edit-meal-type">
+          ${MEAL_TYPES.map(t => `<button type="button" class="seg-btn ${rec.mealType === t ? 'active' : ''}" data-value="${t}">${t.replace('/补剂', '')}</button>`).join('')}
+        </div>
+        ${input('foodSummary', '吃了什么', rec.foodSummary, 'text', 'maxlength="60"')}
+        <div class="field-grid field-grid-2">
+          ${input('calories', '热量 kcal', rec.calories)}
+          ${input('proteinG', '蛋白质 g', rec.proteinG || 0)}
+          ${input('carbsG', '碳水 g', rec.carbsG || 0)}
+          ${input('fatG', '脂肪 g', rec.fatG || 0)}
+        </div>`;
+      f.querySelector('#edit-meal-type').addEventListener('click', (e) => {
+        const b = e.target.closest('.seg-btn');
+        if (!b) return;
+        f.querySelectorAll('#edit-meal-type .seg-btn').forEach(x => x.classList.toggle('active', x === b));
       });
+    } else if (rec.durationMin) {
+      document.getElementById('edit-title').textContent = '修改有氧';
+      f.innerHTML = `
+        ${input('exerciseName', '项目', rec.exerciseName, 'text', 'maxlength="30"')}
+        <div class="field-grid field-grid-2">
+          ${input('durationMin', '时长 分钟', rec.durationMin)}
+          ${input('burnedCalories', '消耗 kcal', rec.burnedCalories || 0)}
+        </div>`;
+    } else {
+      document.getElementById('edit-title').textContent = '修改训练';
+      f.innerHTML = `
+        ${input('exerciseName', '动作', rec.exerciseName, 'text', 'maxlength="30"')}
+        <div class="field-grid">
+          ${input('weightKg', '重量 kg（自重填 0）', rec.weightKg)}
+          ${input('sets', '组数', rec.sets)}
+          ${input('reps', '每组次数', rec.reps)}
+        </div>
+        ${input('burnedCalories', '消耗 kcal', rec.burnedCalories || 0)}`;
+    }
+    document.getElementById('edit-overlay').classList.remove('hidden');
+    history.pushState({ edit: true }, '');
+  }
 
-      // Contextual sync: mark active To-Do item completed if matched
-      if (this.activeRoutineTodo && this.activeRoutineTodo.items) {
-        const todoMatch = this.activeRoutineTodo.items.find(t => !t.completed && (t.exerciseName === item.exerciseName || item.exerciseName.includes(t.exerciseName) || t.exerciseName.includes(item.exerciseName)));
-        if (todoMatch) {
-          todoMatch.completed = true;
-        }
+  closeEditor(fromBack) {
+    if (!this.editing) return;
+    this.editing = null;
+    document.getElementById('edit-overlay').classList.add('hidden');
+    if (!fromBack && history.state && history.state.edit) history.back();
+  }
+
+  saveEditor() {
+    if (!this.editing) return;
+    const { kind, id } = this.editing;
+    const list = kind === 'meal' ? this.diet : this.workouts;
+    const rec = list.find(r => r.id === id);
+    if (!rec) return this.closeEditor();
+    const form = document.getElementById('edit-form');
+    const val = (name) => form.elements[name] ? form.elements[name].value : undefined;
+    const numv = (name, fallback) => { const v = parseFloat(val(name)); return Number.isFinite(v) && v >= 0 ? v : fallback; };
+
+    if (kind === 'meal') {
+      const active = form.querySelector('#edit-meal-type .seg-btn.active');
+      rec.mealType = active ? active.dataset.value : rec.mealType;
+      rec.foodSummary = (val('foodSummary') || '').trim() || rec.foodSummary;
+      rec.calories = Math.round(numv('calories', rec.calories));
+      rec.proteinG = round1(numv('proteinG', rec.proteinG || 0));
+      rec.carbsG = round1(numv('carbsG', rec.carbsG || 0));
+      rec.fatG = round1(numv('fatG', rec.fatG || 0));
+    } else {
+      rec.exerciseName = (val('exerciseName') || '').trim() || rec.exerciseName;
+      if (rec.durationMin) {
+        rec.durationMin = Math.max(1, Math.round(numv('durationMin', rec.durationMin)));
+      } else {
+        rec.weightKg = round1(numv('weightKg', rec.weightKg));
+        rec.sets = Math.max(1, Math.round(numv('sets', rec.sets)));
+        rec.reps = Math.max(1, Math.round(numv('reps', rec.reps)));
       }
-    });
-
+      rec.burnedCalories = Math.round(numv('burnedCalories', rec.burnedCalories || 0));
+      if (rec.notes && /估计/.test(rec.notes)) rec.notes = '一键记录（已手动修改）';
+    }
     this.saveData();
-    this.saveActiveRoutineTodo();
+    this.closeEditor();
+    this.render();
+    this.showToast('已保存');
+  }
 
-    // 自动将口播/录入的一组序列生成并沉淀为置顶训练计划 Card
-    if (this.parsedWorkoutBuffer && this.parsedWorkoutBuffer.length >= 1) {
-      const muscleList = Array.from(new Set(this.parsedWorkoutBuffer.map(i => i.muscleGroup || '综合力量'))).join('/');
-      const routineName = this.parsedWorkoutBuffer.length === 1
-        ? `${this.parsedWorkoutBuffer[0].exerciseName}专项组`
-        : `${muscleList}分化序列 (${this.parsedWorkoutBuffer.length}动作)`;
-
-      if (!Array.isArray(this.customRoutines)) this.customRoutines = [];
-      const existingRoutine = this.customRoutines.find(r => 
-        r.exercises &&
-        r.exercises.length === this.parsedWorkoutBuffer.length &&
-        r.exercises.every((e, idx) => e.name === this.parsedWorkoutBuffer[idx].exerciseName)
-      );
-
-      let routineIdToActivate = null;
-      if (!existingRoutine) {
-        const newRoutine = {
-          id: "routine_auto_" + Date.now(),
-          name: routineName,
-          muscleGroup: muscleList,
-          isCustom: true,
-          isAutoGenerated: true,
-          badgeText: "🎙️ 口播生成",
-          exercises: this.parsedWorkoutBuffer.map(i => ({
-            name: i.exerciseName,
-            muscleGroup: i.muscleGroup || '综合力量',
-            weightKg: i.weightKg !== null && i.weightKg !== undefined ? i.weightKg : 60,
-            sets: i.sets || 4,
-            reps: i.reps || 8
-          }))
-        };
-        this.customRoutines.unshift(newRoutine);
+  deleteEditing() {
+    if (!this.editing) return;
+    const { kind, id } = this.editing;
+    const list = kind === 'meal' ? this.diet : this.workouts;
+    const idx = list.findIndex(r => r.id === id);
+    if (idx === -1) return this.closeEditor();
+    const [removed] = list.splice(idx, 1);
+    this.saveData();
+    this.closeEditor();
+    this.render();
+    if (window.QuickLog) {
+      window.QuickLog.showUndo('已删除 1 条', [], () => {
+        list.splice(idx, 0, removed);
         this.saveData();
-        routineIdToActivate = newRoutine.id;
-      } else {
-        routineIdToActivate = existingRoutine.id;
-      }
-
-      // 如果当前没有激活的计划清单，自动激活该计划为今日待办
-      if (!this.activeRoutineTodo) {
-        this.selectRoutine(routineIdToActivate);
-      }
-    }
-
-    if (typeof document !== 'undefined') {
-      const modal = document.getElementById('modal-confirm-workouts');
-      if (modal) modal.classList.add('hidden');
-    }
-    this.render();
-    this.showToast(`✓ 已存入 ${this.parsedWorkoutBuffer.length} 项训练并生成计划卡片`);
-    this.switchTab('workout');
-  }
-
-  showDietConfirmModal(result) {
-    this.parsedDietBuffer = result;
-    this.renderDietConfirmItems();
-
-    document.querySelectorAll('.meal-type-btn').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.type === result.mealType);
-    });
-
-    document.getElementById('modal-confirm-diet').classList.remove('hidden');
-  }
-
-  renderDietConfirmItems() {
-    if (!this.parsedDietBuffer) return;
-    const result = this.parsedDietBuffer;
-
-    document.getElementById('confirm-diet-summary').value = result.foodSummary;
-    document.getElementById('confirm-diet-cal').value = result.totalCalories;
-    document.getElementById('confirm-diet-p').value = result.proteinG;
-    document.getElementById('confirm-diet-c').value = result.carbsG;
-    document.getElementById('confirm-diet-f').value = result.fatG;
-
-    const box = document.getElementById('confirm-diet-items-box');
-    if (!box) return;
-
-    box.innerHTML = `
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-        <span style="font-weight:700;color:var(--text-muted);font-size:0.7rem;">🍽️ 菜品成分与精确克数微调</span>
-        <span style="font-size:0.65rem;color:var(--accent-cyan);">支持 ± 微调克数实时重算</span>
-      </div>
-      ${result.items.map((i, idx) => `
-        <div style="background:var(--bg-card);padding:8px 10px;border-radius:var(--radius-sm);border:1px solid var(--border-subtle);display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-          <div style="display:flex;flex-direction:column;gap:2px;">
-            <b style="font-size:0.8rem;">${i.name}</b>
-            <span style="font-size:0.68rem;color:var(--text-muted);">P:${i.proteinG}g · C:${i.carbsG}g · F:${i.fatG}g</span>
-          </div>
-          <div style="display:flex;align-items:center;gap:6px;">
-            <div style="display:flex;align-items:center;gap:2px;">
-              <button onclick="window.app.adjustDietItemGrams(${idx}, -20)" class="btn-subtle" style="width:22px;height:22px;padding:0;font-size:0.75rem;border-radius:4px;display:flex;align-items:center;justify-content:center;">-</button>
-              <input type="number" step="10" value="${Math.round(i.estimatedGrams)}" onchange="window.app.setDietItemGrams(${idx}, this.value)" class="form-input" style="width:55px;padding:2px 4px;text-align:center;font-size:0.75rem;height:24px;">
-              <span style="font-size:0.7rem;color:var(--text-muted);">g</span>
-              <button onclick="window.app.adjustDietItemGrams(${idx}, 20)" class="btn-subtle" style="width:22px;height:22px;padding:0;font-size:0.75rem;border-radius:4px;display:flex;align-items:center;justify-content:center;">+</button>
-            </div>
-            <b style="color:var(--accent-orange);font-size:0.82rem;min-width:55px;text-align:right;">${i.calories} kcal</b>
-          </div>
-        </div>
-      `).join('')}
-    `;
-  }
-
-  adjustDietItemGrams(index, delta) {
-    if (!this.parsedDietBuffer || !this.parsedDietBuffer.items[index]) return;
-    const item = this.parsedDietBuffer.items[index];
-    const newGrams = Math.max(10, (item.estimatedGrams || 100) + delta);
-    this.setDietItemGrams(index, newGrams);
-  }
-
-  setDietItemGrams(index, grams) {
-    if (!this.parsedDietBuffer || !this.parsedDietBuffer.items[index]) return;
-    const item = this.parsedDietBuffer.items[index];
-    const g = Math.max(5, parseFloat(grams) || 100);
-    item.estimatedGrams = g;
-
-    if (item.rawItem) {
-      const nut = NutritionEngine.calcItemNutrition(item.rawItem, g);
-      item.calories = nut.calories;
-      item.proteinG = nut.proteinG;
-      item.carbsG = nut.carbsG;
-      item.fatG = nut.fatG;
-    } else {
-      const ratio = g / 100;
-      item.calories = Math.round(128 * ratio);
-      item.proteinG = Math.round(7.2 * ratio * 10) / 10;
-      item.carbsG = Math.round(16.0 * ratio * 10) / 10;
-      item.fatG = Math.round(4.0 * ratio * 10) / 10;
-    }
-
-    // Recalculate totals
-    const items = this.parsedDietBuffer.items;
-    this.parsedDietBuffer.totalCalories = items.reduce((sum, i) => sum + i.calories, 0);
-    this.parsedDietBuffer.proteinG = Math.round(items.reduce((sum, i) => sum + i.proteinG, 0) * 10) / 10;
-    this.parsedDietBuffer.carbsG = Math.round(items.reduce((sum, i) => sum + i.carbsG, 0) * 10) / 10;
-    this.parsedDietBuffer.fatG = Math.round(items.reduce((sum, i) => sum + i.fatG, 0) * 10) / 10;
-
-    this.renderDietConfirmItems();
-  }
-
-  saveConfirmedDiet() {
-    const mealType = document.querySelector('.meal-type-btn.active')?.dataset.type || '午餐';
-    const summary = document.getElementById('confirm-diet-summary').value || '日常餐饮';
-    const cal = parseFloat(document.getElementById('confirm-diet-cal').value) || 300;
-    const p = parseFloat(document.getElementById('confirm-diet-p').value) || 20;
-    const c = parseFloat(document.getElementById('confirm-diet-c').value) || 35;
-    const f = parseFloat(document.getElementById('confirm-diet-f').value) || 8;
-
-    const item = {
-      id: "d_" + Date.now(),
-      date: this.selectedDate,
-      mealType,
-      foodSummary: summary,
-      calories: Math.round(cal),
-      proteinG: Math.round(p * 10) / 10,
-      carbsG: Math.round(c * 10) / 10,
-      fatG: Math.round(f * 10) / 10
-    };
-
-    this.diet.unshift(item);
-    this.saveData();
-    document.getElementById('modal-confirm-diet').classList.add('hidden');
-    this.render();
-    this.showToast(`✓ 已存入：+${item.calories} kcal`);
-    this.switchTab('diet');
-  }
-
-  setDietOilMode(multiplier, btn) {
-    document.querySelectorAll('.oil-mode-btn').forEach(b => b.classList.remove('active'));
-    if (btn) btn.classList.add('active');
-
-    if (this.parsedDietBuffer && this.parsedDietBuffer.items) {
-      this.parsedDietBuffer.items.forEach(item => {
-        if (item.rawItem) {
-          const nut = NutritionEngine.calcItemNutrition(item.rawItem, item.estimatedGrams || 100);
-          const baseFat = nut.fatG;
-          const adjustedFat = Math.round((baseFat * multiplier) * 10) / 10;
-          const fatDelta = adjustedFat - baseFat;
-          item.fatG = Math.max(0, adjustedFat);
-          item.calories = Math.max(10, Math.round(nut.calories + fatDelta * 9));
-        }
+        this.render();
       });
-
-      const items = this.parsedDietBuffer.items;
-      this.parsedDietBuffer.totalCalories = items.reduce((sum, i) => sum + i.calories, 0);
-      this.parsedDietBuffer.proteinG = Math.round(items.reduce((sum, i) => sum + i.proteinG, 0) * 10) / 10;
-      this.parsedDietBuffer.carbsG = Math.round(items.reduce((sum, i) => sum + i.carbsG, 0) * 10) / 10;
-      this.parsedDietBuffer.fatG = Math.round(items.reduce((sum, i) => sum + i.fatG, 0) * 10) / 10;
-
-      this.renderDietConfirmItems();
+    } else {
+      this.showToast('已删除');
     }
   }
 
-  // ==================== Barbell Plate Calculator (配重算片) ====================
-  openPlateCalculator(initialWeight = 80) {
-    const input = document.getElementById('plate-calc-weight-input');
-    if (input) input.value = initialWeight;
-    this.renderPlateCalculation();
-    document.getElementById('modal-plate-calculator')?.classList.remove('hidden');
+  // ======================= 整理中的语音记录 =======================
+  addPending(text) {
+    const p = { id: 'p_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6), text, date: this.selectedDate, ts: Date.now(), status: 'working' };
+    this.pending.unshift(p);
+    this.savePending();
+    if (this.view !== 'today') this.switchView('today'); else this.render();
+    return p;
   }
 
-  closePlateCalculator() {
-    document.getElementById('modal-plate-calculator')?.classList.add('hidden');
+  finishPending(id) {
+    this.pending = this.pending.filter(p => p.id !== id);
+    this.savePending();
   }
 
-  adjustPlateCalcWeight(delta) {
-    const input = document.getElementById('plate-calc-weight-input');
-    if (!input) return;
-    const current = parseFloat(input.value) || 80;
-    const next = Math.max(20, Math.round((current + delta) * 10) / 10);
-    input.value = next;
-    this.renderPlateCalculation();
-  }
-
-  renderPlateCalculation() {
-    const weight = parseFloat(document.getElementById('plate-calc-weight-input')?.value) || 80;
-    const res = WorkoutEngine.calcBarbellPlates(weight);
-
-    const visual = document.getElementById('plate-calc-visual');
-    const summary = document.getElementById('plate-calc-text-summary');
-
-    if (visual) {
-      const plateClassMap = {
-        25: 'plate-25',
-        20: 'plate-20',
-        15: 'plate-15',
-        10: 'plate-10',
-        5: 'plate-5',
-        2.5: 'plate-2_5',
-        1.25: 'plate-1_25'
-      };
-
-      // Left plates (mirrored)
-      const leftPlatesHtml = [...res.platesPerSide].reverse().map(p => `
-        <div class="plate-disc ${plateClassMap[p] || 'plate-10'}" title="${p}kg">${p}</div>
-      `).join('');
-
-      // Right plates
-      const rightPlatesHtml = res.platesPerSide.map(p => `
-        <div class="plate-disc ${plateClassMap[p] || 'plate-10'}" title="${p}kg">${p}</div>
-      `).join('');
-
-      visual.innerHTML = `
-        <div class="bar-shaft"></div>
-        <div style="display:flex;align-items:center;gap:2px;">${leftPlatesHtml}</div>
-        <div class="bar-collar"></div>
-        <div class="bar-sleeve" style="width:76px;text-align:center;font-size:0.65rem;color:#09090b;background:linear-gradient(180deg, #e2e8f0 0%, #cbd5e1 50%, #94a3b8 100%);padding:4px 0;border-radius:3px;font-weight:800;display:flex;align-items:center;justify-content:center;box-shadow:inset 0 1px 0 rgba(255,255,255,0.4);">
-          🏋️ 奥杆 20kg
-        </div>
-        <div class="bar-collar"></div>
-        <div style="display:flex;align-items:center;gap:2px;">${rightPlatesHtml}</div>
-        <div class="bar-shaft"></div>
-      `;
-    }
-
-    if (summary) {
-      if (res.platesPerSide.length === 0) {
-        summary.innerHTML = `
-          <div style="font-size:0.82rem;font-weight:700;color:var(--accent-lime);text-align:center;">
-            ⚡ 奥林匹克标准空杆 <b>20kg</b>（两边无需挂片）
-          </div>
-        `;
-      } else {
-        const platesCount = {};
-        res.platesPerSide.forEach(p => platesCount[p] = (platesCount[p] || 0) + 1);
-        const perSideStr = Object.entries(platesCount).map(([p, count]) => `<b style="color:var(--text-primary);">${p}kg</b> × ${count}块`).join(' + ');
-
-        summary.innerHTML = `
-          <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--border-subtle);">
-            <span>单侧装片：<b style="color:var(--accent-cyan);font-size:0.95rem;">${res.perSideWeight} kg</b></span>
-            <span style="color:var(--text-muted);font-size:0.75rem;">标准奥杆 20kg</span>
-          </div>
-          <div style="margin-top:6px;font-size:0.75rem;color:var(--text-secondary);line-height:1.4;">
-            👉 <b>单边挂片方案</b>：${perSideStr}
-          </div>
-        `;
-      }
-    }
-  }
-
-  deleteDiet(id) {
-    this.diet = this.diet.filter(d => d.id !== id);
-    this.saveData();
+  failPending(id, message) {
+    const p = this.pending.find(x => x.id === id);
+    if (!p) return;
+    p.status = 'failed';
+    p.error = message || '没整理出来';
+    this.savePending();
     this.render();
-    this.showToast('已删除记录');
   }
 
-  deleteWorkout(id) {
-    this.workouts = this.workouts.filter(w => w.id !== id);
-    this.saveData();
+  retryPending(id) {
+    const p = this.pending.find(x => x.id === id);
+    if (!p || !window.QuickLog) return;
+    p.status = 'working';
+    p.error = null;
     this.render();
-    this.showToast('已删除动作');
+    window.QuickLog.process(p);
+  }
+
+  dropPending(id) {
+    this.finishPending(id);
+    this.render();
+  }
+
+  editPendingText(id) {
+    const p = this.pending.find(x => x.id === id);
+    if (!p || !window.QuickLog) return;
+    this.finishPending(id);
+    this.render();
+    window.QuickLog.openWithText(p.text);
   }
 
   showToast(msg) {
@@ -2787,19 +742,19 @@ class FitnessApp {
     t.textContent = msg;
     t.classList.remove('hidden');
     clearTimeout(this.toastTimer);
-    this.toastTimer = setTimeout(() => {
-      t.classList.add('hidden');
-    }, 2200);
+    this.toastTimer = setTimeout(() => t.classList.add('hidden'), 1800);
   }
+
+  // 兼容 quick_log.js 旧接口
+  switchTab(tab) { if (tab === 'workout' || tab === 'diet') this.switchView('today'); else this.switchView(tab); }
 }
 
-window.addEventListener('DOMContentLoaded', () => {
-  window.app = new FitnessApp();
-});
-
-if (typeof window !== 'undefined') {
+if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+  window.addEventListener('DOMContentLoaded', () => {
+    window.app = new FitnessApp();
+  });
   window.FitnessApp = FitnessApp;
 }
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { FitnessApp, DEFAULT_PROFILE, getTodayDateString, shiftDateString };
+  module.exports = { FitnessApp, DEFAULT_PROFILE, getTodayDateString, shiftDateString, formatLocalDate };
 }

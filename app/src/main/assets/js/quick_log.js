@@ -325,7 +325,8 @@
         const items = WE.parseWorkoutVoice(workoutSegs.join('，')) || [];
         const pseudo = {
           workouts: items
-            .filter(i => i && i.exerciseName)
+            // 旧引擎对无关的话也会返回一个默认动作：一个数字都没有的丢掉
+            .filter(i => i && i.exerciseName && (i.weightKg != null || i.sets != null || i.reps != null))
             .map(i => {
               const isCardio = /有氧|跑|骑|单车|跳绳|平板/.test((i.muscleGroup || '') + i.exerciseName);
               return {
@@ -410,16 +411,6 @@
           this.textEl.value = keep;
           this.statusEl.textContent = '打字吧，写完点「记下来」';
           setTimeout(() => this.textEl.focus(), 30);
-        }
-      });
-
-      // 旧的「口喷记饮食 / 口喷记训练」按钮也改成打开一键记录
-      ['btn-hero-diet-voice', 'btn-hero-workout-voice'].forEach(id => {
-        const old = document.getElementById(id);
-        if (old) {
-          const fresh = old.cloneNode(true);
-          old.parentNode.replaceChild(fresh, old);
-          fresh.addEventListener('click', () => this.open(false));
         }
       });
 
@@ -596,44 +587,53 @@
       }
     },
 
-    // ----- 解析 + 保存 -----
-    async submit(text) {
+    // ----- 解析 + 保存（后台进行，不用等） -----
+    submit(text) {
       text = (text || '').trim();
       if (!text) { this.statusEl.textContent = '先说点什么，或者打几个字'; return; }
-      this.setState('processing');
+      const app = root.app;
+      this.close(false);
+      const p = app.addPending(text);
+      this.process(p);
+    },
+
+    async process(p) {
       const app = root.app;
       const ctx = {
-        now: new Date(),
-        history: app ? app.workouts : [],
-        knownExercises: app ? Array.from(new Set(app.workouts.map(w => w.exerciseName))) : []
+        now: new Date(p.ts || Date.now()),
+        history: app.workouts,
+        knownExercises: Array.from(new Set(app.workouts.map(w => w.exerciseName)))
       };
-      const result = await Parser.parse(text, ctx);
-
-      if (!result.workouts.length && !result.meals.length) {
-        this.setState('idle');
-        this.statusEl.textContent = result.source === 'local'
-          ? '没识别出训练或饮食（AI 接口没连上，只能用简单规则）。换个说法试试'
-          : '没识别出训练或饮食，换个说法试试';
+      let result;
+      try {
+        result = await Parser.parse(p.text, ctx);
+      } catch (e) {
+        app.failPending(p.id, '整理出错了');
         return;
       }
-
-      const batch = this.save(result);
-      this.close(false);
+      if (!app.pending.some(x => x.id === p.id)) return; // 已被用户删掉
+      if (!result.workouts.length && !result.meals.length) {
+        app.failPending(p.id, result.source === 'local' ? 'AI 没连上，也没认出内容' : '没认出训练或饮食');
+        return;
+      }
+      app.finishPending(p.id);
+      const batch = this.save(result, p.date);
       this.showSnack(batch, result);
     },
 
-    save(result) {
+    save(result, baseDate) {
       const app = root.app;
-      const base = app.selectedDate || getTodayDateString();
-      const date = result.dayOffset && typeof shiftDateString === 'function' ? shiftDateString(base, result.dayOffset) : base;
+      const base = baseDate || app.selectedDate || getTodayDateString();
+      const date = result.dayOffset ? shiftDateString(base, result.dayOffset) : base;
       const stamp = Date.now();
-      const batch = { workoutIds: [], dietIds: [], todoIds: [], date };
+      const batch = { workoutIds: [], dietIds: [], date };
 
       result.workouts.forEach((w, i) => {
         const id = 'w_' + stamp + '_' + i;
         batch.workoutIds.push(id);
         app.workouts.unshift({
           id,
+          ts: stamp + i,
           date,
           exerciseName: w.exerciseName,
           muscleGroup: w.muscleGroup,
@@ -645,12 +645,6 @@
           burnedCalories: w.burnedCalories,
           notes: w.estimated ? '一键记录（部分参数按上次/默认值估计）' : '一键记录'
         });
-
-        const todo = app.activeRoutineTodo && app.activeRoutineTodo.items;
-        if (todo) {
-          const t = todo.find(x => !x.completed && (x.exerciseName === w.exerciseName || w.exerciseName.includes(x.exerciseName) || x.exerciseName.includes(w.exerciseName)));
-          if (t) { t.completed = true; batch.todoIds.push(t.id); }
-        }
       });
 
       result.meals.forEach((m, i) => {
@@ -658,6 +652,8 @@
         batch.dietIds.push(id);
         app.diet.unshift({
           id,
+          // 同一次说的几顿饭按 早→午→晚→加餐 排时间，列表里倒序显示更自然
+          ts: stamp + 50 + Math.max(0, ['早餐', '午餐', '晚餐', '加餐/补剂'].indexOf(m.mealType)) * 2 + i,
           date,
           mealType: m.mealType,
           foodSummary: m.foodSummary,
@@ -669,65 +665,71 @@
       });
 
       app.saveData();
-      if (typeof app.saveActiveRoutineTodo === 'function') app.saveActiveRoutineTodo();
-      if (date !== app.selectedDate) app.selectedDate = date;
       app.render();
-      if (result.meals.length && !result.workouts.length) app.switchTab('diet');
-      else if (result.workouts.length && !result.meals.length) app.switchTab('workout');
-      this.lastBatch = batch;
       return batch;
-    },
-
-    undo() {
-      const b = this.lastBatch;
-      const app = root.app;
-      if (!b || !app) return;
-      app.workouts = app.workouts.filter(w => !b.workoutIds.includes(w.id));
-      app.diet = app.diet.filter(d => !b.dietIds.includes(d.id));
-      const todo = app.activeRoutineTodo && app.activeRoutineTodo.items;
-      if (todo) todo.forEach(t => { if (b.todoIds.includes(t.id)) t.completed = false; });
-      app.saveData();
-      if (typeof app.saveActiveRoutineTodo === 'function') app.saveActiveRoutineTodo();
-      app.render();
-      this.lastBatch = null;
-      this.hideSnack();
-      app.showToast('已撤销');
     },
 
     describe(result) {
       const lines = [];
       result.workouts.forEach(w => {
-        if (w.durationMin) lines.push(`🏃 ${w.exerciseName} ${w.durationMin}分钟`);
+        if (w.durationMin) lines.push(`🏃 ${w.exerciseName} ${w.durationMin} 分钟`);
         else lines.push(`🏋️ ${w.exerciseName} ${w.weightKg > 0 ? w.weightKg + 'kg' : '自重'} ${w.sets}×${w.reps}${w.estimated ? '（估）' : ''}`);
       });
-      result.meals.forEach(m => lines.push(`🍽️ ${m.mealType} ${m.foodSummary} ${m.calories}kcal`));
+      result.meals.forEach(m => lines.push(`🍽️ ${m.mealType.replace('/补剂', '')} ${m.foodSummary} ${m.calories} kcal`));
       return lines;
     },
 
     showSnack(batch, result) {
-      const list = document.getElementById('ql-snack-list');
-      const title = document.getElementById('ql-snack-title');
+      const app = root.app;
       const n = result.workouts.length + result.meals.length;
-      let t = `✓ 已记下 ${n} 项`;
-      if (result.dayOffset === -1) t += '（昨天）';
-      else if (result.dayOffset === -2) t += '（前天）';
-      if (result.source === 'local') t += ' · 离线解析，可能不准';
-      title.textContent = t;
+      let t = `✓ 已记下 ${n} 条`;
+      if (batch.date !== getTodayDateString()) t += `（${batch.date.slice(5).replace('-', '月')}日）`;
+      if (result.source === 'local') t += ' · AI 没连上，用的简单规则';
+      this.showUndo(t, this.describe(result), () => {
+        app.workouts = app.workouts.filter(w => !batch.workoutIds.includes(w.id));
+        app.diet = app.diet.filter(d => !batch.dietIds.includes(d.id));
+        app.saveData();
+        app.render();
+      });
+    },
+
+    /** 通用：底部提示 + 撤销 */
+    showUndo(title, lines, undoFn) {
+      document.getElementById('ql-snack-title').textContent = title;
+      const list = document.getElementById('ql-snack-list');
       list.innerHTML = '';
-      this.describe(result).forEach(line => {
+      (lines || []).forEach(line => {
         const li = document.createElement('div');
         li.className = 'ql-snack-line';
         li.textContent = line;
         list.appendChild(li);
       });
+      this._undoFn = undoFn;
       this.snack.classList.remove('hidden');
       clearTimeout(this._snackTimer);
-      this._snackTimer = setTimeout(() => this.hideSnack(), 8000);
+      this._snackTimer = setTimeout(() => this.hideSnack(), 6000);
+    },
+
+    undo() {
+      const fn = this._undoFn;
+      this._undoFn = null;
+      this.hideSnack();
+      if (fn) { fn(); root.app && root.app.showToast('已撤销'); }
     },
 
     hideSnack() {
       clearTimeout(this._snackTimer);
       this.snack.classList.add('hidden');
+    },
+
+    openWithText(text) {
+      this.holdMode = false;
+      this.overlay.classList.remove('hidden');
+      document.body.classList.add('ql-open');
+      this.setState('idle');
+      this.textEl.value = text || '';
+      this.statusEl.textContent = '改一改，再点「记下来」';
+      setTimeout(() => this.textEl.focus(), 50);
     },
 
     // ----- 设置：AI 接口 -----

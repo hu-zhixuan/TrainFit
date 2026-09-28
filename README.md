@@ -146,25 +146,21 @@ node server.js
 
 ```text
 TrainFit/
-├── app/                             # Android 原生工程 (Kotlin + Jetpack Compose)
-│   ├── src/main/java/com/example/
-│   │   ├── MainActivity.kt          # 3-Tab 导航路由与主入口
-│   │   ├── data/ai/                 # AI 营养与训练解析服务 (Gemini & 本地规则)
-│   │   ├── data/dao/ & database/    # Room 数据库与本地持久化
-│   │   ├── ui/screens/              # DietScreen / WorkoutScreen / HistoryScreen
-│   │   └── viewmodel/               # MVVM 架构 ViewModel
-│   └── build.gradle.kts
+├── app/                             # Android 壳工程（WebView 加载 assets 里的网页）
+│   ├── src/main/java/com/trainfit/app/
+│   │   ├── MainActivity.kt          # WebView 容器、系统栏与键盘留边、返回键
+│   │   └── NativeBridge.kt          # 给网页用的原生能力：系统语音识别、调用大模型接口、状态栏颜色
+│   └── build.gradle.kts             # 编译时注入 LLM_API_KEY / LLM_BASE_URL / LLM_MODEL
 ├── css/
-│   └── style.css                    # 德系/瑞士极简工精风 UI 主题样式
+│   └── style.css                    # 界面样式（深色 / 浅色）
 ├── js/
-│   ├── app.js                       # SPA 主控制器、数据闭环与引导流程
-│   ├── nutrition.js                 # 全能中式餐饮/零食/高颗粒度规格解析引擎
-│   ├── workout.js                   # 力量训练动作解析与超负荷加片建议算法
-│   ├── charts.js                    # Canvas 发丝级缺口环形仪表盘与历史折线图
-│   └── speech.js                    # Web Speech API 浏览器语音听写驱动
-├── index.html                       # 极简 Web 交互端骨架
-├── server.js                        # 局域网多设备同步 Web 服务
-├── settings.gradle.kts              # Gradle 多模块配置
+│   ├── app.js                       # 两页界面：今天 / 趋势，设置，修改记录
+│   ├── quick_log.js                 # 一键记录：按住说话、大模型解析、后台整理、撤销
+│   ├── nutrition.js                 # 本地中餐热量库（AI 连不上时兜底）
+│   └── workout.js                   # 本地训练动作解析（AI 连不上时兜底）
+├── index.html                       # 页面骨架
+├── server.js                        # 电脑上调试用的静态服务器
+├── settings.gradle.kts              # Gradle 配置
 └── README.md                        # 项目说明文档
 ```
 

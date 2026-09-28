@@ -1,12 +1,12 @@
 {
   "name": "练食AI (TrainFit)",
   "short_name": "练食AI",
-  "description": "用最简单、最快的方式，掌控你的增肌减脂闭环。口喷记录 · 自动超负荷加片建议 · 每日热量缺口闭环。",
+  "description": "一口气说完练了什么、吃了什么，自动记好。热量缺口与训练进步一目了然。",
   "start_url": "./index.html",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#09090b",
-  "theme_color": "#09090b",
+  "background_color": "#0b0b0d",
+  "theme_color": "#0b0b0d",
   "icons": [
     {
       "src": "./app/src/main/res/mipmap-xxxhdpi/ic_launcher.webp",
