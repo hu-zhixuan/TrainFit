@@ -33,6 +33,16 @@ class MainActivity : ComponentActivity() {
     private var pendingPermissionRequest: PermissionRequest? = null
     private lateinit var nativeBridge: NativeBridge
     private var pendingNativeMicCallback: ((Boolean) -> Unit)? = null
+    private var pendingNotifCallback: ((Boolean) -> Unit)? = null
+
+    // 通知权限（Android 13+）
+    private val notifPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        val cb = pendingNotifCallback
+        pendingNotifCallback = null
+        cb?.invoke(granted)
+    }
 
     // 原生语音识别用的麦克风权限申请
     private val nativeMicPermissionLauncher = registerForActivityResult(
@@ -74,8 +84,18 @@ class MainActivity : ComponentActivity() {
                 pendingNativeMicCallback = onResult
                 nativeMicPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
             },
-            onSystemBarsLight = { light -> applySystemBars(light) }
+            onSystemBarsLight = { light -> applySystemBars(light) },
+            requestNotifPermission = { onResult ->
+                if (android.os.Build.VERSION.SDK_INT >= 33) {
+                    pendingNotifCallback = onResult
+                    notifPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                } else {
+                    onResult(true)
+                }
+            }
         )
+        Reminders.ensureChannels(this)
+        Reminders.scheduleAll(this)
 
         // 3. Instantiate and Configure Native WebView Container
         setupWebView()

@@ -1,7 +1,11 @@
 package com.trainfit.app
 
 import android.Manifest
+import android.content.Context
 import android.content.Intent
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -31,7 +35,8 @@ class NativeBridge(
     private val activity: ComponentActivity,
     private val evalJs: (String) -> Unit,
     private val requestMicPermission: (onResult: (Boolean) -> Unit) -> Unit,
-    private val onSystemBarsLight: (Boolean) -> Unit = {}
+    private val onSystemBarsLight: (Boolean) -> Unit = {},
+    private val requestNotifPermission: (onResult: (Boolean) -> Unit) -> Unit = { it(false) }
 ) {
     private val main = Handler(Looper.getMainLooper())
     private val io = Executors.newCachedThreadPool()
@@ -251,6 +256,89 @@ class NativeBridge(
     private fun emitSpeech(type: String, text: String) {
         val js = "window.__tfSpeech && window.__tfSpeech(${JSONObject.quote(type)}, ${JSONObject.quote(text)});"
         main.post { evalJs(js) }
+    }
+
+    // ================= 震动反馈 =================
+    // 用系统预设的震感（点击 / 重击 / 双击 / 滴答），和系统应用的手感一致
+
+    private val vibrator: Vibrator? by lazy {
+        try {
+            if (Build.VERSION.SDK_INT >= 31) {
+                (activity.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager)?.defaultVibrator
+            } else {
+                @Suppress("DEPRECATION")
+                activity.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+            }
+        } catch (_: Exception) { null }
+    }
+
+    /** kind: tick | tap | start | stop | success | error */
+    @JavascriptInterface
+    fun haptic(kind: String) {
+        val v = vibrator ?: return
+        try {
+            if (!v.hasVibrator()) return
+            if (Build.VERSION.SDK_INT >= 29) {
+                val effect = when (kind) {
+                    "tick" -> VibrationEffect.createPredefined(VibrationEffect.EFFECT_TICK)
+                    "start" -> VibrationEffect.createPredefined(VibrationEffect.EFFECT_HEAVY_CLICK)
+                    "success" -> VibrationEffect.createPredefined(VibrationEffect.EFFECT_DOUBLE_CLICK)
+                    "error" -> VibrationEffect.createWaveform(longArrayOf(0, 45, 70, 45, 70, 45), -1)
+                    else -> VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK)
+                }
+                v.vibrate(effect)
+            } else if (Build.VERSION.SDK_INT >= 26) {
+                val effect = when (kind) {
+                    "success" -> VibrationEffect.createWaveform(longArrayOf(0, 25, 70, 25), -1)
+                    "error" -> VibrationEffect.createWaveform(longArrayOf(0, 45, 70, 45, 70, 45), -1)
+                    "tick" -> VibrationEffect.createOneShot(10, VibrationEffect.DEFAULT_AMPLITUDE)
+                    "start" -> VibrationEffect.createOneShot(35, VibrationEffect.DEFAULT_AMPLITUDE)
+                    else -> VibrationEffect.createOneShot(20, VibrationEffect.DEFAULT_AMPLITUDE)
+                }
+                v.vibrate(effect)
+            } else {
+                @Suppress("DEPRECATION")
+                v.vibrate(if (kind == "start") 35L else 20L)
+            }
+        } catch (_: Exception) {
+        }
+    }
+
+    // ================= 通知 =================
+    // 权限结果回调：window.__tfNotifPerm(granted)
+
+    @JavascriptInterface
+    fun notificationsEnabled(): Boolean = Reminders.canNotify(activity)
+
+    @JavascriptInterface
+    fun requestNotifications() {
+        main.post {
+            if (Reminders.canNotify(activity)) {
+                evalJs("window.__tfNotifPerm && window.__tfNotifPerm(true);")
+            } else {
+                requestNotifPermission { granted ->
+                    evalJs("window.__tfNotifPerm && window.__tfNotifPerm(${granted && Reminders.canNotify(activity)});")
+                }
+            }
+        }
+    }
+
+    /** 后台整理完成时发一条通知 */
+    @JavascriptInterface
+    fun showNotification(title: String, body: String) {
+        Reminders.show(activity, Reminders.CH_DONE, 200, title, body)
+    }
+
+    /** [{"id":"lunch","enabled":true,"time":"12:40"}, ...] */
+    @JavascriptInterface
+    fun setReminders(json: String) {
+        io.execute { Reminders.saveReminders(activity, json) }
+    }
+
+    /** 今天的状态，提醒时用来判断要不要打扰你 */
+    @JavascriptInterface
+    fun updateDayState(json: String) {
+        Reminders.saveDayState(activity, json)
     }
 
     // ================= 外观 =================
