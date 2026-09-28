@@ -2382,3 +2382,195 @@ body.theme-light .muscle-badge-core {
   transition: color 0.2s ease;
 }
 
+
+/* ==========================================================================
+   懒人一键记录 (Quick Log)
+   ========================================================================== */
+.screens-container {
+  padding-bottom: calc(150px + var(--sab));
+}
+
+.ql-fab {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(72px + var(--sab));
+  z-index: 60;
+  width: calc(min(100vw, 440px) - 36px);
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: none;
+  border-radius: var(--radius-full);
+  background: var(--accent-lime);
+  color: #04130d;
+  font-size: 0.9rem;
+  font-weight: 800;
+  font-family: inherit;
+  box-shadow: 0 8px 24px rgba(16, 185, 129, 0.35);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  cursor: pointer;
+}
+.ql-fab:active { transform: translateX(-50%) scale(0.97); }
+.ql-fab.ql-busy { opacity: 0.6; }
+body.ql-open .ql-fab { visibility: hidden; }
+
+.ql-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.ql-overlay.hidden { display: none; }
+
+.ql-sheet {
+  width: 100%;
+  max-width: 440px;
+  background: var(--bg-card);
+  border-top: 1px solid var(--border);
+  border-radius: 20px 20px 0 0;
+  padding: 18px 18px calc(18px + var(--sab));
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ql-status-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+.ql-dot {
+  width: 10px;
+  height: 10px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--text-muted);
+}
+.ql-overlay[data-state="listening"] .ql-dot {
+  background: var(--accent-red);
+  animation: qlPulse 1s ease-in-out infinite;
+}
+.ql-overlay[data-state="processing"] .ql-dot {
+  background: var(--accent-cyan);
+  animation: qlPulse 0.6s ease-in-out infinite;
+}
+.ql-overlay.ql-canceling .ql-status-row { color: var(--accent-red); }
+@keyframes qlPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(0.8); }
+}
+
+.ql-text {
+  width: 100%;
+  min-height: 110px;
+  resize: none;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 1rem;
+  line-height: 1.55;
+  padding: 12px;
+  box-sizing: border-box;
+}
+.ql-text:focus { outline: none; border-color: var(--border-focus); }
+
+.ql-actions {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 10px;
+}
+.ql-btn-ghost,
+.ql-btn-main {
+  min-height: 48px;
+  border-radius: var(--radius-md);
+  font-family: inherit;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.ql-btn-ghost {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+}
+.ql-btn-main {
+  border: none;
+  background: var(--accent-lime);
+  color: #04130d;
+}
+.ql-btn-main:disabled { opacity: 0.55; cursor: default; }
+
+.ql-snackbar {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(134px + var(--sab));
+  z-index: 140;
+  width: calc(min(100vw, 440px) - 36px);
+  box-sizing: border-box;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  animation: toastIn 0.2s ease forwards;
+}
+.ql-snackbar.hidden { display: none; }
+.ql-snack-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 0.85rem;
+  color: var(--accent-lime);
+}
+.ql-snack-head button {
+  flex: none;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  border-radius: var(--radius-full);
+  padding: 5px 14px;
+  font-family: inherit;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.ql-snack-line {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.ql-cfg-card { gap: 10px; }
+.ql-cfg-label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+}
+
+body.theme-light .ql-snackbar { box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12); }
+body.theme-light .ql-overlay { background: rgba(15, 23, 42, 0.4); }

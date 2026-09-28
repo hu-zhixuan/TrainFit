@@ -337,6 +337,15 @@ const SpeechModule = {
       return;
     }
 
+    // 安卓 App 内没有 /api/transcribe 后台，直接结束，不白等
+    if (typeof location !== 'undefined' && location.hostname === 'appassets.androidplatform.net') {
+      this.cleanup();
+      this.isTranscribing = false;
+      if (this.onTranscribingStateCallback) this.onTranscribingStateCallback(false);
+      if (this.onEndCallback) this.onEndCallback({ isCanceled: false, text: '', audioUrl: this.lastRecordedAudioUrl });
+      return;
+    }
+
     // Try posting audio to /api/transcribe with 2800ms abort controller timeout
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 2800);

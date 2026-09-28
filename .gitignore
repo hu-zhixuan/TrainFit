@@ -10,3 +10,6 @@ local.properties
 .system_generated/
 .agents/
 ORIGINAL_REQUEST.md
+
+# 本地密钥，不要提交
+.env

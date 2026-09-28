@@ -362,6 +362,19 @@
           ✓ 保存身体档案与设置
         </button>
 
+        <!-- AI 接口（一键记录用） -->
+        <div class="card ql-cfg-card">
+          <div style="font-size:0.85rem;font-weight:700;">🤖 AI 接口</div>
+          <p id="ql-cfg-hint" style="font-size:0.7rem;color:var(--text-muted);line-height:1.5;"></p>
+          <label class="ql-cfg-label">接口地址 (Base URL)<input id="ql-cfg-base" class="form-input" type="url" autocomplete="off" spellcheck="false"></label>
+          <label class="ql-cfg-label">模型<input id="ql-cfg-model" class="form-input" type="text" autocomplete="off" spellcheck="false"></label>
+          <label class="ql-cfg-label">API Key<input id="ql-cfg-key" class="form-input" type="password" autocomplete="off" spellcheck="false"></label>
+          <div style="display:flex;gap:8px;">
+            <button type="button" class="btn-subtle" id="ql-cfg-test" style="flex:1;">测试连接</button>
+            <button type="button" class="btn-subtle" id="ql-cfg-save" style="flex:1;">保存</button>
+          </div>
+        </div>
+
         <div class="card" style="gap:8px;">
           <button class="btn-subtle" id="btn-profile-reopen-tutorial">
             📖 重新查看新手使用教程
@@ -395,6 +408,12 @@
         <span>历史走势</span>
       </button>
     </nav>
+
+    <!-- 懒人一键记录：按住说话 / 点一下打字 -->
+    <button class="ql-fab" id="ql-fab" type="button" aria-label="一键记录训练和饮食">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
+      <span>按住说话 · 练了啥吃了啥一口气说完</span>
+    </button>
   </div>
 
   <!-- MODAL: VOICE DICTATION SHEET (WeChat Style Hold & Click Dual Mode) -->
@@ -1017,6 +1036,30 @@
   <!-- Toast Notification -->
   <div class="toast hidden" id="app-toast"></div>
 
+  <!-- 一键记录面板 -->
+  <div class="ql-overlay hidden" id="ql-overlay" data-state="idle">
+    <div class="ql-sheet" role="dialog" aria-label="一键记录">
+      <div class="ql-status-row">
+        <span class="ql-dot"></span>
+        <span id="ql-status">正在听…</span>
+      </div>
+      <textarea id="ql-text" class="ql-text" rows="4" placeholder="例：卧推80公斤4组8个，深蹲100公斤5组5个，跑步20分钟。中午吃了黄焖鸡米饭，晚上一碗牛肉面"></textarea>
+      <div class="ql-actions">
+        <button type="button" class="ql-btn-ghost" id="ql-cancel">取消</button>
+        <button type="button" class="ql-btn-main" id="ql-primary">记下来</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 保存结果 + 撤销 -->
+  <div class="ql-snackbar hidden" id="ql-snackbar" role="status">
+    <div class="ql-snack-head">
+      <b id="ql-snack-title">✓ 已记下</b>
+      <button type="button" id="ql-undo">撤销</button>
+    </div>
+    <div id="ql-snack-list"></div>
+  </div>
+
   <!-- JavaScript Modules -->
   <script src="js/nutrition.js"></script>
   <script src="js/workout.js"></script>
@@ -1024,5 +1067,6 @@
   <script src="js/speech.js"></script>
   <script src="js/ai_service.js"></script>
   <script src="js/app.js"></script>
+  <script src="js/quick_log.js"></script>
 </body>
 </html>
