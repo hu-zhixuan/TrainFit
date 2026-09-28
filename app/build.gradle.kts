@@ -12,10 +12,16 @@ val localProps = Properties().apply {
     if (f.exists()) f.inputStream().use { load(it) }
 }
 fun llmConfig(name: String, default: String): String {
-    val v = System.getenv(name)?.takeIf { it.isNotBlank() }
+    val raw = System.getenv(name)?.takeIf { it.isNotBlank() }
         ?: localProps.getProperty(name)?.takeIf { it.isNotBlank() }
         ?: default
-    return "\"" + v.trim().replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+    // 粘贴 Secret 时容易多带一行或空格：只取第一段非空内容，并去掉误带的 "Bearer "
+    val v = raw.lineSequence().map { it.trim() }.firstOrNull { it.isNotEmpty() }.orEmpty()
+        .removePrefix("Bearer ").trim()
+    if (raw.trim().lines().size > 1) {
+        logger.warn("$name 里有多行内容，只使用了第一行")
+    }
+    return "\"" + v.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
 }
 
 android {
