@@ -22,6 +22,18 @@ jobs:
         with:
           gradle-version: '8.10.2'
 
+      - name: Check LLM secret (不输出内容)
+        env:
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+        run: |
+          if [ -z "$LLM_API_KEY" ]; then
+            echo "::warning title=LLM_API_KEY::没有设置，APK 里不会带 key"
+          else
+            lines=$(printf '%s\n' "$LLM_API_KEY" | grep -c .)
+            first=$(printf '%s\n' "$LLM_API_KEY" | grep -m1 . | tr -d '[:space:]')
+            echo "::notice title=LLM_API_KEY::非空行数=${lines}，第一行长度=${#first}"
+          fi
+
       - name: Build Debug APK
         env:
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
