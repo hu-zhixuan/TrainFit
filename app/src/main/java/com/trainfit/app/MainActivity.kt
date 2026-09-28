@@ -2,7 +2,9 @@ package com.trainfit.app
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.content.Intent
 import android.graphics.Color
+import android.speech.RecognizerIntent
 import android.os.Bundle
 import android.view.View
 import android.view.ViewGroup
@@ -24,6 +26,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.webkit.WebViewAssetLoader
+import org.json.JSONObject
 
 class MainActivity : ComponentActivity() {
 
@@ -58,6 +61,28 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    // 手机自带的语音输入界面（小米/华为/OPPO 等一般都有），系统识别不能直接用时的第二选择
+    private val voiceIntentLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val text = result.data
+            ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+            ?.firstOrNull().orEmpty()
+        val ok = result.resultCode == RESULT_OK && text.isNotBlank()
+        if (::webView.isInitialized) {
+            webView.evaluateJavascript(
+                "window.__tfVoiceIntent && window.__tfVoiceIntent($ok, ${JSONObject.quote(text)});", null
+            )
+        }
+    }
+
+    private fun buildVoiceIntent() = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+        putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+        putExtra(RecognizerIntent.EXTRA_LANGUAGE, "zh-CN")
+        putExtra(RecognizerIntent.EXTRA_PROMPT, "说说练了什么、吃了什么")
+        putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -74,7 +99,16 @@ class MainActivity : ComponentActivity() {
                 pendingNativeMicCallback = onResult
                 nativeMicPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
             },
-            onSystemBarsLight = { light -> applySystemBars(light) }
+            onSystemBarsLight = { light -> applySystemBars(light) },
+            canVoiceIntent = { buildVoiceIntent().resolveActivity(packageManager) != null },
+            launchVoiceIntent = {
+                try {
+                    voiceIntentLauncher.launch(buildVoiceIntent())
+                    true
+                } catch (e: Exception) {
+                    false
+                }
+            }
         )
 
         // 3. Instantiate and Configure Native WebView Container
