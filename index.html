@@ -144,6 +144,7 @@
         <div class="card form-card">
           <div class="card-title">AI 接口</div>
           <p class="field-note" id="ql-cfg-hint"></p>
+          <p class="field-note" id="set-speech-note"></p>
           <label class="field"><span class="field-label">接口地址 (Base URL)</span><input id="ql-cfg-base" class="input" type="url" autocomplete="off" spellcheck="false"></label>
           <label class="field"><span class="field-label">模型</span><input id="ql-cfg-model" class="input" type="text" autocomplete="off" spellcheck="false"></label>
           <label class="field"><span class="field-label">API Key</span><input id="ql-cfg-key" class="input" type="password" autocomplete="off" spellcheck="false"></label>
@@ -194,9 +195,13 @@
         <span class="ql-dot"></span>
         <span id="ql-status">正在听…</span>
       </div>
-      <textarea id="ql-text" class="ql-text" rows="4" placeholder="例：卧推80公斤4组8个，跑步20分钟，中午吃了黄焖鸡米饭"></textarea>
+      <textarea id="ql-text" class="ql-text" rows="4" placeholder="例：卧推80公斤4组8个，跑步20分钟，中午吃了黄焖鸡米饭" enterkeyhint="done"></textarea>
       <div class="btn-row">
         <button type="button" class="btn" id="ql-cancel">取消</button>
+        <button type="button" class="btn btn-voice hidden" id="ql-voice">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
+          <span>语音</span>
+        </button>
         <button type="button" class="btn btn-primary btn-wide" id="ql-primary">记下来</button>
       </div>
     </div>
