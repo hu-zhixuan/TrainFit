@@ -145,6 +145,120 @@
 
   root.__tfLlm = function (id, ok, payload) { Native._onLlm(id, ok, payload); };
 
+  /** 震动反馈：tick 轻 / tap 点击 / start 重击 / stop 点击 / success 双击 / error 三连 */
+  const Haptics = {
+    on() { try { return root.localStorage.getItem('tf_haptics') !== 'off'; } catch (e) { return true; } },
+    fire(kind) {
+      if (!this.on()) return;
+      try {
+        if (Native.has() && root.TrainFitNative.haptic) { root.TrainFitNative.haptic(kind); return; }
+        if (root.navigator && root.navigator.vibrate) {
+          root.navigator.vibrate({ tick: 8, tap: 15, start: 30, stop: 15, success: [20, 60, 20], error: [40, 60, 40, 60, 40] }[kind] || 15);
+        }
+      } catch (e) {}
+    }
+  };
+  root.Haptics = Haptics;
+
+  // ---------------------------------------------------------------------------
+  // 食物营养库（每 100 克）：中国食物成分表第6版 + 常见成品菜，见 js/food_db.js
+  // 做法：大模型只负责「吃了什么、多少克」，热量和三大营养素按库里每 100 克的数值算
+  // ---------------------------------------------------------------------------
+  const FoodDB = {
+    _built: false,
+    entries: [],
+    byKey: new Map(),
+
+    norm(s) { return String(s || '').replace(/[\s·・]/g, '').replace(/（/g, '(').replace(/）/g, ')').toLowerCase(); },
+
+    build() {
+      if (this._built) return;
+      this._built = true;
+      const rows = root.FOOD_DB || (typeof FOOD_DB !== 'undefined' ? FOOD_DB : []);
+      this.entries = rows.map(r => ({ name: r[0], aliases: r[1] ? r[1].split('|') : [], k: r[2], p: r[3], c: r[4], f: r[5], g: r[6], src: r[7] }));
+      // 名称优先于别名；成品菜 / 常见条目优先于成分表
+      const rank = (e) => (e.src === 'cfct' ? 1 : 0);
+      const put = (key, e, isAlias) => {
+        const k = this.norm(key);
+        if (!k) return;
+        const cur = this.byKey.get(k);
+        const score = (isAlias ? 2 : 0) + rank(e);
+        if (!cur || score < cur.score) this.byKey.set(k, { e, score });
+      };
+      this.entries.forEach(e => {
+        put(e.name, e, false);
+        put(e.name.replace(/\(生\)$/, ''), e, true);
+        e.aliases.forEach(a => put(a, e, true));
+      });
+    },
+
+    find(name) {
+      this.build();
+      const k = this.norm(name);
+      const hit = this.byKey.get(k) || this.byKey.get(k + '(生)');
+      return hit ? hit.e : null;
+    },
+
+    /** 用户原话里提到的食物 → 候选条目（放进提示词，让大模型用库里的名字和数值） */
+    candidates(text, limit) {
+      this.build();
+      const t = this.norm(text);
+      const found = new Map();
+      this.entries.forEach(e => {
+        const keys = [e.name.replace(/\(生\)$/, '')].concat(e.aliases).map(x => this.norm(x)).filter(x => x.length >= 2);
+        const best = keys.filter(k => t.includes(k)).sort((a, b) => b.length - a.length)[0];
+        if (best && !found.has(e.name)) found.set(e.name, { e, len: best.length });
+      });
+      const list = [...found.values()]
+        .sort((a, b) => b.len - a.len || (a.e.src === 'cfct') - (b.e.src === 'cfct'))
+        .slice(0, limit || 18)
+        .map(x => x.e);
+      const oil = this.find('烹调油');
+      if (oil && !list.includes(oil)) list.push(oil);
+      return list;
+    },
+
+    line(e) {
+      return `${e.name} ${e.k}千卡 蛋白${e.p} 碳水${e.c} 脂肪${e.f}${e.g ? ` 常见一份约${e.g}g` : ''}`;
+    }
+  };
+
+  /**
+   * 按库重算一样食物。库里的数和大模型自己的估算差太多（>2.5 倍）时，
+   * 说明大概率匹配错了（比如成分表里的「豆腐花」是干粉），这时保留大模型的估算。
+   */
+  function groundItem(it) {
+    const name = cleanText(it && it.name, 20);
+    const grams = num(it && it.grams);
+    if (!name) return null;
+    const ai = {
+      calories: num(it.calories), proteinG: num(it.proteinG), carbsG: num(it.carbsG), fatG: num(it.fatG)
+    };
+    const e = grams && grams > 0 ? FoodDB.find(name) : null;
+    if (e) {
+      const k = e.k * grams / 100;
+      const ratio = ai.calories && ai.calories > 0 ? k / ai.calories : 1;
+      if (ratio >= 0.4 && ratio <= 2.5) {
+        return {
+          name, grams: Math.round(grams), src: e.src === 'cfct' ? '成分表' : '菜品库', dbName: e.name,
+          calories: Math.round(k), proteinG: round1(e.p * grams / 100), carbsG: round1(e.c * grams / 100), fatG: round1(e.f * grams / 100)
+        };
+      }
+    }
+    if (!(ai.calories > 0)) return null;
+    return {
+      name, grams: grams ? Math.round(grams) : null, src: '估算',
+      calories: Math.round(ai.calories), proteinG: round1(ai.proteinG || 0), carbsG: round1(ai.carbsG || 0), fatG: round1(ai.fatG || 0)
+    };
+  }
+
+  function sumItems(items) {
+    return items.reduce((t, x) => ({
+      calories: t.calories + x.calories, proteinG: round1(t.proteinG + x.proteinG),
+      carbsG: round1(t.carbsG + x.carbsG), fatG: round1(t.fatG + x.fatG)
+    }), { calories: 0, proteinG: 0, carbsG: 0, fatG: 0 });
+  }
+
   // ---------------------------------------------------------------------------
   // 大模型解析
   // ---------------------------------------------------------------------------
@@ -163,15 +277,18 @@
         '由你决定怎么改数据：新增、修改或删除。只输出一个 JSON 对象，不要 markdown，不要解释：',
         '{"reply":"一句话告诉用户你做了什么，20字以内","dayOffset":0,',
         ' "add":{"workouts":[{"exerciseName":"杠铃卧推","muscleGroup":"胸部","weightKg":80,"sets":4,"reps":8,"durationMin":null,"burnedCalories":110,"estimated":false}],',
-        '        "meals":[{"mealType":"午餐","foodSummary":"黄焖鸡米饭1份","calories":820,"proteinG":38,"carbsG":95,"fatG":30}]},',
+        '        "meals":[{"mealType":"午餐","foodSummary":"番茄炒蛋盖饭1份","items":[{"name":"米饭","grams":250,"calories":290,"proteinG":6.5,"carbsG":65,"fatG":0.8},{"name":"鸡蛋","grams":100,"calories":139,"proteinG":13,"carbsG":2.4,"fatG":8.6},{"name":"番茄","grams":150,"calories":30,"proteinG":1.4,"carbsG":6,"fatG":0.3},{"name":"烹调油","grams":12,"calories":108,"proteinG":0,"carbsG":0,"fatG":12}]}]},',
         ' "update":[{"ref":"r2","set":{"weightKg":85}}],',
         ' "delete":["r3"]}',
         '规则：',
         '1. muscleGroup 只能是：' + MUSCLES.join('、') + '；mealType 只能是：' + MEAL_TYPES.join('、') + '（没说就按时间和食物判断）。',
         '2. 重量换算成公斤（磅×0.45，斤×0.5），自重 weightKg=0。跑步、单车、跳绳、平板支撑等按时间算的填 durationMin（分钟），sets、reps 为 null。',
         '3. 用户没说的重量/组数/次数：优先用下面「最近成绩」里同一动作的数；没有就按常见训练估一个，并设 "estimated":true。同一动作请沿用最近成绩里的名字。',
-        '4. 同一餐的多样食物合并成一条，foodSummary 写食物和份量；按中国常见份量估算热量(千卡)和蛋白质/碳水/脂肪(克)。burnedCalories 按常见强度估算。',
-        '5. 用户说「记错了/改成/其实是/只吃了一半/删掉/不算」等，是在改已有记录：用 update（set 里只写要改的字段，份量变了要同时改热量和三大营养素）或 delete，引用下面的编号，不要重复新增。',
+        '4. 饮食：同一餐合并成一条 meal。foodSummary 写给用户看的菜名和份量；items 把这一餐拆成食物/食材，每项写 name、grams（实际吃下去的可食部分克数）和你估算的 calories/proteinG/carbsG/fatG。',
+        '   items 的 name 尽量用下面「参考营养数据」里的名字；名字带「(生)」的是生重，grams 要换算成生重（熟米饭用「米饭」，不要用大米）。',
+        '   参考数据里没有的成品菜，拆成主要食材；炒菜、外卖、盖饭要加一项「烹调油」（一份炒菜约 10–15g，油炸更多）。',
+        '   按中国常见份量估克数：米饭一碗约 180g，馒头一个约 100g，鸡蛋一个约 50g，牛奶一杯约 250g，一份外卖主菜约 250–350g。burnedCalories 按常见强度估算。',
+        '5. 用户说「记错了/改成/其实是/只吃了一半/删掉/不算」等，是在改已有记录：用 update（set 里只写要改的字段；饮食份量变了就在 set 里给新的 items，或同时改热量和三大营养素）或 delete，引用下面的编号，不要重复新增。',
         '6. 说「昨天」dayOffset=-1，「前天」=-2，否则 0；修改和删除只针对下面列出的这天记录。',
         '7. 听不懂或和训练饮食无关：add 为空，reply 说明原因。'
       ].join('\n');
@@ -180,6 +297,8 @@
       lines.push(`现在时间 ${hh}:${mm}，正在看的日期：${day}。`);
       lines.push(records.length ? '这天已有记录：\n' + records.map(r => `${r.ref} ${r.text}`).join('\n') : '这天还没有记录。');
       if (recent.length) lines.push('最近成绩：' + recent.join('；'));
+      const cands = FoodDB.candidates(text, 18);
+      if (cands.length) lines.push('参考营养数据（每100g可食部，来自中国食物成分表和常见菜品库）：\n' + cands.map(e => FoodDB.line(e)).join('\n'));
       lines.push('用户说：' + text);
       return [
         { role: 'system', content: system },
@@ -234,6 +353,10 @@
           const v = num(u.set[k]);
           if (v !== null && v >= 0) set[k] = k === 'weightKg' || /G$/.test(k) ? round1(v) : Math.round(v);
         });
+        if (Array.isArray(u.set.items)) {
+          const items = u.set.items.map(groundItem).filter(Boolean);
+          if (items.length) Object.assign(set, sumItems(items), { items });
+        }
         if (set.mealType === '加餐' || set.mealType === '补剂') set.mealType = '加餐/补剂';
         if (set.mealType && !MEAL_TYPES.includes(set.mealType)) delete set.mealType;
         if (set.muscleGroup && !MUSCLES.includes(set.muscleGroup)) delete set.muscleGroup;
@@ -298,7 +421,12 @@
       });
 
       (Array.isArray(parsed && parsed.meals) ? parsed.meals : []).forEach(m => {
-        const summary = cleanText(m.foodSummary || m.name || (Array.isArray(m.items) ? m.items.map(i => i.name).join('、') : ''), 60);
+        const items = (Array.isArray(m.items) ? m.items : []).map(groundItem).filter(Boolean);
+        if (items.length) {
+          const t = sumItems(items);
+          m = Object.assign({}, m, t);
+        }
+        const summary = cleanText(m.foodSummary || m.name || items.map(i => i.name).join('、'), 60);
         const cal = num(m.calories);
         if (!summary || !cal || cal <= 0) return;
         let type = cleanText(m.mealType, 8);
@@ -310,7 +438,8 @@
           calories: Math.round(cal),
           proteinG: round1(Math.max(0, num(m.proteinG) || 0)),
           carbsG: round1(Math.max(0, num(m.carbsG) || 0)),
-          fatG: round1(Math.max(0, num(m.fatG) || 0))
+          fatG: round1(Math.max(0, num(m.fatG) || 0)),
+          items
         });
       });
 
@@ -571,6 +700,7 @@
       root.addEventListener('pointermove', (e) => {
         if (!pressing || this.state !== 'recording' || this.tapMode) return;
         const cancel = startY - (e.clientY || 0) > 70;
+        if (cancel !== this.panel.classList.contains('canceling')) Haptics.fire('tick');
         this.panel.classList.toggle('canceling', cancel);
         document.getElementById('rec-hint').textContent = cancel ? '松开手指，取消这次' : '松手结束 · 上滑取消';
       });
@@ -605,6 +735,7 @@
       this.engine = engine;
       this.tapMode = false;
       this.state = 'recording';
+      Haptics.fire('start');
       this.recStart = Date.now();
       this.liveText = '';
       this._levels = [];
@@ -684,6 +815,7 @@
     },
 
     cancelTalk(msg) {
+      Haptics.fire('tick');
       if (this.engine === 'asr') { try { root.TrainFitNative.cancelRecording(); } catch (e) {} }
       else this.cancelSystem();
       this.state = 'idle';
@@ -692,6 +824,7 @@
     },
 
     failTalk(msg) {
+      Haptics.fire('error');
       this.state = 'idle';
       this.resetTalkUi();
       this.setStatus(msg, 'warn');
@@ -700,6 +833,7 @@
     stopTalk() {
       if (this.state !== 'recording') return;
       this.state = 'transcribing';
+      Haptics.fire('stop');
       clearInterval(this._timer);
       this.panel.classList.add('hidden');
       this.composer.classList.remove('recording');
@@ -749,6 +883,7 @@
       if (id !== this._asrId || this.state !== 'transcribing') return;
       clearTimeout(this._asrWatch);
       if (ok) { this.finishTalk(text); return; }
+      Haptics.fire('error');
       this.state = 'idle';
       this.resetTalkUi();
       const msg = String(text || '');
@@ -864,7 +999,8 @@
       const dayRecords = [];
       app.diet.filter(d => d.date === date).forEach(d => dayRecords.push({
         kind: 'meal', id: d.id,
-        text: `${(d.mealType || '').replace('/补剂', '')} ${d.foodSummary} ${d.calories}kcal 蛋白${d.proteinG || 0} 碳水${d.carbsG || 0} 脂肪${d.fatG || 0}`
+        text: `${(d.mealType || '').replace('/补剂', '')} ${d.foodSummary} ${d.calories}kcal 蛋白${d.proteinG || 0} 碳水${d.carbsG || 0} 脂肪${d.fatG || 0}` +
+          (Array.isArray(d.items) && d.items.length ? `（${d.items.map(i => `${i.name}${i.grams ? i.grams + 'g' : ''}`).join('、')}）` : '')
       }));
       app.workouts.filter(w => w.date === date).forEach(w => dayRecords.push({
         kind: 'workout', id: w.id,
@@ -926,7 +1062,7 @@
         if (!rec) return;
         batch.before.push({ kind: r.kind, snapshot: JSON.parse(JSON.stringify(rec)) });
         Object.keys(u.set).forEach(k => {
-          if (r.kind === 'meal' && ['mealType', 'foodSummary', 'calories', 'proteinG', 'carbsG', 'fatG'].includes(k)) rec[k] = u.set[k];
+          if (r.kind === 'meal' && ['mealType', 'foodSummary', 'calories', 'proteinG', 'carbsG', 'fatG', 'items'].includes(k)) rec[k] = u.set[k];
           if (r.kind === 'workout' && ['exerciseName', 'muscleGroup', 'weightKg', 'sets', 'reps', 'durationMin', 'burnedCalories'].includes(k)) rec[k] = u.set[k];
         });
         batch.changed.push(r.kind === 'meal' ? `改 · ${rec.foodSummary} ${rec.calories} kcal` :
@@ -976,7 +1112,8 @@
           calories: m.calories,
           proteinG: m.proteinG,
           carbsG: m.carbsG,
-          fatG: m.fatG
+          fatG: m.fatG,
+          items: m.items && m.items.length ? m.items : undefined
         });
       });
 
@@ -1001,7 +1138,13 @@
       let t = result.reply ? '✓ ' + result.reply : (n ? `✓ 已记下 ${n} 条` : '✓ 已更新');
       if (n && batch.date !== getTodayDateString()) t += `（${batch.date.slice(5).replace('-', '月')}日）`;
       if (result.source === 'local') t += ' · AI 没连上，用的简单规则';
-      this.showUndo(t, this.describe(result).concat(batch.changed || []), () => {
+      const lines = this.describe(result).concat(batch.changed || []);
+      Haptics.fire('success');
+      // App 在后台（比如说完就锁屏了）：发一条通知
+      if (typeof document !== 'undefined' && document.hidden && Native.has() && root.TrainFitNative.showNotification) {
+        try { root.TrainFitNative.showNotification(t.replace(/^✓\s*/, ''), lines.join('\n')); } catch (e) {}
+      }
+      this.showUndo(t, lines, () => {
         app.workouts = app.workouts.filter(w => !batch.workoutIds.includes(w.id));
         app.diet = app.diet.filter(d => !batch.dietIds.includes(d.id));
         (batch.before || []).forEach(b => {
@@ -1033,6 +1176,7 @@
     },
 
     undo() {
+      Haptics.fire('tap');
       const fn = this._undoFn;
       this._undoFn = null;
       this.hideSnack();
@@ -1133,6 +1277,6 @@
   }
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { QuickLogParser: Parser, Native };
+    module.exports = { QuickLogParser: Parser, Native, FoodDB, groundItem };
   }
 })(typeof window !== 'undefined' ? window : globalThis);
