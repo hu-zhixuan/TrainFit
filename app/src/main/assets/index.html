@@ -10,10 +10,16 @@
   <script>
     // 尽早应用主题，避免闪一下
     (function () {
-      try {
-        var t = localStorage.getItem('trainfit_theme') || 'system';
-        if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
-      } catch (e) {}
+      var t = 'system';
+      try { t = localStorage.getItem('trainfit_theme') || 'system'; } catch (e) {}
+      if (t !== 'light' && t !== 'dark') {
+        // 安卓 App 里 prefers-color-scheme 不准，问原生系统是不是深色
+        try {
+          if (window.TrainFitNative && window.TrainFitNative.isSystemDark) t = window.TrainFitNative.isSystemDark() ? 'dark' : 'light';
+          else t = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+        } catch (e) { t = 'dark'; }
+      }
+      document.documentElement.setAttribute('data-theme', t);
     })();
   </script>
 </head>
@@ -45,6 +51,7 @@
           <div class="hero-label" id="hero-label">今天还能吃</div>
           <div class="hero-num"><span id="hero-num">0</span><small>kcal</small></div>
           <div class="meter" aria-hidden="true"><div class="meter-fill" id="hero-meter"></div></div>
+          <div class="hero-foot" id="hero-foot"></div>
           <div class="hero-stats">
             <div class="hero-stat"><span>已吃</span><b id="st-intake">0</b></div>
             <div class="hero-stat"><span>训练消耗</span><b id="st-burn">0</b></div>
@@ -131,6 +138,7 @@
             <button class="seg-btn" data-value="dark" type="button">深色</button>
             <button class="seg-btn" data-value="light" type="button">浅色</button>
           </div>
+          <div class="field-note" id="set-theme-note"></div>
         </div>
 
         <div class="card form-card">
@@ -177,6 +185,11 @@
   <!-- 一键记录面板 -->
   <div class="sheet-overlay hidden" id="ql-overlay" data-state="idle">
     <div class="sheet" role="dialog" aria-label="一键记录">
+      <div class="ql-visual" aria-hidden="true">
+        <div class="ql-orb">
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+        </div>
+      </div>
       <div class="ql-status-row">
         <span class="ql-dot"></span>
         <span id="ql-status">正在听…</span>

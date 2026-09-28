@@ -672,10 +672,10 @@
     describe(result) {
       const lines = [];
       result.workouts.forEach(w => {
-        if (w.durationMin) lines.push(`🏃 ${w.exerciseName} ${w.durationMin} 分钟`);
-        else lines.push(`🏋️ ${w.exerciseName} ${w.weightKg > 0 ? w.weightKg + 'kg' : '自重'} ${w.sets}×${w.reps}${w.estimated ? '（估）' : ''}`);
+        if (w.durationMin) lines.push(`有氧 · ${w.exerciseName} ${w.durationMin} 分钟`);
+        else lines.push(`训练 · ${w.exerciseName} ${w.weightKg > 0 ? w.weightKg + 'kg' : '自重'} ${w.sets}×${w.reps}${w.estimated ? '（估）' : ''}`);
       });
-      result.meals.forEach(m => lines.push(`🍽️ ${m.mealType.replace('/补剂', '')} ${m.foodSummary} ${m.calories} kcal`));
+      result.meals.forEach(m => lines.push(`${m.mealType.replace('/补剂', '')} · ${m.foodSummary} ${m.calories} kcal`));
       return lines;
     },
 
