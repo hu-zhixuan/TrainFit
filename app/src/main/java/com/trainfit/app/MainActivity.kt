@@ -26,6 +26,17 @@ class MainActivity : ComponentActivity() {
 
     private lateinit var webView: WebView
     private var pendingPermissionRequest: PermissionRequest? = null
+    private lateinit var nativeBridge: NativeBridge
+    private var pendingNativeMicCallback: ((Boolean) -> Unit)? = null
+
+    // 原生语音识别用的麦克风权限申请
+    private val nativeMicPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        val cb = pendingNativeMicCallback
+        pendingNativeMicCallback = null
+        cb?.invoke(isGranted)
+    }
 
     // Register runtime permission launcher for RECORD_AUDIO
     private val requestAudioPermissionLauncher = registerForActivityResult(
@@ -48,7 +59,19 @@ class MainActivity : ComponentActivity() {
         // 1. Configure Edge-to-Edge Dark Theme (#09090B)
         setupEdgeToEdgeDarkTheme()
 
-        // 2. Instantiate and Configure Native WebView Container
+        // 2. Native bridge (speech recognition + LLM calls) exposed to JS as window.TrainFitNative
+        nativeBridge = NativeBridge(
+            activity = this,
+            evalJs = { js ->
+                if (::webView.isInitialized) webView.evaluateJavascript(js, null)
+            },
+            requestMicPermission = { onResult ->
+                pendingNativeMicCallback = onResult
+                nativeMicPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            }
+        )
+
+        // 3. Instantiate and Configure Native WebView Container
         setupWebView()
 
         // 3. Configure Back Press Navigation for WebView History
@@ -94,6 +117,8 @@ class MainActivity : ComponentActivity() {
             displayZoomControls = false
             builtInZoomControls = false
         }
+
+        webView.addJavascriptInterface(nativeBridge, "TrainFitNative")
 
         // Build WebViewAssetLoader mapping /assets/ to local app assets
         val assetLoader = WebViewAssetLoader.Builder()
@@ -182,6 +207,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onPause() {
         super.onPause()
+        if (::nativeBridge.isInitialized) nativeBridge.cancelInternal()
         if (::webView.isInitialized) {
             webView.onPause()
             webView.pauseTimers()
@@ -211,6 +237,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        if (::nativeBridge.isInitialized) nativeBridge.shutdown()
         if (::webView.isInitialized) {
             webView.destroy()
         }

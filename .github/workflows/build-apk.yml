@@ -39,6 +39,11 @@ jobs:
           chmod +x ./gradlew
 
       - name: Build Android Debug APK
+        env:
+          # 一键记录用的大模型接口：在仓库 Settings → Secrets and variables → Actions 里配置
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
+          LLM_MODEL: ${{ vars.LLM_MODEL }}
         run: |
           ./gradlew assembleDebug --stacktrace --no-daemon
 

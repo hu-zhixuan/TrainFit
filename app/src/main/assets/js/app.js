@@ -141,16 +141,21 @@ const DEFAULT_PROFILE = {
   targetFatG: 58
 };
 
+// 用本地日期（不能用 toISOString，那是 UTC：北京时间 0–8 点会被记到前一天）
+function formatLocalDate(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 function getTodayDateString(offsetDays = 0) {
   const d = new Date();
   if (offsetDays !== 0) d.setDate(d.getDate() + offsetDays);
-  return d.toISOString().split('T')[0];
+  return formatLocalDate(d);
 }
 
 function shiftDateString(dateStr, deltaDays) {
   const d = new Date(dateStr + 'T00:00:00');
   d.setDate(d.getDate() + deltaDays);
-  return d.toISOString().split('T')[0];
+  return formatLocalDate(d);
 }
 
 class FitnessApp {
@@ -794,7 +799,7 @@ class FitnessApp {
       workoutContainer.innerHTML = `<div style="font-size:0.7rem;color:var(--text-muted);text-align:center;padding:8px 0;">该日暂无力量训练记录</div>`;
     } else {
       workoutContainer.innerHTML = dayWorkouts.map(w => {
-        const matchedAdvice = advices.find(a => a.exerciseName === w.exerciseName);
+        const matchedAdvice = w.durationMin ? null : advices.find(a => a.exerciseName === w.exerciseName);
         let adviceHtml = '';
         if (matchedAdvice && matchedAdvice.status === 'READY_TO_ADD_PLATE') {
           adviceHtml = `<div style="font-size:0.65rem;color:var(--accent-cyan);margin-top:2px;">⚡ 建议下次加片至 ${matchedAdvice.targetWeightKg}kg</div>`;
@@ -1640,7 +1645,7 @@ class FitnessApp {
     const advices = WorkoutEngine.generateOverloadAdvices(this.workouts);
 
     container.innerHTML = dayWorkouts.map(w => {
-      const matchedAdvice = advices.find(a => a.exerciseName === w.exerciseName);
+      const matchedAdvice = w.durationMin ? null : advices.find(a => a.exerciseName === w.exerciseName);
 
       let overloadBadgeHtml = '';
       if (matchedAdvice) {
@@ -1675,10 +1680,15 @@ class FitnessApp {
             </button>
           </div>
           <div class="record-row-bottom">
+            ${w.durationMin ? `
+            <span class="record-stat-highlight" style="color:var(--accent-cyan);">⏱ ${w.durationMin} 分钟</span>
+            <span>消耗约 ${w.burnedCalories || 0} kcal</span>
+            ` : `
             <span class="record-stat-highlight" style="color:var(--accent-cyan);">
               ${w.weightKg > 0 ? `${w.weightKg}kg × ` : '自重 × '}${w.sets}组 × ${w.reps}次
             </span>
             <span>${est1RM > 0 ? `预估1RM: ${est1RM}kg · ` : ''}吨位: ${(w.weightKg * w.sets * w.reps).toLocaleString()}kg</span>
+            `}
           </div>
           ${overloadBadgeHtml}
         </div>
