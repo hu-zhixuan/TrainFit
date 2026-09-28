@@ -30,7 +30,13 @@ jobs:
         run: |
           if [ ! -f gradle/wrapper/gradle-wrapper.jar ]; then gradle wrapper --gradle-version 8.10.2; fi
           chmod +x ./gradlew
-          ./gradlew assembleDebug --stacktrace --no-daemon
+          set -o pipefail
+          if ! ./gradlew assembleDebug --no-daemon 2>&1 | tee build.log; then
+            # 把失败原因作为注解输出，方便在 PR 页面直接看到
+            msg=$(grep -E -A15 "What went wrong|^e: |error:" build.log | head -40 | sed ':a;N;$!ba;s/%/%25/g;s/\r/%0D/g;s/\n/%0A/g')
+            echo "::error title=Gradle build failed::${msg}"
+            exit 1
+          fi
 
       - name: Upload APK for testing
         uses: actions/upload-artifact@v4
