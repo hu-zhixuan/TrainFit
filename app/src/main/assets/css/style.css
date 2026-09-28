@@ -806,7 +806,8 @@ body.no-composer .snackbar { bottom: calc(20px + var(--sab)); }
 .cmp-send { background: var(--accent); color: var(--accent-ink); }
 .cmp-send:disabled { background: var(--surface-2); color: var(--text-3); }
 .cmp-send:not(:disabled):active, .cmp-mic:active { transform: scale(0.92); }
-.cmp-mic { background: var(--surface-2); color: var(--text-2); }
+.cmp-mic { background: var(--accent-soft); color: var(--accent-text); touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.composer.canceling .cmp-mic { background: var(--text-3) !important; animation: none !important; }
 .cmp-mic.hidden { display: none; }
 .composer.listening .cmp-mic { background: var(--danger); color: #fff; animation: micPulse 1.4s ease-in-out infinite; }
 .composer.listening .cmp-text { border-color: var(--danger); }

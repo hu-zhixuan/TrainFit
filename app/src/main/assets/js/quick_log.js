@@ -93,6 +93,10 @@
       try { return this.has() && !!root.TrainFitNative.isSpeechAvailable(); } catch (e) { return false; }
     },
 
+    voiceIntentAvailable() {
+      try { return this.has() && !!root.TrainFitNative.isVoiceIntentAvailable && !!root.TrainFitNative.isVoiceIntentAvailable(); } catch (e) { return false; }
+    },
+
     llmInfo() {
       try { return this.has() ? JSON.parse(root.TrainFitNative.getLlmInfo()) : null; } catch (e) { return null; }
     },
@@ -135,29 +139,36 @@
       const now = ctx.now || new Date();
       const hh = String(now.getHours()).padStart(2, '0');
       const mm = String(now.getMinutes()).padStart(2, '0');
-      const known = (ctx.knownExercises || []).slice(0, 30);
+      const day = ctx.dayLabel || '今天';
+      const records = ctx.dayRecords || [];
+      const recent = (ctx.recent || []).slice(0, 25);
 
       const system = [
-        '你是健身记录助手。用户会用口语一口气说出训练和/或饮食，文本来自语音识别，可能有同音错字（如"卧腿"=卧推，"四组八哥"=4组8个，"划川"=划船）。',
-        '把所有内容拆成结构化记录，只输出一个 JSON 对象，不要 markdown，不要解释。格式：',
-        '{"dayOffset":0,"workouts":[{"exerciseName":"杠铃卧推","muscleGroup":"胸部","weightKg":80,"sets":4,"reps":8,"durationMin":null,"burnedCalories":110}],"meals":[{"mealType":"午餐","foodSummary":"黄焖鸡米饭1份","calories":820,"proteinG":38,"carbsG":95,"fatG":30}]}',
+        '你是「练食AI」的记录助手。用户用口语说训练和饮食，文字来自语音识别，可能有同音错字（"卧腿"=卧推，"四组八哥"=4组8个，"划川"=划船）。',
+        '由你决定怎么改数据：新增、修改或删除。只输出一个 JSON 对象，不要 markdown，不要解释：',
+        '{"reply":"一句话告诉用户你做了什么，20字以内","dayOffset":0,',
+        ' "add":{"workouts":[{"exerciseName":"杠铃卧推","muscleGroup":"胸部","weightKg":80,"sets":4,"reps":8,"durationMin":null,"burnedCalories":110,"estimated":false}],',
+        '        "meals":[{"mealType":"午餐","foodSummary":"黄焖鸡米饭1份","calories":820,"proteinG":38,"carbsG":95,"fatG":30}]},',
+        ' "update":[{"ref":"r2","set":{"weightKg":85}}],',
+        ' "delete":["r3"]}',
         '规则：',
-        '1. muscleGroup 只能是：' + MUSCLES.join('、') + '。',
-        '2. 重量单位换算成公斤（"磅"×0.45，"斤"×0.5）。自重动作 weightKg=0；没说重量写 null。没说组数或次数写 null，不要编。',
-        '3. 同一个动作用了不同重量，就拆成多条。',
-        '4. 跑步、单车、跳绳、平板支撑这类按时间算的动作填 durationMin（分钟），sets 和 reps 写 null。',
-        '5. burnedCalories 按一般成年人的常见强度估算。',
-        '6. mealType 只能是：' + MEAL_TYPES.join('、') + '。用户说了就按说的；没说就结合当前时间和食物常识判断。',
-        '7. 同一餐的多样食物合并成一条 meal，foodSummary 写食物和份量（如"米饭1碗、番茄炒蛋1份"）。按中国常见份量估算 calories（千卡）和 proteinG/carbsG/fatG（克）。',
-        '8. 说"昨天"则 dayOffset=-1，"前天"=-2，否则为 0。',
-        '9. 与训练和饮食无关的话忽略。什么都没有就返回空数组。',
-        known.length ? '10. 用户以前记过这些动作，同一个动作请沿用原名：' + known.join('、') + '。' : ''
-      ].filter(Boolean).join('\n');
+        '1. muscleGroup 只能是：' + MUSCLES.join('、') + '；mealType 只能是：' + MEAL_TYPES.join('、') + '（没说就按时间和食物判断）。',
+        '2. 重量换算成公斤（磅×0.45，斤×0.5），自重 weightKg=0。跑步、单车、跳绳、平板支撑等按时间算的填 durationMin（分钟），sets、reps 为 null。',
+        '3. 用户没说的重量/组数/次数：优先用下面「最近成绩」里同一动作的数；没有就按常见训练估一个，并设 "estimated":true。同一动作请沿用最近成绩里的名字。',
+        '4. 同一餐的多样食物合并成一条，foodSummary 写食物和份量；按中国常见份量估算热量(千卡)和蛋白质/碳水/脂肪(克)。burnedCalories 按常见强度估算。',
+        '5. 用户说「记错了/改成/其实是/只吃了一半/删掉/不算」等，是在改已有记录：用 update（set 里只写要改的字段，份量变了要同时改热量和三大营养素）或 delete，引用下面的编号，不要重复新增。',
+        '6. 说「昨天」dayOffset=-1，「前天」=-2，否则 0；修改和删除只针对下面列出的这天记录。',
+        '7. 听不懂或和训练饮食无关：add 为空，reply 说明原因。'
+      ].join('\n');
 
-      const user = '现在时间 ' + hh + ':' + mm + '。用户说：' + text;
+      const lines = [];
+      lines.push(`现在时间 ${hh}:${mm}，正在看的日期：${day}。`);
+      lines.push(records.length ? '这天已有记录：\n' + records.map(r => `${r.ref} ${r.text}`).join('\n') : '这天还没有记录。');
+      if (recent.length) lines.push('最近成绩：' + recent.join('；'));
+      lines.push('用户说：' + text);
       return [
         { role: 'system', content: system },
-        { role: 'user', content: user }
+        { role: 'user', content: lines.join('\n') }
       ];
     },
 
@@ -190,7 +201,30 @@
       ctx = ctx || {};
       const history = ctx.history || [];
       const now = ctx.now || new Date();
-      const out = { dayOffset: 0, workouts: [], meals: [] };
+      const out = { dayOffset: 0, workouts: [], meals: [], updates: [], deletes: [], reply: '' };
+      // 兼容两种格式：{add:{workouts,meals}} 或顶层 workouts/meals
+      if (parsed && parsed.add && typeof parsed.add === 'object') {
+        parsed = Object.assign({}, parsed, {
+          workouts: [].concat(parsed.workouts || [], parsed.add.workouts || []),
+          meals: [].concat(parsed.meals || [], parsed.add.meals || [])
+        });
+      }
+      out.reply = cleanText(parsed && parsed.reply, 40);
+      const refs = new Set((ctx.dayRecords || []).map(r => r.ref));
+      (Array.isArray(parsed && parsed.update) ? parsed.update : []).forEach(u => {
+        if (!u || !refs.has(u.ref) || !u.set || typeof u.set !== 'object') return;
+        const set = {};
+        ['exerciseName', 'foodSummary', 'mealType', 'muscleGroup'].forEach(k => { if (u.set[k] != null) set[k] = cleanText(u.set[k], k === 'foodSummary' ? 60 : 30); });
+        ['weightKg', 'sets', 'reps', 'durationMin', 'burnedCalories', 'calories', 'proteinG', 'carbsG', 'fatG'].forEach(k => {
+          const v = num(u.set[k]);
+          if (v !== null && v >= 0) set[k] = k === 'weightKg' || /G$/.test(k) ? round1(v) : Math.round(v);
+        });
+        if (set.mealType === '加餐' || set.mealType === '补剂') set.mealType = '加餐/补剂';
+        if (set.mealType && !MEAL_TYPES.includes(set.mealType)) delete set.mealType;
+        if (set.muscleGroup && !MUSCLES.includes(set.muscleGroup)) delete set.muscleGroup;
+        if (Object.keys(set).length) out.updates.push({ ref: u.ref, set });
+      });
+      (Array.isArray(parsed && parsed.delete) ? parsed.delete : []).forEach(ref => { if (refs.has(ref)) out.deletes.push(ref); });
 
       const off = num(parsed && parsed.dayOffset);
       if (off !== null && off <= 0 && off >= -7) out.dayOffset = Math.round(off);
@@ -207,7 +241,7 @@
         let weight = num(w.weightKg);
         let sets = num(w.sets);
         let reps = num(w.reps);
-        let estimated = false;
+        let estimated = w.estimated === true;
 
         if (duration && duration > 0 && !sets && !reps) {
           const burn = num(w.burnedCalories);
@@ -219,7 +253,7 @@
             reps: 0,
             durationMin: Math.round(duration),
             burnedCalories: Math.round(burn && burn > 0 ? burn : duration * 8),
-            estimated: false
+            estimated
           });
           return;
         }
@@ -270,39 +304,61 @@
 
     async viaLlm(text, ctx) {
       const override = readOverride();
-      const body = {
+      const base = {
         messages: this.buildMessages(text, ctx),
         temperature: 0.2,
         stream: false
       };
-      if (override.model) body.model = override.model;
+      if (override.model) base.model = override.model;
 
-      let raw;
-      if (Native.has()) {
-        raw = await Native.chat(body, override);
-      } else if (override.apiKey && override.baseUrl) {
+      // 关掉「先推理再回答」：Atria 实测 26 秒 → 3.6 秒，结果一样。
+      // 换成不认这个参数的服务商时，自动去掉再试一次。
+      const attempts = [Object.assign({ thinking: { type: 'disabled' } }, base), base];
+      let lastErr;
+      for (let i = 0; i < attempts.length; i++) {
+        try {
+          const raw = await this.send(attempts[i], override);
+          const parsed = this.extractJson(this.contentFromResponse(raw));
+          return this.normalize(parsed, ctx);
+        } catch (e) {
+          lastErr = e;
+          const msg = (e && e.message) || '';
+          if (/^HTTP 429/.test(msg)) {                // 限流：等一下再试同一个
+            await new Promise(r => setTimeout(r, 2500));
+            i -= 1;
+            if (this._retried429) { this._retried429 = false; break; }
+            this._retried429 = true;
+            continue;
+          }
+          if (msg === 'NO_KEY' || !/^HTTP 4\d\d/.test(msg)) break; // 只有参数被拒才换下一种
+        }
+      }
+      this._retried429 = false;
+      throw lastErr || new Error('LLM_FAILED');
+    },
+
+    async send(body, override) {
+      if (Native.has()) return Native.chat(body, override);
+      if (override.apiKey && override.baseUrl) {
         // 浏览器里调试：直接请求（部分服务商不允许跨域，会失败）
-        body.model = body.model || 'gpt-4o-mini';
+        const b = Object.assign({ model: 'gpt-4o-mini' }, body);
         const ctrl = new AbortController();
         const t = setTimeout(() => ctrl.abort(), 45000);
         try {
           const res = await fetch(override.baseUrl.replace(/\/+$/, '') + '/chat/completions', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + override.apiKey },
-            body: JSON.stringify(body),
+            body: JSON.stringify(b),
             signal: ctrl.signal
           });
-          raw = await res.text();
+          const raw = await res.text();
           if (!res.ok) throw new Error('HTTP ' + res.status + ' ' + raw.slice(0, 200));
+          return raw;
         } finally {
           clearTimeout(t);
         }
-      } else {
-        throw new Error('NO_KEY');
       }
-
-      const parsed = this.extractJson(this.contentFromResponse(raw));
-      return this.normalize(parsed, ctx);
+      throw new Error('NO_KEY');
     },
 
     /** 离线兜底：按句子切开，吃喝相关的走饮食引擎，其余走训练引擎 */
@@ -397,7 +453,7 @@
       if (!this.textEl) return;
 
       this.sendBtn.addEventListener('click', () => this.onSend());
-      this.micBtn.addEventListener('click', () => this.toggleVoice());
+      this.bindMic();
       document.getElementById('ql-undo')?.addEventListener('click', () => this.undo());
 
       this.textEl.addEventListener('input', () => {
@@ -424,6 +480,76 @@
       this.refreshMic();
       this.initSettings();
       root.__tfSpeech = (type, text) => this.onSpeech(type, text);
+      root.__tfVoiceIntent = (ok, text) => this.onVoiceIntent(ok, text);
+    },
+
+    /** 麦克风：点一下开始、再点一下结束；也可以按住说、松手结束（上滑取消）。说完直接记。 */
+    bindMic() {
+      const btn = this.micBtn;
+      let timer = null, holding = false, down = false, startY = 0;
+      btn.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        down = true;
+        holding = false;
+        startY = e.clientY || 0;
+        if (this.state === 'listening') return; // 正在听：这次按下算「结束」
+        timer = setTimeout(() => {
+          if (!this.speechSupported()) return;   // 没有系统识别：松手时按点击处理
+          holding = true;
+          this.startListening(true);
+        }, 250);
+      });
+      root.addEventListener('pointermove', (e) => {
+        if (!holding || this.state !== 'listening') return;
+        const cancel = startY - (e.clientY || 0) > 60;
+        this.composer.classList.toggle('canceling', cancel);
+        this.setStatus(cancel ? '松开手指，取消' : '正在听… 松手就记下，上滑取消', 'live');
+      });
+      const up = (e) => {
+        clearTimeout(timer);
+        if (!down) return;
+        down = false;
+        if (holding) {
+          holding = false;
+          const cancel = startY - (e.clientY || 0) > 60;
+          this.composer.classList.remove('canceling');
+          if (cancel) this.abortListening('已取消');
+          else this.stopListening(true);
+          return;
+        }
+        this.micTap();
+      };
+      root.addEventListener('pointerup', up);
+      root.addEventListener('pointercancel', () => {
+        clearTimeout(timer);
+        if (down && holding) { holding = false; this.stopListening(true); }
+        down = false;
+      });
+      btn.addEventListener('contextmenu', (e) => e.preventDefault());
+    },
+
+    /** 点麦克风：能直接听就直接听；不行就调手机自带的语音输入界面；再不行弹键盘 */
+    micTap() {
+      if (this.state === 'listening') { this.stopListening(true); return; }
+      if (this.speechSupported()) { this.startListening(false); return; }
+      if (Native.voiceIntentAvailable()) { this.startVoiceIntent(); return; }
+      this.textEl.focus();
+      this.setStatus('这台手机没有自带语音识别，点键盘上的 🎤 说', 'warn');
+    },
+
+    startVoiceIntent() {
+      this._baseText = this.textEl.value.trim();
+      this.setStatus('在弹出的语音窗口里说，说完自动记下', 'live');
+      try { root.TrainFitNative.startVoiceIntent(); } catch (e) { this.onVoiceIntent(false, ''); }
+    },
+
+    onVoiceIntent(ok, text) {
+      if (ok && text) {
+        this.setStatus('');
+        this.submit([this._baseText, text.trim()].filter(Boolean).join('，'));
+      } else {
+        this.setStatus('没识别到内容。再点麦克风试试，或者点键盘上的 🎤', 'warn');
+      }
     },
 
     speechSupported() {
@@ -434,7 +560,8 @@
     },
 
     refreshMic() {
-      this.micBtn.classList.toggle('hidden', !this.speechSupported());
+      // 麦克风一直显示：点了会自动选能用的方式（系统识别 → 系统语音输入界面 → 输入法）
+      this.micBtn.classList.remove('hidden');
     },
 
     autoGrow() {
@@ -476,17 +603,15 @@
     },
 
     // ----- 手机系统语音（可选，有才显示麦克风） -----
-    toggleVoice() {
-      if (this.state === 'listening') this.stopListening(false);
-      else this.startListening();
-    },
+    toggleVoice() { this.micTap(); },
 
     clearWatchdogs() {
       clearTimeout(this._startWatch);
       clearTimeout(this._stopWatch);
     },
 
-    startListening() {
+    startListening(hold) {
+      this._hold = !!hold;
       this._aborted = false;
       this._speechError = null;
       this._gotStart = false;
@@ -494,14 +619,18 @@
       this._baseText = this.textEl.value.trim();
       this.state = 'listening';
       this.composer.classList.add('listening');
-      this.setStatus('正在听… 说完点右边发送，或点麦克风停止', 'live');
+      this.setStatus(this._hold ? '正在听… 松手就记下，上滑取消' : '正在听… 说完再点一下麦克风', 'live');
       this.updateSend();
       this.clearWatchdogs();
       this._startWatch = setTimeout(() => {
         if (this.state === 'listening' && !this._gotStart) {
           this.speechBroken = true;
-          this.abortListening('这台手机的系统语音没反应。点输入框，用输入法键盘上的 🎤 说');
-          this.refreshMic();
+          if (Native.voiceIntentAvailable()) {
+            this.abortListening('');
+            this.startVoiceIntent();   // 直接换成手机自带的语音输入界面
+          } else {
+            this.abortListening('这台手机的系统语音没反应。点输入框，用键盘上的 🎤 说');
+          }
         }
       }, 3000);
 
@@ -591,10 +720,10 @@
       if (said && submit) { this.setStatus(''); this.submit(said); return; }
       if (said) { this.setStatus('可以改一改，然后点右边发送', ''); return; }
       if (err === 'PERMISSION_DENIED') this.setStatus('没有麦克风权限，可以去系统设置里打开；或者用输入法的 🎤', 'warn');
-      else if (err === 'NOT_AVAILABLE' || err === 'START_FAILED') {
+      else if (err === 'NOT_AVAILABLE' || err === 'START_FAILED' || /^ERROR_/.test(err || '')) {
         this.speechBroken = true;
-        this.refreshMic();
-        this.setStatus('这台手机没有系统语音识别。点输入框，用输入法键盘上的 🎤 说', 'warn');
+        if (Native.voiceIntentAvailable()) this.startVoiceIntent();
+        else this.setStatus('这台手机没有系统语音识别。点输入框，用键盘上的 🎤 说', 'warn');
       }
       else if (err === 'NETWORK') this.setStatus('系统语音需要联网；也可以用输入法的 🎤', 'warn');
       else this.setStatus('没听清，再试一次，或者用输入法的 🎤', 'warn');
@@ -612,13 +741,41 @@
       this.process(p);
     },
 
+    /** 给大模型的上下文：这天的记录（带编号）+ 各动作最近一次成绩 */
+    buildContext(p) {
+      const app = root.app;
+      const date = p.date;
+      const dayRecords = [];
+      app.diet.filter(d => d.date === date).forEach(d => dayRecords.push({
+        kind: 'meal', id: d.id,
+        text: `${(d.mealType || '').replace('/补剂', '')} ${d.foodSummary} ${d.calories}kcal 蛋白${d.proteinG || 0} 碳水${d.carbsG || 0} 脂肪${d.fatG || 0}`
+      }));
+      app.workouts.filter(w => w.date === date).forEach(w => dayRecords.push({
+        kind: 'workout', id: w.id,
+        text: w.durationMin ? `训练 ${w.exerciseName} ${w.durationMin}分钟 消耗${w.burnedCalories || 0}` :
+          `训练 ${w.exerciseName} ${w.weightKg > 0 ? w.weightKg + 'kg' : '自重'} ${w.sets}组×${w.reps}次 消耗${w.burnedCalories || 0}`
+      }));
+      dayRecords.forEach((r, i) => { r.ref = 'r' + (i + 1); });
+
+      const seen = new Set();
+      const recent = [];
+      app.workouts
+        .filter(w => !w.durationMin)
+        .sort((x, y) => (y.date === x.date ? (y.ts || 0) - (x.ts || 0) : (y.date > x.date ? 1 : -1)))
+        .forEach(w => {
+          if (seen.has(w.exerciseName)) return;
+          seen.add(w.exerciseName);
+          recent.push(`${w.exerciseName} ${w.weightKg > 0 ? w.weightKg + 'kg' : '自重'} ${w.sets}×${w.reps}（${w.date.slice(5)}）`);
+        });
+
+      const today = getTodayDateString();
+      const dayLabel = date === today ? `今天 ${date}` : date;
+      return { now: new Date(p.ts || Date.now()), history: app.workouts, dayRecords, recent, dayLabel };
+    },
+
     async process(p) {
       const app = root.app;
-      const ctx = {
-        now: new Date(p.ts || Date.now()),
-        history: app.workouts,
-        knownExercises: Array.from(new Set(app.workouts.map(w => w.exerciseName)))
-      };
+      const ctx = this.buildContext(p);
       let result;
       try {
         result = await Parser.parse(p.text, ctx);
@@ -627,22 +784,52 @@
         return;
       }
       if (!app.pending.some(x => x.id === p.id)) return; // 已被用户删掉
-      if (!result.workouts.length && !result.meals.length) {
-        app.failPending(p.id, result.source === 'local' ? 'AI 没连上，也没认出内容' : '没认出训练或饮食');
+      const changes = result.workouts.length + result.meals.length + (result.updates || []).length + (result.deletes || []).length;
+      if (!changes) {
+        app.failPending(p.id, result.reply || (result.source === 'local' ? 'AI 没连上，也没认出内容' : '没认出训练或饮食'));
         return;
       }
       app.finishPending(p.id);
-      const batch = this.save(result, p.date);
+      const batch = this.save(result, p.date, ctx);
       this.showSnack(batch, result);
     },
 
-    save(result, baseDate) {
+    save(result, baseDate, ctx) {
       const app = root.app;
       const base = baseDate || app.selectedDate || getTodayDateString();
       const date = result.dayOffset ? shiftDateString(base, result.dayOffset) : base;
       const stamp = Date.now();
-      const batch = { workoutIds: [], dietIds: [], date };
+      const batch = { workoutIds: [], dietIds: [], date, before: [], removed: [], changed: [] };
+      const refMap = new Map(((ctx && ctx.dayRecords) || []).map(r => [r.ref, r]));
+      const find = (r) => (r.kind === 'meal' ? app.diet : app.workouts).find(x => x.id === r.id);
 
+      // 修改
+      (result.updates || []).forEach(u => {
+        const r = refMap.get(u.ref);
+        const rec = r && find(r);
+        if (!rec) return;
+        batch.before.push({ kind: r.kind, snapshot: JSON.parse(JSON.stringify(rec)) });
+        Object.keys(u.set).forEach(k => {
+          if (r.kind === 'meal' && ['mealType', 'foodSummary', 'calories', 'proteinG', 'carbsG', 'fatG'].includes(k)) rec[k] = u.set[k];
+          if (r.kind === 'workout' && ['exerciseName', 'muscleGroup', 'weightKg', 'sets', 'reps', 'durationMin', 'burnedCalories'].includes(k)) rec[k] = u.set[k];
+        });
+        batch.changed.push(r.kind === 'meal' ? `改 · ${rec.foodSummary} ${rec.calories} kcal` :
+          `改 · ${rec.exerciseName} ${rec.durationMin ? rec.durationMin + ' 分钟' : (rec.weightKg > 0 ? rec.weightKg + 'kg' : '自重') + ' ' + rec.sets + '×' + rec.reps}`);
+      });
+
+      // 删除
+      (result.deletes || []).forEach(ref => {
+        const r = refMap.get(ref);
+        if (!r) return;
+        const list = r.kind === 'meal' ? app.diet : app.workouts;
+        const idx = list.findIndex(x => x.id === r.id);
+        if (idx === -1) return;
+        const [rec] = list.splice(idx, 1);
+        batch.removed.push({ kind: r.kind, rec });
+        batch.changed.push(`删 · ${r.kind === 'meal' ? rec.foodSummary : rec.exerciseName}`);
+      });
+
+      // 新增
       result.workouts.forEach((w, i) => {
         const id = 'w_' + stamp + '_' + i;
         batch.workoutIds.push(id);
@@ -661,14 +848,12 @@
           notes: w.estimated ? '一键记录（部分参数按上次/默认值估计）' : '一键记录'
         });
       });
-
       result.meals.forEach((m, i) => {
         const id = 'd_' + stamp + '_' + i;
         batch.dietIds.push(id);
         app.diet.unshift({
           id,
-          // 同一次说的几顿饭按 早→午→晚→加餐 排时间，列表里倒序显示更自然
-          ts: stamp + 50 + Math.max(0, ['早餐', '午餐', '晚餐', '加餐/补剂'].indexOf(m.mealType)) * 2 + i,
+          ts: stamp + 50 + Math.max(0, MEAL_TYPES.indexOf(m.mealType)) * 2 + i,
           date,
           mealType: m.mealType,
           foodSummary: m.foodSummary,
@@ -697,12 +882,18 @@
     showSnack(batch, result) {
       const app = root.app;
       const n = result.workouts.length + result.meals.length;
-      let t = `✓ 已记下 ${n} 条`;
-      if (batch.date !== getTodayDateString()) t += `（${batch.date.slice(5).replace('-', '月')}日）`;
+      let t = result.reply ? '✓ ' + result.reply : (n ? `✓ 已记下 ${n} 条` : '✓ 已更新');
+      if (n && batch.date !== getTodayDateString()) t += `（${batch.date.slice(5).replace('-', '月')}日）`;
       if (result.source === 'local') t += ' · AI 没连上，用的简单规则';
-      this.showUndo(t, this.describe(result), () => {
+      this.showUndo(t, this.describe(result).concat(batch.changed || []), () => {
         app.workouts = app.workouts.filter(w => !batch.workoutIds.includes(w.id));
         app.diet = app.diet.filter(d => !batch.dietIds.includes(d.id));
+        (batch.before || []).forEach(b => {
+          const list = b.kind === 'meal' ? app.diet : app.workouts;
+          const rec = list.find(x => x.id === b.snapshot.id);
+          if (rec) Object.keys(rec).forEach(k => delete rec[k]), Object.assign(rec, b.snapshot);
+        });
+        (batch.removed || []).forEach(r => (r.kind === 'meal' ? app.diet : app.workouts).unshift(r.rec));
         app.saveData();
         app.render();
       });
