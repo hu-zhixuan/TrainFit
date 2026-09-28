@@ -950,3 +950,79 @@ body.no-composer .snackbar { bottom: calc(20px + var(--sab)); }
 .remind-banner b { display: block; font-size: 0.92rem; }
 .remind-banner span { font-size: 0.8rem; color: var(--text-2); }
 .remind-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+/* ---------- v2.3：只记吃的模式 ---------- */
+.mode-eat .fit-only { display: none !important; }
+.mode-eat #goal-grid { grid-template-columns: 1fr; }
+
+/* ---------- 体重 ---------- */
+.weight-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  grid-template-areas: "label main go" "label sub go";
+  align-items: center;
+  column-gap: 14px;
+  width: 100%;
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 10px 14px;
+  box-shadow: var(--shadow-sm);
+}
+.weight-row:active { background: var(--surface-2); }
+.wr-label { grid-area: label; font-size: 0.8rem; font-weight: 700; color: var(--text-2); padding-right: 12px; border-right: 1px solid var(--line); align-self: stretch; display: flex; align-items: center; }
+.wr-main { grid-area: main; font-size: 1.1rem; font-weight: 750; font-variant-numeric: tabular-nums; line-height: 1.25; }
+.wr-main small { font-size: 0.75rem; color: var(--text-3); font-weight: 600; margin-left: 3px; }
+.wr-muted { font-size: 0.92rem; font-weight: 650; color: var(--text-2); }
+.wr-sub { grid-area: sub; font-size: 0.74rem; color: var(--text-3); }
+.wr-sub.good { color: var(--accent-text); font-weight: 600; }
+.wr-sub.bad { color: var(--meal); font-weight: 600; }
+.wr-go { grid-area: go; color: var(--text-3); font-size: 1.1rem; }
+.input-big { font-size: 1.4rem; font-weight: 700; padding-top: 12px; padding-bottom: 12px; }
+.w-line { fill: none; stroke: var(--accent); stroke-width: 2.2; stroke-linejoin: round; stroke-linecap: round; }
+.w-dot { fill: var(--surface); stroke: var(--accent); stroke-width: 2; }
+
+/* ---------- 第一次打开 ---------- */
+.onboard {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: var(--bg);
+  overflow-y: auto;
+  display: flex;
+  justify-content: center;
+}
+.onboarding { overflow: hidden; }
+.ob-step {
+  width: 100%;
+  max-width: 480px;
+  padding: calc(40px + var(--sat)) 20px calc(24px + var(--sab));
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  animation: sheetIn 0.25s ease;
+}
+.ob-brand { display: flex; align-items: center; gap: 8px; font-weight: 750; font-size: 0.95rem; color: var(--text-2); }
+.ob-logo { width: 30px; height: 30px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; background: var(--accent); color: var(--accent-ink); }
+.ob-title { margin: 12px 0 0; font-size: 1.75rem; line-height: 1.25; font-weight: 800; letter-spacing: -0.01em; }
+.ob-sub { margin: 0; color: var(--text-2); font-size: 0.92rem; line-height: 1.55; }
+.ob-options { display: flex; flex-direction: column; gap: 10px; margin-top: 6px; }
+.ob-opt {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  padding: 16px 18px;
+  box-shadow: var(--shadow-sm);
+  transition: border-color 0.15s ease, transform 0.1s ease;
+}
+.ob-opt:active { transform: scale(0.99); border-color: var(--accent); }
+.ob-opt b { font-size: 1.05rem; }
+.ob-opt span { font-size: 0.82rem; color: var(--text-3); }
+.ob-foot { margin: 4px 0 0; text-align: center; font-size: 0.76rem; color: var(--text-3); }
+.ob-back { align-self: flex-start; background: none; border: 0; padding: 4px 0; color: var(--text-2); font-weight: 600; }
+.ob-actions { margin-top: 10px; }

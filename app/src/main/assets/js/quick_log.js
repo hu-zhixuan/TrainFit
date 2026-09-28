@@ -42,6 +42,35 @@
     return '加餐/补剂';
   }
 
+  // ---------------------------------------------------------------------------
+  // 体重：「体重62.5」「今天称了124斤」「61.8」
+  // ---------------------------------------------------------------------------
+  /** 没说单位时：用上次体重判断是公斤还是斤（中国人常说斤） */
+  function toKg(v, unit, lastKg) {
+    if (!Number.isFinite(v)) return null;
+    let kg;
+    if (/公斤|kg|千克/i.test(unit || '')) kg = v;
+    else if (/斤/.test(unit || '')) kg = v / 2;
+    else if (lastKg) kg = Math.abs(v / 2 - lastKg) < Math.abs(v - lastKg) ? v / 2 : v;
+    else kg = v > 150 ? v / 2 : v;
+    kg = Math.round(kg * 10) / 10;
+    return kg >= 25 && kg <= 300 ? kg : null;
+  }
+
+  /** 整句话只是在报体重：不用等大模型，直接记 */
+  function quickWeight(text, lastKg) {
+    const s = String(text || '').trim().replace(/[，,。.!！~～]+$/, '');
+    const m = s.match(/^(?:今天|今早|早上|早晨|刚才|刚刚)?\s*(?:的)?\s*(体重|称了?一?下|称了|称重|上秤)?\s*(?:是|为|有|了)?\s*(\d{2,3}(?:\.\d{1,2})?)\s*(斤|公斤|kg|KG|千克)?$/);
+    if (!m) return null;
+    return toKg(parseFloat(m[2]), m[3], lastKg);
+  }
+
+  /** 一句话里提到体重（离线兜底用） */
+  function findWeight(text, lastKg) {
+    const m = String(text || '').match(/(?:体重|称了?一?下|称了|称重|上秤)[^\d]{0,4}(\d{2,3}(?:\.\d{1,2})?)\s*(斤|公斤|kg|KG|千克)?/);
+    return m ? toKg(parseFloat(m[1]), m[2], lastKg) : null;
+  }
+
   function guessMuscle(name) {
     const n = name || '';
     if (/跑|骑|单车|椭圆|跳绳|游泳|快走|爬坡|划船机|有氧|HIIT|楼梯/i.test(n)) return '有氧';
@@ -273,9 +302,9 @@
       const recent = (ctx.recent || []).slice(0, 25);
 
       const system = [
-        '你是「练食AI」的记录助手。用户用口语说训练和饮食，文字来自语音识别，可能有同音错字（"卧腿"=卧推，"四组八哥"=4组8个，"划川"=划船）。',
+        '你是「练食AI」的记录助手。用户用口语说饮食、训练或体重，文字来自语音识别，可能有同音错字（"卧腿"=卧推，"四组八哥"=4组8个，"划川"=划船）。',
         '由你决定怎么改数据：新增、修改或删除。只输出一个 JSON 对象，不要 markdown，不要解释：',
-        '{"reply":"一句话告诉用户你做了什么，20字以内","dayOffset":0,',
+        '{"reply":"一句话告诉用户你做了什么，20字以内","dayOffset":0,"bodyWeight":null,',
         ' "add":{"workouts":[{"exerciseName":"杠铃卧推","muscleGroup":"胸部","weightKg":80,"sets":4,"reps":8,"durationMin":null,"burnedCalories":110,"estimated":false}],',
         '        "meals":[{"mealType":"午餐","foodSummary":"番茄炒蛋盖饭1份","items":[{"name":"米饭","grams":250,"calories":290,"proteinG":6.5,"carbsG":65,"fatG":0.8},{"name":"鸡蛋","grams":100,"calories":139,"proteinG":13,"carbsG":2.4,"fatG":8.6},{"name":"番茄","grams":150,"calories":30,"proteinG":1.4,"carbsG":6,"fatG":0.3},{"name":"烹调油","grams":12,"calories":108,"proteinG":0,"carbsG":0,"fatG":12}]}]},',
         ' "update":[{"ref":"r2","set":{"weightKg":85}}],',
@@ -290,13 +319,15 @@
         '   按中国常见份量估克数：米饭一碗约 180g，馒头一个约 100g，鸡蛋一个约 50g，牛奶一杯约 250g，一份外卖主菜约 250–350g。burnedCalories 按常见强度估算。',
         '5. 用户说「记错了/改成/其实是/只吃了一半/删掉/不算」等，是在改已有记录：用 update（set 里只写要改的字段；饮食份量变了就在 set 里给新的 items，或同时改热量和三大营养素）或 delete，引用下面的编号，不要重复新增。',
         '6. 说「昨天」dayOffset=-1，「前天」=-2，否则 0；修改和删除只针对下面列出的这天记录。',
-        '7. 听不懂或和训练饮食无关：add 为空，reply 说明原因。'
+        '7. 用户报自己的体重（「体重62.5」「今天称了124斤」「早上61公斤」）：bodyWeight 填公斤数（斤÷2；没说单位就参考下面的最近体重判断是斤还是公斤）。没说体重就填 null。训练用的重量不是体重。',
+        '8. 听不懂或和饮食、训练、体重都无关：add 为空，reply 说明原因。'
       ].join('\n');
 
       const lines = [];
       lines.push(`现在时间 ${hh}:${mm}，正在看的日期：${day}。`);
       lines.push(records.length ? '这天已有记录：\n' + records.map(r => `${r.ref} ${r.text}`).join('\n') : '这天还没有记录。');
       if (recent.length) lines.push('最近成绩：' + recent.join('；'));
+      if (ctx.lastWeight) lines.push(`最近体重：${ctx.lastWeight}kg`);
       const cands = FoodDB.candidates(text, 18);
       if (cands.length) lines.push('参考营养数据（每100g可食部，来自中国食物成分表和常见菜品库）：\n' + cands.map(e => FoodDB.line(e)).join('\n'));
       lines.push('用户说：' + text);
@@ -363,6 +394,15 @@
         if (Object.keys(set).length) out.updates.push({ ref: u.ref, set });
       });
       (Array.isArray(parsed && parsed.delete) ? parsed.delete : []).forEach(ref => { if (refs.has(ref)) out.deletes.push(ref); });
+
+      const bw = num(parsed && (parsed.bodyWeight != null ? parsed.bodyWeight : parsed.bodyWeightKg));
+      if (bw !== null) {
+        let kg = bw;
+        // 模型把「124斤」当成公斤了：和上次体重比一下
+        if (ctx.lastWeight && kg > ctx.lastWeight * 1.6 && Math.abs(kg / 2 - ctx.lastWeight) < ctx.lastWeight * 0.2) kg = kg / 2;
+        kg = round1(kg);
+        if (kg >= 25 && kg <= 300) out.bodyWeight = kg;
+      }
 
       const off = num(parsed && parsed.dayOffset);
       if (off !== null && off <= 0 && off >= -7) out.dayOffset = Math.round(off);
@@ -516,7 +556,10 @@
       else if (/昨天|昨晚/.test(text)) out.dayOffset = -1;
 
       const foodCue = /吃|喝|早餐|午餐|晚餐|早饭|午饭|晚饭|夜宵|加餐|外卖|零食|饮料|奶茶|咖啡|牛奶|鸡蛋|米饭|面条|水果/;
-      const segs = String(text).split(/[，,。；;！!？?\n]|然后|接着|另外|还有/).map(s => s.trim()).filter(Boolean);
+      const w = findWeight(text, ctx.lastWeight);
+      if (w) out.bodyWeight = w;
+      const segs = String(text).split(/[，,。；;！!？?\n]|然后|接着|另外|还有/).map(s => s.trim())
+        .filter(s => s && !/体重|称了|称一下|称重|上秤/.test(s));
       const foodSegs = [];
       const workoutSegs = [];
       segs.forEach(s => (foodCue.test(s) ? foodSegs : workoutSegs).push(s));
@@ -1022,7 +1065,8 @@
 
       const today = getTodayDateString();
       const dayLabel = date === today ? `今天 ${date}` : date;
-      return { now: new Date(p.ts || Date.now()), history: app.workouts, dayRecords, recent, dayLabel };
+      const lw = app.latestWeight ? app.latestWeight() : null;
+      return { now: new Date(p.ts || Date.now()), history: app.workouts, dayRecords, recent, dayLabel, lastWeight: lw ? lw.kg : null };
     },
 
     async process(p) {
@@ -1030,15 +1074,18 @@
       const ctx = this.buildContext(p);
       let result;
       try {
-        result = await Parser.parse(p.text, ctx);
+        // 只是报体重：不用等大模型
+        const kg = quickWeight(p.text, ctx.lastWeight);
+        result = kg ? { dayOffset: 0, workouts: [], meals: [], updates: [], deletes: [], bodyWeight: kg, reply: '', source: 'fast' }
+          : await Parser.parse(p.text, ctx);
       } catch (e) {
         app.failPending(p.id, '整理出错了');
         return;
       }
       if (!app.pending.some(x => x.id === p.id)) return; // 已被用户删掉
-      const changes = result.workouts.length + result.meals.length + (result.updates || []).length + (result.deletes || []).length;
+      const changes = result.workouts.length + result.meals.length + (result.updates || []).length + (result.deletes || []).length + (result.bodyWeight ? 1 : 0);
       if (!changes) {
-        app.failPending(p.id, result.reply || (result.source === 'local' ? 'AI 没连上，也没认出内容' : '没认出训练或饮食'));
+        app.failPending(p.id, result.reply || (result.source === 'local' ? 'AI 没连上，也没认出内容' : '没认出吃了什么'));
         return;
       }
       app.finishPending(p.id);
@@ -1117,6 +1164,11 @@
         });
       });
 
+      // 体重
+      if (result.bodyWeight && app.setWeight) {
+        batch.weight = { date, prev: app.setWeight(date, result.bodyWeight) };
+      }
+
       app.saveData();
       app.render();
       return batch;
@@ -1129,13 +1181,14 @@
         else lines.push(`训练 · ${w.exerciseName} ${w.weightKg > 0 ? w.weightKg + 'kg' : '自重'} ${w.sets}×${w.reps}${w.estimated ? '（估）' : ''}`);
       });
       result.meals.forEach(m => lines.push(`${m.mealType.replace('/补剂', '')} · ${m.foodSummary} ${m.calories} kcal`));
+      if (result.bodyWeight) lines.push(`体重 · ${result.bodyWeight} kg`);
       return lines;
     },
 
     showSnack(batch, result) {
       const app = root.app;
-      const n = result.workouts.length + result.meals.length;
-      let t = result.reply ? '✓ ' + result.reply : (n ? `✓ 已记下 ${n} 条` : '✓ 已更新');
+      const n = result.workouts.length + result.meals.length + (result.bodyWeight ? 1 : 0);
+      let t = result.reply ? '✓ ' + result.reply : (result.bodyWeight && n === 1 ? `✓ 记下体重 ${result.bodyWeight} kg` : (n ? `✓ 已记下 ${n} 条` : '✓ 已更新'));
       if (n && batch.date !== getTodayDateString()) t += `（${batch.date.slice(5).replace('-', '月')}日）`;
       if (result.source === 'local') t += ' · AI 没连上，用的简单规则';
       const lines = this.describe(result).concat(batch.changed || []);
@@ -1153,6 +1206,7 @@
           if (rec) Object.keys(rec).forEach(k => delete rec[k]), Object.assign(rec, b.snapshot);
         });
         (batch.removed || []).forEach(r => (r.kind === 'meal' ? app.diet : app.workouts).unshift(r.rec));
+        if (batch.weight && app.restoreWeight) app.restoreWeight(batch.weight.date, batch.weight.prev);
         app.saveData();
         app.render();
       });
@@ -1277,6 +1331,6 @@
   }
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { QuickLogParser: Parser, Native, FoodDB, groundItem };
+    module.exports = { QuickLogParser: Parser, Native, FoodDB, groundItem, quickWeight, findWeight };
   }
 })(typeof window !== 'undefined' ? window : globalThis);

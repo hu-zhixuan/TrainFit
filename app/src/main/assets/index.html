@@ -58,10 +58,17 @@
           <div class="hero-foot" id="hero-foot"></div>
           <div class="hero-stats">
             <div class="hero-stat"><span>已吃</span><b id="st-intake">0</b></div>
-            <div class="hero-stat"><span>训练消耗</span><b id="st-burn">0</b></div>
-            <div class="hero-stat"><span>蛋白质</span><b id="st-protein">0 / 0g</b></div>
+            <div class="hero-stat"><span id="st-burn-l">训练消耗</span><b id="st-burn">0</b></div>
+            <div class="hero-stat"><span id="st-protein-l">蛋白质</span><b id="st-protein">0 / 0g</b></div>
           </div>
         </div>
+
+        <button class="weight-row" id="weight-row" type="button" aria-label="记体重">
+          <span class="wr-label">体重</span>
+          <span class="wr-main" id="wr-main"></span>
+          <span class="wr-sub" id="wr-sub"></span>
+          <span class="wr-go" aria-hidden="true">›</span>
+        </button>
 
         <button class="setup-hint hidden" id="setup-hint" type="button">
           <span>先填一下身高体重，热量预算才准</span>
@@ -87,26 +94,30 @@
         </div>
 
         <div class="stat-row">
-          <div class="stat-card"><span>平均每天缺口</span><b id="tr-avg">0</b><small>kcal</small></div>
-          <div class="stat-card"><span>折合脂肪</span><b id="tr-fat">0</b><small>kg</small></div>
+          <div class="stat-card"><span id="tr-avg-l">平均每天缺口</span><b id="tr-avg">0</b><small id="tr-avg-u">kcal</small></div>
+          <div class="stat-card"><span id="tr-fat-l">折合脂肪</span><b id="tr-fat">0</b><small id="tr-fat-u">kg</small></div>
           <div class="stat-card"><span>记录天数</span><b id="tr-days">0</b><small>天</small></div>
         </div>
 
         <div class="card chart-card">
           <div class="card-head">
-            <span>每天热量缺口</span>
-            <span class="legend">
-              <span><i class="sw sw-pos"></i>缺口</span>
-              <span><i class="sw sw-neg"></i>超出</span>
-              <span><i class="sw sw-target"></i>目标</span>
-            </span>
+            <span id="trend-chart-title">每天热量缺口</span>
+            <span class="legend" id="trend-legend"></span>
           </div>
           <div class="chart" id="trend-chart"></div>
           <div class="chart-note">点柱子查看那天的记录</div>
         </div>
 
-        <div class="list-head">动作进步</div>
-        <div class="progress-list" id="progress-list"></div>
+        <div class="card chart-card" id="weight-card">
+          <div class="card-head">
+            <span>体重</span>
+            <span class="legend" id="weight-legend"></span>
+          </div>
+          <div class="chart" id="weight-chart"></div>
+        </div>
+
+        <div class="list-head fit-only">动作进步</div>
+        <div class="progress-list fit-only" id="progress-list"></div>
       </section>
 
       <!-- ============ 设置 ============ -->
@@ -129,17 +140,22 @@
         </div>
 
         <div class="card form-card">
-          <div class="card-title">目标</div>
+          <div class="card-title">用来做什么</div>
+          <div class="seg seg-sm" id="set-mode">
+            <button class="seg-btn" data-value="eat" type="button">只记吃的</button>
+            <button class="seg-btn" data-value="fit" type="button">吃和练都记</button>
+          </div>
+          <div class="field-note" id="set-mode-note"></div>
           <div class="seg seg-sm" id="set-goal">
             <button class="seg-btn" data-value="fat_loss" type="button">减脂</button>
             <button class="seg-btn" data-value="maintain" type="button">维持</button>
             <button class="seg-btn" data-value="muscle_gain" type="button">增肌</button>
           </div>
-          <div class="field-grid field-grid-2">
-            <label class="field"><span class="field-label">每天热量缺口 kcal</span><input class="input" id="set-deficit" type="number" inputmode="numeric"></label>
-            <label class="field"><span class="field-label">每天蛋白质 g</span><input class="input" id="set-protein" type="number" inputmode="numeric"></label>
+          <div class="field-grid field-grid-2" id="goal-grid">
+            <label class="field"><span class="field-label" id="set-deficit-l">每天热量缺口 kcal</span><input class="input" id="set-deficit" type="number" inputmode="numeric"></label>
+            <label class="field fit-only"><span class="field-label">每天蛋白质 g</span><input class="input" id="set-protein" type="number" inputmode="numeric"></label>
           </div>
-          <div class="field-note">增肌时缺口是负数，比如 -250 表示每天多吃 250 kcal。改完自动保存。</div>
+          <div class="field-note" id="set-goal-note"></div>
         </div>
 
         <div class="card form-card">
@@ -165,7 +181,7 @@
             <input type="checkbox" class="switch" id="rem-dinner" aria-label="晚餐提醒">
           </div>
           <div class="switch-row">
-            <div class="switch-text"><b>晚间小结</b><small>今天还能吃多少、蛋白还差多少</small></div>
+            <div class="switch-text"><b>晚间小结</b><small id="rem-night-desc">今天还能吃多少、蛋白还差多少</small></div>
             <input type="time" class="time-input" id="rem-night-time" value="21:30">
             <input type="checkbox" class="switch" id="rem-night" aria-label="晚间小结">
           </div>
@@ -242,6 +258,50 @@
         </button>
       </div>
       <div class="cmp-tip hidden" id="cmp-tip">按住把练了啥、吃了啥一口气说完，松手自动记好</div>
+    </div>
+  </div>
+
+  <!-- 第一次打开：选用途 + 填身体数据 -->
+  <div class="onboard hidden" id="onboard">
+    <div class="ob-step" id="ob-step-1">
+      <div class="ob-brand"><span class="ob-logo"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg></span>练食AI</div>
+      <h2 class="ob-title">说一句话，<br>帮你记下今天吃了啥</h2>
+      <p class="ob-sub">按住说「中午一碗牛肉面加个蛋」，热量自动算好。你主要想用它做什么？</p>
+      <div class="ob-options">
+        <button class="ob-opt" type="button" data-pick="lose"><b>想瘦一点</b><span>告诉你今天还能吃多少，顺手记体重</span></button>
+        <button class="ob-opt" type="button" data-pick="track"><b>就记记吃了啥</b><span>不用设目标，看看自己每天吃了多少</span></button>
+        <button class="ob-opt" type="button" data-pick="fit"><b>在健身（减脂 / 增肌）</b><span>吃和练都记：热量缺口、蛋白质、动作进步</span></button>
+      </div>
+      <p class="ob-foot">之后随时可以在设置里改</p>
+    </div>
+    <div class="ob-step hidden" id="ob-step-2">
+      <button class="ob-back" id="ob-back" type="button" aria-label="返回">‹ 返回</button>
+      <h2 class="ob-title">简单填一下</h2>
+      <p class="ob-sub" id="ob-step-2-sub"></p>
+      <div class="field" id="ob-goal-field">
+        <span class="field-label">目标</span>
+        <div class="seg seg-sm" id="ob-goal">
+          <button class="seg-btn" data-value="fat_loss" type="button">减脂</button>
+          <button class="seg-btn" data-value="maintain" type="button">维持</button>
+          <button class="seg-btn" data-value="muscle_gain" type="button">增肌</button>
+        </div>
+      </div>
+      <div class="field">
+        <span class="field-label">性别</span>
+        <div class="seg seg-sm" id="ob-gender">
+          <button class="seg-btn" data-value="male" type="button">男</button>
+          <button class="seg-btn" data-value="female" type="button">女</button>
+        </div>
+      </div>
+      <div class="field-grid">
+        <label class="field"><span class="field-label">身高 cm</span><input class="input" id="ob-height" type="number" inputmode="decimal" placeholder="170"></label>
+        <label class="field"><span class="field-label">体重 kg</span><input class="input" id="ob-weight" type="number" inputmode="decimal" step="0.1" placeholder="60"></label>
+        <label class="field"><span class="field-label">年龄</span><input class="input" id="ob-age" type="number" inputmode="numeric" placeholder="25"></label>
+      </div>
+      <div class="btn-row ob-actions">
+        <button type="button" class="btn" id="ob-skip">先跳过</button>
+        <button type="button" class="btn btn-primary btn-wide" id="ob-done">开始用</button>
+      </div>
     </div>
   </div>
 

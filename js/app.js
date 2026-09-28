@@ -102,6 +102,14 @@ class FitnessApp {
     }
     this.workouts = load('fit_workouts', []);
     this.diet = load('fit_diet', []);
+    this.weights = load('fit_weights', []);   // [{date, kg, ts}]，一天一条
+    // 模式：eat = 只记吃的（想瘦 / 随便记记），fit = 吃和练都记（健身）
+    // 老用户（已经有记录或改过身体数据）默认 fit，不打扰；新用户第一次打开先问
+    this.needsOnboarding = false;
+    if (!this.profile.mode) {
+      if (this.workouts.length || this.diet.length || this.profile.customized) this.profile.mode = 'fit';
+      else this.needsOnboarding = true;
+    }
     this.recalculateMetabolism();
 
     // 上次没整理完就关了 App 的，恢复成「失败，可重试」
@@ -109,7 +117,9 @@ class FitnessApp {
 
     this.bindEvents();
     this.applyTheme(load('trainfit_theme_v2', null) || this.legacyTheme());
+    this.applyMode();
     this.render();
+    if (this.needsOnboarding) this.showOnboarding();
 
     // 跨天了自动回到今天
     document.addEventListener('visibilitychange', () => {
@@ -129,6 +139,79 @@ class FitnessApp {
     store('fit_profile', this.profile);
     store('fit_workouts', this.workouts);
     store('fit_diet', this.diet);
+    store('fit_weights', this.weights);
+  }
+
+  /** 只记吃的模式：藏起训练、蛋白质、缺口这些健身词 */
+  isSimple() { return this.profile.mode === 'eat'; }
+
+  applyMode() {
+    const simple = this.isSimple();
+    document.body.classList.toggle('mode-eat', simple);
+    const t = document.getElementById('cmp-text');
+    if (t) t.placeholder = simple ? '今天吃了啥？' : '今天练了啥、吃了啥？';
+    const tip = document.getElementById('cmp-tip');
+    if (tip) tip.textContent = simple ? '按住说今天吃了啥，松手自动算好热量' : '按住把练了啥、吃了啥一口气说完，松手自动记好';
+  }
+
+  // ======================= 体重 =======================
+  latestWeight() {
+    return this.weights.length ? this.weights[this.weights.length - 1] : null;
+  }
+
+  weightOn(date) {
+    return this.weights.find(w => w.date === date) || null;
+  }
+
+  /** 记一天的体重（同一天再说一次就覆盖），返回原来那条，撤销用 */
+  setWeight(date, kg) {
+    const prev = this.weightOn(date);
+    this.weights = this.weights.filter(w => w.date !== date);
+    this.weights.push({ date, kg: round1(kg), ts: Date.now() });
+    this.weights.sort((a, b) => (a.date > b.date ? 1 : a.date < b.date ? -1 : 0));
+    this.syncProfileWeight();
+    this.saveData();
+    return prev ? Object.assign({}, prev) : null;
+  }
+
+  removeWeight(date) {
+    const prev = this.weightOn(date);
+    this.weights = this.weights.filter(w => w.date !== date);
+    this.syncProfileWeight();
+    this.saveData();
+    return prev;
+  }
+
+  restoreWeight(date, prev) {
+    this.weights = this.weights.filter(w => w.date !== date);
+    if (prev) {
+      this.weights.push(prev);
+      this.weights.sort((a, b) => (a.date > b.date ? 1 : a.date < b.date ? -1 : 0));
+    }
+    this.syncProfileWeight();
+  }
+
+  /** 最新体重就是身体数据里的体重（热量预算跟着变） */
+  syncProfileWeight() {
+    const w = this.latestWeight();
+    if (!w || w.kg === this.profile.weightKg) return;
+    const autoProtein = !this.profile.proteinTouched &&
+      (this.profile.targetProteinG === Math.round(this.profile.weightKg * 2) || this.profile.targetProteinG === DEFAULT_PROFILE.targetProteinG);
+    this.profile.weightKg = w.kg;
+    if (autoProtein) this.profile.targetProteinG = Math.round(w.kg * 2);
+    this.recalculateMetabolism();
+  }
+
+  /** 和大约一周前比 */
+  weightTrend() {
+    const last = this.latestWeight();
+    if (!last) return null;
+    const weekAgo = shiftDateString(last.date, -7);
+    const older = this.weights.filter(w => w.date < last.date);
+    if (!older.length) return { last, delta: null };
+    const base = older.filter(w => w.date <= weekAgo).pop() || older[0];
+    const days = Math.round((new Date(last.date + 'T00:00:00') - new Date(base.date + 'T00:00:00')) / 86400000);
+    return { last, delta: round1(last.kg - base.kg), days };
   }
 
   savePending() {
@@ -201,6 +284,8 @@ class FitnessApp {
     $('date-next').addEventListener('click', () => this.shiftDate(1));
     $('date-label').addEventListener('click', () => { this.selectedDate = getTodayDateString(); this.render(); });
     $('setup-hint').addEventListener('click', () => this.switchView('settings'));
+    $('weight-row').addEventListener('click', () => this.openWeightEditor(this.selectedDate));
+    this.bindOnboarding();
 
     // 左右滑动切换日期
     let sx = 0, sy = 0;
@@ -293,6 +378,7 @@ class FitnessApp {
       window.TrainFitNative.updateDayState(JSON.stringify({
         date: today, meals, count,
         remaining: Math.round(s.remaining),
+        showProtein: !this.isSimple(),
         proteinLeft: Math.max(0, Math.round((this.profile.targetProteinG || 0) - s.protein))
       }));
     } catch (e) {}
@@ -331,10 +417,24 @@ class FitnessApp {
     const pct = s.budget > 0 ? Math.min(100, (s.intake / s.budget) * 100) : 100;
     $('hero-meter').style.width = pct + '%';
     const target = this.profile.targetDeficitKcal || 0;
-    $('hero-foot').textContent = `预算 ${fmt(s.budget)} = 消耗 ${fmt(s.totalBurn)} ${target >= 0 ? '− 目标缺口 ' + fmt(target) : '+ 目标盈余 ' + fmt(-target)}`;
+    const simple = this.isSimple();
+    if (simple) {
+      const perMonth = Math.abs(target) * 30 / 7700;
+      $('hero-foot').textContent = target > 0 ? `每天少吃 ${fmt(target)} kcal，一个月大约瘦 ${perMonth.toFixed(1)} kg`
+        : target < 0 ? `每天多吃 ${fmt(-target)} kcal，一个月大约长 ${perMonth.toFixed(1)} kg` : '按保持现在的体重算';
+      $('st-burn-l').textContent = '今天预算';
+      $('st-burn').textContent = fmt(s.budget);
+      $('st-protein-l').textContent = '运动消耗';
+      $('st-protein').textContent = s.workoutBurn ? '+' + fmt(s.workoutBurn) : '0';
+    } else {
+      $('hero-foot').textContent = `预算 ${fmt(s.budget)} = 消耗 ${fmt(s.totalBurn)} ${target >= 0 ? '− 目标缺口 ' + fmt(target) : '+ 目标盈余 ' + fmt(-target)}`;
+      $('st-burn-l').textContent = '训练消耗';
+      $('st-burn').textContent = s.workoutBurn ? '+' + fmt(s.workoutBurn) : '0';
+      $('st-protein-l').textContent = '蛋白质';
+      $('st-protein').textContent = `${fmt(s.protein)} / ${fmt(this.profile.targetProteinG)}g`;
+    }
     $('st-intake').textContent = fmt(s.intake);
-    $('st-burn').textContent = s.workoutBurn ? '+' + fmt(s.workoutBurn) : '0';
-    $('st-protein').textContent = `${fmt(s.protein)} / ${fmt(this.profile.targetProteinG)}g`;
+    this.renderWeightRow(date);
 
     $('setup-hint').classList.toggle('hidden', !!this.profile.customized);
     let asked = true;
@@ -351,23 +451,51 @@ class FitnessApp {
     const tl = $('timeline');
     let html = pend.map(p => this.renderRow({ kind: 'pending', ts: p.ts, rec: p })).join('');
     if (meals.length) {
-      html += `<div class="group-head"><span>饮食</span><b>${fmt(s.intake)} kcal · 蛋白 ${fmt(s.protein)}g</b></div>`;
+      html += `<div class="group-head"><span>饮食</span><b>${fmt(s.intake)} kcal${simple ? '' : ` · 蛋白 ${fmt(s.protein)}g`}</b></div>`;
       html += meals.map(d => this.renderRow({ kind: 'meal', ts: recordTs(d), rec: d })).join('');
     }
     if (lifts.length) {
-      html += `<div class="group-head"><span>训练</span><b>消耗 ${fmt(s.workoutBurn)} kcal</b></div>`;
+      html += `<div class="group-head"><span>${simple ? '运动' : '训练'}</span><b>消耗 ${fmt(s.workoutBurn)} kcal</b></div>`;
       html += lifts.map(w => this.renderRow({ kind: 'workout', ts: recordTs(w), rec: w })).join('');
     }
     if (!html) {
-      html = isToday
-        ? `<div class="empty"><div class="empty-icon">${ICONS.mic}</div><b>按住下面的按钮</b>，一口气说完今天练了啥、吃了啥<br>松手就自动整理、记好<br>说错了再说一句「改成…」「删掉…」<br><span class="empty-example">「卧推80公斤4组8个，中午吃了黄焖鸡米饭」</span></div>`
-        : `<div class="empty">这天没有记录</div>`;
+      html = !isToday ? `<div class="empty">这天没有记录</div>`
+        : simple
+          ? `<div class="empty"><div class="empty-icon">${ICONS.mic}</div><b>按住下面的按钮</b>，说说今天吃了啥<br>松手自动算好热量、记下来<br>说错了再说一句「改成…」「删掉…」<br><span class="empty-example">「早上包子豆浆，中午黄焖鸡，体重61.5」</span></div>`
+          : `<div class="empty"><div class="empty-icon">${ICONS.mic}</div><b>按住下面的按钮</b>，一口气说完今天练了啥、吃了啥<br>松手就自动整理、记好<br>说错了再说一句「改成…」「删掉…」<br><span class="empty-example">「卧推80公斤4组8个，中午吃了黄焖鸡米饭」</span></div>`;
     }
     tl.innerHTML = html;
 
     this.renderChips();
     const tip = $('cmp-tip');
     if (tip) tip.classList.toggle('hidden', this.workouts.length + this.diet.length >= 3);
+  }
+
+  renderWeightRow(date) {
+    const $ = (id) => document.getElementById(id);
+    const on = this.weightOn(date);
+    const tr = this.weightTrend();
+    const main = $('wr-main'), sub = $('wr-sub');
+    if (on) {
+      main.innerHTML = `${round1(on.kg)}<small>kg</small>`;
+      const isLatest = tr && tr.last.date === on.date;
+      if (isLatest && tr.delta !== null) {
+        const down = tr.delta < 0;
+        sub.textContent = tr.delta === 0 ? `和 ${tr.days} 天前一样` : `比 ${tr.days} 天前${down ? '轻' : '重'} ${Math.abs(tr.delta)} kg`;
+        sub.className = 'wr-sub ' + (tr.delta === 0 ? '' : (down === ((this.profile.targetDeficitKcal || 0) >= 0) ? 'good' : 'bad'));
+      } else {
+        sub.textContent = '点一下可以改';
+        sub.className = 'wr-sub';
+      }
+    } else if (tr) {
+      main.innerHTML = `<span class="wr-muted">上次 ${round1(tr.last.kg)} kg</span>`;
+      sub.textContent = date === getTodayDateString() ? '说「体重 62」或点这里记今天的' : '点这里补记这天的体重';
+      sub.className = 'wr-sub';
+    } else {
+      main.innerHTML = '<span class="wr-muted">还没记</span>';
+      sub.textContent = '说「体重 62.5」就能记，也可以点这里';
+      sub.className = 'wr-sub';
+    }
   }
 
   /** 常吃常练：最近 30 天里记过 2 次以上、这天还没记的，点一下直接再记一次 */
@@ -445,7 +573,7 @@ class FitnessApp {
         </div>`;
     }
     if (r.kind === 'meal') {
-      const macro = [x.proteinG ? `蛋白 ${round1(x.proteinG)}g` : '', x.carbsG ? `碳水 ${round1(x.carbsG)}g` : '', x.fatG ? `脂肪 ${round1(x.fatG)}g` : ''].filter(Boolean).join(' · ');
+      const macro = this.isSimple() ? '' : [x.proteinG ? `蛋白 ${round1(x.proteinG)}g` : '', x.carbsG ? `碳水 ${round1(x.carbsG)}g` : '', x.fatG ? `脂肪 ${round1(x.fatG)}g` : ''].filter(Boolean).join(' · ');
       return `
         <button class="item" data-kind="meal" data-id="${esc(x.id)}" type="button">
           <div class="item-icon meal">${ICONS.meal}</div>
@@ -487,33 +615,100 @@ class FitnessApp {
     document.querySelectorAll('#trend-range .seg-btn').forEach(b => b.classList.toggle('active', Number(b.dataset.range) === this.trendDays));
 
     const today = getTodayDateString();
+    const simple = this.isSimple();
     const days = [];
     for (let i = this.trendDays - 1; i >= 0; i--) {
       const date = shiftDateString(today, -i);
       const s = this.getDaySummary(date);
-      days.push({ date, summary: s, value: s.hasDiet ? s.deficit : null });
+      days.push({ date, summary: s, value: s.hasDiet ? (simple ? s.intake : s.deficit) : null });
     }
     const logged = days.filter(d => d.value !== null);
     const total = logged.reduce((a, d) => a + d.value, 0);
-    $('tr-avg').textContent = logged.length ? fmt(total / logged.length) : '–';
-    $('tr-fat').textContent = logged.length ? (total / 7700).toFixed(2) : '–';
     $('tr-days').textContent = days.filter(d => d.summary.hasLogs).length;
 
-    this.drawDeficitChart($('trend-chart'), days);
+    if (simple) {
+      const overDays = logged.filter(d => d.summary.remaining < 0).length;
+      $('tr-avg-l').textContent = '平均每天吃';
+      $('tr-avg').textContent = logged.length ? fmt(total / logged.length) : '–';
+      $('tr-avg-u').textContent = 'kcal';
+      $('tr-fat-l').textContent = '超预算';
+      $('tr-fat').textContent = logged.length ? overDays : '–';
+      $('tr-fat-u').textContent = '天';
+      $('trend-chart-title').textContent = '每天吃了多少';
+      $('trend-legend').innerHTML = '<span><i class="sw sw-pos"></i>没超</span><span><i class="sw sw-neg"></i>超了</span><span><i class="sw sw-target"></i>预算</span>';
+      const budget = this.profile.tdee - (this.profile.targetDeficitKcal || 0);
+      this.drawBarChart($('trend-chart'), days, {
+        target: budget,
+        cls: (d) => (d.summary.remaining < 0 ? 'bar-neg' : 'bar-pos'),
+        tip: (d) => (d.value === null ? '没记饮食' : `吃了 ${fmt(d.value)} kcal${d.summary.remaining < 0 ? `，超 ${fmt(-d.summary.remaining)}` : ''}`),
+        empty: '记几天饮食后，这里会显示每天吃了多少',
+        aria: '每天摄入热量柱状图'
+      });
+    } else {
+      const target = this.profile.targetDeficitKcal || 0;
+      $('tr-avg-l').textContent = '平均每天缺口';
+      $('tr-avg').textContent = logged.length ? fmt(total / logged.length) : '–';
+      $('tr-avg-u').textContent = 'kcal';
+      $('tr-fat-l').textContent = '折合脂肪';
+      $('tr-fat').textContent = logged.length ? (total / 7700).toFixed(2) : '–';
+      $('tr-fat-u').textContent = 'kg';
+      $('trend-chart-title').textContent = '每天热量缺口';
+      $('trend-legend').innerHTML = '<span><i class="sw sw-pos"></i>缺口</span><span><i class="sw sw-neg"></i>超出</span><span><i class="sw sw-target"></i>目标</span>';
+      this.drawBarChart($('trend-chart'), days, {
+        target: target > 0 ? target : null,
+        cls: (d) => (d.value > 0 ? 'bar-pos' : 'bar-neg'),
+        tip: (d) => (d.value === null ? '没记饮食' : (d.value >= 0 ? `缺口 ${fmt(d.value)} kcal` : `超出 ${fmt(-d.value)} kcal`)),
+        empty: '记几天饮食后，这里会显示每天的热量缺口',
+        aria: '每天热量缺口柱状图'
+      });
+    }
+    this.drawWeightChart($('weight-chart'), shiftDateString(today, -(this.trendDays - 1)));
     this.renderProgressList($('progress-list'));
   }
 
-  drawDeficitChart(el, days) {
-    const target = this.profile.targetDeficitKcal || 0;
+  drawWeightChart(el, since) {
+    const pts = this.weights.filter(w => w.date >= since);
+    const tr = this.weightTrend();
+    const legend = document.getElementById('weight-legend');
+    legend.textContent = tr ? `最新 ${round1(tr.last.kg)} kg` : '';
+    if (pts.length < 2) {
+      el.innerHTML = `<div class="chart-empty">${this.weights.length ? '再记几天体重，这里会画出变化曲线' : '说「体重 62.5」就能记，记几天后这里会画出曲线'}</div>`;
+      return;
+    }
+    const W = 340, H = 150, padL = 40, padR = 12, padT = 12, padB = 22;
+    const iw = W - padL - padR, ih = H - padT - padB;
+    const kgs = pts.map(p => p.kg);
+    let lo = Math.min(...kgs), hi = Math.max(...kgs);
+    const span = Math.max(1, hi - lo);
+    lo = Math.floor((lo - span * 0.25) * 2) / 2;
+    hi = Math.ceil((hi + span * 0.25) * 2) / 2;
+    const t0 = new Date(since + 'T00:00:00').getTime();
+    const t1 = new Date(getTodayDateString() + 'T00:00:00').getTime();
+    const x = (date) => padL + ((new Date(date + 'T00:00:00').getTime() - t0) / Math.max(1, t1 - t0)) * iw;
+    const y = (kg) => padT + ((hi - kg) / (hi - lo)) * ih;
+    let grid = '';
+    const step = (hi - lo) <= 2 ? 0.5 : (hi - lo) <= 5 ? 1 : 2;
+    for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-6; v += step) {
+      grid += `<line class="grid" x1="${padL}" x2="${W - padR}" y1="${y(v)}" y2="${y(v)}"/><text class="axis-text" x="${padL - 6}" y="${y(v) + 3}" text-anchor="end">${round1(v)}</text>`;
+    }
+    const path = pts.map((p, i) => `${i ? 'L' : 'M'}${x(p.date).toFixed(1)},${y(p.kg).toFixed(1)}`).join(' ');
+    const dots = pts.map(p => `<circle class="w-dot" cx="${x(p.date).toFixed(1)}" cy="${y(p.kg).toFixed(1)}" r="3.2"><title>${p.date.slice(5).replace('-', '/')} ${round1(p.kg)} kg</title></circle>`).join('');
+    const md = (d) => d.slice(5).replace('-', '/').replace(/^0/, '');
+    const labels = `<text class="axis-text" x="${padL}" y="${H - 6}" text-anchor="start">${md(since)}</text><text class="axis-text" x="${W - padR}" y="${H - 6}" text-anchor="end">今天</text>`;
+    el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="体重变化曲线">${grid}<path class="w-line" d="${path}"/>${dots}${labels}</svg>`;
+  }
+
+  drawBarChart(el, days, opts) {
+    const target = opts.target;
     const vals = days.map(d => d.value).filter(v => v !== null);
     if (!vals.length) {
-      el.innerHTML = `<div class="chart-empty">记几天饮食后，这里会显示每天的热量缺口</div>`;
+      el.innerHTML = `<div class="chart-empty">${esc(opts.empty)}</div>`;
       return;
     }
     const W = 340, H = 180, padL = 40, padR = 6, padT = 10, padB = 22;
     const iw = W - padL - padR, ih = H - padT - padB;
-    let max = Math.max(target, ...vals, 0);
-    let min = Math.min(0, ...vals, target);
+    let max = Math.max(target || 0, ...vals, 0);
+    let min = Math.min(0, ...vals, target || 0);
     const niceStep = (range) => {
       const raw = range / 3;
       const mag = Math.pow(10, Math.floor(Math.log10(raw || 1)));
@@ -551,14 +746,14 @@ class FitnessApp {
         const path = pos
           ? `M${x},${y0} V${top + r} Q${x},${top} ${x + r},${top} H${x + bw - r} Q${x + bw},${top} ${x + bw},${top + r} V${y0} Z`
           : `M${x},${y0} V${y0 + h - r} Q${x},${y0 + h} ${x + r},${y0 + h} H${x + bw - r} Q${x + bw},${y0 + h} ${x + bw},${y0 + h - r} V${y0} Z`;
-        bars += `<path class="${pos ? 'bar-pos' : 'bar-neg'}" d="${path}"/>`;
+        bars += `<path class="${opts.cls(d)}" d="${path}"/>`;
       }
-      const tip = d.value === null ? '没记饮食' : (d.value >= 0 ? `缺口 ${fmt(d.value)} kcal` : `超出 ${fmt(-d.value)} kcal`);
+      const tip = opts.tip(d);
  bars += `<rect class="bar-hit" data-i="${i}" data-date="${d.date}" data-tip="${esc(md + ' · ' + tip)}" x="${padL + i * slot}" y="${padT}" width="${slot}" height="${ih}"><title>${esc(md + ' ' + tip)}</title></rect>`;
     });
-    const targetLine = target > 0 ? `<line class="target" x1="${padL}" x2="${W - padR}" y1="${y(target)}" y2="${y(target)}"/>` : '';
+    const targetLine = target ? `<line class="target" x1="${padL}" x2="${W - padR}" y1="${y(target)}" y2="${y(target)}"/>` : '';
 
-    el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="每天热量缺口柱状图">${grid}${targetLine}${bars}${labels}</svg><div class="chart-tip hidden"></div>`;
+    el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(opts.aria)}">${grid}${targetLine}${bars}${labels}</svg><div class="chart-tip hidden"></div>`;
 
     const tipEl = el.querySelector('.chart-tip');
     const svg = el.querySelector('svg');
@@ -615,6 +810,12 @@ class FitnessApp {
     });
 
     segPick('set-gender', (v) => { this.profile.gender = v; this.onProfileChange(); });
+    segPick('set-mode', (v) => {
+      if (this.profile.mode === v) return;
+      this.profile.mode = v;
+      this.applyMode();
+      this.onProfileChange();
+    });
     segPick('set-goal', (v) => {
       this.profile.goalType = v;
       this.profile.targetDeficitKcal = GOAL_DEFICIT[v];
@@ -643,15 +844,82 @@ class FitnessApp {
     num('set-protein', 'targetProteinG', 20, 400);
 
     $('set-clear').addEventListener('click', () => {
-      if (!confirm('清空所有训练和饮食记录？身体数据会保留。此操作不能撤销。')) return;
+      if (!confirm('清空所有饮食、训练和体重记录？身体数据会保留。此操作不能撤销。')) return;
       this.workouts = [];
       this.diet = [];
+      this.weights = [];
       this.pending = [];
       this.saveData();
       this.savePending();
       this.showToast('已清空');
       this.renderSettings();
     });
+  }
+
+  // ======================= 第一次打开 =======================
+  showOnboarding() {
+    const ob = document.getElementById('onboard');
+    ob.classList.remove('hidden');
+    document.getElementById('ob-step-1').classList.remove('hidden');
+    document.getElementById('ob-step-2').classList.add('hidden');
+    document.body.classList.add('onboarding');
+  }
+
+  bindOnboarding() {
+    const $ = (id) => document.getElementById(id);
+    let pick = null;
+    let gender = 'male';
+    let goal = 'fat_loss';
+    const setSeg = (id, v) => document.querySelectorAll(`#${id} .seg-btn`).forEach(b => b.classList.toggle('active', b.dataset.value === v));
+
+    $('onboard').addEventListener('click', (e) => {
+      const opt = e.target.closest('[data-pick]');
+      if (!opt) return;
+      pick = opt.dataset.pick;
+      window.Haptics && window.Haptics.fire('tap');
+      $('ob-goal-field').classList.toggle('hidden', pick !== 'fit');
+      $('ob-step-2-sub').textContent = pick === 'track'
+        ? '用来估你每天大概消耗多少，好告诉你吃得多还是少。数据只存在这台手机上。'
+        : '用来估你每天大概消耗多少，热量预算才准。数据只存在这台手机上。';
+      $('ob-step-1').classList.add('hidden');
+      $('ob-step-2').classList.remove('hidden');
+      setSeg('ob-gender', gender);
+      setSeg('ob-goal', goal);
+    });
+    $('ob-gender').addEventListener('click', (e) => { const b = e.target.closest('.seg-btn'); if (b) { gender = b.dataset.value; setSeg('ob-gender', gender); } });
+    $('ob-goal').addEventListener('click', (e) => { const b = e.target.closest('.seg-btn'); if (b) { goal = b.dataset.value; setSeg('ob-goal', goal); } });
+    $('ob-back').addEventListener('click', () => { $('ob-step-2').classList.add('hidden'); $('ob-step-1').classList.remove('hidden'); });
+
+    const finish = (useInputs) => {
+      const p = this.profile;
+      p.mode = pick === 'fit' ? 'fit' : 'eat';
+      p.goalType = pick === 'track' ? 'maintain' : pick === 'lose' ? 'fat_loss' : goal;
+      p.targetDeficitKcal = GOAL_DEFICIT[p.goalType];
+      p.gender = gender;
+      if (useInputs) {
+        const v = (id, min, max) => { const n = parseFloat($(id).value); return Number.isFinite(n) && n >= min && n <= max ? n : null; };
+        const h = v('ob-height', 100, 250), w = v('ob-weight', 25, 300), a = v('ob-age', 10, 100);
+        if (h) p.heightCm = Math.round(h);
+        if (a) p.age = Math.round(a);
+        if (w) {
+          p.weightKg = round1(w);
+          if (!p.proteinTouched) p.targetProteinG = Math.round(w * 2);
+          this.weights = this.weights.filter(x => x.date !== getTodayDateString());
+          this.weights.push({ date: getTodayDateString(), kg: round1(w), ts: Date.now() });
+        }
+        if (h || w || a) p.customized = true;
+      }
+      this.needsOnboarding = false;
+      this.recalculateMetabolism();
+      this.saveData();
+      this.applyMode();
+      $('onboard').classList.add('hidden');
+      document.body.classList.remove('onboarding');
+      window.Haptics && window.Haptics.fire('success');
+      this.render();
+    };
+    $('ob-done').addEventListener('click', () => finish(true));
+    $('ob-skip').addEventListener('click', () => finish(false));
   }
 
   // ======================= 提醒 =======================
@@ -756,6 +1024,16 @@ class FitnessApp {
     const setSeg = (id, v) => document.querySelectorAll(`#${id} .seg-btn`).forEach(b => b.classList.toggle('active', b.dataset.value === v));
     setSeg('set-gender', p.gender);
     setSeg('set-goal', p.goalType || 'fat_loss');
+    setSeg('set-mode', p.mode || 'fit');
+    const simple = this.isSimple();
+    const goalNames = simple ? { fat_loss: '想瘦', maintain: '保持', muscle_gain: '想增重' } : { fat_loss: '减脂', maintain: '维持', muscle_gain: '增肌' };
+    document.querySelectorAll('#set-goal .seg-btn').forEach(b => { b.textContent = goalNames[b.dataset.value]; });
+    $('set-deficit-l').textContent = simple ? '每天少吃 kcal' : '每天热量缺口 kcal';
+    $('set-goal-note').textContent = simple
+      ? '想增重时填负数，比如 -250 表示每天多吃 250 kcal。改完自动保存。'
+      : '增肌时缺口是负数，比如 -250 表示每天多吃 250 kcal。改完自动保存。';
+    $('set-mode-note').textContent = simple ? '只显示吃了多少、还能吃多少和体重。说了运动也会记。' : '训练、蛋白质、热量缺口和动作进步都会显示。';
+    $('rem-night-desc').textContent = simple ? '今天还能吃多少' : '今天还能吃多少、蛋白还差多少';
     setSeg('set-theme', this.theme);
     $('set-theme-note').textContent = this.theme === 'system' ? `手机现在是${this.systemIsLight() ? '浅色' : '深色'}模式，App 跟着变` : '';
     const setVal = (id, v) => { if (document.activeElement !== $(id)) $(id).value = v; };
@@ -769,7 +1047,7 @@ class FitnessApp {
     this.renderReminders();
     const ql = window.QuickLog;
     const days = new Set([...this.workouts, ...this.diet].map(r => r.date)).size;
-    $('set-data-note').textContent = `共 ${this.workouts.length} 条训练、${this.diet.length} 条饮食，覆盖 ${days} 天。`;
+    $('set-data-note').textContent = `共 ${this.diet.length} 条饮食、${this.workouts.length} 条${simple ? '运动' : '训练'}、${this.weights.length} 次体重，覆盖 ${days} 天。`;
   }
 
   /** 系统当前是不是浅色：安卓 App 问原生，浏览器看 prefers-color-scheme */
@@ -805,6 +1083,7 @@ class FitnessApp {
     const rec = list.find(r => r.id === id);
     if (!rec) return;
     this.editing = { kind, id };
+    document.getElementById('edit-delete').classList.remove('hidden');
     const f = document.getElementById('edit-fields');
     const input = (name, label, value, type = 'number', extra = '') =>
       `<label class="field"><span class="field-label">${label}</span><input class="input" name="${name}" type="${type}" value="${esc(value)}" ${type === 'number' ? 'inputmode="decimal" step="any"' : ''} ${extra}></label>`;
@@ -855,6 +1134,23 @@ class FitnessApp {
     history.pushState({ edit: true }, '');
   }
 
+  openWeightEditor(date) {
+    const on = this.weightOn(date);
+    const last = this.latestWeight();
+    this.editing = { kind: 'weight', date };
+    const d = new Date(date + 'T00:00:00');
+    document.getElementById('edit-title').textContent = `${on ? '改' : '记'}体重 · ${date === getTodayDateString() ? '今天' : `${d.getMonth() + 1}月${d.getDate()}日`}`;
+    document.getElementById('edit-delete').classList.toggle('hidden', !on);
+    const v = on ? on.kg : (last ? last.kg : '');
+    document.getElementById('edit-fields').innerHTML = `
+      <label class="field"><span class="field-label">体重 kg</span><input class="input input-big" name="kg" type="number" inputmode="decimal" step="0.1" min="25" max="300" value="${esc(v)}" placeholder="比如 62.5"></label>
+      <div class="field-note">说话记也行：「体重 62.5」「今天称了 125 斤」。最新的体重会用来算每天消耗。</div>`;
+    document.getElementById('edit-overlay').classList.remove('hidden');
+    history.pushState({ edit: true }, '');
+    const input = document.querySelector('#edit-fields input[name="kg"]');
+    setTimeout(() => { try { input.focus(); input.select(); } catch (e) {} }, 60);
+  }
+
   closeEditor(fromBack) {
     if (!this.editing) return;
     this.editing = null;
@@ -865,10 +1161,21 @@ class FitnessApp {
   saveEditor() {
     if (!this.editing) return;
     const { kind, id } = this.editing;
+    const form = document.getElementById('edit-form');
+    if (kind === 'weight') {
+      const kg = parseFloat(form.elements.kg.value);
+      if (!Number.isFinite(kg) || kg < 25 || kg > 300) { this.showToast('填一个 25–300 之间的数'); return; }
+      const date = this.editing.date;
+      const prev = this.setWeight(date, kg);
+      this.closeEditor();
+      this.render();
+      window.Haptics && window.Haptics.fire('success');
+      if (window.QuickLog) window.QuickLog.showUndo(`✓ 记下体重 ${round1(kg)} kg`, [], () => { this.restoreWeight(date, prev); this.saveData(); this.render(); });
+      return;
+    }
     const list = kind === 'meal' ? this.diet : this.workouts;
     const rec = list.find(r => r.id === id);
     if (!rec) return this.closeEditor();
-    const form = document.getElementById('edit-form');
     const val = (name) => form.elements[name] ? form.elements[name].value : undefined;
     const numv = (name, fallback) => { const v = parseFloat(val(name)); return Number.isFinite(v) && v >= 0 ? v : fallback; };
 
@@ -904,6 +1211,15 @@ class FitnessApp {
   deleteEditing() {
     if (!this.editing) return;
     const { kind, id } = this.editing;
+    if (kind === 'weight') {
+      const date = this.editing.date;
+      const prev = this.removeWeight(date);
+      window.Haptics && window.Haptics.fire('tap');
+      this.closeEditor();
+      this.render();
+      if (prev && window.QuickLog) window.QuickLog.showUndo('已删除这天的体重', [], () => { this.restoreWeight(date, prev); this.saveData(); this.render(); });
+      return;
+    }
     const list = kind === 'meal' ? this.diet : this.workouts;
     const idx = list.findIndex(r => r.id === id);
     if (idx === -1) return this.closeEditor();

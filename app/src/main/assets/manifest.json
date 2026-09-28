@@ -1,7 +1,7 @@
 {
   "name": "练食AI (TrainFit)",
   "short_name": "练食AI",
-  "description": "一口气说完练了什么、吃了什么，自动记好。热量缺口与训练进步一目了然。",
+  "description": "说一句话，帮你记下今天吃了啥，热量自动算好。想瘦一点、随便记记、健身减脂增肌都能用。",
   "start_url": "./index.html",
   "display": "standalone",
   "orientation": "portrait",
