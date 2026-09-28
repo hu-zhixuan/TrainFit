@@ -607,6 +607,7 @@
       this.state = 'recording';
       this.recStart = Date.now();
       this.liveText = '';
+      this._levels = [];
       this.composer.classList.add('recording');
       this.panel.classList.remove('hidden', 'canceling');
       document.getElementById('rec-live').textContent = '';
@@ -628,16 +629,49 @@
       document.getElementById('rec-time').textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
       if (this.engine === 'system') {
         // 系统识别没有音量，做个轻微的呼吸动效
-        this.setLevel(0.25 + 0.2 * Math.abs(Math.sin(Date.now() / 300)));
+        this.setLevel(0.15 + 0.25 * Math.abs(Math.sin(Date.now() / 260)));
       }
     },
 
+    /** 滚动波形：保存最近的音量，从右往左画成竖条（参考微信语音、iOS 语音备忘录） */
     setLevel(v) {
-      const bars = document.querySelectorAll('#rec-bars i');
-      bars.forEach((b, i) => {
-        const k = 0.35 + 0.65 * Math.abs(Math.sin((Date.now() / 140) + i * 0.9));
-        b.style.transform = `scaleY(${Math.max(0.12, Math.min(1, v * k * 1.6))})`;
-      });
+      if (!this._levels) this._levels = [];
+      this._levels.push(Math.max(0, Math.min(1, v)));
+      if (this._levels.length > 120) this._levels.shift();
+      this.drawWave();
+    },
+
+    drawWave() {
+      const c = document.getElementById('rec-wave');
+      if (!c) return;
+      const dpr = root.devicePixelRatio || 1;
+      const w = c.clientWidth, h = c.clientHeight;
+      if (!w || !h) return;
+      if (c.width !== Math.round(w * dpr) || c.height !== Math.round(h * dpr)) {
+        c.width = Math.round(w * dpr);
+        c.height = Math.round(h * dpr);
+      }
+      const ctx = c.getContext('2d');
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, w, h);
+      const color = getComputedStyle(c).color || '#e05a4f';
+      const barW = 3, gap = 2, step = barW + gap;
+      const n = Math.floor(w / step);
+      const lv = this._levels || [];
+      for (let i = 0; i < n; i++) {
+        const v = lv[lv.length - n + i];
+        const amp = v == null ? 0 : Math.pow(v, 0.7);             // 小声也看得见
+        const bh = Math.max(3, amp * (h - 4));
+        const x = i * step;
+        ctx.globalAlpha = v == null ? 0.25 : 0.35 + 0.65 * (i / n); // 越新越亮
+        ctx.fillStyle = color;
+        const y = (h - bh) / 2;
+        const r = Math.min(barW / 2, bh / 2);
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(x, y, barW, bh, r); else ctx.rect(x, y, barW, bh);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
     },
 
     resetTalkUi() {
@@ -694,6 +728,14 @@
     // ----- 自己录音 + 语音转文字 -----
     onRec(type, value) {
       if (type === 'level') { if (this.state === 'recording') this.setLevel(Number(value) || 0); return; }
+      if (type === 'partial') {
+        // 本机识别：边说边出字
+        if (this.state === 'recording' || this.state === 'transcribing') {
+          this.liveText = value || '';
+          document.getElementById('rec-live').textContent = this.liveText;
+        }
+        return;
+      }
       if (type === 'max') { if (this.state === 'recording') this.stopTalk(); return; }
       if (type === 'error') {
         if (this.state !== 'recording') return;
@@ -710,7 +752,8 @@
       this.state = 'idle';
       this.resetTalkUi();
       const msg = String(text || '');
-      if (msg === 'TOO_SHORT') this.setStatus('说话时间太短，按住多说一会儿', 'warn');
+      if (msg === 'TOO_SHORT' || msg === 'NO_SPEECH') this.setStatus('没听到说话，按住再说一次', 'warn');
+      else if (msg === 'LOCAL_NOT_READY') this.setStatus('识别模型还在加载，稍等一两秒再说', 'warn');
       else if (msg === 'NO_KEY') this.setStatus('还没有语音识别 key，去设置里填', 'warn');
       else if (/^HTTP 401|^HTTP 403/.test(msg)) this.setStatus('语音识别 key 不对，去设置里检查', 'warn');
       else this.setStatus('识别失败（网络不好？）再说一次，或点左边改成打字', 'warn');
@@ -1015,10 +1058,11 @@
       modelEl.placeholder = (info && info.model) || 'FunAudioLLM/SenseVoiceSmall';
       keyEl.placeholder = info && info.hasKey ? '已内置，留空即可' : 'sk-…';
       const refresh = () => {
+        const loc = info && info.local;
         hint.textContent = Native.has()
-          ? (Native.asrAvailable()
-              ? '按住说话时 App 自己录音，松手后转成文字（约 1 秒），开始和结束都由你控制。'
-              : '还没有语音识别 key：会先用手机系统的语音识别（有的手机没有）。填上 key 后所有手机都能按住说。')
+          ? (loc === 'failed'
+              ? '这台手机用不了本机识别（可能是 32 位系统），改用下面的云端接口。'
+              : '默认在手机本机识别，不用联网、边说边出字。下面的云端接口只在本机识别用不了时才用。')
           : '浏览器里用的是浏览器自带的语音识别。';
       };
       refresh();
