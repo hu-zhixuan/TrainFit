@@ -880,6 +880,8 @@ body.no-composer .snackbar { bottom: calc(20px + var(--sab)); }
   animation: fadeUp 0.15s ease;
 }
 .rec-time { font-size: 1.6rem; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--danger); }
+.rec-wave { display: block; width: 100%; height: 44px; color: var(--danger); }
+.rec-panel.canceling .rec-wave { color: var(--text-3); }
 .rec-bars { display: flex; align-items: center; gap: 4px; height: 36px; }
 .rec-bars i {
   display: block;
@@ -892,7 +894,10 @@ body.no-composer .snackbar { bottom: calc(20px + var(--sab)); }
 }
 .rec-live {
   width: 100%;
-  max-height: 5.2em;
+  max-height: 6em;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
   overflow: hidden;
   text-align: center;
   font-size: 0.95rem;

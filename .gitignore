@@ -13,3 +13,8 @@ ORIGINAL_REQUEST.md
 
 # 本地密钥，不要提交
 .env
+
+# 本机语音识别文件（scripts/fetch-asr.sh 下载，太大不进仓库）
+app/src/main/jniLibs/
+app/src/main/assets/asr/
+.asr-cache/
