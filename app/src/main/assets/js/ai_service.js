@@ -71,6 +71,9 @@ const AiService = {
    * @private
    */
   async _callCloudLlmForDiet(text) {
+    if (typeof location !== 'undefined' && location.hostname === 'appassets.androidplatform.net') {
+      throw new Error('FallbackToLocalEngine'); // 安卓 App 内没有 node 后台
+    }
     const systemPrompt = `你是一位严谨的临床注册营养师与健身热量计算专家。
 请从用户的饮食记录文本中提取所有食物，输出严格的 JSON 格式（不要包含任何 markdown 解释或多余字符）。
 返回格式示例：
@@ -127,6 +130,9 @@ const AiService = {
    * @private
    */
   async _callCloudLlmForWorkout(text) {
+    if (typeof location !== 'undefined' && location.hostname === 'appassets.androidplatform.net') {
+      throw new Error('FallbackToLocalEngine'); // 安卓 App 内没有 node 后台
+    }
     const systemPrompt = `你是一位专业的国家级力量训练教练。
 请从用户的训练口喷描述中提取所有动作，输出严格的 JSON 数组（不要包含任何 markdown 解释或多余字符）。
 返回格式示例：
