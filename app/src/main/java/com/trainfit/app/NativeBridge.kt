@@ -277,6 +277,10 @@ class NativeBridge(
     // 回调：window.__tfRec(type, value)  type = start | level | max | error
     //      window.__tfAsr(requestId, ok, textOrError)
 
+    // 本机识别（优先）：模型随 App 打包，启动后在后台加载
+    private val localAsr = LocalAsr(activity.assets).also { asr -> io.execute { asr.init() } }
+    @Volatile private var usingLocal = false
+
     private val recorder = VoiceRecorder(
         onLevel = { lv -> emitRec("level", String.format(java.util.Locale.US, "%.2f", lv)) },
         onMaxReached = { emitRec("max", "") }
@@ -292,6 +296,7 @@ class NativeBridge(
 
     @JavascriptInterface
     fun isAsrConfigured(overrideJson: String): Boolean {
+        if (!localAsr.failed) return true // 本机识别可用（或正在加载）
         val (base, key, _) = asrConfig(overrideJson)
         return base.isNotBlank() && key.isNotBlank()
     }
@@ -301,6 +306,7 @@ class NativeBridge(
         put("baseUrl", BuildConfig.ASR_BASE_URL)
         put("model", BuildConfig.ASR_MODEL)
         put("hasKey", BuildConfig.ASR_API_KEY.isNotBlank())
+        put("local", if (localAsr.ready) "ready" else if (localAsr.failed) "failed" else "loading")
     }.toString()
 
     @JavascriptInterface
@@ -310,7 +316,19 @@ class NativeBridge(
             if (ContextCompat.checkSelfPermission(activity, Manifest.permission.RECORD_AUDIO)
                 == PackageManager.PERMISSION_GRANTED
             ) {
-                io.execute { if (recorder.start()) emitRec("start", "") else emitRec("error", "RECORD_FAILED") }
+                io.execute {
+                    usingLocal = !localAsr.failed
+                    val ok = if (usingLocal) {
+                        localAsr.start(
+                            onLevel = { lv -> emitRec("level", String.format(java.util.Locale.US, "%.2f", lv)) },
+                            onPartial = { text -> emitRec("partial", text) },
+                            onMax = { emitRec("max", "") }
+                        )
+                    } else {
+                        recorder.start()
+                    }
+                    emitRec(if (ok) "start" else "error", if (ok) (if (usingLocal) "local" else "cloud") else "RECORD_FAILED")
+                }
             } else {
                 requestMicPermission { granted ->
                     // 第一次授权时用户已经松手了，只提示，不自动开录
@@ -322,13 +340,20 @@ class NativeBridge(
 
     @JavascriptInterface
     fun cancelRecording() {
-        io.execute { recorder.cancel() }
+        io.execute { if (usingLocal) localAsr.cancel() else recorder.cancel() }
     }
 
     /** 停止录音并转文字，结果通过 __tfAsr 回调 */
     @JavascriptInterface
     fun stopRecording(requestId: String, overrideJson: String) {
         io.execute {
+            if (usingLocal) {
+                // 本机识别：松手时只剩最后一句要识别
+                val text = localAsr.stop()
+                if (text.isNotBlank()) replyAsr(requestId, true, text)
+                else replyAsr(requestId, false, if (localAsr.ready) "NO_SPEECH" else "LOCAL_NOT_READY")
+                return@execute
+            }
             val audio = recorder.stop()
             if (audio == null) {
                 replyAsr(requestId, false, "TOO_SHORT")
@@ -453,6 +478,7 @@ class NativeBridge(
     fun shutdown() {
         main.post { cancelInternal() }
         recorder.cancel()
+        localAsr.cancel()
         io.shutdown()
     }
 }

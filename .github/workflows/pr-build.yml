@@ -22,6 +22,15 @@ jobs:
         with:
           gradle-version: '8.10.2'
 
+      - name: Cache on-device ASR files
+        uses: actions/cache@v4
+        with:
+          path: .asr-cache
+          key: asr-sherpa-1.13.8-paraformer-zh-small-2024-03-09
+
+      - name: Fetch on-device ASR (sherpa-onnx libs + model)
+        run: bash scripts/fetch-asr.sh
+
       - name: Check LLM secret (不输出内容)
         env:
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
