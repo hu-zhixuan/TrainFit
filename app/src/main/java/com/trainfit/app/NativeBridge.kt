@@ -31,7 +31,9 @@ class NativeBridge(
     private val activity: ComponentActivity,
     private val evalJs: (String) -> Unit,
     private val requestMicPermission: (onResult: (Boolean) -> Unit) -> Unit,
-    private val onSystemBarsLight: (Boolean) -> Unit = {}
+    private val onSystemBarsLight: (Boolean) -> Unit = {},
+    private val canVoiceIntent: () -> Boolean = { false },
+    private val launchVoiceIntent: () -> Boolean = { false }
 ) {
     private val main = Handler(Looper.getMainLooper())
     private val io = Executors.newCachedThreadPool()
@@ -251,6 +253,22 @@ class NativeBridge(
     private fun emitSpeech(type: String, text: String) {
         val js = "window.__tfSpeech && window.__tfSpeech(${JSONObject.quote(type)}, ${JSONObject.quote(text)});"
         main.post { evalJs(js) }
+    }
+
+    // ================= 手机自带的语音输入界面 =================
+    // 结果回调：window.__tfVoiceIntent(ok, text)
+
+    @JavascriptInterface
+    fun isVoiceIntentAvailable(): Boolean = try { canVoiceIntent() } catch (_: Exception) { false }
+
+    @JavascriptInterface
+    fun startVoiceIntent() {
+        main.post {
+            cancelInternal()
+            if (!launchVoiceIntent()) {
+                evalJs("window.__tfVoiceIntent && window.__tfVoiceIntent(false, '');")
+            }
+        }
     }
 
     // ================= 外观 =================
