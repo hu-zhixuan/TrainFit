@@ -577,6 +577,10 @@ class FitnessApp {
     setVal('set-protein', p.targetProteinG);
     const budget = p.tdee - (p.targetDeficitKcal || 0);
     $('set-tdee-note').textContent = `每天日常消耗约 ${fmt(p.tdee)} kcal（不含训练）。按目标，不训练的日子大约吃 ${fmt(budget)} kcal。`;
+    const ql = window.QuickLog;
+    $('set-speech-note').textContent = ql && ql.speechSupported()
+      ? '语音：按住底部按钮用的是手机系统自带的语音识别。识别不好的话，点一下按钮打字，用输入法键盘上的🎤说话效果一样。'
+      : '语音：这台手机没有可用的系统语音识别。点底部按钮打字，用输入法键盘上的🎤说话即可。';
     const days = new Set([...this.workouts, ...this.diet].map(r => r.date)).size;
     $('set-data-note').textContent = `共 ${this.workouts.length} 条训练、${this.diet.length} 条饮食，覆盖 ${days} 天。`;
   }

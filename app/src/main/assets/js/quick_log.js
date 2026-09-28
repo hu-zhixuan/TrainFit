@@ -381,11 +381,12 @@
   // 界面
   // ---------------------------------------------------------------------------
   const QuickLog = {
-    state: 'idle',          // idle | listening | processing
-    holdMode: false,
-    lastBatch: null,
+    state: 'idle',          // idle（打字） | listening（系统语音在听）
+    holdMode: false,        // 是不是按住按钮说话
+    speechBroken: false,    // 本次打开 App 期间系统语音没反应过，就不再尝试
     _webRec: null,
     _snackTimer: null,
+    _baseText: '',
 
     init() {
       this.fab = document.getElementById('ql-fab');
@@ -393,24 +394,29 @@
       this.textEl = document.getElementById('ql-text');
       this.statusEl = document.getElementById('ql-status');
       this.primaryBtn = document.getElementById('ql-primary');
+      this.voiceBtn = document.getElementById('ql-voice');
       this.cancelBtn = document.getElementById('ql-cancel');
       this.snack = document.getElementById('ql-snackbar');
       if (!this.fab || !this.overlay) return;
 
       this.bindFab();
       this.primaryBtn.addEventListener('click', () => this.onPrimary());
-      this.cancelBtn.addEventListener('click', () => this.close(true));
-      this.overlay.addEventListener('click', (e) => { if (e.target === this.overlay && this.state !== 'processing') this.close(true); });
+      this.cancelBtn.addEventListener('click', () => this.close());
+      if (this.voiceBtn) this.voiceBtn.addEventListener('click', () => this.toggleVoice());
+      this.overlay.addEventListener('click', (e) => { if (e.target === this.overlay) this.close(); });
       document.getElementById('ql-undo')?.addEventListener('click', () => this.undo());
-      // 点一下打开后正在听，但用户点了输入框：改成打字
-      this.textEl.addEventListener('pointerdown', () => {
-        if (this.state === 'listening' && !this.holdMode) {
-          const keep = this.textEl.value;
+
+      // 用户自己动了输入框（打字、输入法语音、粘贴）：立刻停掉系统语音，以用户输入为准
+      this.textEl.addEventListener('input', (e) => {
+        if (this.state === 'listening' && !this._programmatic) {
           this.abortListening();
-          this.setState('idle');
-          this.textEl.value = keep;
-          this.statusEl.textContent = '打字吧，写完点「记下来」';
-          setTimeout(() => this.textEl.focus(), 30);
+          this.toTyping('');
+        }
+      });
+      this.textEl.addEventListener('focus', () => {
+        if (this.state === 'listening' && !this.holdMode) {
+          this.abortListening();
+          this.toTyping('');
         }
       });
 
@@ -419,25 +425,34 @@
     },
 
     speechSupported() {
+      if (this.speechBroken) return false;
       return Native.speechAvailable() || !!(root.SpeechRecognition || root.webkitSpeechRecognition);
     },
 
-    // ----- 按钮：按住说话 / 点一下打开 -----
+    typingHint() {
+      return this.speechSupported()
+        ? '打字，或点「语音」/ 输入法键盘上的🎤 说话'
+        : '打字，或点输入法键盘上的🎤 说话';
+    },
+
+    // ----- 底部大按钮：按住 = 系统语音；点一下 = 打字 -----
     bindFab() {
       let holdTimer = null;
       let holding = false;
       let startY = 0;
+      let downOnFab = false;
 
       const down = (e) => {
-        if (this.state !== 'idle') return;
+        if (!this.overlay.classList.contains('hidden')) return;
         e.preventDefault();
+        downOnFab = true;
         startY = e.clientY || 0;
         holding = false;
         holdTimer = setTimeout(() => {
-          if (!this.speechSupported()) return;
+          if (!this.speechSupported()) return; // 没有系统语音：松手时按「点一下」处理
           holding = true;
           this.open(true);
-        }, 220);
+        }, 250);
       };
       const move = (e) => {
         if (!holding || this.state !== 'listening') return;
@@ -447,88 +462,134 @@
       };
       const up = (e) => {
         clearTimeout(holdTimer);
+        if (!downOnFab) return;
+        downOnFab = false;
         if (holding) {
           holding = false;
           const cancel = startY - (e.clientY || 0) > 70;
           this.overlay.classList.remove('ql-canceling');
-          if (cancel) this.close(true); else this.stopListening();
-        } else if (e.target && this.fab.contains(e.target) && this.state === 'idle') {
-          this.open(false);
+          if (cancel) this.close(); else this.stopListening(true);
+        } else {
+          this.open(false); // 在手势里直接聚焦，键盘才弹得出来
         }
       };
 
       this.fab.addEventListener('pointerdown', down);
       root.addEventListener('pointermove', move);
       root.addEventListener('pointerup', up);
-      root.addEventListener('pointercancel', () => { clearTimeout(holdTimer); if (holding) { holding = false; this.stopListening(); } });
+      root.addEventListener('pointercancel', () => {
+        clearTimeout(holdTimer);
+        if (!downOnFab) return;
+        downOnFab = false;
+        if (holding) { holding = false; this.stopListening(true); }
+      });
       this.fab.addEventListener('contextmenu', (e) => e.preventDefault());
     },
 
-    open(holdMode) {
-      this.holdMode = holdMode;
-      this.textEl.value = '';
-      this.overlay.classList.remove('hidden');
+    show() {
+      this.overlay.classList.remove('hidden', 'ql-canceling');
       document.body.classList.add('ql-open');
-      if (this.speechSupported()) {
+      if (this.voiceBtn) this.voiceBtn.classList.toggle('hidden', !this.speechSupported());
+    },
+
+    open(holdMode) {
+      this.holdMode = !!holdMode;
+      this.textEl.value = '';
+      this.show();
+      if (this.holdMode) {
         this.startListening();
       } else {
-        this.setState('idle');
-        this.statusEl.textContent = '打字或用输入法的语音键说，一口气说完就行';
-        this.primaryBtn.textContent = '记下来';
-        setTimeout(() => this.textEl.focus(), 50);
+        this.toTyping(this.typingHint());
+        this.textEl.focus();
       }
     },
 
-    close(cancel) {
+    openWithText(text) {
+      this.holdMode = false;
+      this.show();
+      this.textEl.value = text || '';
+      this.toTyping('改一改，再点「记下来」');
+      this.textEl.focus();
+    },
+
+    close() {
       if (this.state === 'listening') this.abortListening();
+      this.clearWatchdogs();
       this.setState('idle');
       this.overlay.classList.add('hidden');
       document.body.classList.remove('ql-open');
-      if (cancel) this.textEl.blur();
+      this.textEl.blur();
+    },
+
+    /** 切到打字状态（输入框永远可编辑，按钮永远可点） */
+    toTyping(message) {
+      this.holdMode = false;
+      this.setState('idle');
+      if (message) this.statusEl.textContent = message;
     },
 
     setState(s) {
       this.state = s;
       this.overlay.dataset.state = s;
-      this.fab.classList.toggle('ql-busy', s !== 'idle');
+      this.primaryBtn.disabled = false;
+      this.primaryBtn.textContent = '记下来';
+      if (this.voiceBtn) this.voiceBtn.querySelector('span').textContent = s === 'listening' ? '停止' : '语音';
+      if (this.voiceBtn) this.voiceBtn.classList.toggle('on', s === 'listening');
       if (s === 'listening') {
-        this.statusEl.textContent = this.holdMode ? '正在听… 松开就记下，上滑取消' : '正在听… 说完点「说完了」';
-        this.primaryBtn.textContent = '说完了';
-        this.primaryBtn.disabled = false;
-        this.textEl.readOnly = true;
-      } else if (s === 'processing') {
-        this.statusEl.textContent = '🧠 正在整理成记录…';
-        this.primaryBtn.textContent = '整理中…';
-        this.primaryBtn.disabled = true;
-        this.textEl.readOnly = true;
-      } else {
-        this.primaryBtn.textContent = '记下来';
-        this.primaryBtn.disabled = false;
-        this.textEl.readOnly = false;
+        this.statusEl.textContent = this.holdMode ? '正在听… 松开就记下，上滑取消' : '正在听… 说完点「停止」或直接「记下来」';
       }
     },
 
     onPrimary() {
-      if (this.state === 'listening') this.stopListening();
-      else if (this.state === 'idle') this.submit(this.textEl.value);
+      if (this.state === 'listening') {
+        // 边听边点「记下来」：停下来，拿到最终文字后直接提交
+        this.stopListening(true);
+      } else {
+        this.submit(this.textEl.value);
+      }
     },
 
-    // ----- 语音 -----
+    toggleVoice() {
+      if (this.state === 'listening') this.stopListening(false);
+      else { this.holdMode = false; this.startListening(); }
+    },
+
+    clearWatchdogs() {
+      clearTimeout(this._startWatch);
+      clearTimeout(this._stopWatch);
+    },
+
+    // ----- 系统语音 -----
     startListening() {
       this._aborted = false;
       this._speechError = null;
+      this._gotStart = false;
+      this._submitOnEnd = false;
+      this._baseText = this.textEl.value.trim();
       this.setState('listening');
+      this.clearWatchdogs();
+      // 看门狗：系统语音 3 秒内没反应，就当它不可用，退回打字
+      this._startWatch = setTimeout(() => {
+        if (this.state === 'listening' && !this._gotStart) {
+          this.speechBroken = true;
+          this.abortListening();
+          if (this.voiceBtn) this.voiceBtn.classList.add('hidden');
+          this.toTyping('这台手机的系统语音没反应。点输入框，用输入法键盘上的🎤说话');
+        }
+      }, 3000);
+
       if (Native.speechAvailable()) {
         try { root.TrainFitNative.startListening(); } catch (e) { this.onSpeech('error', 'START_FAILED'); this.onSpeech('end', ''); }
         return;
       }
       const SR = root.SpeechRecognition || root.webkitSpeechRecognition;
-      if (!SR) return;
+      if (!SR) { this.onSpeech('error', 'NOT_AVAILABLE'); this.onSpeech('end', ''); return; }
       const rec = new SR();
       rec.lang = 'zh-CN';
       rec.continuous = true;
       rec.interimResults = true;
       let finalText = '';
+      rec.onstart = () => this.onSpeech('start', '');
       rec.onresult = (ev) => {
         let interim = '';
         for (let i = ev.resultIndex; i < ev.results.length; i++) {
@@ -540,51 +601,75 @@
       rec.onerror = (ev) => { if (!finalText) this.onSpeech('error', ev.error || 'ERROR'); };
       rec.onend = () => { this._webRec = null; this.onSpeech('final', finalText); this.onSpeech('end', ''); };
       this._webRec = rec;
-      try { rec.start(); } catch (e) {}
+      try { rec.start(); } catch (e) { this.onSpeech('error', 'START_FAILED'); this.onSpeech('end', ''); }
     },
 
-    stopListening() {
-      if (this.state !== 'listening') return;
+    /** @param submit 拿到最终文字后是否直接提交 */
+    stopListening(submit) {
+      if (this.state !== 'listening') { if (submit) this.submit(this.textEl.value); return; }
+      this._submitOnEnd = !!submit;
       this.statusEl.textContent = '识别收尾中…';
-      this.primaryBtn.disabled = true;
+      clearTimeout(this._startWatch);
       if (Native.speechAvailable()) {
         try { root.TrainFitNative.stopListening(); } catch (e) {}
       } else if (this._webRec) {
         try { this._webRec.stop(); } catch (e) {}
       }
+      // 看门狗：3 秒还没收尾，就用已经识别到的文字
+      clearTimeout(this._stopWatch);
+      this._stopWatch = setTimeout(() => {
+        if (this.state === 'listening') {
+          this.abortListening();
+          this.finishSpeech();
+        }
+      }, 3000);
     },
 
     abortListening() {
       this._aborted = true;
+      this.clearWatchdogs();
       if (Native.has()) { try { root.TrainFitNative.cancelListening(); } catch (e) {} }
       if (this._webRec) { try { this._webRec.abort(); } catch (e) {} this._webRec = null; }
     },
 
+    setSpeechText(text) {
+      this._programmatic = true;
+      this.textEl.value = [this._baseText, (text || '').trim()].filter(Boolean).join('，');
+      this._programmatic = false;
+    },
+
     onSpeech(type, text) {
-      if (type === 'start') { this._aborted = false; this._speechError = null; return; }
-      if (this._aborted) return;
+      if (type === 'start') { this._gotStart = true; clearTimeout(this._startWatch); return; }
+      if (this._aborted || this.state !== 'listening') return;
       if (type === 'partial') {
-        if (this.state === 'listening') this.textEl.value = text;
+        this._gotStart = true;
+        clearTimeout(this._startWatch);
+        this.setSpeechText(text);
       } else if (type === 'final') {
-        if (text) this.textEl.value = text;
+        if (text) this.setSpeechText(text);
       } else if (type === 'error') {
         this._speechError = text;
       } else if (type === 'end') {
-        if (this.state !== 'listening') return;
-        const said = this.textEl.value.trim();
-        if (said) {
-          this.submit(said);
-          return;
-        }
-        this.setState('idle');
-        const err = this._speechError;
-        if (err === 'PERMISSION_DENIED') this.statusEl.textContent = '没有麦克风权限。可以在系统设置里打开，或者直接打字';
-        else if (err === 'NOT_AVAILABLE') this.statusEl.textContent = '这台手机没有系统语音识别，用输入法的语音键说也一样';
-        else if (err === 'NETWORK') this.statusEl.textContent = '语音识别需要联网，检查一下网络，或者直接打字';
-        else this.statusEl.textContent = '没听清，再说一次，或者直接打字';
-        this.primaryBtn.textContent = '记下来';
-        setTimeout(() => this.textEl.focus(), 50);
+        this.clearWatchdogs();
+        this.finishSpeech();
       }
+    },
+
+    finishSpeech() {
+      const said = this.textEl.value.trim();
+      const submit = this._submitOnEnd;
+      const err = this._speechError;
+      this.toTyping('');
+      if (said && submit) { this.submit(said); return; }
+      if (said) { this.statusEl.textContent = '可以改一改，然后点「记下来」'; return; }
+      if (err === 'PERMISSION_DENIED') this.statusEl.textContent = '没有麦克风权限。可以去系统设置里打开，或者直接打字';
+      else if (err === 'NOT_AVAILABLE' || err === 'START_FAILED') {
+        this.speechBroken = true;
+        if (this.voiceBtn) this.voiceBtn.classList.add('hidden');
+        this.statusEl.textContent = '这台手机没有系统语音识别。点输入框，用输入法键盘上的🎤说话';
+      }
+      else if (err === 'NETWORK') this.statusEl.textContent = '系统语音需要联网，或者点输入框用输入法的🎤';
+      else this.statusEl.textContent = '没听清。再试一次，或者点输入框打字 / 用输入法的🎤';
     },
 
     // ----- 解析 + 保存（后台进行，不用等） -----
@@ -720,16 +805,6 @@
     hideSnack() {
       clearTimeout(this._snackTimer);
       this.snack.classList.add('hidden');
-    },
-
-    openWithText(text) {
-      this.holdMode = false;
-      this.overlay.classList.remove('hidden');
-      document.body.classList.add('ql-open');
-      this.setState('idle');
-      this.textEl.value = text || '';
-      this.statusEl.textContent = '改一改，再点「记下来」';
-      setTimeout(() => this.textEl.focus(), 50);
     },
 
     // ----- 设置：AI 接口 -----
