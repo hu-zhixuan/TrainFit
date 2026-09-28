@@ -185,7 +185,11 @@ class FitnessApp {
   bindEvents() {
     const $ = (id) => document.getElementById(id);
 
-    document.querySelectorAll('.dock-tab').forEach(b => b.addEventListener('click', () => this.switchView(b.dataset.view)));
+    document.querySelectorAll('#tabs .tab').forEach(b => b.addEventListener('click', () => this.switchView(b.dataset.view)));
+    $('cmp-chips').addEventListener('click', (e) => {
+      const c = e.target.closest('[data-quick]');
+      if (c) this.quickRepeat(Number(c.dataset.quick));
+    });
     $('btn-settings').addEventListener('click', () => this.switchView(this.view === 'settings' ? 'today' : 'settings'));
     $('date-prev').addEventListener('click', () => this.shiftDate(-1));
     $('date-next').addEventListener('click', () => this.shiftDate(1));
@@ -245,15 +249,17 @@ class FitnessApp {
     if (window.QuickLog && prev !== view) window.QuickLog.hideSnack();
     this.view = view;
     document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + view));
-    document.querySelectorAll('.dock-tab').forEach(b => b.classList.toggle('active', b.dataset.view === view));
-    const isToday = view === 'today';
-    document.getElementById('date-switch').classList.toggle('hidden', !isToday);
+    document.querySelectorAll('#tabs .tab').forEach(b => b.classList.toggle('active', b.dataset.view === view));
+    const isSettings = view === 'settings';
+    document.getElementById('tabs').classList.toggle('hidden', isSettings);
     const title = document.getElementById('view-title');
-    title.classList.toggle('hidden', isToday);
-    title.textContent = view === 'trend' ? '趋势' : view === 'settings' ? '设置' : '';
+    title.classList.toggle('hidden', !isSettings);
+    title.textContent = isSettings ? '设置' : '';
+    document.getElementById('composer').classList.toggle('hidden', view !== 'today');
+    document.body.classList.toggle('no-composer', view !== 'today');
     const sb = document.getElementById('btn-settings');
-    sb.innerHTML = view === 'settings' ? ICON_CLOSE : ICON_SETTINGS;
-    sb.setAttribute('aria-label', view === 'settings' ? '关闭设置' : '设置');
+    sb.innerHTML = isSettings ? ICON_CLOSE : ICON_SETTINGS;
+    sb.setAttribute('aria-label', isSettings ? '关闭设置' : '设置');
     if (!fromBack && prev === 'today' && view !== 'today') history.pushState({ v: view }, '');
     else if (!fromBack && prev !== 'today' && view === 'today' && history.state && history.state.v) history.back();
     window.scrollTo(0, 0);
@@ -307,22 +313,87 @@ class FitnessApp {
 
     $('setup-hint').classList.toggle('hidden', !!this.profile.customized);
 
-    // 时间线：整理中的 + 训练 + 饮食，按时间倒序
-    const rows = [];
-    this.pending.filter(p => p.date === date).forEach(p => rows.push({ kind: 'pending', ts: p.ts, rec: p }));
-    this.workouts.filter(w => w.date === date).forEach(w => rows.push({ kind: 'workout', ts: recordTs(w), rec: w }));
-    this.diet.filter(d => d.date === date).forEach(d => rows.push({ kind: 'meal', ts: recordTs(d), rec: d }));
-    rows.sort((a, b) => (a.kind === 'pending' ? -1 : 0) - (b.kind === 'pending' ? -1 : 0) || b.ts - a.ts);
+    // 记录：整理中的在最上面；饮食按 早→午→晚→加餐，训练按先后顺序
+    const pend = this.pending.filter(p => p.date === date).sort((a, b) => b.ts - a.ts);
+    const meals = this.diet.filter(d => d.date === date)
+      .sort((a, b) => (MEAL_TYPES.indexOf(a.mealType) - MEAL_TYPES.indexOf(b.mealType)) || (recordTs(a) - recordTs(b)));
+    const lifts = this.workouts.filter(w => w.date === date).sort((a, b) => recordTs(a) - recordTs(b));
 
-    $('list-head').textContent = rows.length ? `记录 · ${rows.filter(r => r.kind !== 'pending').length} 条` : '记录';
     const tl = $('timeline');
-    if (!rows.length) {
-      tl.innerHTML = isToday
-        ? `<div class="empty"><div class="empty-icon">${ICONS.mic}</div>按住下面的按钮<br>说说今天<b>练了什么、吃了什么</b><br>松手就记好，不用等<br><span class="empty-example">「卧推80公斤4组8个，中午吃了黄焖鸡米饭」</span></div>`
-        : `<div class="empty">这天没有记录</div>`;
-      return;
+    let html = pend.map(p => this.renderRow({ kind: 'pending', ts: p.ts, rec: p })).join('');
+    if (meals.length) {
+      html += `<div class="group-head"><span>饮食</span><b>${fmt(s.intake)} kcal · 蛋白 ${fmt(s.protein)}g</b></div>`;
+      html += meals.map(d => this.renderRow({ kind: 'meal', ts: recordTs(d), rec: d })).join('');
     }
-    tl.innerHTML = rows.map(r => this.renderRow(r)).join('');
+    if (lifts.length) {
+      html += `<div class="group-head"><span>训练</span><b>消耗 ${fmt(s.workoutBurn)} kcal</b></div>`;
+      html += lifts.map(w => this.renderRow({ kind: 'workout', ts: recordTs(w), rec: w })).join('');
+    }
+    if (!html) {
+      html = isToday
+        ? `<div class="empty"><div class="empty-icon">${ICONS.mic}</div>在下面的输入框里<br>说说今天<b>练了什么、吃了什么</b><br>点键盘上的 🎤 说，或者打字，按发送就记好<br><span class="empty-example">「卧推80公斤4组8个，中午吃了黄焖鸡米饭」</span></div>`
+        : `<div class="empty">这天没有记录</div>`;
+    }
+    tl.innerHTML = html;
+
+    this.renderChips();
+    const tip = $('cmp-tip');
+    if (tip) tip.classList.toggle('hidden', this.workouts.length + this.diet.length >= 3);
+  }
+
+  /** 常吃常练：最近 30 天里记过 2 次以上、这天还没记的，点一下直接再记一次 */
+  quickSuggestions() {
+    const since = shiftDateString(getTodayDateString(), -30);
+    const date = this.selectedDate;
+    const map = new Map();
+    const add = (key, item) => {
+      const e = map.get(key);
+      if (!e) { map.set(key, Object.assign({}, item, { count: 1, last: item.ts })); return; }
+      e.count += 1;
+      if (item.ts > e.last) { e.last = item.ts; e.src = item.src; }
+    };
+    this.diet.filter(d => d.date >= since).forEach(d => add(`m|${d.mealType}|${d.foodSummary}`, {
+      kind: 'meal', label: `${(d.mealType || '').replace('/补剂', '')} · ${d.foodSummary}`, ts: recordTs(d), src: d
+    }));
+    this.workouts.filter(w => w.date >= since).forEach(w => {
+      const label = w.durationMin ? `${w.exerciseName} ${w.durationMin}分钟` : `${w.exerciseName} ${w.weightKg > 0 ? round1(w.weightKg) + 'kg' : '自重'} ${w.sets}×${w.reps}`;
+      add(`w|${label}`, { kind: 'workout', label, ts: recordTs(w), src: w });
+    });
+    const loggedToday = new Set([
+      ...this.diet.filter(d => d.date === date).map(d => `m|${d.mealType}|${d.foodSummary}`),
+      ...this.workouts.filter(w => w.date === date).map(w => w.durationMin ? `w|${w.exerciseName} ${w.durationMin}分钟` : `w|${w.exerciseName} ${w.weightKg > 0 ? round1(w.weightKg) + 'kg' : '自重'} ${w.sets}×${w.reps}`)
+    ]);
+    return [...map.entries()]
+      .filter(([k, e]) => e.count >= 2 && !loggedToday.has(k))
+      .sort((a, b) => b[1].count - a[1].count || b[1].last - a[1].last)
+      .slice(0, 8)
+      .map(([, e]) => e);
+  }
+
+  renderChips() {
+    const el = document.getElementById('cmp-chips');
+    this._quick = this.quickSuggestions();
+    el.innerHTML = this._quick.map((q, i) =>
+      `<button type="button" class="qchip ${q.kind}" data-quick="${i}"><span class="qplus">+</span>${esc(q.label)}</button>`).join('');
+    el.classList.toggle('hidden', !this._quick.length);
+  }
+
+  quickRepeat(i) {
+    const q = this._quick && this._quick[i];
+    if (!q) return;
+    const ts = Date.now();
+    const copy = Object.assign({}, q.src, { id: (q.kind === 'meal' ? 'd_' : 'w_') + ts, ts, date: this.selectedDate });
+    if (q.kind === 'meal') this.diet.unshift(copy); else this.workouts.unshift(copy);
+    this.saveData();
+    this.render();
+    if (window.QuickLog) {
+      window.QuickLog.showUndo(`✓ 已再记一次`, [q.label + (q.kind === 'meal' ? ` · ${fmt(copy.calories)} kcal` : '')], () => {
+        this.diet = this.diet.filter(d => d.id !== copy.id);
+        this.workouts = this.workouts.filter(w => w.id !== copy.id);
+        this.saveData();
+        this.render();
+      });
+    }
   }
 
   renderRow(r) {
@@ -579,8 +650,8 @@ class FitnessApp {
     $('set-tdee-note').textContent = `每天日常消耗约 ${fmt(p.tdee)} kcal（不含训练）。按目标，不训练的日子大约吃 ${fmt(budget)} kcal。`;
     const ql = window.QuickLog;
     $('set-speech-note').textContent = ql && ql.speechSupported()
-      ? '语音：按住底部按钮用的是手机系统自带的语音识别。识别不好的话，点一下按钮打字，用输入法键盘上的🎤说话效果一样。'
-      : '语音：这台手机没有可用的系统语音识别。点底部按钮打字，用输入法键盘上的🎤说话即可。';
+      ? '语音：输入框左边的麦克风用的是手机系统自带的语音识别。识别不好的话，用输入法键盘上的 🎤 效果一样。'
+      : '语音：这台手机没有可用的系统语音识别，用输入法键盘上的 🎤 说话即可。';
     const days = new Set([...this.workouts, ...this.diet].map(r => r.date)).size;
     $('set-data-note').textContent = `共 ${this.workouts.length} 条训练、${this.diet.length} 条饮食，覆盖 ${days} 天。`;
   }
