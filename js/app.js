@@ -42,6 +42,12 @@ const MEAL_TYPES = ['早餐', '午餐', '晚餐', '加餐/补剂'];
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
 const PENDING_KEY = 'tf_pending';
 
+const REMINDER_DEFAULTS = [
+  { id: 'lunch', enabled: true, time: '12:40' },
+  { id: 'dinner', enabled: true, time: '19:30' },
+  { id: 'night', enabled: true, time: '21:30' }
+];
+
 const svgIcon = (d, size = 20) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
 const ICON_SETTINGS = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="17" x2="20" y2="17"/><circle cx="9" cy="7" r="2.2" fill="var(--bg)"/><circle cx="15" cy="17" r="2.2" fill="var(--bg)"/></svg>';
 const ICON_CLOSE = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>';
@@ -185,7 +191,7 @@ class FitnessApp {
   bindEvents() {
     const $ = (id) => document.getElementById(id);
 
-    document.querySelectorAll('#tabs .tab').forEach(b => b.addEventListener('click', () => this.switchView(b.dataset.view)));
+    document.querySelectorAll('#tabs .tab').forEach(b => b.addEventListener('click', () => { if (this.view !== b.dataset.view) window.Haptics && window.Haptics.fire('tick'); this.switchView(b.dataset.view); }));
     $('cmp-chips').addEventListener('click', (e) => {
       const c = e.target.closest('[data-quick]');
       if (c) this.quickRepeat(Number(c.dataset.quick));
@@ -230,6 +236,7 @@ class FitnessApp {
 
     // 设置
     this.bindSettings();
+    this.bindReminders();
 
     // 编辑
     $('edit-form').addEventListener('submit', (e) => { e.preventDefault(); this.saveEditor(); });
@@ -269,13 +276,31 @@ class FitnessApp {
   shiftDate(delta) {
     const next = shiftDateString(this.selectedDate, delta);
     if (next > getTodayDateString()) return;
+    window.Haptics && window.Haptics.fire('tick');
     this.selectedDate = next;
     this.render();
   }
 
   // ======================= 渲染 =======================
+  /** 把今天的状态告诉安卓，提醒时用（午饭记了就不提醒午饭；晚间小结写还能吃多少） */
+  pushDayState() {
+    try {
+      if (!window.TrainFitNative || !window.TrainFitNative.updateDayState) return;
+      const today = getTodayDateString();
+      const s = this.getDaySummary(today);
+      const meals = [...new Set(this.diet.filter(d => d.date === today).map(d => d.mealType))];
+      const count = this.diet.filter(d => d.date === today).length + this.workouts.filter(w => w.date === today).length;
+      window.TrainFitNative.updateDayState(JSON.stringify({
+        date: today, meals, count,
+        remaining: Math.round(s.remaining),
+        proteinLeft: Math.max(0, Math.round((this.profile.targetProteinG || 0) - s.protein))
+      }));
+    } catch (e) {}
+  }
+
   render() {
     this.lastToday = getTodayDateString();
+    this.pushDayState();
     if (this.view === 'today') this.renderToday();
     else if (this.view === 'trend') this.renderTrend();
     else if (this.view === 'settings') this.renderSettings();
@@ -312,6 +337,10 @@ class FitnessApp {
     $('st-protein').textContent = `${fmt(s.protein)} / ${fmt(this.profile.targetProteinG)}g`;
 
     $('setup-hint').classList.toggle('hidden', !!this.profile.customized);
+    let asked = true;
+    try { asked = !!localStorage.getItem('tf_remind_asked'); } catch (e) {}
+    // 有过记录后再问，别一打开就弹
+    $('remind-banner').classList.toggle('hidden', asked || !this.hasNotifApi() || (this.workouts.length + this.diet.length) < 1);
 
     // 记录：整理中的在最上面；饮食按 早→午→晚→加餐，训练按先后顺序
     const pend = this.pending.filter(p => p.date === date).sort((a, b) => b.ts - a.ts);
@@ -384,6 +413,7 @@ class FitnessApp {
     const ts = Date.now();
     const copy = Object.assign({}, q.src, { id: (q.kind === 'meal' ? 'd_' : 'w_') + ts, ts, date: this.selectedDate });
     if (q.kind === 'meal') this.diet.unshift(copy); else this.workouts.unshift(copy);
+    window.Haptics && window.Haptics.fire('success');
     this.saveData();
     this.render();
     if (window.QuickLog) {
@@ -624,6 +654,94 @@ class FitnessApp {
     });
   }
 
+  // ======================= 提醒 =======================
+  hasNotifApi() { return !!(window.TrainFitNative && window.TrainFitNative.setReminders); }
+
+  loadReminders() {
+    const saved = load('tf_reminders', null);
+    return REMINDER_DEFAULTS.map(d => Object.assign({}, d, (saved || []).find(x => x.id === d.id) || {}));
+  }
+
+  /** 保存并交给安卓排闹钟（没有通知权限时一律不排） */
+  applyReminders(list, granted) {
+    store('tf_reminders', list);
+    if (!this.hasNotifApi()) return;
+    const ok = granted !== undefined ? granted : !!(window.TrainFitNative.notificationsEnabled && window.TrainFitNative.notificationsEnabled());
+    try { window.TrainFitNative.setReminders(JSON.stringify(list.map(r => Object.assign({}, r, { enabled: r.enabled && ok })))); } catch (e) {}
+  }
+
+  requestNotif(cb) {
+    if (!this.hasNotifApi() || !window.TrainFitNative.requestNotifications) { cb(false); return; }
+    window.__tfNotifPerm = (granted) => { window.__tfNotifPerm = null; cb(!!granted); };
+    try { window.TrainFitNative.requestNotifications(); } catch (e) { cb(false); }
+  }
+
+  bindReminders() {
+    const $ = (id) => document.getElementById(id);
+    const asked = () => { try { return !!localStorage.getItem('tf_remind_asked'); } catch (e) { return true; } };
+    const markAsked = () => { try { localStorage.setItem('tf_remind_asked', '1'); } catch (e) {} };
+
+    // 启动时同步一次（重装 / 更新后安卓那边可能没有）
+    if (this.hasNotifApi() && asked()) this.applyReminders(this.loadReminders());
+
+    $('remind-yes').addEventListener('click', () => {
+      markAsked();
+      this.requestNotif((granted) => {
+        this.applyReminders(this.loadReminders().map(r => Object.assign(r, { enabled: true })), granted);
+        this.showToast(granted ? '已开启提醒，可以在设置里改时间' : '通知权限没打开，可以稍后在设置里开');
+        this.render();
+      });
+    });
+    $('remind-no').addEventListener('click', () => {
+      markAsked();
+      this.applyReminders(this.loadReminders().map(r => Object.assign(r, { enabled: false })), false);
+      this.render();
+    });
+
+    ['lunch', 'dinner', 'night'].forEach(id => {
+      const box = $('rem-' + id), time = $('rem-' + id + '-time');
+      const save = (enabled, granted) => {
+        const list = this.loadReminders().map(r => r.id === id ? Object.assign(r, { enabled, time: time.value || r.time }) : r);
+        markAsked();
+        this.applyReminders(list, granted);
+        this.renderSettings();
+      };
+      box.addEventListener('change', () => {
+        if (!box.checked) { save(false); return; }
+        this.requestNotif((granted) => {
+          if (!granted) {
+            box.checked = false;
+            $('rem-note').textContent = '通知权限没打开：去手机「设置 → 应用 → 练食AI → 通知」里打开后再试。';
+            return;
+          }
+          save(true, true);
+        });
+      });
+      time.addEventListener('change', () => save(box.checked));
+    });
+
+    $('set-haptics').addEventListener('change', () => {
+      try { localStorage.setItem('tf_haptics', $('set-haptics').checked ? 'on' : 'off'); } catch (e) {}
+      if ($('set-haptics').checked && window.Haptics) window.Haptics.fire('success');
+    });
+  }
+
+  renderReminders() {
+    const $ = (id) => document.getElementById(id);
+    const list = this.loadReminders();
+    const granted = this.hasNotifApi() && window.TrainFitNative.notificationsEnabled && window.TrainFitNative.notificationsEnabled();
+    list.forEach(r => {
+      const box = $('rem-' + r.id), time = $('rem-' + r.id + '-time');
+      if (box) box.checked = !!(r.enabled && granted && localStorage.getItem('tf_remind_asked'));
+      if (time && document.activeElement !== time) time.value = r.time;
+    });
+    let hap = true;
+    try { hap = localStorage.getItem('tf_haptics') !== 'off'; } catch (e) {}
+    $('set-haptics').checked = hap;
+    $('rem-note').textContent = !this.hasNotifApi() ? '提醒只在安卓 App 里可用。' :
+      (!granted && localStorage.getItem('tf_remind_asked') ? '通知权限没打开，提醒不会响。打开任意一个开关会请求权限。' : '');
+  }
+
   onProfileChange() {
     this.profile.customized = true;
     this.recalculateMetabolism();
@@ -648,6 +766,7 @@ class FitnessApp {
     setVal('set-protein', p.targetProteinG);
     const budget = p.tdee - (p.targetDeficitKcal || 0);
     $('set-tdee-note').textContent = `每天日常消耗约 ${fmt(p.tdee)} kcal（不含训练）。按目标，不训练的日子大约吃 ${fmt(budget)} kcal。`;
+    this.renderReminders();
     const ql = window.QuickLog;
     const days = new Set([...this.workouts, ...this.diet].map(r => r.date)).size;
     $('set-data-note').textContent = `共 ${this.workouts.length} 条训练、${this.diet.length} 条饮食，覆盖 ${days} 天。`;
@@ -697,6 +816,11 @@ class FitnessApp {
           ${MEAL_TYPES.map(t => `<button type="button" class="seg-btn ${rec.mealType === t ? 'active' : ''}" data-value="${t}">${t.replace('/补剂', '')}</button>`).join('')}
         </div>
         ${input('foodSummary', '吃了什么', rec.foodSummary, 'text', 'maxlength="60"')}
+        ${Array.isArray(rec.items) && rec.items.length ? `<div class="breakdown">
+          <div class="breakdown-head">怎么算的</div>
+          ${rec.items.map(i => `<div class="breakdown-row"><span>${esc(i.name)}${i.grams ? ` ${i.grams}g` : ''}</span><span>${fmt(i.calories)} kcal <em class="src ${i.src === '估算' ? 'est' : ''}">${esc(i.src || '')}</em></span></div>`).join('')}
+          <div class="breakdown-note">「成分表」来自《中国食物成分表（第6版）》，「估算」是 AI 按常见做法估的。改了下面的数字就以你填的为准。</div>
+        </div>` : ''}
         <div class="field-grid field-grid-2">
           ${input('calories', '热量 kcal', rec.calories)}
           ${input('proteinG', '蛋白质 g', rec.proteinG || 0)}
@@ -752,7 +876,9 @@ class FitnessApp {
       const active = form.querySelector('#edit-meal-type .seg-btn.active');
       rec.mealType = active ? active.dataset.value : rec.mealType;
       rec.foodSummary = (val('foodSummary') || '').trim() || rec.foodSummary;
-      rec.calories = Math.round(numv('calories', rec.calories));
+      const newCal = Math.round(numv('calories', rec.calories));
+      if (newCal !== rec.calories) delete rec.items;
+      rec.calories = newCal;
       rec.proteinG = round1(numv('proteinG', rec.proteinG || 0));
       rec.carbsG = round1(numv('carbsG', rec.carbsG || 0));
       rec.fatG = round1(numv('fatG', rec.fatG || 0));
@@ -771,6 +897,7 @@ class FitnessApp {
     this.saveData();
     this.closeEditor();
     this.render();
+    window.Haptics && window.Haptics.fire('tap');
     this.showToast('已保存');
   }
 
@@ -781,6 +908,7 @@ class FitnessApp {
     const idx = list.findIndex(r => r.id === id);
     if (idx === -1) return this.closeEditor();
     const [removed] = list.splice(idx, 1);
+    window.Haptics && window.Haptics.fire('tap');
     this.saveData();
     this.closeEditor();
     this.render();
@@ -812,6 +940,7 @@ class FitnessApp {
   failPending(id, message) {
     const p = this.pending.find(x => x.id === id);
     if (!p) return;
+    window.Haptics && window.Haptics.fire('error');
     p.status = 'failed';
     p.error = message || '没整理出来';
     this.savePending();

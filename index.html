@@ -68,6 +68,14 @@
           <span aria-hidden="true">›</span>
         </button>
 
+        <div class="remind-banner hidden" id="remind-banner">
+          <div><b>开启提醒？</b><span>午饭、晚饭没记会提醒你，晚上发一条今日小结</span></div>
+          <div class="remind-actions">
+            <button type="button" class="chip" id="remind-no">不用</button>
+            <button type="button" class="chip chip-primary" id="remind-yes">开启</button>
+          </div>
+        </div>
+
         <div class="timeline" id="timeline"></div>
       </section>
 
@@ -142,6 +150,30 @@
             <button class="seg-btn" data-value="light" type="button">浅色</button>
           </div>
           <div class="field-note" id="set-theme-note"></div>
+        </div>
+
+        <div class="card form-card">
+          <div class="card-title">提醒与震动</div>
+          <div class="switch-row">
+            <div class="switch-text"><b>午餐提醒</b><small>午饭还没记才提醒</small></div>
+            <input type="time" class="time-input" id="rem-lunch-time" value="12:40">
+            <input type="checkbox" class="switch" id="rem-lunch" aria-label="午餐提醒">
+          </div>
+          <div class="switch-row">
+            <div class="switch-text"><b>晚餐提醒</b><small>晚饭还没记才提醒</small></div>
+            <input type="time" class="time-input" id="rem-dinner-time" value="19:30">
+            <input type="checkbox" class="switch" id="rem-dinner" aria-label="晚餐提醒">
+          </div>
+          <div class="switch-row">
+            <div class="switch-text"><b>晚间小结</b><small>今天还能吃多少、蛋白还差多少</small></div>
+            <input type="time" class="time-input" id="rem-night-time" value="21:30">
+            <input type="checkbox" class="switch" id="rem-night" aria-label="晚间小结">
+          </div>
+          <div class="switch-row">
+            <div class="switch-text"><b>震动反馈</b><small>按下、开始、结束、记好时轻震一下</small></div>
+            <input type="checkbox" class="switch" id="set-haptics" aria-label="震动反馈">
+          </div>
+          <p class="field-note" id="rem-note"></p>
         </div>
 
         <div class="card form-card">
@@ -239,6 +271,7 @@
 
   <script src="js/nutrition.js"></script>
   <script src="js/workout.js"></script>
+  <script src="js/food_db.js"></script>
   <script src="js/app.js"></script>
   <script src="js/quick_log.js"></script>
 </body>
