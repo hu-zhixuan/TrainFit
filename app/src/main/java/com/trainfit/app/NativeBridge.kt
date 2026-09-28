@@ -30,7 +30,8 @@ import java.util.concurrent.Executors
 class NativeBridge(
     private val activity: ComponentActivity,
     private val evalJs: (String) -> Unit,
-    private val requestMicPermission: (onResult: (Boolean) -> Unit) -> Unit
+    private val requestMicPermission: (onResult: (Boolean) -> Unit) -> Unit,
+    private val onSystemBarsLight: (Boolean) -> Unit = {}
 ) {
     private val main = Handler(Looper.getMainLooper())
     private val io = Executors.newCachedThreadPool()
@@ -250,6 +251,24 @@ class NativeBridge(
     private fun emitSpeech(type: String, text: String) {
         val js = "window.__tfSpeech && window.__tfSpeech(${JSONObject.quote(type)}, ${JSONObject.quote(text)});"
         main.post { evalJs(js) }
+    }
+
+    // ================= 外观 =================
+
+    /**
+     * 系统是否是深色模式。WebView 的 prefers-color-scheme 跟随的是 App 自身主题（深色），
+     * 不跟随系统，所以网页的「跟随系统」要问原生。系统切换深浅色时 Activity 会重建，网页会重新读取。
+     */
+    @JavascriptInterface
+    fun isSystemDark(): Boolean {
+        val mode = activity.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK
+        return mode == android.content.res.Configuration.UI_MODE_NIGHT_YES
+    }
+
+    /** 网页切换深浅色时调用，让状态栏和导航栏一起变 */
+    @JavascriptInterface
+    fun setSystemBarsLight(light: Boolean) {
+        main.post { onSystemBarsLight(light) }
     }
 
     // ================= 大模型 =================

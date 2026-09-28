@@ -14,17 +14,22 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.webkit.WebViewAssetLoader
 
 class MainActivity : ComponentActivity() {
 
     private lateinit var webView: WebView
+    private var rootContainer: FrameLayout? = null
+    private var barsLight = false
     private var pendingPermissionRequest: PermissionRequest? = null
     private lateinit var nativeBridge: NativeBridge
     private var pendingNativeMicCallback: ((Boolean) -> Unit)? = null
@@ -68,7 +73,8 @@ class MainActivity : ComponentActivity() {
             requestMicPermission = { onResult ->
                 pendingNativeMicCallback = onResult
                 nativeMicPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-            }
+            },
+            onSystemBarsLight = { light -> applySystemBars(light) }
         )
 
         // 3. Instantiate and Configure Native WebView Container
@@ -80,18 +86,26 @@ class MainActivity : ComponentActivity() {
 
     private fun setupEdgeToEdgeDarkTheme() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
-        val darkColor = Color.parseColor("#09090B")
-        window.statusBarColor = darkColor
-        window.navigationBarColor = darkColor
-        window.decorView.setBackgroundColor(darkColor)
+        applySystemBars(false)
+    }
+
+    /** 状态栏、导航栏和页面留白跟随网页的深浅色 */
+    private fun applySystemBars(light: Boolean) {
+        barsLight = light
+        val color = Color.parseColor(if (light) "#F4F4F3" else "#0B0B0D")
+        window.statusBarColor = color
+        window.navigationBarColor = color
+        window.decorView.setBackgroundColor(color)
+        rootContainer?.setBackgroundColor(color)
+        if (::webView.isInitialized) webView.setBackgroundColor(color)
 
         val insetsController = WindowInsetsControllerCompat(window, window.decorView)
-        insetsController.isAppearanceLightStatusBars = false
-        insetsController.isAppearanceLightNavigationBars = false
+        insetsController.isAppearanceLightStatusBars = light
+        insetsController.isAppearanceLightNavigationBars = light
     }
 
     private fun setupWebView() {
-        val darkBgColor = Color.parseColor("#09090B")
+        val darkBgColor = Color.parseColor(if (barsLight) "#F4F4F3" else "#0B0B0D")
 
         webView = WebView(this).apply {
             layoutParams = ViewGroup.LayoutParams(
@@ -137,7 +151,6 @@ class MainActivity : ComponentActivity() {
 
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
-                view?.setBackgroundColor(darkBgColor)
             }
 
             override fun onRenderProcessGone(
@@ -186,7 +199,20 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        setContentView(webView)
+        // 网页放进一个容器里，容器按系统栏和键盘的高度留边，避免内容被状态栏/键盘挡住
+        val container = FrameLayout(this).apply {
+            setBackgroundColor(darkBgColor)
+            addView(webView)
+        }
+        ViewCompat.setOnApplyWindowInsetsListener(container) { v, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
+            val ime = insets.getInsets(WindowInsetsCompat.Type.ime())
+            v.setPadding(bars.left, bars.top, bars.right, maxOf(bars.bottom, ime.bottom))
+            WindowInsetsCompat.CONSUMED
+        }
+        rootContainer = container
+        setContentView(container)
+        ViewCompat.requestApplyInsets(container)
 
         // Load entry SPA from local assets
         webView.loadUrl("https://appassets.androidplatform.net/assets/index.html")
