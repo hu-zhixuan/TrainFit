@@ -158,7 +158,11 @@ object Reminders {
                     val remaining = state.optInt("remaining", 0)
                     val proteinLeft = state.optInt("proteinLeft", 0)
                     val a = if (remaining >= 0) "今天还能吃 $remaining 千卡" else "今天超出 ${-remaining} 千卡"
-                    val b = if (proteinLeft > 0) "，蛋白质还差 ${proteinLeft}g" else "，蛋白质达标了 💪"
+                    val b = when {
+                        !state.optBoolean("showProtein", true) -> "" // 只记吃的模式不提蛋白质
+                        proteinLeft > 0 -> "，蛋白质还差 ${proteinLeft}g"
+                        else -> "，蛋白质达标了 💪"
+                    }
                     show(ctx, CH_REMIND, 103, "今日小结", a + b)
                 }
             }
