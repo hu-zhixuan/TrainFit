@@ -42,6 +42,17 @@ const MEAL_TYPES = ['早餐', '午餐', '晚餐', '加餐/补剂'];
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
 const PENDING_KEY = 'tf_pending';
 
+const svgIcon = (d, size = 20) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+const ICON_SETTINGS = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="17" x2="20" y2="17"/><circle cx="9" cy="7" r="2.2" fill="var(--bg)"/><circle cx="15" cy="17" r="2.2" fill="var(--bg)"/></svg>';
+const ICON_CLOSE = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>';
+const ICONS = {
+  meal: svgIcon('<path d="M3 11h18a9 9 0 0 1-18 0z"/><path d="M8 3.5c-.6.8-.6 1.7 0 2.5M12 3.5c-.6.8-.6 1.7 0 2.5M16 3.5c-.6.8-.6 1.7 0 2.5"/>'),
+  lift: svgIcon('<path d="M6.5 6.5v11M17.5 6.5v11M3.5 9v6M20.5 9v6M6.5 12h11"/>'),
+  cardio: svgIcon('<path d="M3 12h4l2.5-6 5 12 2.5-6H21"/>'),
+  alert: svgIcon('<circle cx="12" cy="12" r="9"/><path d="M12 7.5v5M12 16.5v.01"/>'),
+  mic: svgIcon('<path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/>', 24)
+};
+
 function esc(s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
@@ -240,6 +251,9 @@ class FitnessApp {
     const title = document.getElementById('view-title');
     title.classList.toggle('hidden', isToday);
     title.textContent = view === 'trend' ? '趋势' : view === 'settings' ? '设置' : '';
+    const sb = document.getElementById('btn-settings');
+    sb.innerHTML = view === 'settings' ? ICON_CLOSE : ICON_SETTINGS;
+    sb.setAttribute('aria-label', view === 'settings' ? '关闭设置' : '设置');
     if (!fromBack && prev === 'today' && view !== 'today') history.pushState({ v: view }, '');
     else if (!fromBack && prev !== 'today' && view === 'today' && history.state && history.state.v) history.back();
     window.scrollTo(0, 0);
@@ -285,6 +299,8 @@ class FitnessApp {
     $('hero-num').textContent = fmt(Math.abs(s.remaining));
     const pct = s.budget > 0 ? Math.min(100, (s.intake / s.budget) * 100) : 100;
     $('hero-meter').style.width = pct + '%';
+    const target = this.profile.targetDeficitKcal || 0;
+    $('hero-foot').textContent = `预算 ${fmt(s.budget)} = 消耗 ${fmt(s.totalBurn)} ${target >= 0 ? '− 目标缺口 ' + fmt(target) : '+ 目标盈余 ' + fmt(-target)}`;
     $('st-intake').textContent = fmt(s.intake);
     $('st-burn').textContent = s.workoutBurn ? '+' + fmt(s.workoutBurn) : '0';
     $('st-protein').textContent = `${fmt(s.protein)} / ${fmt(this.profile.targetProteinG)}g`;
@@ -302,7 +318,7 @@ class FitnessApp {
     const tl = $('timeline');
     if (!rows.length) {
       tl.innerHTML = isToday
-        ? `<div class="empty">按住下面的按钮，把今天<b>练了什么、吃了什么</b>一口气说完<br>比如「卧推80公斤4组8个，中午吃了黄焖鸡米饭」<br>松手就记好了，不用等</div>`
+        ? `<div class="empty"><div class="empty-icon">${ICONS.mic}</div>按住下面的按钮<br>说说今天<b>练了什么、吃了什么</b><br>松手就记好，不用等<br><span class="empty-example">「卧推80公斤4组8个，中午吃了黄焖鸡米饭」</span></div>`
         : `<div class="empty">这天没有记录</div>`;
       return;
     }
@@ -315,7 +331,7 @@ class FitnessApp {
       const failed = x.status === 'failed';
       return `
         <div class="item pending ${failed ? 'failed' : ''}">
-          <div class="item-icon">${failed ? '!' : '<div class="spinner"></div>'}</div>
+          <div class="item-icon">${failed ? ICONS.alert : '<div class="spinner"></div>'}</div>
           <div class="item-main">
             <div class="item-title">${failed ? esc(x.error || '没整理出来') : '正在整理…'}</div>
             <div class="item-sub">「${esc(x.text)}」</div>
@@ -331,7 +347,7 @@ class FitnessApp {
       const macro = [x.proteinG ? `蛋白 ${round1(x.proteinG)}g` : '', x.carbsG ? `碳水 ${round1(x.carbsG)}g` : '', x.fatG ? `脂肪 ${round1(x.fatG)}g` : ''].filter(Boolean).join(' · ');
       return `
         <button class="item" data-kind="meal" data-id="${esc(x.id)}" type="button">
-          <div class="item-icon">🍽️</div>
+          <div class="item-icon meal">${ICONS.meal}</div>
           <div class="item-main">
             <div class="item-title"><span class="tag tag-meal">${esc((x.mealType || '').replace('/补剂', ''))}</span>${esc(x.foodSummary)}</div>
             <div class="item-sub">${esc(hhmm(r.ts))}${macro ? ' · ' + macro : ''}</div>
@@ -355,9 +371,9 @@ class FitnessApp {
     }
     return `
       <button class="item" data-kind="workout" data-id="${esc(x.id)}" type="button">
-        <div class="item-icon">${x.durationMin ? '🏃' : '🏋️'}</div>
+        <div class="item-icon ${x.durationMin ? 'cardio' : 'lift'}">${x.durationMin ? ICONS.cardio : ICONS.lift}</div>
         <div class="item-main">
-          <div class="item-title"><span class="tag tag-lift">训练</span>${esc(x.exerciseName)}</div>
+          <div class="item-title"><span class="tag ${x.durationMin ? 'tag-cardio' : 'tag-lift'}">${x.durationMin ? '有氧' : '训练'}</span>${esc(x.exerciseName)}</div>
           <div class="item-sub">${parts.join(' · ')}</div>
         </div>
         <div class="item-value">${value}</div>
@@ -437,7 +453,7 @@ class FitnessApp {
         bars += `<path class="${pos ? 'bar-pos' : 'bar-neg'}" d="${path}"/>`;
       }
       const tip = d.value === null ? '没记饮食' : (d.value >= 0 ? `缺口 ${fmt(d.value)} kcal` : `超出 ${fmt(-d.value)} kcal`);
-      bars += `<rect class="bar-hit" data-date="${d.date}" data-tip="${esc(md + ' · ' + tip)}" x="${padL + i * slot}" y="${padT}" width="${slot}" height="${ih}"><title>${esc(md + ' ' + tip)}</title></rect>`;
+ bars += `<rect class="bar-hit" data-i="${i}" data-date="${d.date}" data-tip="${esc(md + ' · ' + tip)}" x="${padL + i * slot}" y="${padT}" width="${slot}" height="${ih}"><title>${esc(md + ' ' + tip)}</title></rect>`;
     });
     const targetLine = target > 0 ? `<line class="target" x1="${padL}" x2="${W - padR}" y1="${y(target)}" y2="${y(target)}"/>` : '';
 
@@ -451,8 +467,10 @@ class FitnessApp {
         const scale = box.width / W;
         const [md, text] = h.dataset.tip.split(' · ');
         tipEl.innerHTML = `<span>${esc(md)}</span> ${esc(text)}`;
-        tipEl.style.left = (Number(h.getAttribute('x')) + slot / 2) * scale + 'px';
-        tipEl.style.top = (padT * scale) + 'px';
+        const v = days[Number(h.dataset.i)].value;
+        const topY = v === null ? y0 : Math.min(y(Math.max(v, 0)), y0);
+        tipEl.style.left = Math.min(Math.max((Number(h.getAttribute('x')) + slot / 2) * scale, 60), box.width - 60) + 'px';
+        tipEl.style.top = Math.max(topY * scale - 6, 34) + 'px';
         tipEl.classList.remove('hidden');
       });
       h.addEventListener('mouseleave', () => tipEl.classList.add('hidden'));
@@ -550,6 +568,7 @@ class FitnessApp {
     setSeg('set-gender', p.gender);
     setSeg('set-goal', p.goalType || 'fat_loss');
     setSeg('set-theme', this.theme);
+    $('set-theme-note').textContent = this.theme === 'system' ? `手机现在是${this.systemIsLight() ? '浅色' : '深色'}模式，App 跟着变` : '';
     const setVal = (id, v) => { if (document.activeElement !== $(id)) $(id).value = v; };
     setVal('set-height', p.heightCm);
     setVal('set-weight', p.weightKg);
@@ -562,17 +581,30 @@ class FitnessApp {
     $('set-data-note').textContent = `共 ${this.workouts.length} 条训练、${this.diet.length} 条饮食，覆盖 ${days} 天。`;
   }
 
+  /** 系统当前是不是浅色：安卓 App 问原生，浏览器看 prefers-color-scheme */
+  systemIsLight() {
+    try {
+      if (window.TrainFitNative && window.TrainFitNative.isSystemDark) return !window.TrainFitNative.isSystemDark();
+    } catch (e) {}
+    return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches);
+  }
+
   applyTheme(theme) {
     this.theme = ['light', 'dark', 'system'].includes(theme) ? theme : 'system';
+    const light = this.theme === 'light' || (this.theme === 'system' && this.systemIsLight());
     const root = document.documentElement;
-    if (this.theme === 'system') root.removeAttribute('data-theme');
-    else root.setAttribute('data-theme', this.theme);
+    root.classList.add('theme-switching');
+    root.setAttribute('data-theme', light ? 'light' : 'dark');
+    requestAnimationFrame(() => requestAnimationFrame(() => root.classList.remove('theme-switching')));
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', light ? '#f4f4f3' : '#0b0b0d');
     try { localStorage.setItem('trainfit_theme', this.theme); } catch (e) {}
-    const light = this.theme === 'light' || (this.theme === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches);
     try { window.TrainFitNative && window.TrainFitNative.setSystemBarsLight && window.TrainFitNative.setSystemBarsLight(!!light); } catch (e) {}
     if (!this._mqBound && window.matchMedia) {
       this._mqBound = true;
-      window.matchMedia('(prefers-color-scheme: light)').addEventListener?.('change', () => { if (this.theme === 'system') this.applyTheme('system'); });
+      const mq = window.matchMedia('(prefers-color-scheme: light)');
+      const onChange = () => { if (this.theme === 'system') this.applyTheme('system'); };
+      if (mq.addEventListener) mq.addEventListener('change', onChange);
     }
   }
 
