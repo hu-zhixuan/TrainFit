@@ -147,13 +147,23 @@
         <div class="card form-card">
           <div class="card-title">AI 接口</div>
           <p class="field-note" id="ql-cfg-hint"></p>
-          <p class="field-note" id="set-speech-note"></p>
           <label class="field"><span class="field-label">接口地址 (Base URL)</span><input id="ql-cfg-base" class="input" type="url" autocomplete="off" spellcheck="false"></label>
           <label class="field"><span class="field-label">模型</span><input id="ql-cfg-model" class="input" type="text" autocomplete="off" spellcheck="false"></label>
           <label class="field"><span class="field-label">API Key</span><input id="ql-cfg-key" class="input" type="password" autocomplete="off" spellcheck="false"></label>
           <div class="btn-row">
             <button type="button" class="btn" id="ql-cfg-test">测试连接</button>
             <button type="button" class="btn" id="ql-cfg-save">保存</button>
+          </div>
+        </div>
+
+        <div class="card form-card">
+          <div class="card-title">语音识别</div>
+          <p class="field-note" id="asr-cfg-hint"></p>
+          <label class="field"><span class="field-label">接口地址 (Base URL)</span><input id="asr-cfg-base" class="input" type="url" autocomplete="off" spellcheck="false"></label>
+          <label class="field"><span class="field-label">模型</span><input id="asr-cfg-model" class="input" type="text" autocomplete="off" spellcheck="false"></label>
+          <label class="field"><span class="field-label">API Key</span><input id="asr-cfg-key" class="input" type="password" autocomplete="off" spellcheck="false"></label>
+          <div class="btn-row">
+            <button type="button" class="btn" id="asr-cfg-save">保存</button>
           </div>
         </div>
 
@@ -167,12 +177,31 @@
       </section>
     </main>
 
-    <!-- 底部输入栏：打字 / 输入法语音，按发送就记 -->
+    <!-- 录音中的大提示 -->
+    <div class="rec-panel hidden" id="rec-panel" aria-live="polite">
+      <div class="rec-time" id="rec-time">0:00</div>
+      <div class="rec-bars" id="rec-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      <div class="rec-live" id="rec-live"></div>
+      <div class="rec-hint" id="rec-hint">松手结束 · 上滑取消</div>
+    </div>
+
+    <!-- 底部：一个按钮，按住说话（或点一下开始、再点一下结束） -->
     <div class="composer" id="composer">
       <div class="chips" id="cmp-chips" aria-label="常用，点一下再记一次"></div>
       <div class="cmp-status hidden" id="cmp-status" role="status"></div>
-      <div class="cmp-row">
-        <button class="cmp-mic hidden" id="cmp-mic" type="button" aria-label="用手机语音识别">
+
+      <div class="cmp-row" id="voice-row">
+        <button class="cmp-side" id="cmp-kbd" type="button" aria-label="改成打字">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2.5"/><path d="M6 9h.01M10 9h.01M14 9h.01M18 9h.01M6 13h.01M18 13h.01M9 15.5h6"/></svg>
+        </button>
+        <button class="talk-btn" id="talk-btn" type="button" aria-label="按住说话">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+          <span id="talk-label">按住说话</span>
+        </button>
+      </div>
+
+      <div class="cmp-row hidden" id="text-row">
+        <button class="cmp-side" id="cmp-voice" type="button" aria-label="改成说话">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
         </button>
         <textarea id="cmp-text" class="cmp-text" rows="1" placeholder="今天练了啥、吃了啥？" enterkeyhint="send" aria-label="输入今天的训练和饮食"></textarea>
@@ -180,7 +209,7 @@
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
         </button>
       </div>
-      <div class="cmp-tip hidden" id="cmp-tip">说完自动记好；记错了直接说「卧推改成85公斤」「把午饭删了」</div>
+      <div class="cmp-tip hidden" id="cmp-tip">按住把练了啥、吃了啥一口气说完，松手自动记好</div>
     </div>
   </div>
 
