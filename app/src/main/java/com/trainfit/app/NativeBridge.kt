@@ -31,9 +31,7 @@ class NativeBridge(
     private val activity: ComponentActivity,
     private val evalJs: (String) -> Unit,
     private val requestMicPermission: (onResult: (Boolean) -> Unit) -> Unit,
-    private val onSystemBarsLight: (Boolean) -> Unit = {},
-    private val canVoiceIntent: () -> Boolean = { false },
-    private val launchVoiceIntent: () -> Boolean = { false }
+    private val onSystemBarsLight: (Boolean) -> Unit = {}
 ) {
     private val main = Handler(Looper.getMainLooper())
     private val io = Executors.newCachedThreadPool()
@@ -255,22 +253,6 @@ class NativeBridge(
         main.post { evalJs(js) }
     }
 
-    // ================= 手机自带的语音输入界面 =================
-    // 结果回调：window.__tfVoiceIntent(ok, text)
-
-    @JavascriptInterface
-    fun isVoiceIntentAvailable(): Boolean = try { canVoiceIntent() } catch (_: Exception) { false }
-
-    @JavascriptInterface
-    fun startVoiceIntent() {
-        main.post {
-            cancelInternal()
-            if (!launchVoiceIntent()) {
-                evalJs("window.__tfVoiceIntent && window.__tfVoiceIntent(false, '');")
-            }
-        }
-    }
-
     // ================= 外观 =================
 
     /**
@@ -287,6 +269,126 @@ class NativeBridge(
     @JavascriptInterface
     fun setSystemBarsLight(light: Boolean) {
         main.post { onSystemBarsLight(light) }
+    }
+
+    // ================= 自己录音 + 语音转文字（OpenAI 兼容 /audio/transcriptions） =================
+    //
+    // 开始和结束都由用户控制（按住/松开，或点一下/再点一下），不做静音检测。
+    // 回调：window.__tfRec(type, value)  type = start | level | max | error
+    //      window.__tfAsr(requestId, ok, textOrError)
+
+    private val recorder = VoiceRecorder(
+        onLevel = { lv -> emitRec("level", String.format(java.util.Locale.US, "%.2f", lv)) },
+        onMaxReached = { emitRec("max", "") }
+    )
+
+    private fun asrConfig(overrideJson: String): Triple<String, String, String> {
+        val ov = try { JSONObject(overrideJson) } catch (_: Exception) { null }
+        val base = ov?.optString("baseUrl").orEmpty().ifBlank { BuildConfig.ASR_BASE_URL }.trim().trimEnd('/')
+        val key = ov?.optString("apiKey").orEmpty().ifBlank { BuildConfig.ASR_API_KEY }.trim()
+        val model = ov?.optString("model").orEmpty().ifBlank { BuildConfig.ASR_MODEL }.trim()
+        return Triple(base, key, model)
+    }
+
+    @JavascriptInterface
+    fun isAsrConfigured(overrideJson: String): Boolean {
+        val (base, key, _) = asrConfig(overrideJson)
+        return base.isNotBlank() && key.isNotBlank()
+    }
+
+    @JavascriptInterface
+    fun getAsrInfo(): String = JSONObject().apply {
+        put("baseUrl", BuildConfig.ASR_BASE_URL)
+        put("model", BuildConfig.ASR_MODEL)
+        put("hasKey", BuildConfig.ASR_API_KEY.isNotBlank())
+    }.toString()
+
+    @JavascriptInterface
+    fun startRecording() {
+        main.post {
+            cancelInternal() // 别和系统语音抢麦克风
+            if (ContextCompat.checkSelfPermission(activity, Manifest.permission.RECORD_AUDIO)
+                == PackageManager.PERMISSION_GRANTED
+            ) {
+                io.execute { if (recorder.start()) emitRec("start", "") else emitRec("error", "RECORD_FAILED") }
+            } else {
+                requestMicPermission { granted ->
+                    // 第一次授权时用户已经松手了，只提示，不自动开录
+                    emitRec("error", if (granted) "PERMISSION_JUST_GRANTED" else "PERMISSION_DENIED")
+                }
+            }
+        }
+    }
+
+    @JavascriptInterface
+    fun cancelRecording() {
+        io.execute { recorder.cancel() }
+    }
+
+    /** 停止录音并转文字，结果通过 __tfAsr 回调 */
+    @JavascriptInterface
+    fun stopRecording(requestId: String, overrideJson: String) {
+        io.execute {
+            val audio = recorder.stop()
+            if (audio == null) {
+                replyAsr(requestId, false, "TOO_SHORT")
+                return@execute
+            }
+            val (base, key, model) = asrConfig(overrideJson)
+            if (base.isBlank() || key.isBlank()) {
+                replyAsr(requestId, false, "NO_KEY")
+                return@execute
+            }
+            var lastError = ""
+            for (attempt in 0 until 2) {  // 网络抖动时再试一次
+                try {
+                    val boundary = "----TrainFit" + System.currentTimeMillis()
+                    val out = java.io.ByteArrayOutputStream()
+                    out.write("--$boundary\r\nContent-Disposition: form-data; name=\"model\"\r\n\r\n$model\r\n".toByteArray(Charsets.UTF_8))
+                    out.write("--$boundary\r\nContent-Disposition: form-data; name=\"file\"; filename=\"speech.wav\"\r\nContent-Type: audio/wav\r\n\r\n".toByteArray(Charsets.UTF_8))
+                    out.write(audio)
+                    out.write("\r\n--$boundary--\r\n".toByteArray(Charsets.UTF_8))
+                    val body = out.toByteArray()
+
+                    val conn = (URL("$base/audio/transcriptions").openConnection() as HttpURLConnection).apply {
+                        requestMethod = "POST"
+                        connectTimeout = 10000
+                        readTimeout = 30000
+                        doOutput = true
+                        setFixedLengthStreamingMode(body.size)
+                        setRequestProperty("Authorization", "Bearer $key")
+                        setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
+                        setRequestProperty("Accept", "application/json")
+                    }
+                    conn.outputStream.use { it.write(body) }
+                    val code = conn.responseCode
+                    val ok = code in 200..299
+                    val text = (if (ok) conn.inputStream else conn.errorStream)
+                        ?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
+                    conn.disconnect()
+                    if (ok) {
+                        val said = try { JSONObject(text).optString("text") } catch (_: Exception) { text }
+                        replyAsr(requestId, true, said.trim())
+                        return@execute
+                    }
+                    lastError = "HTTP $code ${text.take(200)}"
+                    if (code in 400..499 && code != 429) break
+                } catch (e: Exception) {
+                    lastError = "${e.javaClass.simpleName}: ${e.message.orEmpty()}"
+                }
+            }
+            replyAsr(requestId, false, lastError)
+        }
+    }
+
+    private fun emitRec(type: String, value: String) {
+        val js = "window.__tfRec && window.__tfRec(${JSONObject.quote(type)}, ${JSONObject.quote(value)});"
+        main.post { evalJs(js) }
+    }
+
+    private fun replyAsr(requestId: String, ok: Boolean, payload: String) {
+        val js = "window.__tfAsr && window.__tfAsr(${JSONObject.quote(requestId)}, $ok, ${JSONObject.quote(payload)});"
+        main.post { evalJs(js) }
     }
 
     // ================= 大模型 =================
@@ -350,6 +452,7 @@ class NativeBridge(
 
     fun shutdown() {
         main.post { cancelInternal() }
+        recorder.cancel()
         io.shutdown()
     }
 }

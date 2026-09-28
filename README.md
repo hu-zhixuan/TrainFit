@@ -7,12 +7,12 @@
   专为硬核力量训练者与科学减脂人群打造 —— <b>口喷记录</b> · <b>自动超负荷加片建议</b> · <b>热量缺口动态闭环</b>。
 </p>
 
-### 📥 [ 👉 点击这里直接下载最新 Android APK 安装包 (TrainFit-v1.9.apk) 👈 ](https://github.com/hu-zhixuan/TrainFit/releases/download/v1.9/TrainFit-v1.9.apk)
+### 📥 [ 👉 点击这里直接下载最新 Android APK 安装包 (TrainFit-v2.0.apk) 👈 ](https://github.com/hu-zhixuan/TrainFit/releases/download/v2.0/TrainFit-v2.0.apk)
 
 > 💡 **多通道下载指引**：
-> - 🚀 **官方 Release 直链（推荐，极速）**：[TrainFit-v1.9.apk (GitHub Releases v1.9)](https://github.com/hu-zhixuan/TrainFit/releases/download/v1.9/TrainFit-v1.9.apk)
+> - 🚀 **官方 Release 直链（推荐，极速）**：[TrainFit-v2.0.apk (GitHub Releases v2.0)](https://github.com/hu-zhixuan/TrainFit/releases/download/v2.0/TrainFit-v2.0.apk)
 > - 📦 **GitHub Releases 发行页**：[查看全部版本与更新日志](https://github.com/hu-zhixuan/TrainFit/releases)
-> - 🔗 **仓库备用直链**：[TrainFit-v1.9.apk (Raw 源码库直链)](https://github.com/hu-zhixuan/TrainFit/raw/main/downloads/TrainFit-v1.9.apk)
+> - 🔗 **仓库备用直链**：[TrainFit-v2.0.apk (Raw 源码库直链)](https://github.com/hu-zhixuan/TrainFit/raw/main/downloads/TrainFit-v2.0.apk)
 > - ⚡ **永久最新指向**：[TrainFit-Latest.apk (永远指向最新版)](https://github.com/hu-zhixuan/TrainFit/releases/latest/download/TrainFit-Latest.apk)
 
 [✨ 功能特性](#-核心功能亮点) • [📐 科学模型](#-底层数理与算法模型) • [🚀 快速开始](#-快速上手与运行) • [📱 手机安装](#-导出-apk--手机安装) • [📂 项目架构](#-项目工程结构)
@@ -37,6 +37,7 @@
 - 只有「今天」「趋势」两页。今天页底部常驻输入框：点一下用输入法的 🎤 说或打字，按发送就记；说完不用等，后台整理好自动变成记录，记错了点一下就能改。
 - 输入框上方是「常吃常练」：最近记过两次以上的饭和动作，点一下立刻再记一次，不用说话也不用等 AI。
 - 深色 / 浅色 / 跟随系统，状态栏一起变。
+- v2.0：只有一个按钮——按住把话说完，松手自动转文字（硅基流动 SenseVoice，约 2 秒）、自动整理记录，中途不会被截断；也可以点一下开始、再点一下结束。编译时注入 `ASR_API_KEY`，设置里也可以填。
 - v1.9：麦克风点一下或按住都能说，说完自动交给大模型；用手机自带的语音识别，不需要额外接口。大模型直接决定新增、修改还是删除——可以说「卧推改成85公斤」「午饭只吃了一半」「把跑步删了」。关闭模型的「先推理」后，整理一次从约 26 秒降到几秒。
 - 按住底部绿色按钮，把**练了什么、吃了什么一口气说完**，松手自动拆成训练 + 饮食记录并保存；不对就点「撤销」。点一下按钮可以改成打字。
 - 由大模型（OpenAI 兼容接口）解析：动作、重量、组数、次数、有氧时长、每餐热量与三大营养素；没说的重量/组数按上次记录补，说「昨天」就记到昨天。

@@ -32,12 +32,17 @@ android {
         applicationId = "com.trainfit.ai"
         minSdk = 24
         targetSdk = 34
-        versionCode = 12
-        versionName = "1.9"
+        versionCode = 13
+        versionName = "2.0"
 
         buildConfigField("String", "LLM_BASE_URL", llmConfig("LLM_BASE_URL", "https://api.atria-asi.ai/v1"))
         buildConfigField("String", "LLM_MODEL", llmConfig("LLM_MODEL", "Atria-Dawn-Preview"))
         buildConfigField("String", "LLM_API_KEY", llmConfig("LLM_API_KEY", ""))
+
+        // 语音转文字（OpenAI 兼容 /audio/transcriptions），默认硅基流动 SenseVoice
+        buildConfigField("String", "ASR_BASE_URL", llmConfig("ASR_BASE_URL", "https://api.siliconflow.cn/v1"))
+        buildConfigField("String", "ASR_MODEL", llmConfig("ASR_MODEL", "FunAudioLLM/SenseVoiceSmall"))
+        buildConfigField("String", "ASR_API_KEY", llmConfig("ASR_API_KEY", ""))
     }
 
     buildFeatures {

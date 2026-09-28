@@ -44,6 +44,9 @@ jobs:
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
           LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
           LLM_MODEL: ${{ vars.LLM_MODEL }}
+          ASR_API_KEY: ${{ secrets.ASR_API_KEY }}
+          ASR_BASE_URL: ${{ vars.ASR_BASE_URL }}
+          ASR_MODEL: ${{ vars.ASR_MODEL }}
         run: |
           ./gradlew assembleDebug --stacktrace --no-daemon
 
@@ -85,16 +88,15 @@ jobs:
         continue-on-error: true
         with:
           tag_name: v${{ env.VERSION }}
-          name: "TrainFit v${{ env.VERSION }} 说完就记 (Android APK)"
+          name: "TrainFit v${{ env.VERSION }} 一个按钮 (Android APK)"
           body: |
-            ### 🎙️ 练食AI (TrainFit) v1.9：说完就记，说错直接改
+            ### 🎙️ 练食AI (TrainFit) v2.0：一个按钮，按住说完，松手就记
 
-            - **麦克风两种用法**：点一下开始、再点一下结束；或者按住说、松手结束（上滑取消）。说完自动交给大模型，不用再点发送。
-            - **只用手机自带的语音识别**，不接额外的语音接口：能直接听就直接听；不行就打开手机自带的语音输入窗口；都没有就提示用键盘上的 🎤。
-            - **大模型来决定怎么改**：可以直接说「刚才卧推记错了，是85公斤」「午饭其实只吃了一半」「把跑步删了」「昨天练了硬拉…」，它会自己新增、修改或删除对应记录，并用一句话告诉你做了什么，不对可以一键撤销。
-            - 没说的重量、组数、次数，大模型会参考你每个动作最近一次的成绩来补。
-            - **快很多**：关闭模型「先推理再回答」，实测整理一次从约 26 秒降到大多 4–10 秒，结果一样准。
-            - 与训练饮食无关的话不会乱记，会告诉你原因。
+            - **只有一个按钮**：按住把练了啥、吃了啥一口气说完，松手就自动转文字、自动整理、自动记录。也可以点一下开始、再点一下结束。
+            - **不会把话截断**：开始和结束完全由你控制，App 自己录音，不做「你是不是说完了」的判断。录音时显示时长和音量，往上滑可以取消。
+            - **所有手机都能用**：语音转文字用硅基流动 SenseVoice，实测 3–10 秒的话约 2–3 秒出文字，识别准确；不再依赖手机有没有系统语音识别。
+            - **说错直接说**：「卧推改成85公斤」「午饭只吃了一半」「把跑步删了」，大模型会改对应的记录，可撤销。
+            - 左边的键盘按钮可以切到打字。设置里新增「语音识别」，可以换接口或 key。
 
             **📥 下载下方 Assets 中的 `TrainFit-v${{ env.VERSION }}.apk` 或 `TrainFit-Latest.apk`，覆盖安装即可，数据保留。**
           draft: false
