@@ -32,8 +32,8 @@ android {
         applicationId = "com.trainfit.ai"
         minSdk = 24
         targetSdk = 34
-        versionCode = 13
-        versionName = "2.0"
+        versionCode = 14
+        versionName = "2.1"
 
         buildConfigField("String", "LLM_BASE_URL", llmConfig("LLM_BASE_URL", "https://api.atria-asi.ai/v1"))
         buildConfigField("String", "LLM_MODEL", llmConfig("LLM_MODEL", "Atria-Dawn-Preview"))
@@ -68,6 +68,11 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
+
+    // 本机语音识别的模型直接从安装包里读，不压缩加载更快
+    androidResources {
+        noCompress += listOf("onnx")
+    }
 }
 
 val syncWebAssets = tasks.register<Sync>("syncWebAssets") {
@@ -82,6 +87,10 @@ val syncWebAssets = tasks.register<Sync>("syncWebAssets") {
         include("js/**")
     }
     into(layout.projectDirectory.dir("src/main/assets"))
+    // 本机语音识别模型由 scripts/fetch-asr.sh 下载到 assets/asr，同步网页时别删掉
+    preserve {
+        include("asr/**")
+    }
 }
 
 tasks.named("preBuild").configure {
