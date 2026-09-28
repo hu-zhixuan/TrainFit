@@ -7,13 +7,13 @@
   专为硬核力量训练者与科学减脂人群打造 —— <b>口喷记录</b> · <b>自动超负荷加片建议</b> · <b>热量缺口动态闭环</b>。
 </p>
 
-### 📥 [ 👉 点击这里直接下载最新 Android APK 安装包 (TrainFit-v1.5.apk) 👈 ](https://github.com/QD8-png/TrainFit/releases/download/v1.5/TrainFit-v1.5.apk)
+### 📥 [ 👉 点击这里直接下载最新 Android APK 安装包 (TrainFit-v1.6.apk) 👈 ](https://github.com/hu-zhixuan/TrainFit/releases/download/v1.6/TrainFit-v1.6.apk)
 
 > 💡 **多通道下载指引**：
-> - 🚀 **官方 Release 直链（推荐，极速）**：[TrainFit-v1.5.apk (GitHub Releases v1.5)](https://github.com/QD8-png/TrainFit/releases/download/v1.5/TrainFit-v1.5.apk)
-> - 📦 **GitHub Releases 发行页**：[查看全部版本与更新日志](https://github.com/QD8-png/TrainFit/releases)
-> - 🔗 **仓库备用直链**：[TrainFit-v1.5.apk (Raw 源码库直链)](https://github.com/QD8-png/TrainFit/raw/main/downloads/TrainFit-v1.5.apk)
-> - ⚡ **永久最新指向**：[TrainFit-Latest.apk (永远指向最新版)](https://github.com/QD8-png/TrainFit/raw/main/downloads/TrainFit-Latest.apk)
+> - 🚀 **官方 Release 直链（推荐，极速）**：[TrainFit-v1.6.apk (GitHub Releases v1.6)](https://github.com/hu-zhixuan/TrainFit/releases/download/v1.6/TrainFit-v1.6.apk)
+> - 📦 **GitHub Releases 发行页**：[查看全部版本与更新日志](https://github.com/hu-zhixuan/TrainFit/releases)
+> - 🔗 **仓库备用直链**：[TrainFit-v1.6.apk (Raw 源码库直链)](https://github.com/hu-zhixuan/TrainFit/raw/main/downloads/TrainFit-v1.6.apk)
+> - ⚡ **永久最新指向**：[TrainFit-Latest.apk (永远指向最新版)](https://github.com/hu-zhixuan/TrainFit/releases/latest/download/TrainFit-Latest.apk)
 
 [✨ 功能特性](#-核心功能亮点) • [📐 科学模型](#-底层数理与算法模型) • [🚀 快速开始](#-快速上手与运行) • [📱 手机安装](#-导出-apk--手机安装) • [📂 项目架构](#-项目工程结构)
 
@@ -32,6 +32,11 @@
 ---
 
 ## 🌟 核心功能亮点
+
+### 0. 🎙️ 懒人一键记录（v1.6 新增）
+- 按住底部绿色按钮，把**练了什么、吃了什么一口气说完**，松手自动拆成训练 + 饮食记录并保存；不对就点「撤销」。点一下按钮可以改成打字。
+- 由大模型（OpenAI 兼容接口）解析：动作、重量、组数、次数、有氧时长、每餐热量与三大营养素；没说的重量/组数按上次记录补，说「昨天」就记到昨天。
+- 接口地址、模型和 key 可以在「身体档案 → AI 接口」里修改；编译 APK 时通过 `LLM_API_KEY` / `LLM_BASE_URL` / `LLM_MODEL` 注入（见 `.env.example`）。
 
 ### 1. 🎙️ 全能中式口喷与多轮智能要素补全助手 (Voice Dictation & Factor Completion)
 - **多轮智能补全与内嵌录音**：严格校验动作名、重量、组数、次数四大核心要素。口喷要素不全时，自动唤起智能追问气泡，支持**弹窗内嵌极速语音收音（呼吸脉冲红点 + 毫秒计时 + 实时文字流）**、一键快捷胶囊或打字快速补全，彻底解决键盘跳焦弹走问题，缺失时严格阻断保存。
@@ -105,7 +110,7 @@
 
 ```bash
 # 1. 克隆本仓库
-git clone https://github.com/QD8-png/TrainFit.git
+git clone https://github.com/hu-zhixuan/TrainFit.git
 cd TrainFit
 
 # 2. 启动服务 (无需复杂构建工具，原生轻量服务)
