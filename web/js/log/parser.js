@@ -1,0 +1,350 @@
+/**
+ * 把一句话变成记录：拼提示词 → 调大模型 → 校验整理成可以直接保存的数据；
+ * 大模型连不上时退回本地规则（lib/workout.js、lib/nutrition.js）。
+ */
+(function (root) {
+  'use strict';
+  if (typeof module !== 'undefined' && typeof require === 'function') {
+    require('./helpers.js');
+    require('./native.js');
+    require('./food.js');
+  }
+  const TF = root.TF = root.TF || {};
+  const { MUSCLES, MEAL_TYPES, num, cleanText, round1, mealTypeByHour, findWeight, guessMuscle, readOverride, Native, FoodDB, groundItem, sumItems } = TF;
+
+  // ---------------------------------------------------------------------------
+  // 大模型解析
+  // ---------------------------------------------------------------------------
+  const Parser = {
+    buildMessages(text, ctx) {
+      ctx = ctx || {};
+      const now = ctx.now || new Date();
+      const hh = String(now.getHours()).padStart(2, '0');
+      const mm = String(now.getMinutes()).padStart(2, '0');
+      const day = ctx.dayLabel || '今天';
+      const records = ctx.dayRecords || [];
+      const recent = (ctx.recent || []).slice(0, 25);
+
+      const system = [
+        '你是「练食AI」的记录助手。用户用口语说饮食、训练或体重，文字来自语音识别，可能有同音错字（"卧腿"=卧推，"四组八哥"=4组8个，"划川"=划船）。',
+        '由你决定怎么改数据：新增、修改或删除。只输出一个 JSON 对象，不要 markdown，不要解释：',
+        '{"reply":"一句话告诉用户你做了什么，20字以内","dayOffset":0,"bodyWeight":null,',
+        ' "add":{"workouts":[{"exerciseName":"杠铃卧推","muscleGroup":"胸部","weightKg":80,"sets":4,"reps":8,"durationMin":null,"burnedCalories":110,"estimated":false}],',
+        '        "meals":[{"mealType":"午餐","foodSummary":"番茄炒蛋盖饭1份","items":[{"name":"米饭","grams":250,"calories":290,"proteinG":6.5,"carbsG":65,"fatG":0.8},{"name":"鸡蛋","grams":100,"calories":139,"proteinG":13,"carbsG":2.4,"fatG":8.6},{"name":"番茄","grams":150,"calories":30,"proteinG":1.4,"carbsG":6,"fatG":0.3},{"name":"烹调油","grams":12,"calories":108,"proteinG":0,"carbsG":0,"fatG":12}]}]},',
+        ' "update":[{"ref":"r2","set":{"weightKg":85}}],',
+        ' "delete":["r3"]}',
+        '规则：',
+        '1. muscleGroup 只能是：' + MUSCLES.join('、') + '；mealType 只能是：' + MEAL_TYPES.join('、') + '（没说就按时间和食物判断）。',
+        '2. 重量换算成公斤（磅×0.45，斤×0.5），自重 weightKg=0。跑步、单车、跳绳、平板支撑等按时间算的填 durationMin（分钟），sets、reps 为 null。',
+        '3. 用户没说的重量/组数/次数：优先用下面「最近成绩」里同一动作的数；没有就按常见训练估一个，并设 "estimated":true。同一动作请沿用最近成绩里的名字。',
+        '4. 饮食：同一餐合并成一条 meal。foodSummary 写给用户看的菜名和份量；items 把这一餐拆成食物/食材，每项写 name、grams（实际吃下去的可食部分克数）和你估算的 calories/proteinG/carbsG/fatG。',
+        '   items 的 name 尽量用下面「参考营养数据」里的名字；名字带「(生)」的是生重，grams 要换算成生重（熟米饭用「米饭」，不要用大米）。',
+        '   参考数据里没有的成品菜，拆成主要食材；炒菜、外卖、盖饭要加一项「烹调油」（一份炒菜约 10–15g，油炸更多）。',
+        '   按中国常见份量估克数：米饭一碗约 180g，馒头一个约 100g，鸡蛋一个约 50g，牛奶一杯约 250g，一份外卖主菜约 250–350g。burnedCalories 按常见强度估算。',
+        '5. 用户说「记错了/改成/其实是/只吃了一半/删掉/不算」等，是在改已有记录：用 update（set 里只写要改的字段；饮食份量变了就在 set 里给新的 items，或同时改热量和三大营养素）或 delete，引用下面的编号，不要重复新增。',
+        '6. 说「昨天」dayOffset=-1，「前天」=-2，否则 0；修改和删除只针对下面列出的这天记录。',
+        '7. 用户报自己的体重（「体重62.5」「今天称了124斤」「早上61公斤」）：bodyWeight 填公斤数（斤÷2；没说单位就参考下面的最近体重判断是斤还是公斤）。没说体重就填 null。训练用的重量不是体重。',
+        '8. 听不懂或和饮食、训练、体重都无关：add 为空，reply 说明原因。'
+      ].join('\n');
+
+      const lines = [];
+      lines.push(`现在时间 ${hh}:${mm}，正在看的日期：${day}。`);
+      lines.push(records.length ? '这天已有记录：\n' + records.map(r => `${r.ref} ${r.text}`).join('\n') : '这天还没有记录。');
+      if (recent.length) lines.push('最近成绩：' + recent.join('；'));
+      if (ctx.lastWeight) lines.push(`最近体重：${ctx.lastWeight}kg`);
+      const cands = FoodDB.candidates(text, 18);
+      if (cands.length) lines.push('参考营养数据（每100g可食部，来自中国食物成分表和常见菜品库）：\n' + cands.map(e => FoodDB.line(e)).join('\n'));
+      lines.push('用户说：' + text);
+      return [
+        { role: 'system', content: system },
+        { role: 'user', content: lines.join('\n') }
+      ];
+    },
+
+    extractJson(content) {
+      if (content && typeof content === 'object') return content;
+      let s = String(content || '').trim();
+      s = s.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+      const fence = s.match(/```(?:json)?\s*([\s\S]*?)```/i);
+      if (fence) s = fence[1].trim();
+      const a = s.indexOf('{');
+      const b = s.lastIndexOf('}');
+      if (a === -1 || b <= a) throw new Error('NO_JSON');
+      return JSON.parse(s.slice(a, b + 1));
+    },
+
+    /** 从 chat/completions 的原始响应里拿出 message.content */
+    contentFromResponse(raw) {
+      const data = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      const choice = data && data.choices && data.choices[0];
+      const content = choice && (choice.message ? choice.message.content : choice.text);
+      if (!content) throw new Error('EMPTY_RESPONSE');
+      return content;
+    },
+
+    /**
+     * 把大模型输出整理成可以直接存的记录；缺的参数用历史记录补，补不到用默认值。
+     * @returns {{dayOffset:number, workouts:Array, meals:Array}}
+     */
+    normalize(parsed, ctx) {
+      ctx = ctx || {};
+      const history = ctx.history || [];
+      const now = ctx.now || new Date();
+      const out = { dayOffset: 0, workouts: [], meals: [], updates: [], deletes: [], reply: '' };
+      // 兼容两种格式：{add:{workouts,meals}} 或顶层 workouts/meals
+      if (parsed && parsed.add && typeof parsed.add === 'object') {
+        parsed = Object.assign({}, parsed, {
+          workouts: [].concat(parsed.workouts || [], parsed.add.workouts || []),
+          meals: [].concat(parsed.meals || [], parsed.add.meals || [])
+        });
+      }
+      out.reply = cleanText(parsed && parsed.reply, 40);
+      const refs = new Set((ctx.dayRecords || []).map(r => r.ref));
+      (Array.isArray(parsed && parsed.update) ? parsed.update : []).forEach(u => {
+        if (!u || !refs.has(u.ref) || !u.set || typeof u.set !== 'object') return;
+        const set = {};
+        ['exerciseName', 'foodSummary', 'mealType', 'muscleGroup'].forEach(k => { if (u.set[k] != null) set[k] = cleanText(u.set[k], k === 'foodSummary' ? 60 : 30); });
+        ['weightKg', 'sets', 'reps', 'durationMin', 'burnedCalories', 'calories', 'proteinG', 'carbsG', 'fatG'].forEach(k => {
+          const v = num(u.set[k]);
+          if (v !== null && v >= 0) set[k] = k === 'weightKg' || /G$/.test(k) ? round1(v) : Math.round(v);
+        });
+        if (Array.isArray(u.set.items)) {
+          const items = u.set.items.map(groundItem).filter(Boolean);
+          if (items.length) Object.assign(set, sumItems(items), { items });
+        }
+        if (set.mealType === '加餐' || set.mealType === '补剂') set.mealType = '加餐/补剂';
+        if (set.mealType && !MEAL_TYPES.includes(set.mealType)) delete set.mealType;
+        if (set.muscleGroup && !MUSCLES.includes(set.muscleGroup)) delete set.muscleGroup;
+        if (Object.keys(set).length) out.updates.push({ ref: u.ref, set });
+      });
+      (Array.isArray(parsed && parsed.delete) ? parsed.delete : []).forEach(ref => { if (refs.has(ref)) out.deletes.push(ref); });
+
+      const bw = num(parsed && (parsed.bodyWeight != null ? parsed.bodyWeight : parsed.bodyWeightKg));
+      if (bw !== null) {
+        let kg = bw;
+        // 模型把「124斤」当成公斤了：和上次体重比一下
+        if (ctx.lastWeight && kg > ctx.lastWeight * 1.6 && Math.abs(kg / 2 - ctx.lastWeight) < ctx.lastWeight * 0.2) kg = kg / 2;
+        kg = round1(kg);
+        if (kg >= 25 && kg <= 300) out.bodyWeight = kg;
+      }
+
+      const off = num(parsed && parsed.dayOffset);
+      if (off !== null && off <= 0 && off >= -7) out.dayOffset = Math.round(off);
+
+      const lastOf = (name) => history.find(h => h.exerciseName === name && !h.durationMin);
+
+      (Array.isArray(parsed && parsed.workouts) ? parsed.workouts : []).forEach(w => {
+        const name = cleanText(w.exerciseName || w.name, 30);
+        if (!name) return;
+        let muscle = cleanText(w.muscleGroup, 6);
+        if (!MUSCLES.includes(muscle)) muscle = guessMuscle(name);
+
+        const duration = num(w.durationMin);
+        let weight = num(w.weightKg);
+        let sets = num(w.sets);
+        let reps = num(w.reps);
+        let estimated = w.estimated === true;
+
+        if (duration && duration > 0 && !sets && !reps) {
+          const burn = num(w.burnedCalories);
+          out.workouts.push({
+            exerciseName: name,
+            muscleGroup: muscle,
+            weightKg: 0,
+            sets: 1,
+            reps: 0,
+            durationMin: Math.round(duration),
+            burnedCalories: Math.round(burn && burn > 0 ? burn : duration * 8),
+            estimated
+          });
+          return;
+        }
+
+        const last = lastOf(name);
+        if (weight === null) { weight = last ? last.weightKg : 0; estimated = true; }
+        if (!sets) { sets = last ? last.sets : 3; estimated = true; }
+        if (!reps) { reps = last ? last.reps : 10; estimated = true; }
+        weight = Math.max(0, round1(weight));
+        sets = Math.max(1, Math.min(20, Math.round(sets)));
+        reps = Math.max(1, Math.min(100, Math.round(reps)));
+
+        let burn = num(w.burnedCalories);
+        if (!burn || burn <= 0) {
+          burn = sets * reps * (weight > 0 ? weight * 0.05 + 1.2 : 2.5);
+        }
+        out.workouts.push({
+          exerciseName: name,
+          muscleGroup: muscle,
+          weightKg: weight,
+          sets,
+          reps,
+          durationMin: null,
+          burnedCalories: Math.round(burn),
+          estimated
+        });
+      });
+
+      (Array.isArray(parsed && parsed.meals) ? parsed.meals : []).forEach(m => {
+        const items = (Array.isArray(m.items) ? m.items : []).map(groundItem).filter(Boolean);
+        if (items.length) {
+          const t = sumItems(items);
+          m = Object.assign({}, m, t);
+        }
+        const summary = cleanText(m.foodSummary || m.name || items.map(i => i.name).join('、'), 60);
+        const cal = num(m.calories);
+        if (!summary || !cal || cal <= 0) return;
+        let type = cleanText(m.mealType, 8);
+        if (type === '加餐' || type === '补剂') type = '加餐/补剂';
+        if (!MEAL_TYPES.includes(type)) type = mealTypeByHour(now.getHours());
+        out.meals.push({
+          mealType: type,
+          foodSummary: summary,
+          calories: Math.round(cal),
+          proteinG: round1(Math.max(0, num(m.proteinG) || 0)),
+          carbsG: round1(Math.max(0, num(m.carbsG) || 0)),
+          fatG: round1(Math.max(0, num(m.fatG) || 0)),
+          items
+        });
+      });
+
+      return out;
+    },
+
+    async viaLlm(text, ctx) {
+      const override = readOverride();
+      const base = {
+        messages: this.buildMessages(text, ctx),
+        temperature: 0.2,
+        stream: false
+      };
+      if (override.model) base.model = override.model;
+
+      // 关掉「先推理再回答」：Atria 实测 26 秒 → 3.6 秒，结果一样。
+      // 换成不认这个参数的服务商时，自动去掉再试一次。
+      const attempts = [Object.assign({ thinking: { type: 'disabled' } }, base), base];
+      let lastErr;
+      for (let i = 0; i < attempts.length; i++) {
+        try {
+          const raw = await this.send(attempts[i], override);
+          const parsed = this.extractJson(this.contentFromResponse(raw));
+          return this.normalize(parsed, ctx);
+        } catch (e) {
+          lastErr = e;
+          const msg = (e && e.message) || '';
+          if (/^HTTP 429/.test(msg)) {                // 限流：等一下再试同一个
+            await new Promise(r => setTimeout(r, 2500));
+            i -= 1;
+            if (this._retried429) { this._retried429 = false; break; }
+            this._retried429 = true;
+            continue;
+          }
+          if (msg === 'NO_KEY' || !/^HTTP 4\d\d/.test(msg)) break; // 只有参数被拒才换下一种
+        }
+      }
+      this._retried429 = false;
+      throw lastErr || new Error('LLM_FAILED');
+    },
+
+    async send(body, override) {
+      if (Native.has()) return Native.chat(body, override);
+      if (override.apiKey && override.baseUrl) {
+        // 浏览器里调试：直接请求（部分服务商不允许跨域，会失败）
+        const b = Object.assign({ model: 'gpt-4o-mini' }, body);
+        const ctrl = new AbortController();
+        const t = setTimeout(() => ctrl.abort(), 45000);
+        try {
+          const res = await fetch(override.baseUrl.replace(/\/+$/, '') + '/chat/completions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + override.apiKey },
+            body: JSON.stringify(b),
+            signal: ctrl.signal
+          });
+          const raw = await res.text();
+          if (!res.ok) throw new Error('HTTP ' + res.status + ' ' + raw.slice(0, 200));
+          return raw;
+        } finally {
+          clearTimeout(t);
+        }
+      }
+      throw new Error('NO_KEY');
+    },
+
+    /** 离线兜底：按句子切开，吃喝相关的走饮食引擎，其余走训练引擎 */
+    viaLocal(text, ctx) {
+      ctx = ctx || {};
+      const now = ctx.now || new Date();
+      const WE = root.WorkoutEngine;
+      const NE = root.NutritionEngine;
+      const out = { dayOffset: 0, workouts: [], meals: [] };
+      if (/前天/.test(text)) out.dayOffset = -2;
+      else if (/昨天|昨晚/.test(text)) out.dayOffset = -1;
+
+      const foodCue = /吃|喝|早餐|午餐|晚餐|早饭|午饭|晚饭|夜宵|加餐|外卖|零食|饮料|奶茶|咖啡|牛奶|鸡蛋|米饭|面条|水果/;
+      const w = findWeight(text, ctx.lastWeight);
+      if (w) out.bodyWeight = w;
+      const segs = String(text).split(/[，,。；;！!？?\n]|然后|接着|另外|还有/).map(s => s.trim())
+        .filter(s => s && !/体重|称了|称一下|称重|上秤/.test(s));
+      const foodSegs = [];
+      const workoutSegs = [];
+      segs.forEach(s => (foodCue.test(s) ? foodSegs : workoutSegs).push(s));
+
+      if (WE && workoutSegs.length) {
+        const items = WE.parseWorkoutVoice(workoutSegs.join('，')) || [];
+        const pseudo = {
+          workouts: items
+            // 旧引擎对无关的话也会返回一个默认动作：一个数字都没有的丢掉
+            .filter(i => i && i.exerciseName && (i.weightKg != null || i.sets != null || i.reps != null))
+            .map(i => {
+              const isCardio = /有氧|跑|骑|单车|跳绳|平板/.test((i.muscleGroup || '') + i.exerciseName);
+              return {
+                exerciseName: i.exerciseName,
+                muscleGroup: i.muscleGroup,
+                weightKg: isCardio ? null : i.weightKg,
+                sets: isCardio ? null : i.sets,
+                reps: isCardio ? null : i.reps,
+                durationMin: isCardio ? (i.durationMin || i.weightKg || null) : null,
+                burnedCalories: isCardio ? null : i.burnedCalories
+              };
+            })
+        };
+        out.workouts = this.normalize(pseudo, ctx).workouts;
+      }
+
+      if (NE && foodSegs.length) {
+        const joined = foodSegs.join('，');
+        const r = NE.parseDietVoice(joined);
+        if (r && r.totalCalories > 0) {
+          let type = null;
+          if (/早餐|早饭|早上/.test(joined)) type = '早餐';
+          else if (/午餐|午饭|中午/.test(joined)) type = '午餐';
+          else if (/晚餐|晚饭|晚上/.test(joined)) type = '晚餐';
+          else if (/加餐|夜宵|零食/.test(joined)) type = '加餐/补剂';
+          out.meals.push({
+            mealType: type || mealTypeByHour(now.getHours()),
+            foodSummary: cleanText(r.foodSummary, 60) || '饮食记录',
+            calories: Math.round(r.totalCalories),
+            proteinG: round1(r.proteinG || 0),
+            carbsG: round1(r.carbsG || 0),
+            fatG: round1(r.fatG || 0)
+          });
+        }
+      }
+      return out;
+    },
+
+    async parse(text, ctx) {
+      try {
+        const r = await this.viaLlm(text, ctx);
+        return Object.assign(r, { source: 'llm' });
+      } catch (e) {
+        console.warn('[QuickLog] 大模型解析失败，改用本地规则：', e && e.message);
+        const r = this.viaLocal(text, ctx);
+        return Object.assign(r, { source: 'local', error: e && e.message });
+      }
+    }
+  };
+
+  Object.assign(TF, { Parser });
+
+  if (typeof module !== 'undefined' && module.exports) module.exports = TF;
+})(typeof window !== 'undefined' ? window : globalThis);

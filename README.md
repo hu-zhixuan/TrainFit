@@ -1,182 +1,122 @@
-# 练食AI (TrainFit) 🏋️‍♂️🍎
-
-<div align="center">
+# 练食AI (TrainFit)
 
 <p align="center">
   <b>说一句话，帮你记下今天吃了啥。</b><br>
   按住说「中午一碗牛肉面加个蛋」，热量自动算好 —— 想瘦一点、随便记记都能用；在健身的话，训练、蛋白质、热量缺口也一起管。
 </p>
 
-### 📥 [ 👉 点击这里直接下载最新 Android APK 安装包 (TrainFit-v2.3.apk) 👈 ](https://github.com/hu-zhixuan/TrainFit/releases/download/v2.3/TrainFit-v2.3.apk)
+### 📥 [下载最新安卓安装包（TrainFit-Latest.apk）](https://github.com/hu-zhixuan/TrainFit/releases/latest/download/TrainFit-Latest.apk)
 
-> 💡 **多通道下载指引**：
-> - 🚀 **官方 Release 直链（推荐，极速）**：[TrainFit-v2.3.apk (GitHub Releases v2.3)](https://github.com/hu-zhixuan/TrainFit/releases/download/v2.3/TrainFit-v2.3.apk)
-> - 📦 **GitHub Releases 发行页**：[查看全部版本与更新日志](https://github.com/hu-zhixuan/TrainFit/releases)
-> - ⚡ **永久最新指向**：[TrainFit-Latest.apk (永远指向最新版)](https://github.com/hu-zhixuan/TrainFit/releases/latest/download/TrainFit-Latest.apk)
-
-[✨ 功能特性](#-核心功能亮点) • [📐 科学模型](#-底层数理与算法模型) • [🚀 快速开始](#-快速上手与运行) • [📱 手机安装](#-导出-apk--手机安装) • [📂 项目架构](#-项目工程结构)
-
-</div>
+所有版本和更新说明见 [Releases](https://github.com/hu-zhixuan/TrainFit/releases) 和 [CHANGELOG.md](CHANGELOG.md)。覆盖安装，数据保留。
 
 ---
 
-## 💡 为什么做「练食AI」？
+## 能做什么
 
-传统健身与饮食打卡软件存在两大痛点：
-1. **记饮食繁琐**：吃一顿饭要搜索 10 种食材、一个个选克数，折腾 5 分钟，难以坚持；
-2. **练与吃脱节**：练归练、吃归吃，不知道今天到底消耗了多少、产生了多少净热量缺口，深蹲卧推下次该加多少重量全凭感觉。
+- **按住说话，松手就记**：一口气说完吃了什么（练了什么、体重多少），松手后后台整理成记录，不用等；记错了点一下改，或者再说一句「改成……」「删掉……」。
+- **热量按食物成分表算**：大模型只负责认出「吃了什么、各多少克」，每 100 克的热量和三大营养素从《中国食物成分表（第6版）》和常见菜品库里查，炒菜自动算上烹调油。点开一餐能看到每样食物怎么算的。
+- **本机语音识别**：不联网，边说边出字，松手立刻出结果。
+- **两种用法**：
+  - *只记吃的*（想瘦一点 / 随便记记）：首页只有「今天还能吃多少」和体重。
+  - *吃和练都记*（健身）：再加上训练记录、蛋白质、热量缺口和每个动作「下次加重量还是加次数」的建议。
+- **体重**：说「体重 62.5」「称了 124 斤」就记，首页看一周变化，趋势页看曲线。
+- **提醒与震动**：午饭 / 晚饭没记提醒、晚间小结、后台整理完成通知；按键震动反馈。都可以在设置里关。
+- 数据只存在手机上（WebView 的 localStorage）。
 
-**练食AI (TrainFit)** 将**力量训练进阶**与**热量缺口管理**深度合二为一，支持一句话语音“口喷”瞬间提取，并提供瑞士工精般的极简冷冽质感。
+## 怎么算的
 
----
-
-## 🌟 核心功能亮点
-
-### 0. 🎙️ 懒人一键记录（v1.6 新增，v1.7 界面精简）
-- 只有「今天」「趋势」两页。今天页底部常驻输入框：点一下用输入法的 🎤 说或打字，按发送就记；说完不用等，后台整理好自动变成记录，记错了点一下就能改。
-- 输入框上方是「常吃常练」：最近记过两次以上的饭和动作，点一下立刻再记一次，不用说话也不用等 AI。
-- 深色 / 浅色 / 跟随系统，状态栏一起变。
-- v2.3：不只给健身的人用。第一次打开先问「想瘦一点 / 就记记吃了啥 / 在健身」，前两种只显示吃了多少、还能吃多少和体重，训练、蛋白质、缺口这些词都藏起来（设置里随时切换）。说「体重 62.5」「今天称了124斤」就能记体重，只报体重时不等 AI、立刻记好；趋势页多了体重曲线。
-- v2.2：热量算得更准——大模型只负责认出吃了什么、各多少克，每 100g 的热量和营养素从《中国食物成分表（第6版）》（数据来自 [Sanotsu/china-food-composition-data](https://github.com/Sanotsu/china-food-composition-data)，约 1000 种）和常见菜品库里查，炒菜自动加上烹调油；点开一餐能看到「怎么算的」。新增震动反馈（按下、开始、结束、记好）和通知：后台整理完成通知、午餐/晚餐没记提醒、晚间小结（今天还能吃多少、蛋白还差多少），都能在设置里关。
-- v2.1：语音识别改到手机本机（照搬 sherpa-onnx 官方 Android「模拟流式」方案：Silero VAD 切句 + Paraformer 中文模型），不联网、边说边出字、松手立刻出结果；录音时显示滚动波形。模型和库在编译时由 `scripts/fetch-asr.sh` 下载，安装包约 100MB。
-- v2.0：只有一个按钮——按住把话说完，松手自动转文字（硅基流动 SenseVoice，约 2 秒）、自动整理记录，中途不会被截断；也可以点一下开始、再点一下结束。编译时注入 `ASR_API_KEY`，设置里也可以填。
-- v1.9：麦克风点一下或按住都能说，说完自动交给大模型；用手机自带的语音识别，不需要额外接口。大模型直接决定新增、修改还是删除——可以说「卧推改成85公斤」「午饭只吃了一半」「把跑步删了」。关闭模型的「先推理」后，整理一次从约 26 秒降到几秒。
-- 按住底部绿色按钮，把**练了什么、吃了什么一口气说完**，松手自动拆成训练 + 饮食记录并保存；不对就点「撤销」。点一下按钮可以改成打字。
-- 由大模型（OpenAI 兼容接口）解析：动作、重量、组数、次数、有氧时长、每餐热量与三大营养素；没说的重量/组数按上次记录补，说「昨天」就记到昨天。
-- 接口地址、模型和 key 可以在「身体档案 → AI 接口」里修改；编译 APK 时通过 `LLM_API_KEY` / `LLM_BASE_URL` / `LLM_MODEL` 注入（见 `.env.example`）。
-
-### 1. 🎙️ 全能中式口喷与多轮智能要素补全助手 (Voice Dictation & Factor Completion)
-- **多轮智能补全与内嵌录音**：严格校验动作名、重量、组数、次数四大核心要素。口喷要素不全时，自动唤起智能追问气泡，支持**弹窗内嵌极速语音收音（呼吸脉冲红点 + 毫秒计时 + 实时文字流）**、一键快捷胶囊或打字快速补全，彻底解决键盘跳焦弹走问题，缺失时严格阻断保存。
-- **口播序列自动生成置顶计划 Card**：用户口播录入一组动作序列后（如*“卧推80kg 4x8，哑铃上斜26kg 3x10，绳索夹胸15kg 4x12”*），系统不仅存入训练，还会**自动提炼生成置顶的专属训练计划 Card**（如【胸部分化序列 (3动作)】），随时点击选择或循环重载！
-- **上下文自适应偏置与同音纠偏**：引入高星开源语音规范化与编辑距离纠偏算法，自动纠偏*“卧腿$\rightarrow$卧推”*、*“四组八哥$\rightarrow$4组8个”*、*“划川$\rightarrow$划船”*；当激活 To-Do 清单时，口喷识别自适应偏置优先命中当前计划动作。
-- **口喷记饮食**：自动识别菜品、零食、外卖与饮料，支持精细生活量词与修饰换算（*“一大碗米饭”* $\rightarrow$ 300g，*“半斤酱牛肉”* $\rightarrow$ 250g，*“两听可乐”* $\rightarrow$ 660ml）。
-
-### 2. 📋 循环训练 To-Do 待办清单与全景多巴胺动效 (Cyclical Routine To-Do List & Dopamine Celebrations)
-- **自定义与口播计划卡片**：顶部滑动展示自定义计划与口播生成的训练 Card，激活态伴随低频呼吸微光晕与悬浮升降。
-- **To-Do 打钩 Q 弹与平滑下沉动效**：打钩触发物理阻尼弹性回弹微动效，卡片以 `0.38s` 优雅贝塞尔曲线平滑下沉置底并置灰（0.38透明度），未完成动作保持在上方。
-- **🎉 全组达成五彩粒子礼花庆祝 (`ConfettiEngine`)**：整组动作全部勾选完成或触发超负荷突破时，激发 60 FPS 全屏绚烂五彩粒子礼花与触觉震动反馈，给每一次训练最极致的多巴胺正反馈！
-- **🎯 动态肌群发光徽章**：胸大肌 🎯、背阔肌 🦅、臀腿下肢 🦵、三角肩部 🛡️、手臂肱肌 ⚡、核心 💎 专属色彩微光标识。
-- **重新加载循环**：点击顶部训练 Card 立即清空打钩状态并恢复初始顺序，重新加载开启下一轮循环！
-
-### 3. 🛡️ 麦克风音频焦点隔离与后台防卡退黑屏自愈 (Audio Focus & Lifecycle Stability)
-- **麦克风音频隔离，不打断后台音乐**：彻底剥离启动阶段的麦克风权限抢占，仅在点击/按住说话时调起麦克风；录音结束或切出后台瞬间自动注销音频轨道 (`track.stop()`)，边听网易云/Spotify 边举铁记录丝滑不间断。
-- **后台挂起与 GPU 进程崩溃自愈**：深度适配 Android Activity `onPause` / `onResume` 资源休眠唤醒，内置 `onRenderProcessGone` 崩溃自愈保护，后台挂起数小时切回依然秒开不黑屏。
-
-### 4. ☀️ 瑞士纯净「白天模式」与「黑夜极简」全景自适应 (Dual Light / Dark Themes)
-- **多入口即时切换**：顶部导航栏常驻 `☀️ / 🌙` 快速切换按钮（带 90° 旋转动效），设置页提供专属模式卡片；
-- **全景自适应白昼质感**：精调冷调哑光纸白（#ffffff）基底、黑曜石深冷黑字阶与发丝级边框；Canvas 走势图与环形仪表盘全量自适应黑夜/白昼双色阶渲染，阳光下举铁清晰可辨；
-- **本地持久化记忆**：主题偏好自动保存在手机本地，重启 App 无缝维持。
-
-### 5. ⚡ 科学超负荷加片建议 (Progressive Overload)
-- 基于**双重累进加载法（Double Progression Model）**；
-- 每次记录训练动作后，系统自动根据完成组数、次数及 RPE 疲劳度判断是否满足超负荷门槛；
-- 达标时自动在动作卡片上点亮金色奖杯徽章（如：*“🏆 AI 超负荷加片：下次目标加片至 82.5kg (8次)”*），指引每次训练稳步突破。
-
-### 6. 🏋️ 3D 拟真奥运标准杠铃算片器 (Barbell Plate Visualizer)
-- 自动扣除 **20kg 标准奥林匹克杆**；
-- 采用 **贪心匹配算法**，支持红25kg、蓝20kg、黄15kg、绿10kg、白5kg、黑2.5kg、银1.25kg 具有逼真光影与物理滑入动效的彩色奥运杠铃片；
-- 拟物化绘制杠铃片图解与每边挂片清单，告别大重量训练时的大脑缺氧算片。
-
-### 7. ⚡ Epley 1RM 极限力量预估
-- 在动作卡片上实时计算并展示 **1RM 力量极限**：$1\text{RM} = W \times (1 + R / 30)$；
-- 重量 $\ge 20\text{kg}$ 的复合杠铃动作自动点亮 **`[⚡ 算片]`** 快捷按钮。
-
-### 8. 🎯 每日热量缺口与四大宏量预设 (Macros Closed-Loop)
-- 顶部环形仪表盘实时动态联动：
-  $$\text{今日净缺口} = (\text{TDEE} + \text{训练运动消耗}) - \text{全天饮食总摄入}$$
-- 提供 **四大经典健身预设**（高蛋白刷脂 4:4:2、均衡减脂 4:4:2、增肌充碳 5:3:2、低碳生酮 2:1:7）与三色能量比例实时演算。
-
-### 9. 🥢 800+ 中餐高精库与烹饪吸油档位
-- 覆盖八大菜系、外卖快餐、家常炒菜与复合菜品（如盖浇饭、便当、麻辣烫）；
-- 支持 **中餐生熟转化系数** 与 **9 大烹饪吸油率档位微调**。
+- **每天消耗**：Mifflin-St Jeor 公式算基础代谢，乘 1.45 作为日常消耗（不含训练）：
+  - 男：`10 × 体重kg + 6.25 × 身高cm − 5 × 年龄 + 5`
+  - 女：`10 × 体重kg + 6.25 × 身高cm − 5 × 年龄 − 161`
+- **今天还能吃** = 日常消耗 + 训练消耗 − 目标缺口 − 已吃。想瘦默认每天少吃 450 千卡（约每月 1.8kg）。
+- **一餐的热量**：每样食物 `库里每100g数值 × 克数 / 100`；库里查不到、或者和模型估算相差超过 2.5 倍（多半是匹配错了），就用模型的估算。
+- **动作建议**：双重累进——次数练到上限（复合动作 8 次、孤立动作 12 次）且至少 3 组，下次加重量；否则下次加 1 次。
 
 ---
 
-## 📐 底层数理与算法模型
+## 开发
 
-### 1. 基础代谢 (BMR) 与日常总消耗 (TDEE)
-采用国际权威 **Mifflin-St Jeor** 公式计算：
-- **男性**：$\text{BMR} = 10 \times \text{体重(kg)} + 6.25 \times \text{身高(cm)} - 5 \times \text{年龄} + 5$
-- **女性**：$\text{BMR} = 10 \times \text{体重(kg)} + 6.25 \times \text{身高(cm)} - 5 \times \text{年龄} - 161$
-- **基础 TDEE**：$\text{TDEE} = \text{BMR} \times 1.45$
-
-### 2. 训练力量容积与热量消耗估算
-- **训练总吨位 (Volume)**：$\text{Volume} = \sum (\text{重量} \times \text{组数} \times \text{每组次数})$
-- **复合动作热量**：$\text{Burn}_{\text{compound}} = \text{组数} \times 28.0 + \text{重量} \times 0.45$
-- **孤立动作热量**：$\text{Burn}_{\text{isolation}} = \text{组数} \times 18.0 + \text{重量} \times 0.20$
-
----
-
-## 🚀 快速上手与运行
-
-本项目为**双端同构工程**（包含极速 Web 预览端与 Android 原生 Jetpack Compose 端）。
-
-### 方式 A：Web 端 / 本地服务启动（即开即用）
-
-克隆仓库并直接启动轻量服务：
-
-```bash
-# 1. 克隆本仓库
-git clone https://github.com/hu-zhixuan/TrainFit.git
-cd TrainFit
-
-# 2. 启动服务 (无需复杂构建工具，原生轻量服务)
-node server.js
-```
-
-打开浏览器访问：
-- **电脑端**：[http://localhost:3000](http://localhost:3000)
-- **手机同 WiFi 局域网**：`http://你的电脑局域网IP:3000`
-
----
-
-## 📱 导出 APK / 手机安装
-
-### 1. Android Studio 编译原生 APK
-1. 在 **Android Studio** 中打开项目根目录 `TrainFit/`；
-2. 等待 Gradle 同步完成；
-3. 点击顶部菜单栏：
-   > **Build $\rightarrow$ Build Bundle(s) / APK(s) $\rightarrow$ Build APK(s)**
-4. 编译完成后，生成的 APK 文件位于：
-   `app/build/outputs/apk/debug/app-debug.apk`
-5. 传输至手机即可一键安装使用！
-
-### 2. 免编译一键添加到手机主屏幕 (PWA)
-1. 手机连接与电脑相同的 WiFi；
-2. 手机浏览器打开 `http://电脑IP:3000`；
-3. 点击浏览器菜单 $\rightarrow$ 选择 **「添加到主屏幕」** 或 **「安装应用」**；
-4. 手机桌面即可生成独立 App 图标，享受全屏无边框与本地离线存储体验。
-
----
-
-## 📂 项目工程结构
+### 目录结构
 
 ```text
 TrainFit/
-├── app/                             # Android 壳工程（WebView 加载 assets 里的网页）
-│   ├── src/main/java/com/trainfit/app/
-│   │   ├── MainActivity.kt          # WebView 容器、系统栏与键盘留边、返回键
-│   │   └── NativeBridge.kt          # 给网页用的原生能力：系统语音识别、调用大模型接口、状态栏颜色
-│   └── build.gradle.kts             # 编译时注入 LLM_API_KEY / LLM_BASE_URL / LLM_MODEL
-├── css/
-│   └── style.css                    # 界面样式（深色 / 浅色）
-├── js/
-│   ├── app.js                       # 两页界面：今天 / 趋势，设置，修改记录
-│   ├── quick_log.js                 # 一键记录：按住说话、大模型解析、后台整理、撤销
-│   ├── nutrition.js                 # 本地中餐热量库（AI 连不上时兜底）
-│   └── workout.js                   # 本地训练动作解析（AI 连不上时兜底）
-├── index.html                       # 页面骨架
-├── server.js                        # 电脑上调试用的静态服务器
-├── settings.gradle.kts              # Gradle 配置
-└── README.md                        # 项目说明文档
+├── web/                         # 网页（App 的全部界面，WebView 加载）
+│   ├── index.html
+│   ├── css/style.css            # 深色 / 浅色两套配色
+│   └── js/
+│       ├── app/                 # 主界面：FitnessApp
+│       │   ├── util.js          #   常量、日期、格式化等小工具
+│       │   ├── app.js           #   类定义：数据、事件、页面切换、主题
+│       │   ├── today.js         #   今天页：大数字、记录列表、常吃常练
+│       │   ├── weight.js        #   体重
+│       │   ├── trend.js         #   趋势页图表
+│       │   ├── settings.js      #   设置、提醒
+│       │   ├── onboarding.js    #   第一次打开的引导
+│       │   └── editor.js        #   修改一条记录
+│       ├── log/                 # 一键记录（按顺序加载）
+│       │   ├── helpers.js       #   小工具、体重识别
+│       │   ├── native.js        #   安卓接口包装、震动、接口设置
+│       │   ├── food.js          #   食物库查找、按库算热量
+│       │   ├── parser.js        #   提示词、解析大模型输出、离线兜底
+│       │   ├── quick_log.js     #   按住说话按钮、录音、识别
+│       │   ├── pipeline.js      #   后台整理、保存、撤销
+│       │   └── api_settings.js  #   设置里的 AI 接口 / 语音识别卡片
+│       ├── lib/                 # 离线兜底引擎（大模型连不上时用）：workout.js、nutrition.js
+│       └── data/food_db.js      # 食物营养库（脚本生成，不要手改）
+├── app/                         # 安卓壳（Kotlin）
+│   └── src/main/java/com/trainfit/app/
+│       ├── MainActivity.kt      #   WebView 容器、权限、系统栏
+│       ├── NativeBridge.kt      #   给网页用的原生接口（window.TrainFitNative）
+│       ├── Haptics.kt           #   震动
+│       ├── Reminders.kt         #   通知、定时提醒、开机后重排
+│       ├── asr/                 #   本机识别（sherpa-onnx）、录音、系统语音识别
+│       └── net/OpenAiApi.kt     #   调大模型、云端语音转文字（OpenAI 兼容接口）
+├── scripts/
+│   ├── fetch-asr.sh             # 下载本机识别用的库和模型（编译前运行，CI 自动运行）
+│   └── build-food-db.js         # 生成 web/js/data/food_db.js
+├── tests/                       # 单元测试：npm test
+└── CHANGELOG.md                 # 更新记录，也是 Release 说明的来源
 ```
 
----
+`app/src/main/assets/` 是编译时从 `web/` 复制过去的（`app/build.gradle.kts` 里的 `syncWebAssets`），不进仓库；改界面只改 `web/`。
 
-## 🤝 参与贡献
+### 在电脑上看界面
 
-欢迎提交 Issue 和 Pull Request！如果你有更丰富的常吃美食热量数据或更前沿的超负荷进阶算法，欢迎交流探讨。
+```bash
+npm run serve        # 打开 http://localhost:3000
+```
 
-## 📄 开源协议
+浏览器里没有安卓的原生能力：语音识别和提醒用不了，可以打字；大模型需要在设置的「AI 接口」里填地址和 key（部分服务商不允许浏览器跨域调用）。
 
-本项目基于 [MIT License](LICENSE) 开源。
+### 测试
+
+```bash
+npm test             # 体重识别、按库算热量、解析大模型输出、离线引擎
+```
+
+### 编译安卓 App
+
+```bash
+bash scripts/fetch-asr.sh      # 第一次需要：下载本机识别模型（约 80MB）
+./gradlew assembleDebug        # 生成 app/build/outputs/apk/debug/*.apk
+```
+
+接口 key 在编译时注入，写在 `local.properties`（不进仓库）或环境变量里，见 [.env.example](.env.example)：
+
+| 名称 | 用途 |
+| --- | --- |
+| `LLM_API_KEY` / `LLM_BASE_URL` / `LLM_MODEL` | 整理记录用的大模型（OpenAI 兼容 `/chat/completions`） |
+| `ASR_API_KEY` / `ASR_BASE_URL` / `ASR_MODEL` | 云端语音转文字，本机识别用不了时才用 |
+
+### 发布
+
+- 提 PR：GitHub Actions 跑单元测试并编译检查，产出测试用 APK。
+- 合并到 `main`：按 `app/build.gradle.kts` 里的 `versionName` 编译并发布 Release，说明取自 `CHANGELOG.md` 里对应版本的一节。key 放在仓库的 Actions Secrets 里。
+
+### 食物数据
+
+`web/js/data/food_db.js` 由 `npm run build:food-db -- <数据目录>` 生成：`web/js/lib/nutrition.js` 里整理的常见成品菜 + 《中国食物成分表标准版（第6版）》（[Sanotsu/china-food-composition-data](https://github.com/Sanotsu/china-food-composition-data)）。该数据集注明仅供个人学习研究使用，商用前需要换成授权明确的数据。
+
+## 开源协议
+
+[MIT License](LICENSE)

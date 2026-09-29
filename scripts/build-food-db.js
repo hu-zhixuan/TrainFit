@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * 生成 js/food_db.js：本机食物营养库（每 100 克可食部）。
+ * 生成 web/js/data/food_db.js：本机食物营养库（每 100 克可食部）。
  * 来源：
- *   1. js/nutrition.js 里整理好的中餐成品菜 / 外卖 / 常见主食（带别名和常用份量），优先使用
+ *   1. web/js/lib/nutrition.js 里整理好的中餐成品菜 / 外卖 / 常见主食（带别名和常用份量），优先使用
  *   2. 《中国食物成分表标准版（第6版）》JSON：https://github.com/Sanotsu/china-food-composition-data
  *      用法：node scripts/build-food-db.js <china-food-composition-data 目录>
  */
@@ -25,7 +25,7 @@ const add = (name, aliases, k, p, c, f, g, src) => {
 };
 
 // 1) 成品菜库
-const src = fs.readFileSync(path.join(__dirname, '..', 'js', 'nutrition.js'), 'utf8');
+const src = fs.readFileSync(path.join(__dirname, '..', 'web', 'js', 'lib', 'nutrition.js'), 'utf8');
 const m = src.match(/const CHINESE_FOOD_DATABASE = (\[[\s\S]*?\n\]);/);
 const dishes = eval(m[1]);
 dishes.forEach(d => {
@@ -67,5 +67,5 @@ const header = `/* 自动生成：node scripts/build-food-db.js —— 不要手
  * 每行：[名称, 别名(|分隔), 千卡/100g, 蛋白g, 碳水g, 脂肪g, 常用一份克数(0=未知), 来源(dish=成品菜库, cfct=中国食物成分表第6版)]
  * 共 ${out.length} 条 */\n`;
 const body = `const FOOD_DB = ${JSON.stringify(out)};\nif (typeof window !== 'undefined') window.FOOD_DB = FOOD_DB;\nif (typeof module !== 'undefined' && module.exports) module.exports = FOOD_DB;\n`;
-fs.writeFileSync(path.join(__dirname, '..', 'js', 'food_db.js'), header + body);
+fs.writeFileSync(path.join(__dirname, '..', 'web', 'js', 'data', 'food_db.js'), header + body);
 console.log('food_db.js:', out.length, 'entries,', (header + body).length, 'bytes', '| dish', out.filter(x => x[7] === 'dish').length, '| cfct', out.filter(x => x[7] === 'cfct').length);

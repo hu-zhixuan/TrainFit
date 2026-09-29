@@ -81,22 +81,23 @@ jobs:
           path: release-apk/TrainFit-v${{ env.VERSION }}.apk
           retention-days: 30
 
+      - name: Release notes from CHANGELOG.md
+        run: |
+          # 取 CHANGELOG.md 里「## v版本号」这一节
+          awk -v v="## v${VERSION} " 'index($0, v) == 1 {on=1; next} on && /^## / {exit} on {print}' CHANGELOG.md > release-notes.md
+          if [ ! -s release-notes.md ]; then echo "CHANGELOG.md 里没有 v${VERSION} 的说明" > release-notes.md; fi
+          printf '\n**📥 下载下方 Assets 里的 `TrainFit-v%s.apk` 或 `TrainFit-Latest.apk`，覆盖安装即可，数据保留。**\n' "$VERSION" >> release-notes.md
+          TITLE=$(grep -m1 "^## v${VERSION} " CHANGELOG.md | sed 's/^## v[^ ]* *·* *//')
+          echo "RELEASE_TITLE=${TITLE}" >> "$GITHUB_ENV"
+          cat release-notes.md
+
       - name: Publish APK to GitHub Releases
         uses: softprops/action-gh-release@v2
         continue-on-error: true
         with:
           tag_name: v${{ env.VERSION }}
-          name: "TrainFit v${{ env.VERSION }} 不健身也能用 + 说一句记体重 (Android APK)"
-          body: |
-            ### 🥢 练食AI (TrainFit) v2.3：说一句话，帮你记下今天吃了啥
-
-            - **不只给健身的人用**：第一次打开先问你想用它做什么——想瘦一点 / 就记记吃了啥 / 在健身（减脂、增肌）。选前两种，首页只剩「今天吃了多少、还能吃多少」和体重，训练、蛋白质、热量缺口这些词都藏起来。设置里随时可以切换。
-            - **说一句就记体重**：「体重 62.5」「今天称了 124 斤」都行，斤会自动换算；只报体重时不用等 AI，立刻记好。也可以和吃的一起说：「中午黄焖鸡，体重 61.5」。
-            - **首页体重一行**：显示今天体重、比一周前轻了还是重了，点一下能改。最新体重会自动用来算每天消耗。
-            - **趋势页**：「只记吃的」模式下显示每天吃了多少和超预算天数；两种模式都多了体重曲线。
-            - 已经在用的老用户不会看到引导，界面和以前一样。
-
-            **📥 下载下方 Assets 中的 `TrainFit-v${{ env.VERSION }}.apk` 或 `TrainFit-Latest.apk`，覆盖安装即可，数据保留。**
+          name: "TrainFit v${{ env.VERSION }} ${{ env.RELEASE_TITLE }} (Android APK)"
+          body_path: release-notes.md
           draft: false
           prerelease: false
           make_latest: true

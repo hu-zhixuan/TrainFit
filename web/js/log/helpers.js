@@ -1,0 +1,81 @@
+/**
+ * 一键记录用到的小工具：数字/文字清洗、按时间猜餐次、猜肌群、从一句话里认体重。
+ */
+(function (root) {
+  'use strict';
+  const TF = root.TF = root.TF || {};
+
+  const MUSCLES = ['胸部', '背部', '腿部', '肩部', '手臂', '核心', '有氧'];
+  const MEAL_TYPES = ['早餐', '午餐', '晚餐', '加餐/补剂'];
+
+  // ---------------------------------------------------------------------------
+  // 小工具
+  // ---------------------------------------------------------------------------
+  function num(v) {
+    if (v === null || v === undefined || v === '') return null;
+    const n = typeof v === 'number' ? v : parseFloat(String(v).replace(/[^\d.\-]/g, ''));
+    return Number.isFinite(n) ? n : null;
+  }
+
+  function cleanText(s, maxLen) {
+    return String(s == null ? '' : s)
+      .replace(/[<>"'`&]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, maxLen || 40);
+  }
+
+  function round1(n) { return Math.round(n * 10) / 10; }
+
+  function mealTypeByHour(hour) {
+    if (hour >= 4 && hour < 10) return '早餐';
+    if (hour >= 10 && hour < 15) return '午餐';
+    if (hour >= 17 && hour < 21) return '晚餐';
+    return '加餐/补剂';
+  }
+
+  // ---------------------------------------------------------------------------
+  // 体重：「体重62.5」「今天称了124斤」「61.8」
+  // ---------------------------------------------------------------------------
+  /** 没说单位时：用上次体重判断是公斤还是斤（中国人常说斤） */
+  function toKg(v, unit, lastKg) {
+    if (!Number.isFinite(v)) return null;
+    let kg;
+    if (/公斤|kg|千克/i.test(unit || '')) kg = v;
+    else if (/斤/.test(unit || '')) kg = v / 2;
+    else if (lastKg) kg = Math.abs(v / 2 - lastKg) < Math.abs(v - lastKg) ? v / 2 : v;
+    else kg = v > 150 ? v / 2 : v;
+    kg = Math.round(kg * 10) / 10;
+    return kg >= 25 && kg <= 300 ? kg : null;
+  }
+
+  /** 整句话只是在报体重：不用等大模型，直接记 */
+  function quickWeight(text, lastKg) {
+    const s = String(text || '').trim().replace(/[，,。.!！~～]+$/, '');
+    const m = s.match(/^(?:今天|今早|早上|早晨|刚才|刚刚)?\s*(?:的)?\s*(体重|称了?一?下|称了|称重|上秤)?\s*(?:是|为|有|了)?\s*(\d{2,3}(?:\.\d{1,2})?)\s*(斤|公斤|kg|KG|千克)?$/);
+    if (!m) return null;
+    return toKg(parseFloat(m[2]), m[3], lastKg);
+  }
+
+  /** 一句话里提到体重（离线兜底用） */
+  function findWeight(text, lastKg) {
+    const m = String(text || '').match(/(?:体重|称了?一?下|称了|称重|上秤)[^\d]{0,4}(\d{2,3}(?:\.\d{1,2})?)\s*(斤|公斤|kg|KG|千克)?/);
+    return m ? toKg(parseFloat(m[1]), m[2], lastKg) : null;
+  }
+
+  function guessMuscle(name) {
+    const n = name || '';
+    if (/跑|骑|单车|椭圆|跳绳|游泳|快走|爬坡|划船机|有氧|HIIT|楼梯/i.test(n)) return '有氧';
+    if (/卧推|夹胸|飞鸟|俯卧撑|胸/.test(n)) return '胸部';
+    if (/引体|划船|下拉|硬拉|背/.test(n)) return '背部';
+    if (/蹲|腿|臀|箭步|提踵/.test(n)) return '腿部';
+    if (/推举|侧平举|肩|面拉/.test(n)) return '肩部';
+    if (/弯举|二头|三头|臂屈伸|下压/.test(n)) return '手臂';
+    if (/卷腹|平板|腹|核心/.test(n)) return '核心';
+    return '胸部';
+  }
+
+  Object.assign(TF, { MUSCLES, MEAL_TYPES, num, cleanText, round1, mealTypeByHour, toKg, quickWeight, findWeight, guessMuscle });
+
+  if (typeof module !== 'undefined' && module.exports) module.exports = TF;
+})(typeof window !== 'undefined' ? window : globalThis);
