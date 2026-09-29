@@ -13,8 +13,11 @@ jobs:
       - name: Call LLM exactly like the app does
         env:
           TZ: Asia/Shanghai
-          RUN_LABEL: ${{ github.event.head_commit.message }}
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
           LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
           LLM_MODEL: ${{ vars.LLM_MODEL }}
-        run: node .github/api_check.js
+        run: |
+          SPLIT="原话：早上+晚上,无标点：早+晚"
+          PARSER=old ONLY="$SPLIT" ROUNDS=4 node .github/api_check.js
+          PARSER=new ONLY="$SPLIT" ROUNDS=4 node .github/api_check.js
+          PARSER=new SKIP="$SPLIT" node .github/api_check.js

@@ -1,19 +1,24 @@
 // 临时：口语识别（分餐次、改口、口头禅、昨晚…），用 App 同样的提示词和整理逻辑调真实接口（不打印 key）
 global.window = global;
-const TF = require('../web/js/log/parser.js');
+const OLD = process.env.PARSER === 'old';
+const TF = require(OLD ? './old/web/js/log/parser.js' : '../web/js/log/parser.js');
+const TAG = OLD ? '旧' : '新';
 const P = TF.Parser;
 const key = (process.env.LLM_API_KEY || '').split(/\r?\n/).map(s => s.trim()).find(Boolean) || '';
 const base = (process.env.LLM_BASE_URL || 'https://api.atria-asi.ai/v1').replace(/\/+$/, '');
 const model = process.env.LLM_MODEL || 'Atria-Dawn-Preview';
 const esc = (m) => String(m).replace(/%/g, '%25').replace(/\r/g, '').replace(/\n/g, '%0A').slice(0, 3500);
-const note = (t, m) => console.log(`::notice title=${t}::${esc(m)}`);
-const err = (t, m) => console.log(`::error title=${t}::${esc(m)}`);
+const note = (t, m) => console.log(`::notice title=${t}::${esc(t + '\n' + m)}`);
+const err = (t, m) => console.log(`::error title=${t}::${esc(t + '\n' + m)}`);
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
 async function call(label, text, hhmm, check) {
   const [h, mi] = hhmm.split(':').map(Number);
   const now = new Date(2026, 8, 29, h, mi); // 本地时间（workflow 里 TZ=Asia/Shanghai）
-  const ctx = { now, history: [], recent: [], dayRecords: [], dayLabel: '今天 2026-09-29', lastWeight: 61, myFoods: [] };
+  // 像一个在健身的老用户：有最近成绩、记住的食物、体重（手机上的提示词比空白上下文长得多）
+  const ctx = { now, history: [], dayRecords: [], dayLabel: '今天 2026-09-29', lastWeight: 61,
+    recent: ['杠铃卧推 80kg 4×8（09-28）', '杠铃深蹲 100kg 5×5（09-27）', '引体向上 自重 4×8（09-27）', '哑铃推举 22kg 3×10（09-26）', '传统硬拉 120kg 3×5（09-25）', '跑步机 30分钟（09-24）'],
+    myFoods: [{ name: '糯米鸡', amount: '1个', grams: 180, calories: 350, proteinG: 10, carbsG: 50, fatG: 11 }, { name: '乳清蛋白粉', amount: '1勺', grams: 30, calories: 120, proteinG: 24, carbsG: 3, fatG: 1.5 }] };
   const body = { model, messages: P.buildMessages(text, ctx), temperature: 0.2, stream: false, thinking: { type: 'disabled' } };
   let res, t0, tries = 0;
   for (;;) {
@@ -31,7 +36,7 @@ async function call(label, text, hhmm, check) {
   const wos = r.workouts.map(w => `【训练】${w.exerciseName} ${w.durationMin ? w.durationMin + '分钟' : w.weightKg + 'kg ' + w.sets + '×' + w.reps}`);
   let why;
   try { why = check(r); } catch (e) { why = '检查出错 ' + e.message; }
-  (why === true ? note : err)(`${label} ${why === true ? 'OK' : 'CHECK: ' + why} (${(ms / 1000).toFixed(1)}s)`,
+  (why === true ? note : err)(`[${TAG}] ${label} ${why === true ? 'OK' : 'CHECK: ' + why} (${(ms / 1000).toFixed(1)}s)`,
     `${hhmm} 说：${text}%0AdayOffset=${r.dayOffset}%0A${meals.concat(wos).join('%0A')}%0Areply：${r.reply}`);
   return why === true;
 }
@@ -47,6 +52,13 @@ const CASES = [
     if (!rest.length) return '没拆出晚上那一餐：' + types(r);
     if (b.some(m => /香蕉|牛奶|蛋白粉/.test(itemNames(m)))) return '晚上的东西记到早餐了';
     if (!b.some(m => /荷叶鸡/.test(itemNames(m)) && /茶叶蛋|鸡蛋/.test(itemNames(m)))) return '早餐里不是荷叶鸡+茶叶蛋';
+    return true;
+  }],
+  ['无标点：早+晚', '早上吃了两个包子然后喝了杯豆浆中午没吃晚上吃了一碗牛肉面加个蛋', '21:30', r => {
+    const b = r.meals.filter(m => m.mealType === '早餐');
+    const d = r.meals.filter(m => m.mealType !== '早餐');
+    if (!b.length || !d.length) return '没分开：' + types(r);
+    if (b.some(m => /牛肉面/.test(itemNames(m)))) return '牛肉面记到早餐了';
     return true;
   }],
   ['早中晚', '早上两个包子一杯豆浆，中午黄焖鸡米饭，晚上没吃', '21:00', r => types(r) === '早餐,午餐' || '餐次是 ' + types(r)],
@@ -71,15 +83,17 @@ const CASES = [
 
 (async () => {
   const only = (process.env.ONLY || '').split(',').filter(Boolean);
+  const skip = (process.env.SKIP || '').split(',').filter(Boolean);
   const rounds = Number(process.env.ROUNDS || 1);
   const rs = [];
   for (let k = 0; k < rounds; k++) {
     for (const [label, text, hhmm, check] of CASES) {
       if (only.length && !only.includes(label)) continue;
+      if (skip.includes(label)) continue;
       await sleep(15000);
       rs.push(await call(rounds > 1 ? `${label} #${k + 1}` : label, text, hhmm, check));
     }
   }
-  note(`${process.env.RUN_LABEL || ''} 通过`, `${rs.filter(Boolean).length}/${rs.length}`);
+  note(`[${TAG}] ${process.env.ONLY ? '分餐' : '其他'} 通过`, `${rs.filter(Boolean).length}/${rs.length}`);
   process.exit(0);
 })();
