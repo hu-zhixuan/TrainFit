@@ -27,6 +27,12 @@ Object.assign(FitnessApp.prototype, {
     const pct = s.budget > 0 ? Math.min(100, (s.intake / s.budget) * 100) : 100;
     $('hero-meter').style.width = pct + '%';
     const target = this.profile.targetDeficitKcal || 0;
+    // 热量赤字 = 全天消耗（日常 + 训练）− 已吃；负数就是盈余
+    const surplus = s.deficit < 0;
+    $('hero-deficit-l').textContent = surplus ? '热量盈余' : '热量赤字';
+    $('hero-deficit-v').textContent = fmt(Math.abs(s.deficit));
+    $('hero-deficit-n').textContent = target > 0 ? `目标 ${fmt(target)}` : target < 0 ? `目标盈余 ${fmt(-target)}` : '目标 保持';
+    $('hero-deficit').className = 'hero-side ' + (s.deficit >= target ? 'good' : surplus ? 'bad' : '');
     const simple = this.isSimple();
     if (simple) {
       const perMonth = Math.abs(target) * 30 / 7700;
@@ -37,7 +43,7 @@ Object.assign(FitnessApp.prototype, {
       $('st-protein-l').textContent = '运动消耗';
       $('st-protein').textContent = s.workoutBurn ? '+' + fmt(s.workoutBurn) : '0';
     } else {
-      $('hero-foot').textContent = `预算 ${fmt(s.budget)} = 消耗 ${fmt(s.totalBurn)} ${target >= 0 ? '− 目标缺口 ' + fmt(target) : '+ 目标盈余 ' + fmt(-target)}`;
+      $('hero-foot').textContent = `预算 ${fmt(s.budget)} = 消耗 ${fmt(s.totalBurn)} ${target >= 0 ? '− 目标赤字 ' + fmt(target) : '+ 目标盈余 ' + fmt(-target)}`;
       $('st-burn-l').textContent = '训练消耗';
       $('st-burn').textContent = s.workoutBurn ? '+' + fmt(s.workoutBurn) : '0';
       $('st-protein-l').textContent = '蛋白质';

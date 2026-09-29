@@ -52,8 +52,17 @@
           </button>
         </div>
         <div class="hero" id="hero">
-          <div class="hero-label" id="hero-label">今天还能吃</div>
-          <div class="hero-num"><span id="hero-num">0</span><small>kcal</small></div>
+          <div class="hero-top">
+            <div class="hero-main">
+              <div class="hero-label" id="hero-label">今天还能吃</div>
+              <div class="hero-num"><span id="hero-num">0</span><small>kcal</small></div>
+            </div>
+            <div class="hero-side" id="hero-deficit">
+              <span id="hero-deficit-l">热量赤字</span>
+              <b id="hero-deficit-v">0</b>
+              <small id="hero-deficit-n"></small>
+            </div>
+          </div>
           <div class="meter" aria-hidden="true"><div class="meter-fill" id="hero-meter"></div></div>
           <div class="hero-foot" id="hero-foot"></div>
           <div class="hero-stats">
@@ -94,14 +103,14 @@
         </div>
 
         <div class="stat-row">
-          <div class="stat-card"><span id="tr-avg-l">平均每天缺口</span><b id="tr-avg">0</b><small id="tr-avg-u">kcal</small></div>
+          <div class="stat-card"><span id="tr-avg-l">平均每天赤字</span><b id="tr-avg">0</b><small id="tr-avg-u">kcal</small></div>
           <div class="stat-card"><span id="tr-fat-l">折合脂肪</span><b id="tr-fat">0</b><small id="tr-fat-u">kg</small></div>
           <div class="stat-card"><span>记录天数</span><b id="tr-days">0</b><small>天</small></div>
         </div>
 
         <div class="card chart-card">
           <div class="card-head">
-            <span id="trend-chart-title">每天热量缺口</span>
+            <span id="trend-chart-title">每天热量赤字</span>
             <span class="legend" id="trend-legend"></span>
           </div>
           <div class="chart" id="trend-chart"></div>
@@ -152,7 +161,7 @@
             <button class="seg-btn" data-value="muscle_gain" type="button">增肌</button>
           </div>
           <div class="field-grid field-grid-2" id="goal-grid">
-            <label class="field"><span class="field-label" id="set-deficit-l">每天热量缺口 kcal</span><input class="input" id="set-deficit" type="number" inputmode="numeric"></label>
+            <label class="field"><span class="field-label" id="set-deficit-l">每天热量赤字 kcal</span><input class="input" id="set-deficit" type="number" inputmode="numeric"></label>
             <label class="field fit-only"><span class="field-label">每天蛋白质 g</span><input class="input" id="set-protein" type="number" inputmode="numeric"></label>
           </div>
           <div class="field-note" id="set-goal-note"></div>
@@ -275,7 +284,7 @@
       <div class="ob-options">
         <button class="ob-opt" type="button" data-pick="lose"><b>想瘦一点</b><span>告诉你今天还能吃多少，顺手记体重</span></button>
         <button class="ob-opt" type="button" data-pick="track"><b>就记记吃了啥</b><span>不用设目标，看看自己每天吃了多少</span></button>
-        <button class="ob-opt" type="button" data-pick="fit"><b>在健身（减脂 / 增肌）</b><span>吃和练都记：热量缺口、蛋白质、动作进步</span></button>
+        <button class="ob-opt" type="button" data-pick="fit"><b>在健身（减脂 / 增肌）</b><span>吃和练都记：热量赤字、蛋白质、动作进步</span></button>
       </div>
       <p class="ob-foot">之后随时可以在设置里改</p>
     </div>
