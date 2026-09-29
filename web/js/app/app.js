@@ -25,6 +25,7 @@ class FitnessApp {
     this.workouts = load('fit_workouts', []);
     this.diet = load('fit_diet', []);
     this.weights = load('fit_weights', []);   // [{date, kg, ts}]，一天一条
+    this.myFoods = load('fit_my_foods', []);  // 记住的食物，见 foods.js
     // 模式：eat = 只记吃的（想瘦 / 随便记记），fit = 吃和练都记（健身）
     // 老用户（已经有记录或改过身体数据）默认 fit，不打扰；新用户第一次打开先问
     this.needsOnboarding = false;

@@ -28,9 +28,13 @@ const add = (name, aliases, k, p, c, f, g, src) => {
 const src = fs.readFileSync(path.join(__dirname, '..', 'web', 'js', 'lib', 'nutrition.js'), 'utf8');
 const m = src.match(/const CHINESE_FOOD_DATABASE = (\[[\s\S]*?\n\]);/);
 const dishes = eval(m[1]);
+// 成品菜库里有些别名其实是另一样东西（离线引擎按「差不多」归了类），按名字精确查热量时去掉
+const DROP_ALIAS = { '柳州螺蛳粉': ['米线', '过桥米线'], '皮蛋瘦肉粥': ['白粥'], '玉米': ['红薯', '地瓜', '紫薯', '芋头'] };
 dishes.forEach(d => {
   const names = String(d.name).split('/').map(s => s.trim()).filter(Boolean);
-  add(names[0], names.slice(1).concat(d.aliases || []), d.cal100g, d.p100g, d.c100g, d.f100g, d.defaultGrams, 'dish');
+  const drop = DROP_ALIAS[names[0]] || [];
+  const aliases = names.slice(1).concat(d.aliases || []).filter(a => !drop.includes(a));
+  add(names[0], aliases, d.cal100g, d.p100g, d.c100g, d.f100g, d.defaultGrams, 'dish');
 });
 
 // 1.5) 常见但成分表里缺失或名字对不上的（数值取成分表同类条目）
@@ -38,6 +42,7 @@ add('烹调油', ['植物油', '食用油', '炒菜油', '菜油', '油'], 899, 
 add('啤酒', ['扎啤', '生啤'], 32, 0.4, 3.0, 0, 500, 'common');
 add('猪肉包子', ['肉包', '肉包子', '包子'], 227, 7.6, 29.0, 8.5, 80, 'common');
 add('菜包子', ['素包子', '菜包'], 175, 5.4, 30.0, 3.8, 80, 'common');
+const CFCT_DROP_ALIAS = { '豆薯': ['地瓜'] }; // 多数地方「地瓜」指红薯
 const ALIAS = { '番茄': ['西红柿'], '马铃薯': ['土豆', '洋芋'], '甘薯': ['红薯', '地瓜', '番薯'], '豆浆': ['豆奶'] };
 
 // 2) 中国食物成分表：同一基础名优先「代表值」，跳过品牌条目
@@ -58,9 +63,12 @@ files.forEach(fn => {
   });
 });
 groups.forEach(e => {
-  // 生熟标注给大模型看：成分表里的肉、米面大多是生重
-  const raw = /^(稻米|大米|小米|面粉|挂面|燕麦|玉米面|糯米|黑米)$/.test(e.base) || (/肉|排|腿|翅|肝|胸|里脊/.test(e.base) && !/熟|酱|卤|烤|炸|罐头|干|松|肠/.test(e.full));
-  add(raw ? `${e.base}(生)` : e.base, [e.base].concat(e.alias, ALIAS[e.base] || []), e.k, e.p, e.c, e.f, 0, 'cfct');
+  // 生熟标注：成分表里的肉、米面大多是生重，粉丝木耳这类是干重。
+  // 标了「(生)」「(干)」的条目只按全名匹配（见 web/js/log/food.js），免得「一碗面条」按干面条算
+  const raw = /^(稻米|大米|小米|面粉|挂面|面条|燕麦|玉米面|糯米|黑米)$/.test(e.base) || (/肉|排|腿|翅|肝|胸|里脊/.test(e.base) && !/熟|酱|卤|烤|炸|罐头|干|松|肠/.test(e.full));
+  const dry = /^(米粉|粉丝|粉条|河粉|通心面|木耳|银耳|腐竹)$/.test(e.base);
+  const aliases = [e.base].concat(e.alias, ALIAS[e.base] || []).filter(a => !(CFCT_DROP_ALIAS[e.base] || []).includes(a));
+  add(raw ? `${e.base}(生)` : dry ? `${e.base}(干)` : e.base, aliases, e.k, e.p, e.c, e.f, 0, 'cfct');
 });
 
 const header = `/* 自动生成：node scripts/build-food-db.js —— 不要手改
