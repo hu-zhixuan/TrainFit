@@ -240,7 +240,7 @@
 
     <!-- 底部：一个按钮，按住说话（或点一下开始、再点一下结束） -->
     <div class="composer" id="composer">
-      <div class="chips" id="cmp-chips" aria-label="常用，点一下再记一次"></div>
+      <div class="chips" id="cmp-chips" aria-label="常吃，点一下就记"></div>
       <div class="cmp-status hidden" id="cmp-status" role="status"></div>
 
       <div class="cmp-row" id="voice-row">
@@ -310,6 +310,16 @@
     </div>
   </div>
 
+  <!-- 长按「常吃」 -->
+  <div class="sheet-overlay hidden" id="chip-menu">
+    <div class="sheet chip-sheet">
+      <div class="sheet-title" id="chip-menu-title"></div>
+      <button type="button" class="btn" data-chip-act="pin" id="chip-menu-pin">固定在最前面</button>
+      <button type="button" class="btn btn-danger" data-chip-act="hide">不再推荐</button>
+      <button type="button" class="btn" data-chip-act="cancel">取消</button>
+    </div>
+  </div>
+
   <!-- 修改一条记录 -->
   <div class="sheet-overlay hidden" id="edit-overlay">
     <form class="sheet" id="edit-form" autocomplete="off">
@@ -349,6 +359,7 @@
   <script src="js/app/onboarding.js"></script>
   <script src="js/app/editor.js"></script>
   <script src="js/app/foods.js"></script>
+  <script src="js/app/quick.js"></script>
 
   <!-- 一键记录：按住说话 → 大模型整理 → 保存（顺序有依赖） -->
   <script src="js/log/helpers.js"></script>
