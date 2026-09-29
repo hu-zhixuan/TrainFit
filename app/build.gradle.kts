@@ -32,8 +32,8 @@ android {
         applicationId = "com.trainfit.ai"
         minSdk = 24
         targetSdk = 34
-        versionCode = 16
-        versionName = "2.3"
+        versionCode = 17
+        versionName = "2.3.1"
 
         buildConfigField("String", "LLM_BASE_URL", llmConfig("LLM_BASE_URL", "https://api.atria-asi.ai/v1"))
         buildConfigField("String", "LLM_MODEL", llmConfig("LLM_MODEL", "Atria-Dawn-Preview"))
@@ -75,17 +75,12 @@ android {
     }
 }
 
+// 网页源码在仓库根目录的 web/，编译前原样复制到 assets（assets 里的副本不进仓库）
 val syncWebAssets = tasks.register<Sync>("syncWebAssets") {
-    description = "Syncs root Web frontend assets into Android assets directory"
+    description = "Copies web/ into the Android assets directory"
     group = "build"
 
-    from(rootProject.projectDir) {
-        include("index.html")
-        include("manifest.json")
-        include("metadata.json")
-        include("css/**")
-        include("js/**")
-    }
+    from(rootProject.layout.projectDirectory.dir("web"))
     into(layout.projectDirectory.dir("src/main/assets"))
     // 本机语音识别模型由 scripts/fetch-asr.sh 下载到 assets/asr，同步网页时别删掉
     preserve {
