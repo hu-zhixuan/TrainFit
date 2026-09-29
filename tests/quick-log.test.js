@@ -25,11 +25,46 @@ test('一句话里夹着体重', () => {
   assert.strictEqual(findWeight('卧推60公斤4组8个'), null);
 });
 
-test('食物库：名字和别名都能找到，生重条目可以省略「(生)」', () => {
+test('食物库：名字和别名都能找到；生重条目不会被熟食名字误用', () => {
   assert.ok(FoodDB.find('米饭'));
   assert.ok(FoodDB.find('西红柿'));                   // 别名 → 番茄
   assert.ok(FoodDB.find('烹调油'));
   assert.strictEqual(FoodDB.find('不存在的菜xyz'), null);
+  assert.strictEqual(FoodDB.find('糯米'), null);      // 只有「糯米(生)」，不能拿来算熟糯米
+  const names = FoodDB.candidates('中午一个糯米鸡两个水煮蛋').map(e => e.name);
+  assert.ok(!names.some(n => /\(生\)$/.test(n)), names.join(','));
+  assert.ok(FoodDB.candidates('生重150克牛肉').some(e => /\(生\)$/.test(e.name)));
+});
+
+test('整份的东西（糯米鸡）用大模型估算，不拆原料、不拿原料去算', () => {
+  const it = groundItem({ name: '糯米鸡', amount: '1个', grams: 180, whole: true, calories: 380, proteinG: 12, carbsG: 52, fatG: 13 });
+  assert.strictEqual(it.src, '估算');
+  assert.strictEqual(it.calories, 380);
+  assert.strictEqual(it.amount, '1个');
+  // 整份的东西即使库里有同名成品菜，也用大模型结合原话的估算（库里的数只作参考）
+  const bun = groundItem({ name: '麻辣烫', amount: '1份', grams: 550, whole: true, calories: 720 });
+  assert.strictEqual(bun.src, '估算');
+  assert.strictEqual(bun.calories, 720);
+  // 单一食材按库算
+  const egg = groundItem({ name: '鸡蛋', grams: 100, calories: 150 });
+  assert.strictEqual(egg.src, '成分表');
+});
+
+test('记住的食物优先，按份数或克数换算', () => {
+  const mine = [{ name: '糯米鸡', amount: '1个', grams: 180, calories: 350, proteinG: 10, carbsG: 50, fatG: 11 }];
+  const two = groundItem({ name: '糯米鸡', amount: '两个', whole: true, calories: 800 }, mine);
+  assert.strictEqual(two.src, '我的');
+  assert.strictEqual(two.calories, 700);
+  const g = groundItem({ name: '糯米鸡', amount: '1个', grams: 90, calories: 200 }, mine);
+  assert.strictEqual(g.calories, 175);
+  assert.strictEqual(TF.countOf('半份'), 0.5);
+  assert.strictEqual(TF.countOf('3个'), 3);
+});
+
+test('包装上的营养数照用', () => {
+  const it = groundItem({ name: '某品牌鸡胸肉', amount: '1包', grams: 100, source: 'label', calories: 110, proteinG: 23 });
+  assert.strictEqual(it.src, '包装');
+  assert.strictEqual(it.calories, 110);
 });
 
 test('按库算热量；和大模型估算差太多时保留估算', () => {
@@ -48,8 +83,10 @@ test('按库算热量；和大模型估算差太多时保留估算', () => {
   assert.strictEqual(t.calories, 340);
 });
 
-test('提示词里带上参考营养数据和最近体重', () => {
-  const msgs = Parser.buildMessages('中午番茄炒蛋盖饭', { lastWeight: 61, now: new Date('2026-09-28T12:30:00') });
+test('提示词里带上参考营养数据、最近体重和记住的食物', () => {
+  const myFoods = [{ name: '糯米鸡', amount: '1个', grams: 180, calories: 350, proteinG: 10, carbsG: 50, fatG: 11 }];
+  const msgs = Parser.buildMessages('中午番茄炒蛋盖饭', { lastWeight: 61, myFoods, now: new Date('2026-09-28T12:30:00') });
+  assert.match(msgs[1].content, /记住的食物[^\n]*\n糯米鸡 1个 约180g 350千卡/);
   assert.strictEqual(msgs.length, 2);
   assert.match(msgs[0].content, /bodyWeight/);
   assert.match(msgs[1].content, /参考营养数据/);
@@ -80,6 +117,14 @@ test('整理大模型输出：饮食按库重算、训练补默认值、体重�
   assert.strictEqual(r.meals[0].mealType, '午餐'); // 不认识的餐次按时间判断
   assert.strictEqual(r.workouts[0].sets, 3);       // 没说组数 → 默认值并标记估计
   assert.strictEqual(r.workouts[0].estimated, true);
+});
+
+test('「记住」：整理成一份的量；不合法的丢掉', () => {
+  const r = Parser.normalize({ remember: [{ name: '糯米鸡', amount: '1个', grams: 180, calories: 350 }, { name: '', calories: 100 }, { name: '水', calories: 0 }] }, {});
+  assert.deepStrictEqual(r.remember, [{ name: '糯米鸡', amount: '1个', grams: 180, calories: 350, proteinG: 0, carbsG: 0, fatG: 0 }]);
+  const m = Parser.normalize({ add: { meals: [{ mealType: '午餐', foodSummary: '糯米鸡2个', items: [{ name: '糯米鸡', amount: '2个', whole: true, calories: 900 }] }] } },
+    { myFoods: [{ name: '糯米鸡', amount: '1个', grams: 180, calories: 350 }] });
+  assert.strictEqual(m.meals[0].calories, 700);
 });
 
 test('修改 / 删除只认这天已有记录的编号', () => {
