@@ -10,6 +10,15 @@ const REMINDER_DEFAULTS = [
 Object.assign(FitnessApp.prototype, {
   bindSettings() {
     const $ = (id) => document.getElementById(id);
+    $('my-foods').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-forget]');
+      if (!b) return;
+      const name = b.dataset.forget;
+      const prev = this.findMyFood(name);
+      this.forgetFood(name);
+      this.renderMyFoods();
+      if (window.QuickLog && prev) window.QuickLog.showUndo(`已删除「${name}」`, [], () => { this.restoreFood(name, prev); this.renderMyFoods(); });
+    });
     const segPick = (id, fn) => $(id).addEventListener('click', (e) => {
       const b = e.target.closest('.seg-btn');
       if (b) fn(b.dataset.value);
@@ -97,6 +106,7 @@ Object.assign(FitnessApp.prototype, {
     const budget = p.tdee - (p.targetDeficitKcal || 0);
     $('set-tdee-note').textContent = `每天日常消耗约 ${fmt(p.tdee)} kcal（不含训练）。按目标，不训练的日子大约吃 ${fmt(budget)} kcal。`;
     this.renderReminders();
+    this.renderMyFoods();
     const ql = window.QuickLog;
     const days = new Set([...this.workouts, ...this.diet].map(r => r.date)).size;
     $('set-data-note').textContent = `共 ${this.diet.length} 条饮食、${this.workouts.length} 条${simple ? '运动' : '训练'}、${this.weights.length} 次体重，覆盖 ${days} 天。`;

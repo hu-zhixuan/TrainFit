@@ -47,7 +47,7 @@
       const today = getTodayDateString();
       const dayLabel = date === today ? `今天 ${date}` : date;
       const lw = app.latestWeight ? app.latestWeight() : null;
-      return { now: new Date(p.ts || Date.now()), history: app.workouts, dayRecords, recent, dayLabel, lastWeight: lw ? lw.kg : null };
+      return { now: new Date(p.ts || Date.now()), history: app.workouts, dayRecords, recent, dayLabel, lastWeight: lw ? lw.kg : null, myFoods: app.myFoods || [] };
     },
 
     async process(p) {
@@ -64,7 +64,7 @@
         return;
       }
       if (!app.pending.some(x => x.id === p.id)) return; // 已被用户删掉
-      const changes = result.workouts.length + result.meals.length + (result.updates || []).length + (result.deletes || []).length + (result.bodyWeight ? 1 : 0);
+      const changes = result.workouts.length + result.meals.length + (result.updates || []).length + (result.deletes || []).length + (result.bodyWeight ? 1 : 0) + (result.remember || []).length;
       if (!changes) {
         app.failPending(p.id, result.reply || (result.source === 'local' ? 'AI 没连上，也没认出内容' : '没认出吃了什么'));
         return;
@@ -150,6 +150,9 @@
         batch.weight = { date, prev: app.setWeight(date, result.bodyWeight) };
       }
 
+      // 记住的食物（「记住，糯米鸡一个350大卡」、包装上的营养数）
+      batch.remembered = (result.remember || []).map(f => ({ name: f.name, prev: app.rememberFood(f) }));
+
       app.saveData();
       app.render();
       return batch;
@@ -163,13 +166,19 @@
       });
       result.meals.forEach(m => lines.push(`${m.mealType.replace('/补剂', '')} · ${m.foodSummary} ${m.calories} kcal`));
       if (result.bodyWeight) lines.push(`体重 · ${result.bodyWeight} kg`);
+      (result.remember || []).forEach(f => lines.push(`记住 · ${f.name} ${f.amount || '1份'} ${f.calories} kcal`));
       return lines;
     },
 
     showSnack(batch, result) {
       const app = root.app;
       const n = result.workouts.length + result.meals.length + (result.bodyWeight ? 1 : 0);
-      let t = result.reply ? '✓ ' + result.reply : (result.bodyWeight && n === 1 ? `✓ 记下体重 ${result.bodyWeight} kg` : (n ? `✓ 已记下 ${n} 条` : '✓ 已更新'));
+      const kept = (result.remember || []).length;
+      let t = result.reply ? '✓ ' + result.reply
+        : result.bodyWeight && n === 1 ? `✓ 记下体重 ${result.bodyWeight} kg`
+        : n ? `✓ 已记下 ${n} 条`
+        : kept ? `✓ 记住了 ${result.remember.map(f => f.name).join('、')}`
+        : '✓ 已更新';
       if (n && batch.date !== getTodayDateString()) t += `（${batch.date.slice(5).replace('-', '月')}日）`;
       if (result.source === 'local') t += ' · AI 没连上，用的简单规则';
       const lines = this.describe(result).concat(batch.changed || []);
@@ -188,6 +197,7 @@
         });
         (batch.removed || []).forEach(r => (r.kind === 'meal' ? app.diet : app.workouts).unshift(r.rec));
         if (batch.weight && app.restoreWeight) app.restoreWeight(batch.weight.date, batch.weight.prev);
+        (batch.remembered || []).slice().reverse().forEach(r => app.restoreFood(r.name, r.prev));
         app.saveData();
         app.render();
       });
