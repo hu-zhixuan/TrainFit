@@ -17,7 +17,7 @@ Object.assign(FitnessApp.prototype, {
 
   /** 记住一样东西（同名覆盖），返回原来那条，撤销用 */
   rememberFood(food) {
-    if (!food || !food.name || !(food.calories > 0)) return null;
+    if (!food || !food.name || !(food.calories > 0 || (food.supp && food.nutrients))) return null;
     const prev = this.findMyFood(food.name);
     const entry = {
       name: food.name,
@@ -29,6 +29,8 @@ Object.assign(FitnessApp.prototype, {
       fatG: round1(food.fatG || 0),
       ts: Date.now()
     };
+    if (food.nutrients) entry.nutrients = food.nutrients;
+    if (food.supp) entry.supp = true;
     this.myFoods = [entry].concat(this.myFoods.filter(f => f !== prev)).slice(0, MY_FOODS_MAX);
     store(MY_FOODS_KEY, this.myFoods);
     return prev ? Object.assign({}, prev) : null;
@@ -57,7 +59,7 @@ Object.assign(FitnessApp.prototype, {
     }
     el.innerHTML = this.myFoods.map(f => `
       <div class="myfood-row">
-        <div class="myfood-main"><b>${esc(f.name)}</b><small>${esc(f.amount || '1份')}${f.grams ? ` · 约${f.grams}g` : ''}</small></div>
+        <div class="myfood-main"><b>${esc(f.name)}</b><small>${esc(f.amount || '1份')}${f.grams ? ` · 约${f.grams}g` : ''}${f.nutrients ? ' · ' + esc(TF.nutrientsText(f.nutrients, 2)) : ''}</small></div>
         <span class="myfood-kcal">${fmt(f.calories)}<small>kcal</small></span>
         <button type="button" class="chip" data-forget="${esc(f.name)}">删除</button>
       </div>`).join('');

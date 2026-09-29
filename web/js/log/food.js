@@ -3,7 +3,7 @@
  *   1. 用户记住的（自己改过、或照包装念过的）→「我的」
  *   2. 用户念的包装营养数 →「包装」
  *   3. 单一食材（米饭、鸡蛋、牛奶…）按食物库重算 →「成分表」「菜品库」
- *   4. 整份的东西（糯米鸡、饭团、一碗面、一份炒菜）用大模型的估算 →「估算」。
+ *   4. 整份的东西（糯米鸡、饭团、一碗面、一份炒菜）用大模型的估算 →「估算」；补剂（维生素、鱼油、钙片…）→「补剂」。
  *      库里的成品菜数值只放进提示词给大模型参考，不直接覆盖：同一道菜做法、份量差别很大，大模型结合原话估更准
  */
 (function (root) {
@@ -13,7 +13,7 @@
     if (!root.FOOD_DB) root.FOOD_DB = require('../data/food_db.js'); // Node 里 food_db.js 不会自己挂到全局
   }
   const TF = root.TF = root.TF || {};
-  const { num, cleanText, round1 } = TF;
+  const { num, cleanText, round1, cleanNutrients, nutrientsText } = TF;
 
   // ---------------------------------------------------------------------------
   // 食物营养库（每 100 克）：中国食物成分表第6版 + 常见成品菜，见 js/data/food_db.js
@@ -81,7 +81,7 @@
   };
 
   // ---------------------------------------------------------------------------
-  // 用户记住的食物：[{name, amount, grams, calories, proteinG, carbsG, fatG}]，一份的量
+  // 用户记住的食物：[{name, amount, grams, calories, proteinG, carbsG, fatG, nutrients?, supp?}]，一份的量
   // ---------------------------------------------------------------------------
   const CN_NUM = { 半: 0.5, 一: 1, 两: 2, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9, 十: 10 };
 
@@ -110,27 +110,32 @@
     },
 
     line(f) {
-      return `${f.name}${f.amount ? ' ' + f.amount : ''}${f.grams ? ` 约${f.grams}g` : ''} ${Math.round(f.calories)}千卡 蛋白${round1(f.proteinG || 0)} 碳水${round1(f.carbsG || 0)} 脂肪${round1(f.fatG || 0)}`;
+      return `${f.name}${f.amount ? ' ' + f.amount : ''}${f.grams ? ` 约${f.grams}g` : ''} ${Math.round(f.calories)}千卡 蛋白${round1(f.proteinG || 0)} 碳水${round1(f.carbsG || 0)} 脂肪${round1(f.fatG || 0)}` +
+        (f.nutrients ? ` 含${nutrientsText(f.nutrients)}` : '');
     },
 
     /** 大模型给的「记住」条目 → 干净的一份 */
     clean(r) {
       const name = cleanText(r && r.name, 20);
       const kcal = num(r && r.calories);
-      if (!name || !(kcal > 0)) return null;
+      const nutrients = cleanNutrients(r && r.nutrients);
+      // 补剂可以没有热量（钙片、锌片），但要有营养素
+      if (!name || !(kcal > 0 || (kcal === 0 && nutrients))) return null;
       const grams = num(r.grams);
-      return {
+      const f = {
         name, amount: cleanText(r.amount, 12) || '1份', grams: grams > 0 ? Math.round(grams) : null,
         calories: Math.round(kcal), proteinG: round1(Math.max(0, num(r.proteinG) || 0)),
         carbsG: round1(Math.max(0, num(r.carbsG) || 0)), fatG: round1(Math.max(0, num(r.fatG) || 0))
       };
+      if (nutrients) f.nutrients = nutrients;
+      if (r.kind === 'supplement' || r.supp) f.supp = true;
+      return f;
     }
   };
 
   /**
    * 定下一样食物的热量（顺序见文件开头）。
-   * 查库时，库里的数和大模型的估算差太多（>2.5 倍）说明大概率匹配错了（比如成分表里的「豆腐花」是干粉），保留估算。
-   * @param it  大模型给的一项：{name, amount, grams, whole, source, calories, proteinG, carbsG, fatG}
+   * @param it  大模型给的一项：{name, amount, grams, whole, source, kind, calories, proteinG, carbsG, fatG, nutrients}
    * @param myFoods 用户记住的食物
    */
   function groundItem(it, myFoods) {
@@ -141,34 +146,46 @@
     const base = { name, grams: grams > 0 ? Math.round(grams) : null };
     if (amount) base.amount = amount;
     if (it.whole === true) base.whole = true;
+    // 补剂（维生素、鱼油、钙片、药…）：不查库，带上含的营养素
+    const supp = it.kind === 'supplement' || it.supp === true;
+    if (supp) base.supp = true;
+    const nutrients = cleanNutrients(it.nutrients);
     const ai = {
       calories: num(it.calories), proteinG: num(it.proteinG), carbsG: num(it.carbsG), fatG: num(it.fatG)
     };
     const vals = (k, p, c, f) => ({ calories: Math.round(k), proteinG: round1(p || 0), carbsG: round1(c || 0), fatG: round1(f || 0) });
+    const withN = (o) => { if (nutrients) o.nutrients = nutrients; return o; };
 
     // 1. 用户记住的
     const my = MyFoods.match(Array.isArray(myFoods) ? myFoods : [], name);
     if (my) {
       const f = MyFoods.factor(grams, amount, my);
-      return Object.assign(base, { src: '我的' }, vals(my.calories * f, my.proteinG * f, my.carbsG * f, my.fatG * f));
+      if (my.supp) base.supp = true;
+      const o = withN(Object.assign(base, { src: '我的' }, vals(my.calories * f, my.proteinG * f, my.carbsG * f, my.fatG * f)));
+      if (my.nutrients) o.nutrients = Object.fromEntries(Object.entries(my.nutrients).map(([k, v]) => [k, round1(v * f)]));
+      return o;
     }
     // 2. 包装上的数（大模型已经按用户念的数算好）
-    if (it.source === 'label' && ai.calories > 0) {
-      return Object.assign(base, { src: '包装' }, vals(ai.calories, ai.proteinG, ai.carbsG, ai.fatG));
+    if (it.source === 'label' && ai.calories >= 0 && ai.calories !== null) {
+      return withN(Object.assign(base, { src: '包装' }, vals(ai.calories, ai.proteinG, ai.carbsG, ai.fatG)));
     }
-    // 3. 单一食材查库
-    const e = !base.whole && grams && grams > 0 ? FoodDB.find(name) : null;
+    // 3. 单一食材查库。和大模型的估算差太多，多半是匹配错了（比如成分表里的「豆腐花」是干粉），保留估算：
+    //    热量差 2.5 倍以上；或者蛋白质差得多（相差 6g 以上、且不在 0.6～1.7 倍之间）——蛋白质用户最在意
+    const e = !supp && !base.whole && grams && grams > 0 ? FoodDB.find(name) : null;
     if (e) {
       const k = e.k * grams / 100;
-      const ratio = ai.calories && ai.calories > 0 ? k / ai.calories : 1;
-      if (ratio >= 0.4 && ratio <= 2.5) {
+      const p = e.p * grams / 100;
+      const ratio = ai.calories > 0 ? k / ai.calories : ai.calories === 0 ? (k <= 20 ? 1 : Infinity) : 1;
+      const pr = ai.proteinG > 0 ? p / ai.proteinG : 1;
+      const proteinOff = ai.proteinG != null && Math.abs(p - ai.proteinG) > 6 && (pr < 0.6 || pr > 1.7);
+      if (ratio >= 0.4 && ratio <= 2.5 && !proteinOff) {
         return Object.assign(base, { src: e.src === 'cfct' ? '成分表' : '菜品库', dbName: e.name },
-          vals(k, e.p * grams / 100, e.c * grams / 100, e.f * grams / 100));
+          vals(k, p, e.c * grams / 100, e.f * grams / 100));
       }
     }
-    // 4. 大模型的估算
-    if (!(ai.calories > 0)) return null;
-    return Object.assign(base, { src: '估算' }, vals(ai.calories, ai.proteinG, ai.carbsG, ai.fatG));
+    // 4. 大模型的估算（水、黑咖啡、钙片这类热量是 0 的也记）
+    if (ai.calories === null || !(ai.calories >= 0)) return null;
+    return withN(Object.assign(base, { src: supp ? '补剂' : '估算' }, vals(ai.calories, ai.proteinG, ai.carbsG, ai.fatG)));
   }
 
   function sumItems(items) {
