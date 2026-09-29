@@ -26,7 +26,7 @@ Object.assign(FitnessApp.prototype, {
         ${Array.isArray(rec.items) && rec.items.length ? `<div class="breakdown">
           <div class="breakdown-head">怎么算的</div>
           ${rec.items.map((i, idx) => `<div class="breakdown-row">
-            <span class="bd-name">${esc(i.name)}<small>${esc([i.amount, i.grams ? i.grams + 'g' : ''].filter(Boolean).join(' · '))}${
+            <span class="bd-name">${esc(i.name)}<small>${esc([i.amount, i.grams && !String(i.amount || '').replace('克', 'g').includes(i.grams + 'g') ? i.grams + 'g' : ''].filter(Boolean).join(' · '))}${
               i.supp ? (i.nutrients ? ' · ' + esc(TF.nutrientsText(i.nutrients)) : '') : ` · 蛋白 <b>${round1(i.proteinG || 0)}g</b>`}</small></span>
             <span class="bd-val"><input class="bd-input" name="item_${idx}" type="number" inputmode="numeric" min="0" value="${Math.round(i.calories || 0)}" aria-label="${esc(i.name)} 热量">kcal<em class="src ${SRC_CLASS[i.src] || ''}">${esc(i.src || '')}</em></span>
           </div>`).join('')}
