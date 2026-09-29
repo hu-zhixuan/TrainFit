@@ -1,6 +1,6 @@
 /**
- * 把一句话变成记录：拼提示词 → 调大模型 → 校验整理成可以直接保存的数据；
- * 大模型连不上时退回本地规则（lib/workout.js、lib/nutrition.js）。
+ * 把一句话变成记录：拼提示词 → 调大模型 → 校验整理成可以直接保存的数据。
+ * 大模型连不上就报错（界面上留一张「没整理好」卡片，可以重试），不再用本地规则猜。
  */
 (function (root) {
   'use strict';
@@ -234,7 +234,9 @@
       // 关掉「先推理再回答」：Atria 实测 26 秒 → 3.6 秒，结果一样。
       // 换成不认这个参数的服务商时，自动去掉再试一次。
       const attempts = [Object.assign({ thinking: { type: 'disabled' } }, base), base];
+      const waits = this.retryWaits || [3000, 8000]; // 限流 / 超时 / 网络断了：等一等再试，最多两次
       let lastErr;
+      let retries = 0;
       for (let i = 0; i < attempts.length; i++) {
         try {
           const raw = await this.send(attempts[i], override);
@@ -243,17 +245,15 @@
         } catch (e) {
           lastErr = e;
           const msg = (e && e.message) || '';
-          if (/^HTTP 429/.test(msg)) {                // 限流：等一下再试同一个
-            await new Promise(r => setTimeout(r, 2500));
-            i -= 1;
-            if (this._retried429) { this._retried429 = false; break; }
-            this._retried429 = true;
+          if (msg === 'NO_KEY') break;
+          if (Parser.isTransient(msg) && retries < waits.length) {
+            await new Promise(r => setTimeout(r, waits[retries++]));
+            i -= 1; // 同一种请求再试
             continue;
           }
-          if (msg === 'NO_KEY' || !/^HTTP 4\d\d/.test(msg)) break; // 只有参数被拒才换下一种
+          if (!/^HTTP 4\d\d/.test(msg) || /^HTTP 429/.test(msg)) break; // 只有参数被拒才换下一种写法
         }
       }
-      this._retried429 = false;
       throw lastErr || new Error('LLM_FAILED');
     },
 
@@ -281,78 +281,28 @@
       throw new Error('NO_KEY');
     },
 
-    /** 离线兜底：按句子切开，吃喝相关的走饮食引擎，其余走训练引擎 */
-    viaLocal(text, ctx) {
-      ctx = ctx || {};
-      const now = ctx.now || new Date();
-      const WE = root.WorkoutEngine;
-      const NE = root.NutritionEngine;
-      const out = { dayOffset: 0, workouts: [], meals: [] };
-      if (/前天/.test(text)) out.dayOffset = -2;
-      else if (/昨天|昨晚/.test(text)) out.dayOffset = -1;
-
-      const foodCue = /吃|喝|早餐|午餐|晚餐|早饭|午饭|晚饭|夜宵|加餐|外卖|零食|饮料|奶茶|咖啡|牛奶|鸡蛋|米饭|面条|水果/;
-      const w = findWeight(text, ctx.lastWeight);
-      if (w) out.bodyWeight = w;
-      const segs = String(text).split(/[，,。；;！!？?\n]|然后|接着|另外|还有/).map(s => s.trim())
-        .filter(s => s && !/体重|称了|称一下|称重|上秤/.test(s));
-      const foodSegs = [];
-      const workoutSegs = [];
-      segs.forEach(s => (foodCue.test(s) ? foodSegs : workoutSegs).push(s));
-
-      if (WE && workoutSegs.length) {
-        const items = WE.parseWorkoutVoice(workoutSegs.join('，')) || [];
-        const pseudo = {
-          workouts: items
-            // 旧引擎对无关的话也会返回一个默认动作：一个数字都没有的丢掉
-            .filter(i => i && i.exerciseName && (i.weightKg != null || i.sets != null || i.reps != null))
-            .map(i => {
-              const isCardio = /有氧|跑|骑|单车|跳绳|平板/.test((i.muscleGroup || '') + i.exerciseName);
-              return {
-                exerciseName: i.exerciseName,
-                muscleGroup: i.muscleGroup,
-                weightKg: isCardio ? null : i.weightKg,
-                sets: isCardio ? null : i.sets,
-                reps: isCardio ? null : i.reps,
-                durationMin: isCardio ? (i.durationMin || i.weightKg || null) : null,
-                burnedCalories: isCardio ? null : i.burnedCalories
-              };
-            })
-        };
-        out.workouts = this.normalize(pseudo, ctx).workouts;
-      }
-
-      if (NE && foodSegs.length) {
-        const joined = foodSegs.join('，');
-        const r = NE.parseDietVoice(joined);
-        if (r && r.totalCalories > 0) {
-          let type = null;
-          if (/早餐|早饭|早上/.test(joined)) type = '早餐';
-          else if (/午餐|午饭|中午/.test(joined)) type = '午餐';
-          else if (/晚餐|晚饭|晚上/.test(joined)) type = '晚餐';
-          else if (/加餐|夜宵|零食/.test(joined)) type = '加餐/补剂';
-          out.meals.push({
-            mealType: type || mealTypeByHour(now.getHours()),
-            foodSummary: cleanText(r.foodSummary, 60) || '饮食记录',
-            calories: Math.round(r.totalCalories),
-            proteinG: round1(r.proteinG || 0),
-            carbsG: round1(r.carbsG || 0),
-            fatG: round1(r.fatG || 0)
-          });
-        }
-      }
-      return out;
+    /** 值得等一等再试的错误：限流、超时、网络、服务端 5xx */
+    isTransient(msg) {
+      return /^HTTP (429|5\d\d)/.test(msg) || /TIMEOUT|Timeout|timed out|IOException|UnknownHost|ConnectException|SocketException|SSL|Failed to fetch|NetworkError|abort/i.test(msg);
     },
 
+    /** 大模型失败时的说明（给「没整理好」卡片用） */
+    failReason(e) {
+      const msg = (e && e.message) || '';
+      if (msg === 'NO_KEY') return 'AI 接口没有配置 key';
+      if (/^HTTP 429/.test(msg)) return 'AI 这会儿太忙（限流），点「重试」';
+      if (/^HTTP 401|^HTTP 403/.test(msg)) return 'AI 接口的 key 不对';
+      if (this.isTransient(msg)) return '网络不好，AI 没连上，点「重试」';
+      return 'AI 没整理出来，点「重试」或「改字」';
+    },
+
+    /**
+     * 只用大模型。以前失败时会退回本地规则，但规则会把「蛋白粉 700 毫升」这种话算得离谱还直接存，
+     * 现在失败就留一张「没整理好」的卡片，让用户重试或改字。
+     */
     async parse(text, ctx) {
-      try {
-        const r = await this.viaLlm(text, ctx);
-        return Object.assign(r, { source: 'llm' });
-      } catch (e) {
-        console.warn('[QuickLog] 大模型解析失败，改用本地规则：', e && e.message);
-        const r = this.viaLocal(text, ctx);
-        return Object.assign(r, { source: 'local', error: e && e.message });
-      }
+      const r = await this.viaLlm(text, ctx);
+      return Object.assign(r, { source: 'llm' });
     }
   };
 

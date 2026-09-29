@@ -12,6 +12,8 @@ jobs:
           node-version: '20'
       - name: Call LLM exactly like the app does
         env:
+          TZ: Asia/Shanghai
+          RUN_LABEL: ${{ github.event.head_commit.message }}
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
           LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
           LLM_MODEL: ${{ vars.LLM_MODEL }}

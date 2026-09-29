@@ -89,11 +89,11 @@ Object.assign(FitnessApp.prototype, {
     const simple = this.isSimple();
     const goalNames = simple ? { fat_loss: '想瘦', maintain: '保持', muscle_gain: '想增重' } : { fat_loss: '减脂', maintain: '维持', muscle_gain: '增肌' };
     document.querySelectorAll('#set-goal .seg-btn').forEach(b => { b.textContent = goalNames[b.dataset.value]; });
-    $('set-deficit-l').textContent = simple ? '每天少吃 kcal' : '每天热量缺口 kcal';
+    $('set-deficit-l').textContent = simple ? '每天少吃 kcal' : '每天热量赤字 kcal';
     $('set-goal-note').textContent = simple
       ? '想增重时填负数，比如 -250 表示每天多吃 250 kcal。改完自动保存。'
-      : '增肌时缺口是负数，比如 -250 表示每天多吃 250 kcal。改完自动保存。';
-    $('set-mode-note').textContent = simple ? '只显示吃了多少、还能吃多少和体重。说了运动也会记。' : '训练、蛋白质、热量缺口和动作进步都会显示。';
+      : '增肌时赤字填负数，比如 -250 表示每天多吃 250 kcal。改完自动保存。';
+    $('set-mode-note').textContent = simple ? '只显示吃了多少、还能吃多少和体重。说了运动也会记。' : '训练、蛋白质、热量赤字和动作进步都会显示。';
     $('rem-night-desc').textContent = simple ? '今天还能吃多少' : '今天还能吃多少、蛋白还差多少';
     setSeg('set-theme', this.theme);
     $('set-theme-note').textContent = this.theme === 'system' ? `手机现在是${this.systemIsLight() ? '浅色' : '深色'}模式，App 跟着变` : '';

@@ -3,6 +3,8 @@ name: Build and Release TrainFit APK
 on:
   push:
     branches: [ main ]
+    paths-ignore:
+      - '**.md'   # 只改文档不重新发版
   workflow_dispatch:
 
 permissions:

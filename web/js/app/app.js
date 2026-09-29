@@ -1,7 +1,7 @@
 /**
  * 练食AI · 主界面
  *
- * 两页：今天（还能吃多少 + 当天所有记录）、趋势（每天缺口 / 吃了多少 + 体重 + 动作进步）；设置在右上角。
+ * 两页：今天（还能吃多少 + 当天所有记录）、趋势（每天赤字 / 吃了多少 + 体重 + 动作进步）；设置在右上角。
  * 记录靠底部按钮一口气说完（见 js/log/），记错了点一下改。
  *
  * FitnessApp 在这里定义核心：数据、事件、页面切换、主题。各页面的方法按功能放在同目录的其它文件里，
@@ -68,7 +68,7 @@ class FitnessApp {
     store(PENDING_KEY, this.pending.map(p => ({ id: p.id, text: p.text, date: p.date, ts: p.ts })));
   }
 
-  /** 只记吃的模式：藏起训练、蛋白质、缺口这些健身词 */
+  /** 只记吃的模式：藏起训练、蛋白质、赤字这些健身词 */
   isSimple() { return this.profile.mode === 'eat'; }
 
   applyMode() {
@@ -136,16 +136,13 @@ class FitnessApp {
     const $ = (id) => document.getElementById(id);
 
     document.querySelectorAll('#tabs .tab').forEach(b => b.addEventListener('click', () => { if (this.view !== b.dataset.view) window.Haptics && window.Haptics.fire('tick'); this.switchView(b.dataset.view); }));
-    $('cmp-chips').addEventListener('click', (e) => {
-      const c = e.target.closest('[data-quick]');
-      if (c) this.quickRepeat(Number(c.dataset.quick));
-    });
+    this.bindQuick();
     $('btn-settings').addEventListener('click', () => this.switchView(this.view === 'settings' ? 'today' : 'settings'));
     $('date-prev').addEventListener('click', () => this.shiftDate(-1));
     $('date-next').addEventListener('click', () => this.shiftDate(1));
     $('date-label').addEventListener('click', () => { this.selectedDate = getTodayDateString(); this.render(); });
     $('setup-hint').addEventListener('click', () => this.switchView('settings'));
-    $('weight-row').addEventListener('click', () => this.openWeightEditor(this.selectedDate));
+    $('weight-log').addEventListener('click', () => this.openWeightEditor(getTodayDateString()));
     this.bindOnboarding();
 
     // 左右滑动切换日期
@@ -168,6 +165,8 @@ class FitnessApp {
         else if (act.dataset.act === 'edit-text') this.editPendingText(id);
         return;
       }
+      const quick = e.target.closest('[data-quick-key]');
+      if (quick) { this.quickRepeatKey(quick.dataset.quickKey); return; }
       const item = e.target.closest('.item[data-kind]');
       if (item) this.openEditor(item.dataset.kind, item.dataset.id);
     });
@@ -192,6 +191,8 @@ class FitnessApp {
 
     // 安卓返回键：WebView 有历史就先后退，这里用 hash 管理弹层和页面
     window.addEventListener('popstate', () => {
+      // 保存 / 取消弹层时自己调的 history.back()：只关弹层，别跟着回到今天页
+      if (this._editorBack) { this._editorBack = false; return; }
       if (!$('edit-overlay').classList.contains('hidden')) this.closeEditor(true);
       else if (this.view !== 'today') this.switchView('today', true);
     });

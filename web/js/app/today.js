@@ -27,6 +27,12 @@ Object.assign(FitnessApp.prototype, {
     const pct = s.budget > 0 ? Math.min(100, (s.intake / s.budget) * 100) : 100;
     $('hero-meter').style.width = pct + '%';
     const target = this.profile.targetDeficitKcal || 0;
+    // 热量赤字 = 全天消耗（日常 + 训练）− 已吃；负数就是盈余
+    const surplus = s.deficit < 0;
+    $('hero-deficit-l').textContent = surplus ? '热量盈余' : '热量赤字';
+    $('hero-deficit-v').textContent = fmt(Math.abs(s.deficit));
+    $('hero-deficit-n').textContent = target > 0 ? `目标 ${fmt(target)}` : target < 0 ? `目标盈余 ${fmt(-target)}` : '目标 保持';
+    $('hero-deficit').className = 'hero-side ' + (s.deficit >= target ? 'good' : surplus ? 'bad' : '');
     const simple = this.isSimple();
     if (simple) {
       const perMonth = Math.abs(target) * 30 / 7700;
@@ -37,14 +43,13 @@ Object.assign(FitnessApp.prototype, {
       $('st-protein-l').textContent = '运动消耗';
       $('st-protein').textContent = s.workoutBurn ? '+' + fmt(s.workoutBurn) : '0';
     } else {
-      $('hero-foot').textContent = `预算 ${fmt(s.budget)} = 消耗 ${fmt(s.totalBurn)} ${target >= 0 ? '− 目标缺口 ' + fmt(target) : '+ 目标盈余 ' + fmt(-target)}`;
+      $('hero-foot').textContent = `预算 ${fmt(s.budget)} = 消耗 ${fmt(s.totalBurn)} ${target >= 0 ? '− 目标赤字 ' + fmt(target) : '+ 目标盈余 ' + fmt(-target)}`;
       $('st-burn-l').textContent = '训练消耗';
       $('st-burn').textContent = s.workoutBurn ? '+' + fmt(s.workoutBurn) : '0';
       $('st-protein-l').textContent = '蛋白质';
       $('st-protein').textContent = `${fmt(s.protein)} / ${fmt(this.profile.targetProteinG)}g`;
     }
     $('st-intake').textContent = fmt(s.intake);
-    this.renderWeightRow(date);
 
     $('setup-hint').classList.toggle('hidden', !!this.profile.customized);
     let asked = true;
@@ -69,7 +74,10 @@ Object.assign(FitnessApp.prototype, {
       html += lifts.map(w => this.renderRow({ kind: 'workout', ts: recordTs(w), rec: w })).join('');
     }
     if (!html) {
+      const usual = isToday ? this.quickSuggestions().filter(q => q.kind === 'meal' && q.usual) : [];
       html = !isToday ? `<div class="empty">这天没有记录</div>`
+        : usual.length
+          ? `<div class="empty"><b>还是老样子？</b>点一下就记好<br>吃了别的，按住下面的按钮说一句<br><button type="button" class="empty-quick" data-quick-key="${esc(usual[0].key)}"><span class="qplus">+</span>${esc(usual[0].label)} · ${fmt(usual[0].kcal)} kcal</button></div>`
         : simple
           ? `<div class="empty"><div class="empty-icon">${ICONS.mic}</div><b>按住下面的按钮</b>，说说今天吃了啥<br>松手自动算好热量、记下来<br>说错了再说一句「改成…」「删掉…」<br><span class="empty-example">「早上包子豆浆，中午黄焖鸡，体重61.5」</span></div>`
           : `<div class="empty"><div class="empty-icon">${ICONS.mic}</div><b>按住下面的按钮</b>，一口气说完今天练了啥、吃了啥<br>松手就自动整理、记好<br>说错了再说一句「改成…」「删掉…」<br><span class="empty-example">「卧推80公斤4组8个，中午吃了黄焖鸡米饭」</span></div>`;
@@ -79,62 +87,6 @@ Object.assign(FitnessApp.prototype, {
     this.renderChips();
     const tip = $('cmp-tip');
     if (tip) tip.classList.toggle('hidden', this.workouts.length + this.diet.length >= 3);
-  },
-
-  /** 常吃常练：最近 30 天里记过 2 次以上、这天还没记的，点一下直接再记一次 */
-  quickSuggestions() {
-    const since = shiftDateString(getTodayDateString(), -30);
-    const date = this.selectedDate;
-    const map = new Map();
-    const add = (key, item) => {
-      const e = map.get(key);
-      if (!e) { map.set(key, Object.assign({}, item, { count: 1, last: item.ts })); return; }
-      e.count += 1;
-      if (item.ts > e.last) { e.last = item.ts; e.src = item.src; }
-    };
-    this.diet.filter(d => d.date >= since).forEach(d => add(`m|${d.mealType}|${d.foodSummary}`, {
-      kind: 'meal', label: `${(d.mealType || '').replace('/补剂', '')} · ${d.foodSummary}`, ts: recordTs(d), src: d
-    }));
-    this.workouts.filter(w => w.date >= since).forEach(w => {
-      const label = w.durationMin ? `${w.exerciseName} ${w.durationMin}分钟` : `${w.exerciseName} ${w.weightKg > 0 ? round1(w.weightKg) + 'kg' : '自重'} ${w.sets}×${w.reps}`;
-      add(`w|${label}`, { kind: 'workout', label, ts: recordTs(w), src: w });
-    });
-    const loggedToday = new Set([
-      ...this.diet.filter(d => d.date === date).map(d => `m|${d.mealType}|${d.foodSummary}`),
-      ...this.workouts.filter(w => w.date === date).map(w => w.durationMin ? `w|${w.exerciseName} ${w.durationMin}分钟` : `w|${w.exerciseName} ${w.weightKg > 0 ? round1(w.weightKg) + 'kg' : '自重'} ${w.sets}×${w.reps}`)
-    ]);
-    return [...map.entries()]
-      .filter(([k, e]) => e.count >= 2 && !loggedToday.has(k))
-      .sort((a, b) => b[1].count - a[1].count || b[1].last - a[1].last)
-      .slice(0, 8)
-      .map(([, e]) => e);
-  },
-
-  renderChips() {
-    const el = document.getElementById('cmp-chips');
-    this._quick = this.quickSuggestions();
-    el.innerHTML = this._quick.map((q, i) =>
-      `<button type="button" class="qchip ${q.kind}" data-quick="${i}"><span class="qplus">+</span>${esc(q.label)}</button>`).join('');
-    el.classList.toggle('hidden', !this._quick.length);
-  },
-
-  quickRepeat(i) {
-    const q = this._quick && this._quick[i];
-    if (!q) return;
-    const ts = Date.now();
-    const copy = Object.assign({}, q.src, { id: (q.kind === 'meal' ? 'd_' : 'w_') + ts, ts, date: this.selectedDate });
-    if (q.kind === 'meal') this.diet.unshift(copy); else this.workouts.unshift(copy);
-    window.Haptics && window.Haptics.fire('success');
-    this.saveData();
-    this.render();
-    if (window.QuickLog) {
-      window.QuickLog.showUndo(`✓ 已再记一次`, [q.label + (q.kind === 'meal' ? ` · ${fmt(copy.calories)} kcal` : '')], () => {
-        this.diet = this.diet.filter(d => d.id !== copy.id);
-        this.workouts = this.workouts.filter(w => w.id !== copy.id);
-        this.saveData();
-        this.render();
-      });
-    }
   },
 
   renderRow(r) {

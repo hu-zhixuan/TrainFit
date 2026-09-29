@@ -22,6 +22,7 @@ Object.assign(FitnessApp.prototype, {
           ${MEAL_TYPES.map(t => `<button type="button" class="seg-btn ${rec.mealType === t ? 'active' : ''}" data-value="${t}">${t.replace('/补剂', '')}</button>`).join('')}
         </div>
         ${input('foodSummary', '吃了什么', rec.foodSummary, 'text', 'maxlength="60"')}
+        ${rec.said ? `<div class="said">你说的：「${esc(rec.said)}」</div>` : ''}
         ${Array.isArray(rec.items) && rec.items.length ? `<div class="breakdown">
           <div class="breakdown-head">怎么算的</div>
           ${rec.items.map((i, idx) => `<div class="breakdown-row">
@@ -99,7 +100,7 @@ Object.assign(FitnessApp.prototype, {
     if (!this.editing) return;
     this.editing = null;
     document.getElementById('edit-overlay').classList.add('hidden');
-    if (!fromBack && history.state && history.state.edit) history.back();
+    if (!fromBack && history.state && history.state.edit) { this._editorBack = true; history.back(); }
   },
 
   saveEditor() {

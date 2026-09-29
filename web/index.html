@@ -52,8 +52,17 @@
           </button>
         </div>
         <div class="hero" id="hero">
-          <div class="hero-label" id="hero-label">今天还能吃</div>
-          <div class="hero-num"><span id="hero-num">0</span><small>kcal</small></div>
+          <div class="hero-top">
+            <div class="hero-main">
+              <div class="hero-label" id="hero-label">今天还能吃</div>
+              <div class="hero-num"><span id="hero-num">0</span><small>kcal</small></div>
+            </div>
+            <div class="hero-side" id="hero-deficit">
+              <span id="hero-deficit-l">热量赤字</span>
+              <b id="hero-deficit-v">0</b>
+              <small id="hero-deficit-n"></small>
+            </div>
+          </div>
           <div class="meter" aria-hidden="true"><div class="meter-fill" id="hero-meter"></div></div>
           <div class="hero-foot" id="hero-foot"></div>
           <div class="hero-stats">
@@ -63,12 +72,6 @@
           </div>
         </div>
 
-        <button class="weight-row" id="weight-row" type="button" aria-label="记体重">
-          <span class="wr-label">体重</span>
-          <span class="wr-main" id="wr-main"></span>
-          <span class="wr-sub" id="wr-sub"></span>
-          <span class="wr-go" aria-hidden="true">›</span>
-        </button>
 
         <button class="setup-hint hidden" id="setup-hint" type="button">
           <span>先填一下身高体重，热量预算才准</span>
@@ -94,14 +97,14 @@
         </div>
 
         <div class="stat-row">
-          <div class="stat-card"><span id="tr-avg-l">平均每天缺口</span><b id="tr-avg">0</b><small id="tr-avg-u">kcal</small></div>
+          <div class="stat-card"><span id="tr-avg-l">平均每天赤字</span><b id="tr-avg">0</b><small id="tr-avg-u">kcal</small></div>
           <div class="stat-card"><span id="tr-fat-l">折合脂肪</span><b id="tr-fat">0</b><small id="tr-fat-u">kg</small></div>
           <div class="stat-card"><span>记录天数</span><b id="tr-days">0</b><small>天</small></div>
         </div>
 
         <div class="card chart-card">
           <div class="card-head">
-            <span id="trend-chart-title">每天热量缺口</span>
+            <span id="trend-chart-title">每天热量赤字</span>
             <span class="legend" id="trend-legend"></span>
           </div>
           <div class="chart" id="trend-chart"></div>
@@ -111,7 +114,7 @@
         <div class="card chart-card" id="weight-card">
           <div class="card-head">
             <span>体重</span>
-            <span class="legend" id="weight-legend"></span>
+            <span class="weight-head-right"><span class="legend" id="weight-legend"></span><button type="button" class="chip" id="weight-log">记体重</button></span>
           </div>
           <div class="chart" id="weight-chart"></div>
         </div>
@@ -152,7 +155,7 @@
             <button class="seg-btn" data-value="muscle_gain" type="button">增肌</button>
           </div>
           <div class="field-grid field-grid-2" id="goal-grid">
-            <label class="field"><span class="field-label" id="set-deficit-l">每天热量缺口 kcal</span><input class="input" id="set-deficit" type="number" inputmode="numeric"></label>
+            <label class="field"><span class="field-label" id="set-deficit-l">每天热量赤字 kcal</span><input class="input" id="set-deficit" type="number" inputmode="numeric"></label>
             <label class="field fit-only"><span class="field-label">每天蛋白质 g</span><input class="input" id="set-protein" type="number" inputmode="numeric"></label>
           </div>
           <div class="field-note" id="set-goal-note"></div>
@@ -240,7 +243,7 @@
 
     <!-- 底部：一个按钮，按住说话（或点一下开始、再点一下结束） -->
     <div class="composer" id="composer">
-      <div class="chips" id="cmp-chips" aria-label="常用，点一下再记一次"></div>
+      <div class="chips" id="cmp-chips" aria-label="打字联想：点一下就记"></div>
       <div class="cmp-status hidden" id="cmp-status" role="status"></div>
 
       <div class="cmp-row" id="voice-row">
@@ -275,7 +278,7 @@
       <div class="ob-options">
         <button class="ob-opt" type="button" data-pick="lose"><b>想瘦一点</b><span>告诉你今天还能吃多少，顺手记体重</span></button>
         <button class="ob-opt" type="button" data-pick="track"><b>就记记吃了啥</b><span>不用设目标，看看自己每天吃了多少</span></button>
-        <button class="ob-opt" type="button" data-pick="fit"><b>在健身（减脂 / 增肌）</b><span>吃和练都记：热量缺口、蛋白质、动作进步</span></button>
+        <button class="ob-opt" type="button" data-pick="fit"><b>在健身（减脂 / 增肌）</b><span>吃和练都记：热量赤字、蛋白质、动作进步</span></button>
       </div>
       <p class="ob-foot">之后随时可以在设置里改</p>
     </div>
@@ -334,9 +337,7 @@
 
   <div class="toast hidden" id="app-toast" role="status"></div>
 
-  <!-- 离线兜底引擎 + 食物营养库 -->
-  <script src="js/lib/nutrition.js"></script>
-  <script src="js/lib/workout.js"></script>
+  <!-- 食物营养库 -->
   <script src="js/data/food_db.js"></script>
 
   <!-- 主界面：FitnessApp（app.js 定义类，其余文件往上加方法） -->
@@ -349,6 +350,7 @@
   <script src="js/app/onboarding.js"></script>
   <script src="js/app/editor.js"></script>
   <script src="js/app/foods.js"></script>
+  <script src="js/app/quick.js"></script>
 
   <!-- 一键记录：按住说话 → 大模型整理 → 保存（顺序有依赖） -->
   <script src="js/log/helpers.js"></script>

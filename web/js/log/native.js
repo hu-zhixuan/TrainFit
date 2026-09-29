@@ -80,7 +80,7 @@
         const timer = setTimeout(() => {
           delete this._pending[id];
           reject(new Error('TIMEOUT'));
-        }, timeoutMs || 45000);
+        }, timeoutMs || 75000); // 原生那边连接 15 秒 + 读取 60 秒
         this._pending[id] = { resolve, reject, timer };
         try {
           root.TrainFitNative.llmChat(id, JSON.stringify(body), JSON.stringify(override || {}));
