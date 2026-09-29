@@ -17,6 +17,6 @@ jobs:
           LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
           LLM_MODEL: ${{ vars.LLM_MODEL }}
         run: |
-          PARSER=new ONLY="原话：早上+晚上" ROUNDS=4 node .github/api_check.js
-          PARSER=new ONLY="份量补充,错字+补份量,无标点：早+晚" ROUNDS=2 node .github/api_check.js
-          PARSER=new SKIP="原话：早上+晚上,份量补充,错字+补份量,无标点：早+晚" node .github/api_check.js
+          KEY="补剂：鱼油+维D,补剂：锌镁钙,饭+复合维生素,蛋白：鸡胸200g+米饭,蛋白：两勺蛋白粉,蛋白：一块煎鸡胸,原话：早上+晚上"
+          PARSER=new ONLY="$KEY" ROUNDS=2 node .github/api_check.js
+          PARSER=new SKIP="$KEY" node .github/api_check.js

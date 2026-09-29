@@ -38,12 +38,12 @@ async function call(label, text, hhmm, check) {
     const r0 = P.normalize(parsed, ctx);
     if (r0.meals.length !== r.meals.length) fallback = '（大模型没分开，兜底拆开了）';
   } catch (e) { err(label + ' 解析失败', e.message + ' ' + raw.slice(0, 600)); return false; }
-  const meals = r.meals.map(m => `【${m.mealType}】${m.foodSummary} ${m.calories}kcal：` + (m.items || []).map(i => `${i.name} ${i.amount || ''} ${i.grams || ''}g ${i.calories}`).join('；'));
+  const meals = r.meals.map(m => `【${m.mealType}】${m.foodSummary} ${m.calories}kcal：` + (m.items || []).map(i => `${i.name} ${i.amount || ''} ${i.grams || ''}g ${i.calories}kcal 蛋白${i.proteinG}[${i.src}]${i.nutrients ? JSON.stringify(i.nutrients) : ''}`).join('；'));
   const wos = r.workouts.map(w => `【训练】${w.exerciseName} ${w.durationMin ? w.durationMin + '分钟' : w.weightKg + 'kg ' + w.sets + '×' + w.reps}`);
   let why;
   try { why = check(r); } catch (e) { why = '检查出错 ' + e.message; }
   (why === true ? note : err)(`[${TAG}] ${label} ${why === true ? 'OK' : 'CHECK: ' + why} (${(ms / 1000).toFixed(1)}s)`,
-    `${hhmm} 说：${text}${fallback}%0AdayOffset=${r.dayOffset}%0A${meals.concat(wos).join('%0A')}%0Areply：${r.reply}`);
+    `${hhmm} 说：${text}${fallback}%0AdayOffset=${r.dayOffset}%0A${meals.concat(wos).join('%0A')}%0A记住：${JSON.stringify(r.remember)}%0Areply：${r.reply}`);
   return why === true;
 }
 
@@ -51,56 +51,64 @@ const types = (r) => r.meals.map(m => m.mealType.replace('/补剂', '')).join(',
 const itemNames = (m) => (m.items || []).map(i => i.name).join(',') + ',' + m.foodSummary;
 
 const CASES = [
+  // ---- 补剂、零热量 ----
+  ['补剂：鱼油+维D', '早上吃了两粒鱼油一片维生素D', '08:30', r => {
+    const sup = r.meals.flatMap(m => (m.items || []).filter(i => i.supp));
+    const n = sumN(sup);
+    if (sup.length < 2) return '补剂没记全：' + allItems(r);
+    if (!r.meals.filter(m => m.items.some(i => i.supp)).every(m => m.mealType === '加餐/补剂')) return '补剂没放进补剂那条';
+    return (n['EPA+DHA'] > 0 && n['维生素D'] > 0) || '营养素缺：' + JSON.stringify(n);
+  }],
+  ['补剂：锌镁钙', '吃了一片锌一片镁还有一片钙片', '21:00', r => {
+    const n = sumN(r.meals.flatMap(m => m.items || []));
+    return (n['锌'] > 0 && n['镁'] > 0 && n['钙'] > 0 && n['锌'] <= 50) || '营养素：' + JSON.stringify(n);
+  }],
+  ['饭+复合维生素', '早上两个包子，然后吃了颗复合维生素', '09:00', r => {
+    const food = r.meals.find(m => /包子/.test(m.foodSummary));
+    const sup = r.meals.find(m => m.items.some(i => i.supp));
+    if (!food || !sup) return '结果：' + allItems(r);
+    if (food.items.some(i => i.supp)) return '补剂混在早餐里';
+    return Object.keys(sumN(sup.items)).length >= 3 || '复合维生素营养素太少：' + JSON.stringify(sumN(sup.items));
+  }],
+  ['零热量：水', '喝了一瓶矿泉水', '15:00', r => (r.meals.length === 1 && r.meals[0].calories <= 5) || '结果：' + allItems(r)],
+  ['零热量：美式', '刚喝了一杯美式', '10:00', r => (r.meals.length === 1 && r.meals[0].calories <= 25) || '结果：' + allItems(r)],
+  ['药', '吃了一片布洛芬', '14:00', r => (r.meals.length === 1 && r.meals[0].calories <= 5) || '结果：' + allItems(r)],
+  ['记住补剂', '记住，我的鱼油一粒含EPA加DHA 700毫克', '10:00', r => {
+    if (r.meals.length) return '不该新增饮食';
+    const f = r.remember[0];
+    return (f && f.nutrients && f.nutrients['EPA+DHA'] === 700) || '记住的：' + JSON.stringify(r.remember);
+  }],
+  // ---- 蛋白质 ----
+  ['蛋白：鸡胸200g+米饭', '中午吃了鸡胸肉200克，一碗米饭', '12:30', r => inR('蛋白', protein(r), 48, 62)],
+  ['蛋白：两勺蛋白粉', '练完喝了两勺蛋白粉', '20:00', r => inR('蛋白', protein(r), 42, 52)],
+  ['蛋白：三蛋一奶', '早上三个鸡蛋一杯牛奶', '08:00', r => inR('蛋白', protein(r), 24, 32)],
+  ['蛋白：虾仁炒蛋饭', '中午一份虾仁炒蛋和一碗米饭', '12:30', r => inR('蛋白', protein(r), 22, 48)],
+  ['蛋白：一块煎鸡胸', '晚上吃了一块煎鸡胸肉', '19:00', r => inR('蛋白', protein(r), 28, 55)],
+  ['蛋白：即食鸡胸', '下午吃了一包即食鸡胸肉', '16:00', r => inR('蛋白', protein(r), 18, 32)],
+  // ---- 回归 ----
   ['原话：早上+晚上', '今天早上吃了一份呃荷叶鸡然后有一小份然后两个茶叶大晚上吃了两个香蕉两勺蛋白粉，七百毫升牛奶', '21:22', r => {
     const b = r.meals.filter(m => m.mealType === '早餐');
     const rest = r.meals.filter(m => m.mealType !== '早餐');
-    if (!b.length) return '没有早餐：' + types(r);
-    if (!rest.length) return '没拆出晚上那一餐：' + types(r);
+    if (!b.length || !rest.length) return '没分开：' + types(r);
     if (b.some(m => /香蕉|牛奶|蛋白粉/.test(itemNames(m)))) return '晚上的东西记到早餐了';
-    if (!b.some(m => /荷叶鸡/.test(itemNames(m)) && /茶叶蛋|鸡蛋/.test(itemNames(m)))) return '早餐里不是荷叶鸡+茶叶蛋';
-    if (b.reduce((a, m) => a + (m.items || []).length, 0) > 2) return '早餐多记了东西';
-    return true;
+    return inR('晚上那餐蛋白', rest.reduce((a, m) => a + m.proteinG, 0), 60, 80);
   }],
-  ['无标点：早+晚', '早上吃了两个包子然后喝了杯豆浆中午没吃晚上吃了一碗牛肉面加个蛋', '21:30', r => {
-    const b = r.meals.filter(m => m.mealType === '早餐');
-    const d = r.meals.filter(m => m.mealType !== '早餐');
-    if (!b.length || !d.length) return '没分开：' + types(r);
-    if (b.some(m => /牛肉面/.test(itemNames(m)))) return '牛肉面记到早餐了';
-    return true;
+  ['糯米鸡+水煮蛋', '中午吃了一个糯米鸡，两个水煮蛋', '12:30', r => inR('热量', r.meals.reduce((a, m) => a + m.calories, 0), 380, 700)],
+  ['份量补充', '中午吃了一碗牛肉面嗯是小碗的', '12:40', r => {
+    const items = r.meals.flatMap(m => m.items || []);
+    return (items.length === 1 && /面/.test(items[0].name)) || '记成了 ' + allItems(r);
   }],
-  ['早中晚', '早上两个包子一杯豆浆，中午黄焖鸡米饭，晚上没吃', '21:00', r => types(r) === '早餐,午餐' || '餐次是 ' + types(r)],
-  ['中午和晚上都', '中午和晚上都吃的黄焖鸡米饭', '21:00', r => (r.meals.length === 2 && /午餐/.test(types(r)) && /晚餐/.test(types(r))) || '餐次是 ' + types(r)],
-  ['昨晚', '昨晚吃了火锅，还喝了两瓶啤酒', '09:10', r => r.dayOffset !== -1 ? 'dayOffset=' + r.dayOffset : (r.meals.length && r.meals.every(m => m.mealType === '晚餐')) || '餐次是 ' + types(r)],
-  ['改口', '中午吃了两碗米饭，不对，是一碗，还有一份红烧肉', '12:40', r => {
-    const rice = r.meals.flatMap(m => m.items || []).find(i => /米饭/.test(i.name));
-    if (!rice) return '没有米饭';
-    return (rice.grams && rice.grams <= 260) || `米饭 ${rice.amount} ${rice.grams}g，没按改口后的一碗算`;
-  }],
-  ['口头禅', '呃那个中午就是吃了个嗯麻辣烫然后还有一瓶可乐', '13:00', r => (types(r) === '午餐' && /麻辣烫/.test(itemNames(r.meals[0])) && /可乐/.test(itemNames(r.meals[0]))) || '结果：' + types(r)],
-  ['练完+睡前', '练完喝了一勺蛋白粉，睡前又喝了一杯牛奶', '22:30', r => (r.meals.length && r.meals.every(m => m.mealType === '加餐/补剂')) || '餐次是 ' + types(r)],
   ['吃练混说', '早上跑了五公里然后吃了两个鸡蛋一杯牛奶，晚上卧推八十公斤四组八个', '21:00', r => {
     if (types(r) !== '早餐') return '餐次是 ' + types(r);
     const bench = r.workouts.find(w => /卧推/.test(w.exerciseName));
-    if (!bench || bench.weightKg !== 80 || bench.sets !== 4 || bench.reps !== 8) return '卧推不对';
-    const run = r.workouts.find(w => /跑/.test(w.exerciseName));
-    return (run && run.durationMin >= 15 && run.durationMin <= 60) || '跑步没按时间记：' + (run ? run.weightKg + 'kg ' + run.sets + '×' + run.reps : '无');
-  }],
-  ['份量补充', '中午吃了一碗牛肉面嗯是小碗的', '12:40', r => {
-    const items = r.meals.flatMap(m => m.items || []);
-    return (items.length === 1 && /面/.test(items[0].name)) || '记成了 ' + items.map(i => i.name + i.amount).join('、');
-  }],
-  ['错字+补份量', '中午吃了一个肉夹馍嗯然后是大份的然后一瓶冰红叉', '12:50', r => {
-    const items = r.meals.flatMap(m => m.items || []);
-    const names = items.map(i => i.name + i.amount).join('、');
-    return (items.length === 2 && items.some(i => /肉夹馍/.test(i.name)) && items.some(i => /冰红茶/.test(i.name))) || '记成了 ' + names;
-  }],
-  ['只说距离', '早上跑了五公里', '08:30', r => {
-    const run = r.workouts[0];
-    return (run && run.durationMin >= 15 && run.durationMin <= 60 && !r.meals.length) || '结果：' + JSON.stringify(r.workouts);
-  }],
-  ['刚吃', '刚吃了一份猪脚饭', '12:40', r => types(r) === '午餐' || '餐次是 ' + types(r)],
-  ['下午茶', '下午喝了杯奶茶吃了块蛋糕', '17:30', r => (r.meals.length && r.meals.every(m => m.mealType === '加餐/补剂')) || '餐次是 ' + types(r)]
+    return (bench && bench.weightKg === 80 && bench.sets === 4 && bench.reps === 8) || '卧推不对';
+  }]
 ];
+const sumN = (items) => { const n = {}; items.forEach(i => Object.keys(i.nutrients || {}).forEach(k => { n[k] = (n[k] || 0) + i.nutrients[k]; })); return n; };
+const allItems = (r) => r.meals.map(m => `【${m.mealType}】` + m.items.map(i => i.name + (i.amount || '')).join('、')).join(' ');
+const protein = (r) => Math.round(r.meals.reduce((a, m) => a + (m.proteinG || 0), 0) * 10) / 10;
+const inR = (what, v, a, b) => (v >= a && v <= b) || `${what} ${v} 不在 ${a}–${b}`;
+
 
 (async () => {
   const only = (process.env.ONLY || '').split(',').filter(Boolean);

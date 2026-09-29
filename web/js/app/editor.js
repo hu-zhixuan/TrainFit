@@ -1,5 +1,5 @@
 /** 「怎么算的」里来源标签的颜色 */
-const SRC_CLASS = { '估算': 'est', '我的': 'mine', '包装': 'mine' };
+const SRC_CLASS = { '估算': 'est', '补剂': 'est', '我的': 'mine', '包装': 'mine' };
 
 /**
  * 修改一条饮食或训练记录的弹层（体重的弹层在 weight.js）。
@@ -26,10 +26,11 @@ Object.assign(FitnessApp.prototype, {
         ${Array.isArray(rec.items) && rec.items.length ? `<div class="breakdown">
           <div class="breakdown-head">怎么算的</div>
           ${rec.items.map((i, idx) => `<div class="breakdown-row">
-            <span class="bd-name">${esc(i.name)}<small>${esc([i.amount, i.grams ? i.grams + 'g' : ''].filter(Boolean).join(' · '))}</small></span>
+            <span class="bd-name">${esc(i.name)}<small>${esc([i.amount, i.grams ? i.grams + 'g' : ''].filter(Boolean).join(' · '))}${
+              i.supp ? (i.nutrients ? ' · ' + esc(TF.nutrientsText(i.nutrients)) : '') : ` · 蛋白 <b>${round1(i.proteinG || 0)}g</b>`}</small></span>
             <span class="bd-val"><input class="bd-input" name="item_${idx}" type="number" inputmode="numeric" min="0" value="${Math.round(i.calories || 0)}" aria-label="${esc(i.name)} 热量">kcal<em class="src ${SRC_CLASS[i.src] || ''}">${esc(i.src || '')}</em></span>
           </div>`).join('')}
-          <div class="breakdown-note">哪样不对就直接改那一样（填 0 去掉），会记住，下次说到同样的东西就用你的数。「成分表」来自《中国食物成分表（第6版）》，「估算」是 AI 按常见大小估的。</div>
+          <div class="breakdown-note">哪样不对就直接改那一样（填 0 去掉），会记住，下次说到同样的东西就用你的数。「成分表」来自《中国食物成分表（第6版）》，「估算」是 AI 按常见大小估的；肉按生重算。</div>
         </div>` : ''}
         <div class="field-grid field-grid-2">
           ${input('calories', '热量 kcal', rec.calories)}

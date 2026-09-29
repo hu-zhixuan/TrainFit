@@ -93,6 +93,14 @@ class FitnessApp {
     const workoutBurn = ws.reduce((s, w) => s + (w.burnedCalories || 0), 0);
     const intake = ds.reduce((s, d) => s + (d.calories || 0), 0);
     const protein = ds.reduce((s, d) => s + (d.proteinG || 0), 0);
+    const fat = ds.reduce((s, d) => s + (d.fatG || 0), 0);
+    // 补剂：吃了哪些、合计含多少营养素（健康度温度计用）
+    const supps = [];
+    const nutrients = {};
+    ds.forEach(d => (d.items || []).forEach(it => {
+      if (it.supp && !supps.includes(it.name)) supps.push(it.name);
+      Object.keys(it.nutrients || {}).forEach(k => { nutrients[k] = round1((nutrients[k] || 0) + it.nutrients[k]); });
+    }));
     const totalBurn = this.profile.tdee + workoutBurn;
     const budget = totalBurn - (this.profile.targetDeficitKcal || 0);
     return {
@@ -102,6 +110,9 @@ class FitnessApp {
       workoutBurn,
       intake,
       protein: round1(protein),
+      fat: round1(fat),
+      supps,
+      nutrients,
       totalBurn,
       budget,
       remaining: budget - intake,
@@ -140,6 +151,7 @@ class FitnessApp {
     $('btn-settings').addEventListener('click', () => this.switchView(this.view === 'settings' ? 'today' : 'settings'));
     $('date-prev').addEventListener('click', () => this.shiftDate(-1));
     $('date-next').addEventListener('click', () => this.shiftDate(1));
+    this.bindGaugePop();
     $('date-label').addEventListener('click', () => { this.selectedDate = getTodayDateString(); this.render(); });
     $('setup-hint').addEventListener('click', () => this.switchView('settings'));
     $('weight-log').addEventListener('click', () => this.openWeightEditor(getTodayDateString()));

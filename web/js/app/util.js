@@ -53,6 +53,14 @@ const ICONS = {
 function esc(s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
+/** 这一条饮食是不是只有补剂（钙片、鱼油…） */
+function isSuppOnly(rec) { return Array.isArray(rec && rec.items) && rec.items.length > 0 && rec.items.every(i => i.supp); }
+/** 几样东西含的营养素加起来 */
+function sumNutrients(items) {
+  const n = {};
+  (items || []).forEach(it => Object.keys(it.nutrients || {}).forEach(k => { n[k] = Math.round(((n[k] || 0) + it.nutrients[k]) * 10) / 10; }));
+  return n;
+}
 function fmt(n) { return Math.round(n || 0).toLocaleString('zh-CN'); }
 function round1(n) { return Math.round((n || 0) * 10) / 10; }
 function load(key, fallback) {
