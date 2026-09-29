@@ -1,10 +1,8 @@
-// 一键记录的纯逻辑：体重识别、按食物库算热量、大模型输出的校验整理、离线兜底。
+// 一键记录的纯逻辑：体重识别、按食物库算热量、大模型输出的校验整理、失败重试。
 // 运行：npm test
 const test = require('node:test');
 const assert = require('node:assert');
 
-globalThis.WorkoutEngine = require('../web/js/lib/workout.js').WorkoutEngine;
-globalThis.NutritionEngine = require('../web/js/lib/nutrition.js');
 const TF = require('../web/js/log/parser.js');
 const { quickWeight, findWeight, FoodDB, groundItem, sumItems, Parser } = TF;
 
@@ -134,11 +132,35 @@ test('修改 / 删除只认这天已有记录的编号', () => {
   assert.deepStrictEqual(r.deletes, ['r1']);
 });
 
-test('大模型连不上时的离线兜底', () => {
-  const r = Parser.viaLocal('卧推80公斤4组8个，中午吃了黄焖鸡米饭，体重61.5', { lastWeight: 61, now: new Date('2026-09-28T12:30:00') });
-  assert.strictEqual(r.bodyWeight, 61.5);
-  assert.strictEqual(r.workouts.length, 1);
-  assert.strictEqual(r.workouts[0].weightKg, 80);
-  assert.strictEqual(r.meals.length, 1);
-  assert.ok(r.meals[0].calories > 0);
+test('大模型失败：限流 / 超时会重试，最后还是失败就报错，不再用本地规则乱记', async () => {
+  const origSend = Parser.send;
+  Parser.retryWaits = [0, 0];
+  try {
+    // 前两次限流，第三次成功
+    let n = 0;
+    Parser.send = async () => {
+      n += 1;
+      if (n <= 2) throw new Error('HTTP 429 {"error":"Cluster RPM rate limit exceeded."}');
+      return JSON.stringify({ choices: [{ message: { content: '{"reply":"ok","add":{"meals":[{"mealType":"早餐","foodSummary":"鸡蛋2个","items":[{"name":"鸡蛋","grams":100,"calories":140}]}]}}' } }] });
+    };
+    const r = await Parser.parse('早上两个鸡蛋', {});
+    assert.strictEqual(n, 3);
+    assert.strictEqual(r.meals[0].calories, 139);
+    // 一直超时：重试两次后报错
+    n = 0;
+    Parser.send = async () => { n += 1; throw new Error('TIMEOUT'); };
+    await assert.rejects(() => Parser.parse('两个水煮蛋加乳清蛋白粉700毫升', {}), /TIMEOUT/);
+    assert.strictEqual(n, 3);
+    assert.strictEqual(Parser.failReason(new Error('TIMEOUT')), '网络不好，AI 没连上，点「重试」');
+    assert.strictEqual(Parser.failReason(new Error('HTTP 429 x')), 'AI 这会儿太忙（限流），点「重试」');
+    assert.strictEqual(Parser.failReason(new Error('NO_KEY')), 'AI 接口没有配置 key');
+    // 参数被拒（400）：换不带 thinking 的写法再试一次
+    n = 0;
+    Parser.send = async (body) => { n += 1; if (body.thinking) throw new Error('HTTP 400 bad param'); return JSON.stringify({ choices: [{ message: { content: '{"reply":"ok"}' } }] }); };
+    await Parser.parse('随便', {});
+    assert.strictEqual(n, 2);
+  } finally {
+    Parser.send = origSend;
+    delete Parser.retryWaits;
+  }
 });

@@ -142,7 +142,7 @@ class FitnessApp {
     $('date-next').addEventListener('click', () => this.shiftDate(1));
     $('date-label').addEventListener('click', () => { this.selectedDate = getTodayDateString(); this.render(); });
     $('setup-hint').addEventListener('click', () => this.switchView('settings'));
-    $('weight-row').addEventListener('click', () => this.openWeightEditor(this.selectedDate));
+    $('weight-log').addEventListener('click', () => this.openWeightEditor(getTodayDateString()));
     this.bindOnboarding();
 
     // 左右滑动切换日期
@@ -191,6 +191,8 @@ class FitnessApp {
 
     // 安卓返回键：WebView 有历史就先后退，这里用 hash 管理弹层和页面
     window.addEventListener('popstate', () => {
+      // 保存 / 取消弹层时自己调的 history.back()：只关弹层，别跟着回到今天页
+      if (this._editorBack) { this._editorBack = false; return; }
       if (!$('edit-overlay').classList.contains('hidden')) this.closeEditor(true);
       else if (this.view !== 'today') this.switchView('today', true);
     });

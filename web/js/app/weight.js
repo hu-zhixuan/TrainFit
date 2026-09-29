@@ -1,5 +1,5 @@
 /**
- * 体重：一天一条（fit_weights），首页体重一行、改体重弹层；最新体重同步到身体数据。
+ * 体重：一天一条（fit_weights），说「体重 62」或在趋势页体重卡片里记；最新体重同步到身体数据。
  */
 Object.assign(FitnessApp.prototype, {
   latestWeight() {
@@ -59,33 +59,6 @@ Object.assign(FitnessApp.prototype, {
     const base = older.filter(w => w.date <= weekAgo).pop() || older[0];
     const days = Math.round((new Date(last.date + 'T00:00:00') - new Date(base.date + 'T00:00:00')) / 86400000);
     return { last, delta: round1(last.kg - base.kg), days };
-  },
-
-  renderWeightRow(date) {
-    const $ = (id) => document.getElementById(id);
-    const on = this.weightOn(date);
-    const tr = this.weightTrend();
-    const main = $('wr-main'), sub = $('wr-sub');
-    if (on) {
-      main.innerHTML = `${round1(on.kg)}<small>kg</small>`;
-      const isLatest = tr && tr.last.date === on.date;
-      if (isLatest && tr.delta !== null) {
-        const down = tr.delta < 0;
-        sub.textContent = tr.delta === 0 ? `和 ${tr.days} 天前一样` : `比 ${tr.days} 天前${down ? '轻' : '重'} ${Math.abs(tr.delta)} kg`;
-        sub.className = 'wr-sub ' + (tr.delta === 0 ? '' : (down === ((this.profile.targetDeficitKcal || 0) >= 0) ? 'good' : 'bad'));
-      } else {
-        sub.textContent = '点一下可以改';
-        sub.className = 'wr-sub';
-      }
-    } else if (tr) {
-      main.innerHTML = `<span class="wr-muted">上次 ${round1(tr.last.kg)} kg</span>`;
-      sub.textContent = date === getTodayDateString() ? '说「体重 62」或点这里记今天的' : '点这里补记这天的体重';
-      sub.className = 'wr-sub';
-    } else {
-      main.innerHTML = '<span class="wr-muted">还没记</span>';
-      sub.textContent = '说「体重 62.5」就能记，也可以点这里';
-      sub.className = 'wr-sub';
-    }
   },
 
   openWeightEditor(date) {
