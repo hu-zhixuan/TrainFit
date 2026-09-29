@@ -136,10 +136,7 @@ class FitnessApp {
     const $ = (id) => document.getElementById(id);
 
     document.querySelectorAll('#tabs .tab').forEach(b => b.addEventListener('click', () => { if (this.view !== b.dataset.view) window.Haptics && window.Haptics.fire('tick'); this.switchView(b.dataset.view); }));
-    $('cmp-chips').addEventListener('click', (e) => {
-      const c = e.target.closest('[data-quick]');
-      if (c) this.quickRepeat(Number(c.dataset.quick));
-    });
+    this.bindQuick();
     $('btn-settings').addEventListener('click', () => this.switchView(this.view === 'settings' ? 'today' : 'settings'));
     $('date-prev').addEventListener('click', () => this.shiftDate(-1));
     $('date-next').addEventListener('click', () => this.shiftDate(1));
@@ -168,6 +165,8 @@ class FitnessApp {
         else if (act.dataset.act === 'edit-text') this.editPendingText(id);
         return;
       }
+      const quick = e.target.closest('[data-quick-key]');
+      if (quick) { this.quickRepeatKey(quick.dataset.quickKey); return; }
       const item = e.target.closest('.item[data-kind]');
       if (item) this.openEditor(item.dataset.kind, item.dataset.id);
     });
