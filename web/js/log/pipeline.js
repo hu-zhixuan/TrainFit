@@ -182,6 +182,9 @@
       if (n && batch.date !== getTodayDateString()) t += `（${batch.date.slice(5).replace('-', '月')}日）`;
       if (result.source === 'local') t += ' · AI 没连上，用的简单规则';
       const lines = this.describe(result).concat(batch.changed || []);
+      const kcal = result.meals.reduce((a, m) => a + (m.calories || 0), 0);
+      const eq = kcal > 0 && app.equivText ? app.equivText(kcal) : '';
+      if (eq) lines.push(eq);
       Haptics.fire('success');
       // App 在后台（比如说完就锁屏了）：发一条通知
       if (typeof document !== 'undefined' && document.hidden && Native.has() && root.TrainFitNative.showNotification) {

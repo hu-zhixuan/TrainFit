@@ -668,6 +668,20 @@ body.no-composer .snackbar { bottom: calc(20px + var(--sab)); }
 }
 .qchip.meal .qplus { background: var(--meal-soft); color: var(--meal); }
 .qchip.workout .qplus { background: var(--lift-soft); color: var(--lift); }
+.chips { align-items: center; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.qhead { flex: none; font-size: 0.72rem; font-weight: 700; color: var(--text-3); padding-right: 2px; }
+.qlabel { overflow: hidden; text-overflow: ellipsis; }
+.qchip small { flex: none; font-size: 0.72rem; font-weight: 600; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.qchip.pinned { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.qchip.pinned .qplus { background: var(--accent-soft); color: var(--accent-text); font-size: 0.7rem; }
+.qchip.done { opacity: 0.55; }
+.chip-sheet { gap: 10px; }
+.empty-quick { display: inline-flex; align-items: center; gap: 6px; margin-top: 12px; padding: 10px 16px; border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--line)); background: var(--accent-soft); color: var(--text); font-weight: 700; font-size: 0.9rem; }
+.empty-quick .qplus { background: var(--accent); color: var(--accent-ink); }
+.empty-quick:active { transform: scale(0.97); }
+.chip-sheet .sheet-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 4px; }
+.chip-sheet .btn { flex: none; width: 100%; padding: 13px; }
 .cmp-row { display: flex; align-items: flex-end; gap: 8px; }
 .cmp-text {
   flex: 1;

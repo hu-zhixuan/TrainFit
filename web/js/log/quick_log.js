@@ -38,7 +38,7 @@
       $('cmp-voice').addEventListener('click', () => this.setMode('voice'));
       this.sendBtn.addEventListener('click', () => this.sendText());
       document.getElementById('ql-undo')?.addEventListener('click', () => this.undo());
-      this.textEl.addEventListener('input', () => { this.autoGrow(); this.updateSend(); });
+      this.textEl.addEventListener('input', () => { this.autoGrow(); this.updateSend(); this.notifyTyping(); });
       this.textEl.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); this.sendText(); }
       });
@@ -76,6 +76,7 @@
       this.voiceRow.classList.toggle('hidden', this.mode !== 'voice');
       this.textRow.classList.toggle('hidden', this.mode !== 'text');
       this.setStatus('');
+      this.notifyTyping();
       if (this.mode === 'text') {
         this.autoGrow();
         this.updateSend();
@@ -98,11 +99,21 @@
     sendText() {
       const text = this.textEl.value.trim();
       if (!text) { this.textEl.focus(); return; }
+      this.clearText();
+      this.textEl.blur();
+      this.submit(text);
+    },
+
+    /** 打字联想：把输入框内容告诉主界面（app/quick.js） */
+    notifyTyping() {
+      if (root.app && root.app.onTyping) root.app.onTyping(this.mode === 'text' ? this.textEl.value : '');
+    },
+
+    clearText() {
       this.textEl.value = '';
       this.autoGrow();
       this.updateSend();
-      this.textEl.blur();
-      this.submit(text);
+      this.notifyTyping();
     },
 
     /** 失败的记录「改字」：放回输入框 */
