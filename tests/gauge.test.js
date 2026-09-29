@@ -53,3 +53,20 @@ test('水银高度：四档各占四分之一，档线正好在刻度上', () =>
   assert.strictEqual(HealthGauge.position(85), 0.75);
   assert.strictEqual(HealthGauge.position(100), 1);
 });
+
+test('补剂：补到的营养素加分（最多 8 分），超过每天上限扣分', () => {
+  const day = { intake: 1900, protein: 100, fat: 65, hour: 22 };
+  const base = HealthGauge.evaluate(Object.assign({}, B, day)).score;
+  const fish = HealthGauge.evaluate(Object.assign({}, B, day, { supps: ['鱼油'], nutrients: { 'EPA+DHA': 600 } }));
+  assert.strictEqual(fish.score, base + 3);
+  const many = HealthGauge.evaluate(Object.assign({}, B, day, { supps: ['复合维生素'], nutrients: { '维生素C': 100, '维生素D': 10, '钙': 200, '镁': 100, '锌': 10 } }));
+  assert.strictEqual(many.detail.bonus, 8);
+  const zinc = HealthGauge.evaluate(Object.assign({}, B, day, { supps: ['锌'], nutrients: { '锌': 60 } }));
+  assert.ok(zinc.score < base);
+  assert.strictEqual(zinc.detail.overUl[0].name, '锌');
+  assert.strictEqual(zinc.detail.bonus, 0);
+  const d3 = HealthGauge.evaluate(Object.assign({}, B, day, { supps: ['维生素D'], nutrients: { '维生素D': 125 } })); // 5000IU
+  assert.ok(d3.score < zinc.score);
+  // 没吃补剂不扣分
+  assert.strictEqual(HealthGauge.evaluate(Object.assign({}, B, day, { supps: [], nutrients: {} })).score, base);
+});

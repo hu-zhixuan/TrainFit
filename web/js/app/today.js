@@ -22,7 +22,7 @@ Object.assign(FitnessApp.prototype, {
     if (!el) return;
     const now = new Date();
     const g = TF.HealthGauge.evaluate({
-      intake: s.intake, protein: s.protein, fat: s.fat, budget: s.budget,
+      intake: s.intake, protein: s.protein, fat: s.fat, budget: s.budget, supps: s.supps, nutrients: s.nutrients,
       targetProteinG: this.gaugeProteinTarget(), hour: isToday ? now.getHours() + now.getMinutes() / 60 : null
     });
     const level = g.hasData ? String(g.level) : 'none';
@@ -61,6 +61,9 @@ Object.assign(FitnessApp.prototype, {
         row('蛋白质', `${fmt(d.protein)} / ${fmt(d.proteinExpected)}g`, p.protein, '偏少') +
         row('脂肪', d.fatShare == null ? '—' : `占热量 ${Math.round(d.fatShare * 100)}%`, p.fat, d.fatShare != null && d.fatShare < 0.2 ? '偏少' : '偏多') +
         row('热量', deficit < 0 ? `盈余 ${fmt(-deficit)}` : `赤字 ${fmt(deficit)}`, p.energy, d.energyIssue === 'over' ? '吃多了' : '吃少了') +
+        (d.supps.length || d.overUl.length ? `<div class="gauge-row"><span>补剂</span><b>${esc(d.supps.slice(0, 3).join('、') + (d.supps.length > 3 ? ` 等${d.supps.length}样` : ''))}</b>` +
+          (d.overUl.length ? `<em class="bad">${esc(d.overUl[0].name)}超上限</em>` : d.bonus ? `<em class="ok">加 ${d.bonus} 分</em>` : '<em></em>') + '</div>' : '') +
+        (d.overUl.length ? `<p class="gauge-warn">${d.overUl.map(o => `${esc(o.name)} 今天 ${round1(o.amount)}${o.unit}，超过每天上限 ${o.ul}${o.unit}`).join('；')}</p>` : '') +
         `<p class="gauge-note">蛋白质按已经吃的饭量算该有多少；脂肪占热量 20–35% 最好；热量看离目标${target >= 0 ? '赤字 ' + fmt(target) : '盈余 ' + fmt(-target)} 有多远。</p>`;
     }
     // 贴着温度计右边，从「预算 …」那行下面弹出来，别压住字
@@ -183,12 +186,15 @@ Object.assign(FitnessApp.prototype, {
         </div>`;
     }
     if (r.kind === 'meal') {
-      const macro = this.isSimple() ? '' : [x.proteinG ? `蛋白 ${round1(x.proteinG)}g` : '', x.carbsG ? `碳水 ${round1(x.carbsG)}g` : '', x.fatG ? `脂肪 ${round1(x.fatG)}g` : ''].filter(Boolean).join(' · ');
+      // 只有补剂的一条：标「补剂」，下面写含的营养素
+      const suppOnly = isSuppOnly(x);
+      const macro = suppOnly ? TF.nutrientsText(sumNutrients(x.items), 3)
+        : this.isSimple() ? '' : [x.proteinG ? `蛋白 ${round1(x.proteinG)}g` : '', x.carbsG ? `碳水 ${round1(x.carbsG)}g` : '', x.fatG ? `脂肪 ${round1(x.fatG)}g` : ''].filter(Boolean).join(' · ');
       return `
         <button class="item" data-kind="meal" data-id="${esc(x.id)}" type="button">
           <div class="item-icon meal">${ICONS.meal}</div>
           <div class="item-main">
-            <div class="item-title"><span class="tag tag-meal">${esc((x.mealType || '').replace('/补剂', ''))}</span>${esc(x.foodSummary)}</div>
+            <div class="item-title"><span class="tag tag-meal">${esc(suppOnly ? '补剂' : (x.mealType || '').replace('/补剂', ''))}</span>${esc(x.foodSummary)}</div>
             <div class="item-sub">${esc(hhmm(r.ts))}${macro ? ' · ' + macro : ''}</div>
           </div>
           <div class="item-value">${fmt(x.calories)}<small>kcal</small></div>

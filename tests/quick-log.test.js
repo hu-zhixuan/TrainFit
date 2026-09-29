@@ -230,3 +230,49 @@ test('大模型失败：限流 / 超时会重试，最后还是失败就报错�
     delete Parser.retryWaits;
   }
 });
+
+test('蛋白质：「蛋白粉」按乳清算、「虾仁」按鲜虾仁算，脱脂奶单独一条', () => {
+  const whey = groundItem({ name: '蛋白粉', amount: '2勺', grams: 60, calories: 230, proteinG: 46 });
+  assert.strictEqual(whey.dbName, '乳清蛋白粉');
+  assert.strictEqual(whey.proteinG, 46.8);                 // 以前按成分表里 50% 的品牌蛋白粉算成 30g
+  const shrimp = groundItem({ name: '虾仁', grams: 150, calories: 140, proteinG: 28 });
+  assert.ok(shrimp.proteinG > 25, String(shrimp.proteinG)); // 以前按「虾仁（红）」算成 15.6g
+  assert.strictEqual(FoodDB.find('脱脂牛奶').f, 0.3);
+});
+
+test('蛋白质和大模型差太多：多半是库里匹配错了，用大模型的估算', () => {
+  // 假设大模型认为这 100g 有 25g 蛋白，而库里对上的条目只有 5g → 不用库
+  const it = groundItem({ name: '米饭', grams: 100, calories: 120, proteinG: 25 });
+  assert.strictEqual(it.src, '估算');
+  assert.strictEqual(it.proteinG, 25);
+  // 差得不多：照常用库
+  assert.strictEqual(groundItem({ name: '米饭', grams: 200, calories: 230, proteinG: 5 }).src, '成分表');
+});
+
+test('吃进嘴的都能记：补剂带营养素、热量 0 的也记，补剂单独一条「加餐/补剂」', () => {
+  const r = Parser.normalize({ add: { meals: [
+    { mealType: '早餐', foodSummary: '包子2个、鱼油2粒、钙片1片', items: [
+      { name: '包子', amount: '2个', whole: true, calories: 460, proteinG: 16, carbsG: 60, fatG: 16 },
+      { name: '鱼油', amount: '2粒', kind: 'supplement', calories: 18, fatG: 2, nutrients: { 'EPA+DHA': 600 } },
+      { name: '钙片', amount: '1片', kind: 'supplement', calories: 0, nutrients: { '钙': 600, '维D': 5, '肌酸': 1 } }] },
+    { mealType: '午餐', foodSummary: '矿泉水1瓶', items: [{ name: '矿泉水', amount: '1瓶', calories: 0 }] }
+  ] } }, { now: new Date('2026-09-29T09:00:00') });
+  assert.deepStrictEqual(r.meals.map(m => [m.mealType, m.foodSummary, m.calories]), [
+    ['早餐', '包子2个', 460], ['午餐', '矿泉水1瓶', 0], ['加餐/补剂', '鱼油2粒、钙片1片', 18]
+  ]);
+  const calcium = r.meals[2].items[1];
+  assert.strictEqual(calcium.supp, true);
+  assert.strictEqual(calcium.src, '补剂');
+  assert.deepStrictEqual(calcium.nutrients, { '钙': 600, '维生素D': 5 }); // 认不出的营养素丢掉
+  // 没说热量的还是不记
+  assert.strictEqual(groundItem({ name: '不知道', grams: 100 }), null);
+});
+
+test('记住的补剂：按粒数换算营养素', () => {
+  const my = [TF.MyFoods.clean({ name: '鱼油', amount: '1粒', kind: 'supplement', calories: 9, nutrients: { 'EPA+DHA': 700 } })];
+  assert.strictEqual(my[0].supp, true);
+  const it = groundItem({ name: '鱼油', amount: '3粒', kind: 'supplement', calories: 27 }, my);
+  assert.strictEqual(it.src, '我的');
+  assert.deepStrictEqual(it.nutrients, { 'EPA+DHA': 2100 });
+  assert.strictEqual(TF.MyFoods.clean({ name: '锌片', calories: 0 }), null); // 0 热量又没营养素：不记
+});

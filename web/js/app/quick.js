@@ -46,7 +46,7 @@ Object.assign(FitnessApp.prototype, {
       // 一餐里有好几样的，每一样也能单独再记（打字联想用）
       if (Array.isArray(d.items) && d.items.length > 1) {
         d.items.forEach(it => {
-          if (!it || !it.name || !(it.calories > 0)) return;
+          if (!it || !it.name || !(it.calories > 0 || it.supp)) return;
           const label = it.name + (it.amount ? ' ' + it.amount : '');
           add('i|' + this.normFoodName(label), { kind: 'item', label, kcal: it.calories, src: it, itemOnly: true }, ts, d.mealType);
         });
@@ -144,7 +144,7 @@ Object.assign(FitnessApp.prototype, {
       rec = Object.assign({}, q.src, { id: 'w_' + uid, ts, date: this.selectedDate });
       this.workouts.unshift(rec);
     } else if (q.kind === 'meal') {
-      rec = Object.assign({}, q.src, { id: 'd_' + uid, ts, date: this.selectedDate, mealType: this.quickMealType(q.src.mealType) });
+      rec = Object.assign({}, q.src, { id: 'd_' + uid, ts, date: this.selectedDate, mealType: isSuppOnly(q.src) ? '加餐/补剂' : this.quickMealType(q.src.mealType) });
       if (Array.isArray(rec.items)) rec.items = rec.items.map(x => Object.assign({}, x));
       this.diet.unshift(rec);
     } else {
@@ -152,7 +152,9 @@ Object.assign(FitnessApp.prototype, {
       const it = q.src;
       const item = { name: it.name, amount: it.amount, grams: it.grams || null, src: q.kind === 'mine' ? '我的' : (it.src || '估算'),
         calories: Math.round(it.calories), proteinG: round1(it.proteinG || 0), carbsG: round1(it.carbsG || 0), fatG: round1(it.fatG || 0) };
-      rec = { id: 'd_' + uid, ts, date: this.selectedDate, mealType: this.quickMealType(), foodSummary: q.label,
+      if (it.supp) item.supp = true;
+      if (it.nutrients) item.nutrients = Object.assign({}, it.nutrients);
+      rec = { id: 'd_' + uid, ts, date: this.selectedDate, mealType: it.supp ? '加餐/补剂' : this.quickMealType(), foodSummary: q.label,
         calories: item.calories, proteinG: item.proteinG, carbsG: item.carbsG, fatG: item.fatG, items: [item] };
       this.diet.unshift(rec);
     }

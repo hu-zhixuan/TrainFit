@@ -396,6 +396,7 @@ body.no-composer .views { padding-bottom: calc(32px + var(--sab)); }
 .gauge-row em.meh { color: var(--warn-text); }
 .gauge-row em.bad { color: var(--danger); }
 .gauge-note { margin: 8px 0 2px; font-size: 0.72rem; line-height: 1.55; color: var(--text-3); }
+.gauge-warn { margin: 8px 0 0; padding: 7px 10px; border-radius: var(--r-sm); font-size: 0.76rem; line-height: 1.5; color: var(--danger); background: var(--danger-soft); }
 @media (prefers-reduced-motion: reduce) { .gauge-pop { animation: none; } }
 @media (max-width: 370px) {
   .hero-top { gap: 8px; }
@@ -948,6 +949,7 @@ body.no-composer .snackbar { bottom: calc(20px + var(--sab)); }
 .breakdown { background: var(--surface-2); border-radius: var(--r-md); padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; }
 .breakdown-head { font-size: 0.78rem; font-weight: 700; color: var(--text-2); }
 .breakdown-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+.breakdown-row small b { font-weight: 700; color: var(--text-2); }
 .breakdown-row em.src { font-style: normal; font-size: 0.7rem; font-weight: 700; color: var(--accent-text); background: var(--accent-soft); border-radius: 5px; padding: 0 5px; margin-left: 4px; }
 .breakdown-row em.src.est { color: var(--meal); background: var(--meal-soft); }
 .breakdown-row em.src.mine { color: var(--lift); background: var(--lift-soft); }

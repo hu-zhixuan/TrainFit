@@ -1,5 +1,5 @@
 /**
- * 一键记录用到的小工具：数字/文字清洗、餐次（按时间猜 / 口语叫法）、猜肌群、从一句话里认体重。
+ * 一键记录用到的小工具：数字/文字清洗、餐次（按时间猜 / 口语叫法）、补剂营养素、猜肌群、从一句话里认体重。
  */
 (function (root) {
   'use strict';
@@ -70,6 +70,45 @@
   }
 
   // ---------------------------------------------------------------------------
+  // 补剂里的营养素：只认这几种，单位固定；ul 是每天可耐受最高摄入量（中国居民膳食营养素参考摄入量 2023，
+  // 镁取美国 IOM 对补剂的上限 350mg，EPA+DHA 取 EFSA 的 5g），超过就在健康度里扣分
+  // ---------------------------------------------------------------------------
+  const NUTRIENTS = {
+    'EPA+DHA': { unit: 'mg', ul: 5000 },
+    '维生素D': { unit: 'μg', ul: 50 },
+    '维生素C': { unit: 'mg', ul: 2000 },
+    '维生素A': { unit: 'μg', ul: 3000 },
+    '维生素E': { unit: 'mg', ul: 700 },
+    '维生素B6': { unit: 'mg', ul: 60 },
+    '叶酸': { unit: 'μg', ul: 1000 },
+    '钙': { unit: 'mg', ul: 2000 },
+    '镁': { unit: 'mg', ul: 350 },
+    '锌': { unit: 'mg', ul: 40 },
+    '铁': { unit: 'mg', ul: 42 },
+    '硒': { unit: 'μg', ul: 400 }
+  };
+  const NUTRIENT_ALIAS = { 'DHA+EPA': 'EPA+DHA', 'omega-3': 'EPA+DHA', 'Omega-3': 'EPA+DHA', 'ω-3': 'EPA+DHA', '维D': '维生素D', '维C': '维生素C', '维A': '维生素A', '维E': '维生素E', 'VD': '维生素D', 'VC': '维生素C' };
+
+  /** 大模型给的 {"钙":600,"维生素D":10,…} → 只留认识的、数值合理的 */
+  function cleanNutrients(obj) {
+    if (!obj || typeof obj !== 'object') return null;
+    const out = {};
+    Object.keys(obj).forEach(k0 => {
+      const k = NUTRIENTS[k0] ? k0 : NUTRIENT_ALIAS[String(k0).trim()];
+      const v = num(obj[k0]);
+      if (k && v !== null && v > 0 && v < 1e6) out[k] = round1((out[k] || 0) + v);
+    });
+    return Object.keys(out).length ? out : null;
+  }
+
+  /** 「钙 600mg · 维生素D 10μg」 */
+  function nutrientsText(n, max) {
+    const keys = Object.keys(n || {});
+    const parts = keys.slice(0, max || keys.length).map(k => `${k} ${round1(n[k])}${(NUTRIENTS[k] || {}).unit || ''}`);
+    return parts.join(' · ') + (max && keys.length > max ? ' …' : '');
+  }
+
+  // ---------------------------------------------------------------------------
   // 体重：「体重62.5」「今天称了124斤」「61.8」
   // ---------------------------------------------------------------------------
   /** 没说单位时：用上次体重判断是公斤还是斤（中国人常说斤） */
@@ -110,7 +149,7 @@
     return '胸部';
   }
 
-  Object.assign(TF, { MUSCLES, MEAL_TYPES, num, cleanText, round1, mealTypeByHour, normMealType, mealTimes, mealSegments, toKg, quickWeight, findWeight, guessMuscle });
+  Object.assign(TF, { MUSCLES, MEAL_TYPES, num, cleanText, round1, mealTypeByHour, normMealType, mealTimes, mealSegments, NUTRIENTS, cleanNutrients, nutrientsText, toKg, quickWeight, findWeight, guessMuscle });
 
   if (typeof module !== 'undefined' && module.exports) module.exports = TF;
 })(typeof window !== 'undefined' ? window : globalThis);

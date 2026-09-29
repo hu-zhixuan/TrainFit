@@ -166,7 +166,10 @@
         if (w.durationMin) lines.push(`有氧 · ${w.exerciseName} ${w.durationMin} 分钟`);
         else lines.push(`训练 · ${w.exerciseName} ${w.weightKg > 0 ? w.weightKg + 'kg' : '自重'} ${w.sets}×${w.reps}${w.estimated ? '（估）' : ''}`);
       });
-      result.meals.forEach(m => lines.push(`${m.mealType.replace('/补剂', '')} · ${m.foodSummary} ${m.calories} kcal`));
+      result.meals.forEach(m => {
+        const supp = m.items && m.items.length && m.items.every(i => i.supp);
+        lines.push(supp ? `补剂 · ${m.foodSummary}` : `${m.mealType.replace('/补剂', '')} · ${m.foodSummary} ${m.calories} kcal`);
+      });
       if (result.bodyWeight) lines.push(`体重 · ${result.bodyWeight} kg`);
       (result.remember || []).forEach(f => lines.push(`记住 · ${f.name} ${f.amount || '1份'} ${f.calories} kcal`));
       return lines;
