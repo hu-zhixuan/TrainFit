@@ -3,7 +3,8 @@
  *   1. 用户记住的（自己改过、或照包装念过的）→「我的」
  *   2. 用户念的包装营养数 →「包装」
  *   3. 单一食材（米饭、鸡蛋、牛奶…）按食物库重算 →「成分表」「菜品库」
- *   4. 其余（糯米鸡、饭团、一碗面这种整份的东西）用大模型按常见大小的估算 →「估算」
+ *   4. 整份的东西（糯米鸡、饭团、一碗面、一份炒菜）用大模型的估算 →「估算」。
+ *      库里的成品菜数值只放进提示词给大模型参考，不直接覆盖：同一道菜做法、份量差别很大，大模型结合原话估更准
  */
 (function (root) {
   'use strict';
@@ -155,9 +156,9 @@
     if (it.source === 'label' && ai.calories > 0) {
       return Object.assign(base, { src: '包装' }, vals(ai.calories, ai.proteinG, ai.carbsG, ai.fatG));
     }
-    // 3. 查库：单一食材查整个库；整份的东西只认库里的成品菜条目，不拿原料去算
-    const e = grams && grams > 0 ? FoodDB.find(name) : null;
-    if (e && (!base.whole || e.src !== 'cfct')) {
+    // 3. 单一食材查库
+    const e = !base.whole && grams && grams > 0 ? FoodDB.find(name) : null;
+    if (e) {
       const k = e.k * grams / 100;
       const ratio = ai.calories && ai.calories > 0 ? k / ai.calories : 1;
       if (ratio >= 0.4 && ratio <= 2.5) {

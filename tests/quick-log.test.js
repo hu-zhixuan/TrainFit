@@ -41,12 +41,13 @@ test('整份的东西（糯米鸡）用大模型估算，不拆原料、不拿�
   assert.strictEqual(it.src, '估算');
   assert.strictEqual(it.calories, 380);
   assert.strictEqual(it.amount, '1个');
-  // 整份但库里有这道成品菜 → 按成品菜库算
-  const bun = groundItem({ name: '肉包', amount: '1个', grams: 100, whole: true, calories: 230 });
-  assert.strictEqual(bun.src, '菜品库');
-  // 整份的东西不能拿成分表里的原料条目算
-  const egg = groundItem({ name: '鸡蛋', grams: 100, whole: true, calories: 150 });
-  assert.strictEqual(egg.src, '估算');
+  // 整份的东西即使库里有同名成品菜，也用大模型结合原话的估算（库里的数只作参考）
+  const bun = groundItem({ name: '麻辣烫', amount: '1份', grams: 550, whole: true, calories: 720 });
+  assert.strictEqual(bun.src, '估算');
+  assert.strictEqual(bun.calories, 720);
+  // 单一食材按库算
+  const egg = groundItem({ name: '鸡蛋', grams: 100, calories: 150 });
+  assert.strictEqual(egg.src, '成分表');
 });
 
 test('记住的食物优先，按份数或克数换算', () => {
