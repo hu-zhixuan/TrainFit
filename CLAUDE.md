@@ -32,6 +32,8 @@
 - `npm test`：解析、按库算热量、体重识别、失败重试等纯逻辑。
 - 界面用 Playwright 在浏览器里测：`python3 -m http.server` 跑 `web/`，用 `add_init_script` 伪造 `window.TrainFitNative`（`llmChat` 里直接回调 `__tfLlm` 返回假的大模型结果），再点页面、截图（深色 / 浅色都看）。改界面一定截图看一眼。
 - 真实大模型测试：沙箱连不到大模型接口。做法是把测试脚本推到 `claude/api-check` 分支，那里有个临时 workflow 用仓库 Secrets 调真实接口，结果写在 check run 的 annotation 里。**接口有每分钟请求数限制（429），用例之间要隔 15～30 秒**。
+  - 大模型每次结果不一样，跑一次通过不算数：关键用例同一句跑 4 次以上；上下文要像真实用户（有最近成绩、记住的食物、体重），空白上下文会比手机上好看。v2.6.2 那次，旧提示词空白上下文 1/1 通过、健身用户上下文 3/4。
+  - workflow 里设 `TZ: Asia/Shanghai`，否则 `getHours()` 是 UTC，「现在时间」会错。要对比新旧提示词，可以把 `main` 的 `web/js/log` 和 `food_db.js` 复制到 `.github/old/web/js/…`，分两个进程跑（`TF` 是全局的，同一进程里不能加载两份）。
 
 ## 密钥和钱
 
