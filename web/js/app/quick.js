@@ -1,12 +1,10 @@
 /**
- * 常吃一键记 + 打字联想：天天吃差不多的东西，点一下就记，不用每次都说。
+ * 老样子一键记 + 打字联想：天天吃差不多的东西，点一下就记，不用每次都说。
  *
- *  - 底部「常吃」：从最近 60 天自己记过的东西里挑，按现在是早 / 中 / 晚排序，吃过一次就会出现；
- *    长按可以固定在最前面，或者不再推荐。
+ *  - 今天还没记时，空白页给一个「老样子」按钮（这个钟点最常吃的那一餐）。
  *  - 打字时：输入一两个字，弹出自己吃过的整餐、其中的某一样、记住的食物，点一下直接记。
  *  - 记完给一句人话：≈ 几碗米饭、走路多久。
  */
-const QUICK_PREFS_KEY = 'tf_quick_prefs';
 const QUICK_DAYS = 60;
 const RICE_BOWL_KCAL = 210; // 一碗米饭约 180g ≈ 210 千卡
 
@@ -23,14 +21,7 @@ function workoutLabel(w) {
 }
 
 Object.assign(FitnessApp.prototype, {
-  loadQuickPrefs() {
-    const p = load(QUICK_PREFS_KEY, null) || {};
-    return { pinned: Array.isArray(p.pinned) ? p.pinned : [], hidden: Array.isArray(p.hidden) ? p.hidden : [] };
-  },
-
-  saveQuickPrefs(p) { store(QUICK_PREFS_KEY, p); },
-
-  /** 这次点「常吃」记到哪一顿：看的是今天就按现在的钟点，看的是别的日子就沿用原来的 */
+  /** 这次一键记到哪一顿：看的是今天就按现在的钟点，看的是别的日子就沿用原来的 */
   quickMealType(fallback) {
     return this.selectedDate === getTodayDateString() ? mealSlotByHour(new Date().getHours()) : (fallback || '加餐/补剂');
   },
@@ -76,9 +67,8 @@ Object.assign(FitnessApp.prototype, {
     return [...map.values()];
   },
 
-  /** 底部「常吃」：固定的在前，然后是这个钟点常吃的，再按次数和最近 */
+  /** 「老样子」候选：这个钟点常吃的在前，再按次数和最近；今天已经记过的排后面 */
   quickSuggestions() {
-    const prefs = this.loadQuickPrefs();
     const slot = this.quickMealType();
     const date = this.selectedDate;
     const doneToday = new Set([
@@ -87,9 +77,9 @@ Object.assign(FitnessApp.prototype, {
     ]);
     const score = (e) => (e.slots[slot] || 0) * 3 + e.count + (Date.now() - e.last < 3 * 86400000 ? 1 : 0);
     return this.quickCandidates()
-      .filter(e => (e.kind === 'meal' || e.kind === 'workout') && !prefs.hidden.includes(e.key))
-      .map(e => Object.assign(e, { pinned: prefs.pinned.includes(e.key), done: doneToday.has(e.key), usual: (e.slots[slot] || 0) > 0 }))
-      .sort((a, b) => (b.pinned - a.pinned) || (a.done - b.done) || (score(b) - score(a)) || (b.last - a.last))
+      .filter(e => e.kind === 'meal' || e.kind === 'workout')
+      .map(e => Object.assign(e, { done: doneToday.has(e.key), usual: (e.slots[slot] || 0) > 0 }))
+      .sort((a, b) => (a.done - b.done) || (score(b) - score(a)) || (b.last - a.last))
       .slice(0, 8);
   },
 
@@ -97,9 +87,8 @@ Object.assign(FitnessApp.prototype, {
   typingSuggestions(text) {
     const q = this.normFoodName(text).replace(/[，,。.、]/g, '');
     if (!q) return [];
-    const hidden = this.loadQuickPrefs().hidden;
     return this.quickCandidates()
-      .filter(e => e.kind !== 'workout' && !hidden.includes(e.key) && this.normFoodName(e.label).includes(q))
+      .filter(e => e.kind !== 'workout' && this.normFoodName(e.label).includes(q))
       .sort((a, b) => (b.kind === 'meal') - (a.kind === 'meal') || b.count - a.count || b.last - a.last)
       .slice(0, 6);
   },
@@ -112,8 +101,9 @@ Object.assign(FitnessApp.prototype, {
 
   renderChips() {
     const el = document.getElementById('cmp-chips');
+    // 平时不显示（保持简洁）；只在打字时弹出联想
     const typing = this._typing && window.QuickLog && window.QuickLog.mode === 'text';
-    const list = typing ? this.typingSuggestions(this._typing) : this.quickSuggestions();
+    const list = typing ? this.typingSuggestions(this._typing) : [];
     this._quick = list;
     this._quickFromTyping = !!typing;
     if (!list.length) {
@@ -121,75 +111,18 @@ Object.assign(FitnessApp.prototype, {
       el.classList.add('hidden');
       return;
     }
-    const slot = this.quickMealType().replace('/补剂', '');
-    const head = typing ? '点一下直接记' : `${slot}常吃`;
-    el.innerHTML = `<span class="qhead">${esc(head)}</span>` + list.map((q, i) => `
-      <button type="button" class="qchip ${q.kind === 'workout' ? 'workout' : 'meal'}${q.pinned ? ' pinned' : ''}${q.done ? ' done' : ''}" data-quick="${i}">
-        <span class="qplus">${q.pinned ? '★' : '+'}</span><span class="qlabel">${esc(q.label)}</span>${q.kcal ? `<small>${fmt(q.kcal)}</small>` : ''}
+    el.innerHTML = `<span class="qhead">点一下直接记</span>` + list.map((q, i) => `
+      <button type="button" class="qchip meal" data-quick="${i}">
+        <span class="qplus">+</span><span class="qlabel">${esc(q.label)}</span>${q.kcal ? `<small>${fmt(q.kcal)}</small>` : ''}
       </button>`).join('');
     el.classList.remove('hidden');
   },
 
   bindQuick() {
-    const el = document.getElementById('cmp-chips');
-    let timer = null, longPressed = false, startX = 0, startY = 0;
-    const clear = () => { clearTimeout(timer); timer = null; };
-    el.addEventListener('pointerdown', (e) => {
-      longPressed = false; // 上次长按松手在菜单上时，这里复位，免得吞掉这次点击
+    document.getElementById('cmp-chips').addEventListener('click', (e) => {
       const c = e.target.closest('[data-quick]');
-      if (!c || this._quickFromTyping) return;
-      startX = e.clientX; startY = e.clientY;
-      timer = setTimeout(() => {
-        longPressed = true;
-        window.Haptics && window.Haptics.fire('tick');
-        this.openChipMenu(Number(c.dataset.quick));
-      }, 500);
+      if (c) this.quickRepeat(Number(c.dataset.quick));
     });
-    el.addEventListener('pointermove', (e) => { if (timer && Math.hypot(e.clientX - startX, e.clientY - startY) > 10) clear(); });
-    ['pointerup', 'pointercancel', 'pointerleave'].forEach(t => el.addEventListener(t, clear));
-    el.addEventListener('contextmenu', (e) => { if (e.target.closest('[data-quick]')) e.preventDefault(); });
-    el.addEventListener('click', (e) => {
-      const c = e.target.closest('[data-quick]');
-      if (!c) return;
-      if (longPressed) { longPressed = false; return; }
-      this.quickRepeat(Number(c.dataset.quick));
-    });
-
-    const menu = document.getElementById('chip-menu');
-    menu.addEventListener('click', (e) => {
-      const b = e.target.closest('[data-chip-act]');
-      if (e.target === menu || (b && b.dataset.chipAct === 'cancel')) { this.closeChipMenu(); return; }
-      if (!b) return;
-      const key = this._menuKey;
-      const prefs = this.loadQuickPrefs();
-      const before = JSON.parse(JSON.stringify(prefs));
-      if (b.dataset.chipAct === 'pin') {
-        prefs.pinned = prefs.pinned.includes(key) ? prefs.pinned.filter(k => k !== key) : [key].concat(prefs.pinned);
-      } else if (b.dataset.chipAct === 'hide') {
-        prefs.hidden = prefs.hidden.filter(k => k !== key).concat(key);
-        prefs.pinned = prefs.pinned.filter(k => k !== key);
-      }
-      this.saveQuickPrefs(prefs);
-      this.closeChipMenu();
-      this.renderChips();
-      if (b.dataset.chipAct === 'hide' && window.QuickLog) {
-        window.QuickLog.showUndo('不再推荐了', [this._menuLabel], () => { this.saveQuickPrefs(before); this.renderChips(); });
-      }
-    });
-  },
-
-  openChipMenu(i) {
-    const q = this._quick && this._quick[i];
-    if (!q) return;
-    this._menuKey = q.key;
-    this._menuLabel = q.label;
-    document.getElementById('chip-menu-title').textContent = q.label;
-    document.getElementById('chip-menu-pin').textContent = q.pinned ? '取消固定' : '固定在最前面';
-    document.getElementById('chip-menu').classList.remove('hidden');
-  },
-
-  closeChipMenu() {
-    document.getElementById('chip-menu').classList.add('hidden');
   },
 
   /** 空白页上那个「老样子」按钮 */

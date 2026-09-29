@@ -72,12 +72,6 @@
           </div>
         </div>
 
-        <button class="weight-row" id="weight-row" type="button" aria-label="记体重">
-          <span class="wr-label">体重</span>
-          <span class="wr-main" id="wr-main"></span>
-          <span class="wr-sub" id="wr-sub"></span>
-          <span class="wr-go" aria-hidden="true">›</span>
-        </button>
 
         <button class="setup-hint hidden" id="setup-hint" type="button">
           <span>先填一下身高体重，热量预算才准</span>
@@ -120,7 +114,7 @@
         <div class="card chart-card" id="weight-card">
           <div class="card-head">
             <span>体重</span>
-            <span class="legend" id="weight-legend"></span>
+            <span class="weight-head-right"><span class="legend" id="weight-legend"></span><button type="button" class="chip" id="weight-log">记体重</button></span>
           </div>
           <div class="chart" id="weight-chart"></div>
         </div>
@@ -249,7 +243,7 @@
 
     <!-- 底部：一个按钮，按住说话（或点一下开始、再点一下结束） -->
     <div class="composer" id="composer">
-      <div class="chips" id="cmp-chips" aria-label="常吃，点一下就记"></div>
+      <div class="chips" id="cmp-chips" aria-label="打字联想：点一下就记"></div>
       <div class="cmp-status hidden" id="cmp-status" role="status"></div>
 
       <div class="cmp-row" id="voice-row">
@@ -319,16 +313,6 @@
     </div>
   </div>
 
-  <!-- 长按「常吃」 -->
-  <div class="sheet-overlay hidden" id="chip-menu">
-    <div class="sheet chip-sheet">
-      <div class="sheet-title" id="chip-menu-title"></div>
-      <button type="button" class="btn" data-chip-act="pin" id="chip-menu-pin">固定在最前面</button>
-      <button type="button" class="btn btn-danger" data-chip-act="hide">不再推荐</button>
-      <button type="button" class="btn" data-chip-act="cancel">取消</button>
-    </div>
-  </div>
-
   <!-- 修改一条记录 -->
   <div class="sheet-overlay hidden" id="edit-overlay">
     <form class="sheet" id="edit-form" autocomplete="off">
@@ -353,9 +337,7 @@
 
   <div class="toast hidden" id="app-toast" role="status"></div>
 
-  <!-- 离线兜底引擎 + 食物营养库 -->
-  <script src="js/lib/nutrition.js"></script>
-  <script src="js/lib/workout.js"></script>
+  <!-- 食物营养库 -->
   <script src="js/data/food_db.js"></script>
 
   <!-- 主界面：FitnessApp（app.js 定义类，其余文件往上加方法） -->

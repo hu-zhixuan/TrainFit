@@ -60,17 +60,18 @@
         result = kg ? { dayOffset: 0, workouts: [], meals: [], updates: [], deletes: [], bodyWeight: kg, reply: '', source: 'fast' }
           : await Parser.parse(p.text, ctx);
       } catch (e) {
-        app.failPending(p.id, '整理出错了');
+        console.warn('[QuickLog] 大模型没整理出来：', e && e.message);
+        if (app.pending.some(x => x.id === p.id)) app.failPending(p.id, Parser.failReason(e));
         return;
       }
       if (!app.pending.some(x => x.id === p.id)) return; // 已被用户删掉
       const changes = result.workouts.length + result.meals.length + (result.updates || []).length + (result.deletes || []).length + (result.bodyWeight ? 1 : 0) + (result.remember || []).length;
       if (!changes) {
-        app.failPending(p.id, result.reply || (result.source === 'local' ? 'AI 没连上，也没认出内容' : '没认出吃了什么'));
+        app.failPending(p.id, result.reply || '没认出吃了什么');
         return;
       }
       app.finishPending(p.id);
-      const batch = this.save(result, p.date, ctx);
+      const batch = this.save(Object.assign(result, { said: p.text }), p.date, ctx);
       this.showSnack(batch, result);
     },
 
@@ -141,7 +142,8 @@
           proteinG: m.proteinG,
           carbsG: m.carbsG,
           fatG: m.fatG,
-          items: m.items && m.items.length ? m.items : undefined
+          items: m.items && m.items.length ? m.items : undefined,
+          said: result.said ? String(result.said).slice(0, 200) : undefined // 原话：分得清是没听清还是理解错
         });
       });
 
@@ -180,7 +182,6 @@
         : kept ? `✓ 记住了 ${result.remember.map(f => f.name).join('、')}`
         : '✓ 已更新';
       if (n && batch.date !== getTodayDateString()) t += `（${batch.date.slice(5).replace('-', '月')}日）`;
-      if (result.source === 'local') t += ' · AI 没连上，用的简单规则';
       const lines = this.describe(result).concat(batch.changed || []);
       const kcal = result.meals.reduce((a, m) => a + (m.calories || 0), 0);
       const eq = kcal > 0 && app.equivText ? app.equivText(kcal) : '';
