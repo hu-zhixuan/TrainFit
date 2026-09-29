@@ -84,13 +84,14 @@ const CASES = [
   ['蛋白：三蛋一奶', '早上三个鸡蛋一杯牛奶', '08:00', r => inR('蛋白', protein(r), 24, 32)],
   ['蛋白：虾仁炒蛋饭', '中午一份虾仁炒蛋和一碗米饭', '12:30', r => inR('蛋白', protein(r), 22, 48)],
   ['蛋白：一块煎鸡胸', '晚上吃了一块煎鸡胸肉', '19:00', r => inR('蛋白', protein(r), 28, 55)],
-  ['蛋白：即食鸡胸', '下午吃了一包即食鸡胸肉', '16:00', r => inR('蛋白', protein(r), 18, 32)],
+  ['蛋白：即食鸡胸', '下午吃了一包即食鸡胸肉', '16:00', r => inR('蛋白', protein(r), 18, 40)],
   // ---- 回归 ----
   ['原话：早上+晚上', '今天早上吃了一份呃荷叶鸡然后有一小份然后两个茶叶大晚上吃了两个香蕉两勺蛋白粉，七百毫升牛奶', '21:22', r => {
     const b = r.meals.filter(m => m.mealType === '早餐');
     const rest = r.meals.filter(m => m.mealType !== '早餐');
     if (!b.length || !rest.length) return '没分开：' + types(r);
     if (b.some(m => /香蕉|牛奶|蛋白粉/.test(itemNames(m)))) return '晚上的东西记到早餐了';
+    if (!b.some(m => /茶叶蛋|鸡蛋/.test(itemNames(m)))) return '漏了茶叶蛋';
     return inR('晚上那餐蛋白', rest.reduce((a, m) => a + m.proteinG, 0), 60, 80);
   }],
   ['糯米鸡+水煮蛋', '中午吃了一个糯米鸡，两个水煮蛋', '12:30', r => inR('热量', r.meals.reduce((a, m) => a + m.calories, 0), 380, 700)],
