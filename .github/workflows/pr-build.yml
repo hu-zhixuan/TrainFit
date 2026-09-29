@@ -11,6 +11,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Unit tests
+        run: npm test
+
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:

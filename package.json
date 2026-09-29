@@ -1,0 +1,13 @@
+{
+  "name": "trainfit",
+  "private": true,
+  "description": "练食AI：说一句话，帮你记下今天吃了啥。网页在 web/，安卓壳在 app/。",
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "serve": "npx --yes serve web -l 3000",
+    "build:food-db": "node scripts/build-food-db.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

@@ -10,11 +10,15 @@ local.properties
 .system_generated/
 .agents/
 ORIGINAL_REQUEST.md
+.antigravity/
+.vscode/
 
 # 本地密钥，不要提交
 .env
 
+# 编译时生成：网页从 web/ 复制过来（app/build.gradle.kts 的 syncWebAssets）
+app/src/main/assets/
+
 # 本机语音识别文件（scripts/fetch-asr.sh 下载，太大不进仓库）
 app/src/main/jniLibs/
-app/src/main/assets/asr/
 .asr-cache/
