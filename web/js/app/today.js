@@ -11,6 +11,80 @@ Object.assign(FitnessApp.prototype, {
     return `${md} 周${WEEKDAYS[d.getDay()]}`;
   },
 
+  /** 只记吃的时，蛋白质目标按每公斤 1.2g 算（健身的用设置里的目标） */
+  gaugeProteinTarget() {
+    return this.isSimple() ? Math.round((this.profile.weightKg || 60) * 1.2) : (this.profile.targetProteinG || 0);
+  },
+
+  /** 健康度温度计：水银涨到哪一档，点一下看三项各怎么样 */
+  renderThermo(s, isToday, target) {
+    const el = document.getElementById('thermo');
+    if (!el) return;
+    const now = new Date();
+    const g = TF.HealthGauge.evaluate({
+      intake: s.intake, protein: s.protein, fat: s.fat, budget: s.budget,
+      targetProteinG: this.gaugeProteinTarget(), hour: isToday ? now.getHours() + now.getMinutes() / 60 : null
+    });
+    const level = g.hasData ? String(g.level) : 'none';
+    const name = document.getElementById('thermo-name');
+    const fill = document.getElementById('thermo-fill');
+    const changed = el.dataset.level !== level;
+    el.dataset.level = level;
+    name.textContent = g.hasData ? g.name : '未记录';
+    if (changed && this.thermoShown) { name.classList.remove('pop'); void name.offsetWidth; name.classList.add('pop'); }
+    // 水银高度：第一次出现时等一帧再涨，才有「涨上去」的动画
+    const h = (g.hasData ? Math.max(0.08, g.pos) : 0) * 100 + '%';
+    if (this.thermoShown) fill.style.height = h;
+    else {
+      this.thermoShown = true;
+      void fill.offsetHeight;
+      requestAnimationFrame(() => requestAnimationFrame(() => { fill.style.height = h; }));
+    }
+
+    this.gaugeInfo = { g, deficit: s.deficit, target };
+    if (!document.getElementById('gauge-pop').classList.contains('hidden')) this.showGaugePop();
+  },
+
+  /** 点温度计：弹出一张小卡片，三项各怎么样 */
+  showGaugePop() {
+    const pop = document.getElementById('gauge-pop');
+    const { g, deficit, target } = this.gaugeInfo || {};
+    if (!g) return;
+    pop.dataset.level = g.hasData ? String(g.level) : 'none';
+    if (!g.hasData) {
+      pop.innerHTML = `<div class="gauge-pop-head"><b>未记录</b>今天吃得怎么样</div><p class="gauge-note">记上一顿之后，这里会按蛋白质、脂肪和热量赤字告诉你吃得健不健康。</p>`;
+    } else {
+      const d = g.detail, p = g.parts;
+      const tone = (x) => (x >= 0.85 ? 'ok' : x >= 0.4 ? 'meh' : 'bad');
+      const row = (name, value, part, word) => `<div class="gauge-row"><span>${name}</span><b>${value}</b><em class="${part == null ? '' : tone(part)}">${part == null ? '' : part >= 0.85 ? '合适' : word}</em></div>`;
+      pop.innerHTML = `<div class="gauge-pop-head"><b>${g.name}</b>今天吃得怎么样</div>` +
+        row('蛋白质', `${fmt(d.protein)} / ${fmt(d.proteinExpected)}g`, p.protein, '偏少') +
+        row('脂肪', d.fatShare == null ? '—' : `占热量 ${Math.round(d.fatShare * 100)}%`, p.fat, d.fatShare != null && d.fatShare < 0.2 ? '偏少' : '偏多') +
+        row('热量', deficit < 0 ? `盈余 ${fmt(-deficit)}` : `赤字 ${fmt(deficit)}`, p.energy, d.energyIssue === 'over' ? '吃多了' : '吃少了') +
+        `<p class="gauge-note">蛋白质按已经吃的饭量算该有多少；脂肪占热量 20–35% 最好；热量看离目标${target >= 0 ? '赤字 ' + fmt(target) : '盈余 ' + fmt(-target)} 有多远。</p>`;
+    }
+    // 贴着温度计右边，从「预算 …」那行下面弹出来，别压住字
+    const r = document.getElementById('thermo').getBoundingClientRect();
+    const foot = document.getElementById('hero-foot').getBoundingClientRect();
+    pop.style.top = Math.round(Math.max(r.bottom, foot.bottom) + 6) + 'px';
+    pop.style.right = Math.max(16, Math.round(window.innerWidth - r.right - 6)) + 'px';
+    pop.classList.remove('hidden');
+  },
+
+  bindGaugePop() {
+    const pop = document.getElementById('gauge-pop');
+    const close = () => pop.classList.add('hidden');
+    document.getElementById('thermo').addEventListener('click', (e) => {
+      e.stopPropagation();
+      window.Haptics && window.Haptics.fire('tick');
+      if (pop.classList.contains('hidden')) this.showGaugePop(); else close();
+    });
+    // 点别的地方、滚动、切页都关掉
+    document.addEventListener('click', (e) => { if (!pop.contains(e.target)) close(); });
+    window.addEventListener('scroll', close, { passive: true, capture: true });
+    window.addEventListener('resize', close);
+  },
+
   renderToday() {
     const $ = (id) => document.getElementById(id);
     const date = this.selectedDate;
@@ -33,6 +107,7 @@ Object.assign(FitnessApp.prototype, {
     $('hero-deficit-v').textContent = fmt(Math.abs(s.deficit));
     $('hero-deficit-n').textContent = target > 0 ? `目标 ${fmt(target)}` : target < 0 ? `目标盈余 ${fmt(-target)}` : '目标 保持';
     $('hero-deficit').className = 'hero-side ' + (s.deficit >= target ? 'good' : surplus ? 'bad' : '');
+    this.renderThermo(s, isToday, target);
     const simple = this.isSimple();
     if (simple) {
       const perMonth = Math.abs(target) * 30 / 7700;

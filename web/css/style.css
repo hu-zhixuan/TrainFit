@@ -17,6 +17,10 @@
   --accent-text: #34d399;
   --danger: #f06a5f;
   --danger-soft: rgba(240, 106, 95, 0.14);
+  --warn: #f5a524;          /* 温度计：还行 */
+  --warn-text: #fbbf24;
+  --great: #2dd4bf;         /* 温度计：非常健康 */
+  --great-text: #5eead4;
   --pos: #3987e5;           /* 图表：缺口 */
   --neg: #e05a4f;           /* 图表：超出 */
   --meal: #f5a524;
@@ -54,6 +58,10 @@
   --accent-soft: rgba(5, 150, 105, 0.10);
   --accent-text: #047857;
   --danger: #d23f35;
+  --warn: #e39212;
+  --warn-text: #b45309;
+  --great: #14b8a6;
+  --great-text: #0f766e;
   --danger-soft: rgba(210, 63, 53, 0.09);
   --pos: #2a78d6;
   --neg: #d9493f;
@@ -224,6 +232,9 @@ body.no-composer .views { padding-bottom: calc(32px + var(--sab)); }
 .hero-label { font-size: 0.9rem; color: var(--text-2); font-weight: 600; }
 .hero-top { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
 .hero-main { min-width: 0; }
+/* 左边：大数字和横条；右边：一根竖着的温度计，从右上角通到横条那一行，一横一竖在右下角对齐 */
+.hero-upper { display: flex; gap: 16px; }
+.hero-body { flex: 1; min-width: 0; }
 .hero-side { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; padding-bottom: 6px; text-align: right; flex: none; }
 .hero-side span { font-size: 0.75rem; font-weight: 600; color: var(--text-3); }
 .hero-side b { font-size: 1.35rem; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.15; }
@@ -260,6 +271,137 @@ body.no-composer .views { padding-bottom: calc(32px + var(--sab)); }
   transition: width 0.4s ease;
 }
 .hero.over .meter-fill { background: var(--danger); }
+/* 健康度温度计：蛋白质 + 脂肪 + 热量赤字 → 不健康 / 还行 / 健康 / 非常健康
+   一根细玻璃管，底下一层很淡的红→黄→绿→青当刻度；水银涨到哪一档，顶上一颗发光的小球 */
+.thermo {
+  flex: none;
+  width: 60px; /* 定宽：「健康」「非常健康」长短不同，管子不能跟着左右跳 */
+  margin-right: -6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 9px;
+  padding: 0;
+  background: none;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.thermo, .gauge-pop { --th: var(--text-3); --th-text: var(--text-3); }
+[data-level="0"]:is(.thermo, .gauge-pop) { --th: var(--danger); --th-text: var(--danger); }
+[data-level="1"]:is(.thermo, .gauge-pop) { --th: var(--warn); --th-text: var(--warn-text); }
+[data-level="2"]:is(.thermo, .gauge-pop) { --th: var(--accent); --th-text: var(--accent-text); }
+[data-level="3"]:is(.thermo, .gauge-pop) { --th: var(--great); --th-text: var(--great-text); }
+.thermo-name, .gauge-pop-head b {
+  /* 状态小标签：卡片右上角那个和左边「今天还能吃」同一行高（0.9rem × 1.45） */
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: calc(1.305rem - 4px);
+  padding: 2px 7px;
+  border-radius: 999px;
+  white-space: nowrap;
+  color: var(--th-text);
+  background: color-mix(in srgb, var(--th) 14%, transparent);
+  transition: color 0.5s, background-color 0.5s;
+}
+.thermo[data-level="none"] .thermo-name { font-weight: 600; background: var(--surface-2); }
+.thermo-tube {
+  position: relative;
+  flex: 1;
+  min-height: 52px;
+  width: 8px;
+  margin-bottom: 12px; /* 底部和横条对齐（横条下面也是 12px） */
+  border-radius: 999px;
+  background: linear-gradient(to top,
+    color-mix(in srgb, var(--danger) 20%, var(--surface-2)),
+    color-mix(in srgb, var(--warn) 20%, var(--surface-2)) 35%,
+    color-mix(in srgb, var(--accent) 20%, var(--surface-2)) 65%,
+    color-mix(in srgb, var(--great) 20%, var(--surface-2)));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 5%, transparent);
+  transition: transform 0.15s;
+}
+.thermo[data-level="none"] .thermo-tube { background: var(--surface-2); }
+.thermo-fill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 0;
+  border-radius: 999px;
+  background: var(--th);
+  /* 像弹簧一样涨上去，略冲过头再回落 */
+  transition: height 1.1s cubic-bezier(0.34, 1.5, 0.64, 1), background-color 0.5s;
+}
+.thermo-fill::after {
+  /* 水银顶上的小球 */
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  transform: translate(-50%, -35%);
+  background: var(--th);
+  box-shadow: 0 0 0 2px var(--surface), 0 0 10px 1px color-mix(in srgb, var(--th) 55%, transparent);
+  transition: background-color 0.5s, opacity 0.3s;
+}
+.thermo[data-level="none"] .thermo-fill::after { opacity: 0; }
+.thermo[data-level="3"] .thermo-fill::after { animation: thermoGlow 2.4s ease-in-out infinite; }
+@keyframes thermoGlow {
+  0%, 100% { box-shadow: 0 0 0 2px var(--surface), 0 0 8px 1px color-mix(in srgb, var(--th) 45%, transparent); }
+  50% { box-shadow: 0 0 0 2px var(--surface), 0 0 16px 5px color-mix(in srgb, var(--th) 60%, transparent); }
+}
+.thermo-name.pop { animation: thermoPop 0.45s ease; }
+@keyframes thermoPop {
+  0% { transform: translateY(4px); opacity: 0; }
+  100% { transform: none; opacity: 1; }
+}
+.thermo:active .thermo-tube { transform: scale(0.94); }
+@media (prefers-reduced-motion: reduce) {
+  .thermo-fill, .thermo-fill::after, .thermo-name { transition: none; }
+  .thermo[data-level="3"] .thermo-fill::after, .thermo-name.pop { animation: none; }
+}
+/* 点温度计弹出的小卡片：三项各怎么样 */
+.gauge-pop {
+  position: fixed;
+  z-index: 150;
+  width: min(290px, calc(100vw - 32px));
+  box-sizing: border-box;
+  padding: 12px 14px 10px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow);
+  transform-origin: top right;
+  animation: gaugePopIn 0.18s ease;
+}
+@keyframes gaugePopIn { from { opacity: 0; transform: scale(0.94) translateY(-4px); } to { opacity: 1; transform: none; } }
+.gauge-pop-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; font-size: 0.8rem; font-weight: 600; color: var(--text-3); }
+.gauge-row {
+  display: grid;
+  grid-template-columns: 3.2em 1fr auto;
+  align-items: baseline;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.86rem;
+}
+.gauge-row span { color: var(--text-2); }
+.gauge-row b { font-weight: 700; font-variant-numeric: tabular-nums; }
+.gauge-row em { font-style: normal; font-size: 0.78rem; font-weight: 700; }
+.gauge-row em.ok { color: var(--accent-text); }
+.gauge-row em.meh { color: var(--warn-text); }
+.gauge-row em.bad { color: var(--danger); }
+.gauge-note { margin: 8px 0 2px; font-size: 0.72rem; line-height: 1.55; color: var(--text-3); }
+@media (prefers-reduced-motion: reduce) { .gauge-pop { animation: none; } }
+@media (max-width: 370px) {
+  .hero-top { gap: 8px; }
+  .hero-upper { gap: 10px; }
+  .hero-num span { font-size: 2.6rem; }
+}
 .hero-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .hero-stat { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .hero-stat span { font-size: 0.75rem; color: var(--text-3); }
