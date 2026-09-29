@@ -73,7 +73,6 @@ jobs:
           APK_PATH=$(find app/build/outputs/apk/ -name "*.apk" | head -n 1)
           echo "Found APK at: $APK_PATH"
           cp "$APK_PATH" "release-apk/TrainFit-v${VERSION}.apk"
-          cp "$APK_PATH" release-apk/TrainFit-Latest.apk
           ls -lh release-apk/
 
       - name: Upload APK Artifact to Actions
@@ -88,7 +87,7 @@ jobs:
           # 取 CHANGELOG.md 里「## v版本号」这一节
           awk -v v="## v${VERSION} " 'index($0, v) == 1 {on=1; next} on && /^## / {exit} on {print}' CHANGELOG.md > release-notes.md
           if [ ! -s release-notes.md ]; then echo "CHANGELOG.md 里没有 v${VERSION} 的说明" > release-notes.md; fi
-          printf '\n**📥 下载下方 Assets 里的 `TrainFit-v%s.apk` 或 `TrainFit-Latest.apk`，覆盖安装即可，数据保留。**\n' "$VERSION" >> release-notes.md
+          printf '\n**📥 下载下方 Assets 里的 `TrainFit-v%s.apk`，覆盖安装即可，数据保留。**\n' "$VERSION" >> release-notes.md
           TITLE=$(grep -m1 "^## v${VERSION} " CHANGELOG.md | sed 's/^## v[^ ]* *·* *//')
           echo "RELEASE_TITLE=${TITLE}" >> "$GITHUB_ENV"
           cat release-notes.md
@@ -105,6 +104,12 @@ jobs:
           make_latest: true
           files: |
             release-apk/TrainFit-v${{ env.VERSION }}.apk
-            release-apk/TrainFit-Latest.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # 以前每个版本还传一份 TrainFit-Latest.apk，和带版本号的是同一个文件；只留带版本号的
+      - name: Remove duplicate TrainFit-Latest.apk
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release delete-asset "v${VERSION}" TrainFit-Latest.apk -y --repo "${{ github.repository }}" || true

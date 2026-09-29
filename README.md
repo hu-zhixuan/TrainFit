@@ -5,7 +5,7 @@
   按住说「中午一碗牛肉面加个蛋」，热量自动算好 —— 想瘦一点、随便记记都能用；在健身的话，训练、蛋白质、热量赤字也一起管。
 </p>
 
-### 📥 [下载最新安卓安装包（TrainFit-Latest.apk）](https://github.com/hu-zhixuan/TrainFit/releases/latest/download/TrainFit-Latest.apk)
+### 📥 [下载最新安卓安装包](https://github.com/hu-zhixuan/TrainFit/releases/latest)（打开后点 Assets 里的 `TrainFit-v版本号.apk`）
 
 所有版本和更新说明见 [Releases](https://github.com/hu-zhixuan/TrainFit/releases) 和 [CHANGELOG.md](CHANGELOG.md)。覆盖安装，数据保留。
 
