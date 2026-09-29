@@ -222,6 +222,14 @@ body.no-composer .views { padding-bottom: calc(32px + var(--sab)); }
 .hero > * { position: relative; }
 .hero-foot { margin-top: -6px; margin-bottom: 12px; font-size: 0.74rem; color: var(--text-3); }
 .hero-label { font-size: 0.9rem; color: var(--text-2); font-weight: 600; }
+.hero-top { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+.hero-main { min-width: 0; }
+.hero-side { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; padding-bottom: 6px; text-align: right; flex: none; }
+.hero-side span { font-size: 0.75rem; font-weight: 600; color: var(--text-3); }
+.hero-side b { font-size: 1.35rem; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.15; }
+.hero-side small { font-size: 0.7rem; color: var(--text-3); }
+.hero-side.good b { color: var(--accent-text); }
+.hero-side.bad b { color: var(--danger); }
 .hero-num {
   display: flex;
   align-items: baseline;

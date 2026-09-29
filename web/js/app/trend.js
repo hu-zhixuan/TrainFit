@@ -1,5 +1,5 @@
 /**
- * 趋势页：每天缺口（健身模式）或每天吃了多少（只记吃的模式）柱状图、体重曲线、动作进步。
+ * 趋势页：每天赤字（健身模式）或每天吃了多少（只记吃的模式）柱状图、体重曲线、动作进步。
  */
 Object.assign(FitnessApp.prototype, {
   renderTrend() {
@@ -38,20 +38,20 @@ Object.assign(FitnessApp.prototype, {
       });
     } else {
       const target = this.profile.targetDeficitKcal || 0;
-      $('tr-avg-l').textContent = '平均每天缺口';
+      $('tr-avg-l').textContent = '平均每天赤字';
       $('tr-avg').textContent = logged.length ? fmt(total / logged.length) : '–';
       $('tr-avg-u').textContent = 'kcal';
       $('tr-fat-l').textContent = '折合脂肪';
       $('tr-fat').textContent = logged.length ? (total / 7700).toFixed(2) : '–';
       $('tr-fat-u').textContent = 'kg';
-      $('trend-chart-title').textContent = '每天热量缺口';
-      $('trend-legend').innerHTML = '<span><i class="sw sw-pos"></i>缺口</span><span><i class="sw sw-neg"></i>超出</span><span><i class="sw sw-target"></i>目标</span>';
+      $('trend-chart-title').textContent = '每天热量赤字';
+      $('trend-legend').innerHTML = '<span><i class="sw sw-pos"></i>赤字</span><span><i class="sw sw-neg"></i>超出</span><span><i class="sw sw-target"></i>目标</span>';
       this.drawBarChart($('trend-chart'), days, {
         target: target > 0 ? target : null,
         cls: (d) => (d.value > 0 ? 'bar-pos' : 'bar-neg'),
-        tip: (d) => (d.value === null ? '没记饮食' : (d.value >= 0 ? `缺口 ${fmt(d.value)} kcal` : `超出 ${fmt(-d.value)} kcal`)),
-        empty: '记几天饮食后，这里会显示每天的热量缺口',
-        aria: '每天热量缺口柱状图'
+        tip: (d) => (d.value === null ? '没记饮食' : (d.value >= 0 ? `赤字 ${fmt(d.value)} kcal` : `超出 ${fmt(-d.value)} kcal`)),
+        empty: '记几天饮食后，这里会显示每天的热量赤字',
+        aria: '每天热量赤字柱状图'
       });
     }
     this.drawWeightChart($('weight-chart'), shiftDateString(today, -(this.trendDays - 1)));
