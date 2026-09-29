@@ -93,6 +93,72 @@ test('提示词里带上参考营养数据、最近体重和记住的食物', ()
   assert.match(msgs[1].content, /用户说：中午番茄炒蛋盖饭/);
 });
 
+test('一句话说了早上和晚上：提示词里提醒大模型分成两餐；只说一个时间不提醒', () => {
+  assert.deepStrictEqual(TF.mealTimes('今天早上吃了一份呃荷叶鸡然后两个茶叶大晚上吃了两个香蕉').map(t => t.type), ['早餐', '晚餐']);
+  assert.deepStrictEqual(TF.mealTimes('早饭包子，中午黄焖鸡，晚饭没吃，睡前一杯奶').map(t => t.type), ['早餐', '午餐', '晚餐', '加餐/补剂']);
+  assert.deepStrictEqual(TF.mealTimes('昨晚火锅'), [{ word: '昨晚', type: '晚餐' }]);
+  assert.deepStrictEqual(TF.mealTimes('刚吃了一份猪脚饭'), []);
+  const two = Parser.buildMessages('早上两个包子晚上一碗面', { now: new Date('2026-09-29T21:22:00') });
+  assert.match(two[1].content, /注意：这句话说到了不同的时间（早上→早餐、晚上→晚餐）/);
+  assert.match(two[0].content, /一句话说了几个时间就拆成几条 meal/);
+  const one = Parser.buildMessages('中午一碗面', { now: new Date('2026-09-29T12:30:00') });
+  assert.doesNotMatch(one[1].content, /注意：这句话说到了不同的时间/);
+});
+
+test('兜底：大模型把早上和晚上吃的记成一条时，按原话拆开', () => {
+  const said = '今天早上吃了一份呃荷叶鸡然后有一小份然后两个茶叶大晚上吃了两个香蕉两勺蛋白粉，七百毫升牛奶';
+  // 用户截图里的结果：全记成了早餐
+  const merged = { reply: '已记早餐', add: { meals: [{ mealType: '早餐', foodSummary: '荷叶鸡1小份、茶叶蛋2个、香蕉2根、蛋白粉2勺、牛奶700ml', items: [
+    { name: '荷叶鸡', amount: '1小份', grams: 350, whole: true, calories: 520, proteinG: 30, carbsG: 50, fatG: 22 },
+    { name: '茶叶蛋', amount: '2个', grams: 100, whole: true, calories: 150, proteinG: 13, carbsG: 1, fatG: 10 },
+    { name: '香蕉', amount: '2根', grams: 240, whole: true, calories: 206, proteinG: 3, carbsG: 50, fatG: 0.5 },
+    { name: '蛋白粉', amount: '2勺', grams: 60, whole: true, calories: 240, proteinG: 48, carbsG: 6, fatG: 3 },
+    { name: '牛奶', amount: '700ml', grams: 700, whole: true, calories: 448, proteinG: 21, carbsG: 34, fatG: 25 }
+  ] }] } };
+  const night = new Date('2026-09-29T21:22:00');
+  const r = Parser.normalize(merged, { said, now: night });
+  assert.deepStrictEqual(r.meals.map(m => [m.mealType, m.foodSummary, m.calories]), [
+    ['早餐', '荷叶鸡1小份、茶叶蛋2个', 670],
+    ['晚餐', '香蕉2根、蛋白粉2勺、牛奶700ml', 894]
+  ]);
+  assert.strictEqual(r.meals[1].proteinG, 72);
+  assert.strictEqual(r.reply, '分开记了早餐、晚餐');
+  // 大模型已经分好了：不动
+  const ok = Parser.normalize({ add: { meals: [
+    { mealType: '早餐', foodSummary: '荷叶鸡', items: [merged.add.meals[0].items[0]] },
+    { mealType: '晚餐', foodSummary: '香蕉', items: [merged.add.meals[0].items[2]] }
+  ] } }, { said, now: night });
+  assert.deepStrictEqual(ok.meals.map(m => m.mealType), ['早餐', '晚餐']);
+  // 有一样东西在原话里找不到（比如大模型自己加的）：不拆，免得拆错
+  const extra = JSON.parse(JSON.stringify(merged));
+  extra.add.meals[0].items.push({ name: '烹调油', grams: 10, calories: 90 });
+  assert.strictEqual(Parser.normalize(extra, { said, now: night }).meals.length, 1);
+  // 只说了一个时间：不拆
+  assert.strictEqual(Parser.normalize(merged, { said: '早上荷叶鸡茶叶蛋香蕉蛋白粉牛奶', now: night }).meals.length, 1);
+  // 同一样东西早上晚上都说了，分不清：不拆
+  const both = Parser.normalize({ add: { meals: [{ mealType: '晚餐', foodSummary: '鸡蛋、面条', items: [
+    { name: '鸡蛋', amount: '2个', whole: true, calories: 140 }, { name: '面条', amount: '1碗', whole: true, calories: 400 }
+  ] }] } }, { said: '早上吃了鸡蛋晚上又吃了鸡蛋和面条', now: night });
+  assert.strictEqual(both.meals.length, 1);
+});
+
+test('大模型写的「早饭」「夜宵」认成标准餐次，不再按现在的钟点乱猜', () => {
+  assert.strictEqual(TF.normMealType('早饭'), '早餐');
+  assert.strictEqual(TF.normMealType('夜宵'), '加餐/补剂');
+  assert.strictEqual(TF.normMealType('加餐'), '加餐/补剂');
+  assert.strictEqual(TF.normMealType('晚餐'), '晚餐');
+  assert.strictEqual(TF.normMealType('随便'), '');
+  const night = new Date('2026-09-29T21:22:00'); // 这个钟点按时间猜会是「加餐」
+  const r = Parser.normalize({ add: { meals: [
+    { mealType: '早饭', foodSummary: '荷叶鸡', items: [{ name: '荷叶鸡', whole: true, calories: 520 }] },
+    { mealType: '晚饭', foodSummary: '香蕉2根', items: [{ name: '香蕉', grams: 240, calories: 200 }] }
+  ] } }, { now: night });
+  assert.deepStrictEqual(r.meals.map(m => m.mealType), ['早餐', '晚餐']);
+  const u = Parser.normalize({ update: [{ ref: 'r1', set: { mealType: '夜宵' } }, { ref: 'r1', set: { mealType: '不知道' } }] },
+    { dayRecords: [{ ref: 'r1', kind: 'meal', id: 'd1' }] });
+  assert.deepStrictEqual(u.updates, [{ ref: 'r1', set: { mealType: '加餐/补剂' } }]);
+});
+
 test('解析模型回复：去掉 <think> 和 ```json 包裹', () => {
   assert.deepStrictEqual(Parser.extractJson('<think>嗯</think>```json\n{"a":1}\n```'), { a: 1 });
   assert.throws(() => Parser.extractJson('没有 JSON'), /NO_JSON/);

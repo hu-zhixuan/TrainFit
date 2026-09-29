@@ -1,5 +1,5 @@
 /**
- * 一键记录用到的小工具：数字/文字清洗、按时间猜餐次、猜肌群、从一句话里认体重。
+ * 一键记录用到的小工具：数字/文字清洗、餐次（按时间猜 / 口语叫法）、猜肌群、从一句话里认体重。
  */
 (function (root) {
   'use strict';
@@ -32,6 +32,41 @@
     if (hour >= 10 && hour < 15) return '午餐';
     if (hour >= 17 && hour < 21) return '晚餐';
     return '加餐/补剂';
+  }
+
+  // 口语里的吃饭时间 → 餐次
+  const MEAL_WORDS = {
+    早上: '早餐', 早晨: '早餐', 早饭: '早餐', 早餐: '早餐', 今早: '早餐',
+    中午: '午餐', 午饭: '午餐', 中饭: '午餐', 午餐: '午餐',
+    晚上: '晚餐', 晚饭: '晚餐', 晚餐: '晚餐', 傍晚: '晚餐', 昨晚: '晚餐', 今晚: '晚餐',
+    下午茶: '加餐/补剂', 夜宵: '加餐/补剂', 宵夜: '加餐/补剂', 睡前: '加餐/补剂', 半夜: '加餐/补剂',
+    练完: '加餐/补剂', 练后: '加餐/补剂', 加餐: '加餐/补剂', 零食: '加餐/补剂', 补剂: '加餐/补剂'
+  };
+  const MEAL_WORDS_RE = new RegExp(Object.keys(MEAL_WORDS).sort((a, b) => b.length - a.length).join('|'), 'g');
+
+  /** 大模型写的餐次（「早饭」「夜宵」…）换成标准叫法；认不出返回 '' */
+  function normMealType(s) {
+    s = cleanText(s, 8);
+    if (MEAL_TYPES.includes(s)) return s;
+    if (MEAL_WORDS[s]) return MEAL_WORDS[s];
+    const m = s.match(MEAL_WORDS_RE);
+    return m ? MEAL_WORDS[m[0]] : '';
+  }
+
+  /** 一句话里按顺序说到的吃饭时间，每个餐次只留第一次：[{word:'早上',type:'早餐'}, …] */
+  function mealTimes(text) {
+    const out = [];
+    (String(text || '').match(MEAL_WORDS_RE) || []).forEach(w => {
+      if (!out.some(o => o.type === MEAL_WORDS[w])) out.push({ word: w, type: MEAL_WORDS[w] });
+    });
+    return out;
+  }
+
+  /** 按说到的吃饭时间把原话切段，第一个时间词前面的话算第一段：[{type:'早餐', text:'今天早上吃了…'}, {type:'晚餐', text:'晚上…'}] */
+  function mealSegments(text) {
+    const s = String(text || '');
+    const hits = Array.from(s.matchAll(MEAL_WORDS_RE));
+    return hits.map((m, i) => ({ type: MEAL_WORDS[m[0]], text: s.slice(i ? m.index : 0, i + 1 < hits.length ? hits[i + 1].index : s.length) }));
   }
 
   // ---------------------------------------------------------------------------
@@ -75,7 +110,7 @@
     return '胸部';
   }
 
-  Object.assign(TF, { MUSCLES, MEAL_TYPES, num, cleanText, round1, mealTypeByHour, toKg, quickWeight, findWeight, guessMuscle });
+  Object.assign(TF, { MUSCLES, MEAL_TYPES, num, cleanText, round1, mealTypeByHour, normMealType, mealTimes, mealSegments, toKg, quickWeight, findWeight, guessMuscle });
 
   if (typeof module !== 'undefined' && module.exports) module.exports = TF;
 })(typeof window !== 'undefined' ? window : globalThis);
