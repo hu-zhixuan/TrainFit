@@ -52,18 +52,26 @@
           </button>
         </div>
         <div class="hero" id="hero">
-          <div class="hero-top">
-            <div class="hero-main">
-              <div class="hero-label" id="hero-label">今天还能吃</div>
-              <div class="hero-num"><span id="hero-num">0</span><small>kcal</small></div>
+          <div class="hero-upper">
+            <div class="hero-body">
+              <div class="hero-top">
+                <div class="hero-main">
+                  <div class="hero-label" id="hero-label">今天还能吃</div>
+                  <div class="hero-num"><span id="hero-num">0</span><small>kcal</small></div>
+                </div>
+                <div class="hero-side" id="hero-deficit">
+                  <span id="hero-deficit-l">热量赤字</span>
+                  <b id="hero-deficit-v">0</b>
+                  <small id="hero-deficit-n"></small>
+                </div>
+              </div>
+              <div class="meter" aria-hidden="true"><div class="meter-fill" id="hero-meter"></div></div>
             </div>
-            <div class="hero-side" id="hero-deficit">
-              <span id="hero-deficit-l">热量赤字</span>
-              <b id="hero-deficit-v">0</b>
-              <small id="hero-deficit-n"></small>
-            </div>
+            <button type="button" class="thermo" id="thermo" data-level="none" aria-label="今天吃得健康吗，点一下看详情">
+              <span class="thermo-name" id="thermo-name">未记录</span>
+              <span class="thermo-tube"><span class="thermo-fill" id="thermo-fill"></span></span>
+            </button>
           </div>
-          <div class="meter" aria-hidden="true"><div class="meter-fill" id="hero-meter"></div></div>
           <div class="hero-foot" id="hero-foot"></div>
           <div class="hero-stats">
             <div class="hero-stat"><span>已吃</span><b id="st-intake">0</b></div>
@@ -336,12 +344,14 @@
   </div>
 
   <div class="toast hidden" id="app-toast" role="status"></div>
+  <div class="gauge-pop hidden" id="gauge-pop" role="dialog" aria-label="今天吃得怎么样"></div>
 
   <!-- 食物营养库 -->
   <script src="js/data/food_db.js"></script>
 
   <!-- 主界面：FitnessApp（app.js 定义类，其余文件往上加方法） -->
   <script src="js/app/util.js"></script>
+  <script src="js/app/gauge.js"></script>
   <script src="js/app/app.js"></script>
   <script src="js/app/today.js"></script>
   <script src="js/app/weight.js"></script>
