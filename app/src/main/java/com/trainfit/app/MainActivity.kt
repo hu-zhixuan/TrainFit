@@ -253,7 +253,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onPause() {
         super.onPause()
-        if (::nativeBridge.isInitialized) nativeBridge.cancelInternal()
+        if (::nativeBridge.isInitialized) nativeBridge.cancelSystemSpeech()
         if (::webView.isInitialized) {
             webView.onPause()
             webView.pauseTimers()
