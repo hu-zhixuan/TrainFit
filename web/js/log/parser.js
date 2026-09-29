@@ -10,7 +10,46 @@
     require('./food.js');
   }
   const TF = root.TF = root.TF || {};
-  const { MUSCLES, MEAL_TYPES, num, cleanText, round1, mealTypeByHour, normMealType, mealTimes, findWeight, guessMuscle, readOverride, Native, FoodDB, MyFoods, groundItem, sumItems } = TF;
+  const { MUSCLES, MEAL_TYPES, num, cleanText, round1, mealTypeByHour, normMealType, mealTimes, mealSegments, findWeight, guessMuscle, readOverride, Native, FoodDB, MyFoods, groundItem, sumItems } = TF;
+
+  /** 两段文字最长的公共片段有几个字（「乳清蛋白粉」和「两勺蛋白粉」→ 3） */
+  function common(a, b) {
+    let best = 0;
+    for (let i = 0; i < a.length; i++) {
+      for (let j = i + best + 1; j <= a.length && b.includes(a.slice(i, j)); j++) best = j - i;
+    }
+    return best;
+  }
+
+  /**
+   * 兜底：原话说了「早上…晚上…」，大模型却把不同时间吃的东西记进了同一条 meal，
+   * 就按每样东西在原话里出现在哪个时间后面拆开。有一样对不上原话（或几段里都有）就不动。
+   */
+  function splitByTime(meals, said) {
+    const segs = mealSegments(said);
+    if (new Set(segs.map(s => s.type)).size < 2) return meals;
+    const out = [];
+    meals.forEach(m => {
+      const items = m.items || [];
+      const types = items.map(it => {
+        const scores = segs.map(s => common(it.name, s.text));
+        const best = Math.max(...scores);
+        const at = new Set(segs.filter((s, i) => scores[i] === best).map(s => s.type));
+        return best >= 2 && at.size === 1 ? [...at][0] : null;
+      });
+      const kinds = [...new Set(types)];
+      if (types.includes(null) || kinds.length < 2) { out.push(m); return; }
+      kinds.forEach(type => {
+        const part = items.filter((it, i) => types[i] === type);
+        out.push(Object.assign({}, m, sumItems(part), {
+          mealType: type,
+          foodSummary: cleanText(part.map(it => it.name + (it.amount || '')).join('、'), 60),
+          items: part
+        }));
+      });
+    });
+    return out;
+  }
 
   // ---------------------------------------------------------------------------
   // 大模型解析
@@ -26,7 +65,7 @@
       const recent = (ctx.recent || []).slice(0, 25);
 
       const system = [
-        '你是「练食AI」的记录助手。用户用口语说饮食、训练或体重，文字来自语音识别，可能有同音错字（"卧腿"=卧推，"四组八哥"=4组8个，"划川"=划船，"茶叶大"=茶叶蛋）、没有标点、夹着「呃、嗯、那个、然后、就是」这类口头禅，按意思理解。说了又改口（「两碗，不对，一碗」「哦应该是…」）以后说的为准。',
+        '你是「练食AI」的记录助手。用户用口语说饮食、训练或体重，文字来自语音识别，可能有同音错字（"卧腿"=卧推，"四组八哥"=4组8个，"划川"=划船，"茶叶大"=茶叶蛋）、没有标点、夹着「呃、嗯、那个、然后、就是」这类口头禅，按意思理解。说了又改口（「两碗，不对，一碗」「哦应该是…」）以后说的为准；只有份量、没说是什么的话（「然后有一小份」「是小碗的」）是在补充前面那样东西的份量，不要多记一项，更不要编食物名。',
         '由你决定怎么改数据：新增、修改或删除。只输出一个 JSON 对象，不要 markdown，不要解释：',
         '{"reply":"一句话告诉用户你做了什么，20字以内","dayOffset":0,"bodyWeight":null,"remember":[],',
         ' "add":{"workouts":[{"exerciseName":"杠铃卧推","muscleGroup":"胸部","weightKg":80,"sets":4,"reps":8,"durationMin":null,"burnedCalories":110,"estimated":false}],',
@@ -36,7 +75,7 @@
         ' "delete":["r3"]}',
         '规则：',
         '1. muscleGroup 只能是：' + MUSCLES.join('、') + '；mealType 只能是：' + MEAL_TYPES.join('、') + '（怎么判断见第 4 条）。',
-        '2. 重量换算成公斤（磅×0.45，斤×0.5），自重 weightKg=0。跑步、单车、跳绳、平板支撑等按时间算的填 durationMin（分钟），sets、reps 为 null。',
+        '2. 重量换算成公斤（磅×0.45，斤×0.5），自重 weightKg=0。跑步、单车、跳绳、平板支撑等按时间算的填 durationMin（分钟），sets、reps 为 null；只说了距离（「跑了5公里」）就按常见配速估分钟数。',
         '3. 用户没说的重量/组数/次数：优先用下面「最近成绩」里同一动作的数；没有就按常见训练估一个，并设 "estimated":true。同一动作请沿用最近成绩里的名字。',
         '4. 饮食按餐分：用户说的时间决定是哪一餐——早上/早饭 → 早餐，中午/午饭 → 午餐，晚上/晚饭 → 晚餐，下午茶、练前练后、睡前、夜宵、零食 → 加餐/补剂；没说时间（「刚吃了」）按现在时间和食物判断。',
         '   一句话说了几个时间就拆成几条 meal（「早上A和B，晚上C」= 早餐 A+B 一条、晚餐 C 一条，不能都记到一餐里）；同一餐的东西合并成一条。foodSummary 写给用户看的菜名和份量。items 列出吃了的东西，每项写 name、amount（份量原话，如「1个」「1碗」「半份」）、grams（吃下去的熟重，可食部分）、whole，以及你估的 calories/proteinG/carbsG/fatG。',
@@ -44,7 +83,7 @@
         '   只有明显是几样东西拼起来的才分开写（盖饭 = 米饭 + 菜，套餐 = 主食 + 菜 + 饮料）。单独的米饭、馒头、鸡蛋、牛奶、水果这类单一食材 whole=false，name 尽量用下面「参考营养数据」里的名字，数值会按库重算。参考数据里的成品菜数值可以参考，但要按用户说的做法和份量自己判断。',
         '   克数都按熟的、吃下去的算：米饭一碗约 180g，盖饭和外卖套餐里的米饭约 250–300g，馒头一个约 100g，鸡蛋一个约 50g，牛奶一杯约 250g，糯米鸡一个约 150–200g，一份外卖约 400–600g。',
         '   用户念了包装上的营养数（「包装上写每100克210大卡」「一包300大卡」），严格按用户给的数算，这一项加 "source":"label"。',
-        '   下面「记住的食物」是用户确认过的数：说到同样的东西就用那里的名字，数值按份数换算。burnedCalories 按常见强度估算。',
+        '   下面「记住的食物」是用户确认过的数：说到同样的东西（同名或明显是同一样）就用那里的名字，数值按份数换算；只是相似的不要套用。burnedCalories 按常见强度估算。',
         '5. 用户说「记错了/改成/其实是/只吃了一半/删掉/不算」等，是在改已有记录：用 update（set 里只写要改的字段；饮食份量变了就在 set 里给新的 items，或同时改热量和三大营养素）或 delete，引用下面的编号，不要重复新增。',
         '6. 说「昨天」「昨晚」dayOffset=-1，「前天」=-2，否则 0；修改和删除只针对下面列出的这天记录。',
         '7. 用户报自己的体重（「体重62.5」「今天称了124斤」「早上61公斤」）：bodyWeight 填公斤数（斤÷2；没说单位就参考下面的最近体重判断是斤还是公斤）。没说体重就填 null。训练用的重量不是体重。',
@@ -219,6 +258,7 @@
           items
         });
       });
+      out.meals = splitByTime(out.meals, ctx.said);
 
       return out;
     },
@@ -242,7 +282,7 @@
         try {
           const raw = await this.send(attempts[i], override);
           const parsed = this.extractJson(this.contentFromResponse(raw));
-          return this.normalize(parsed, ctx);
+          return this.normalize(parsed, Object.assign({ said: text }, ctx));
         } catch (e) {
           lastErr = e;
           const msg = (e && e.message) || '';

@@ -31,13 +31,19 @@ async function call(label, text, hhmm, check) {
   const ms = Date.now() - t0;
   if (!res.ok) { err(`${label} HTTP ${res.status}`, raw.slice(0, 400)); return false; }
   let r;
-  try { r = P.normalize(P.extractJson(P.contentFromResponse(raw)), ctx); } catch (e) { err(label + ' 解析失败', e.message + ' ' + raw.slice(0, 600)); return false; }
+  let fallback = '';
+  try {
+    const parsed = P.extractJson(P.contentFromResponse(raw));
+    r = P.normalize(parsed, Object.assign({ said: text }, ctx));
+    const r0 = P.normalize(parsed, ctx);
+    if (r0.meals.length !== r.meals.length) fallback = '（大模型没分开，兜底拆开了）';
+  } catch (e) { err(label + ' 解析失败', e.message + ' ' + raw.slice(0, 600)); return false; }
   const meals = r.meals.map(m => `【${m.mealType}】${m.foodSummary} ${m.calories}kcal：` + (m.items || []).map(i => `${i.name} ${i.amount || ''} ${i.grams || ''}g ${i.calories}`).join('；'));
   const wos = r.workouts.map(w => `【训练】${w.exerciseName} ${w.durationMin ? w.durationMin + '分钟' : w.weightKg + 'kg ' + w.sets + '×' + w.reps}`);
   let why;
   try { why = check(r); } catch (e) { why = '检查出错 ' + e.message; }
   (why === true ? note : err)(`[${TAG}] ${label} ${why === true ? 'OK' : 'CHECK: ' + why} (${(ms / 1000).toFixed(1)}s)`,
-    `${hhmm} 说：${text}%0AdayOffset=${r.dayOffset}%0A${meals.concat(wos).join('%0A')}%0Areply：${r.reply}`);
+    `${hhmm} 说：${text}${fallback}%0AdayOffset=${r.dayOffset}%0A${meals.concat(wos).join('%0A')}%0Areply：${r.reply}`);
   return why === true;
 }
 
@@ -52,6 +58,7 @@ const CASES = [
     if (!rest.length) return '没拆出晚上那一餐：' + types(r);
     if (b.some(m => /香蕉|牛奶|蛋白粉/.test(itemNames(m)))) return '晚上的东西记到早餐了';
     if (!b.some(m => /荷叶鸡/.test(itemNames(m)) && /茶叶蛋|鸡蛋/.test(itemNames(m)))) return '早餐里不是荷叶鸡+茶叶蛋';
+    if (b.reduce((a, m) => a + (m.items || []).length, 0) > 2) return '早餐多记了东西';
     return true;
   }],
   ['无标点：早+晚', '早上吃了两个包子然后喝了杯豆浆中午没吃晚上吃了一碗牛肉面加个蛋', '21:30', r => {
@@ -75,7 +82,16 @@ const CASES = [
     if (types(r) !== '早餐') return '餐次是 ' + types(r);
     const bench = r.workouts.find(w => /卧推/.test(w.exerciseName));
     if (!bench || bench.weightKg !== 80 || bench.sets !== 4 || bench.reps !== 8) return '卧推不对';
-    return r.workouts.some(w => /跑/.test(w.exerciseName)) || '没有跑步';
+    const run = r.workouts.find(w => /跑/.test(w.exerciseName));
+    return (run && run.durationMin >= 15 && run.durationMin <= 60) || '跑步没按时间记：' + (run ? run.weightKg + 'kg ' + run.sets + '×' + run.reps : '无');
+  }],
+  ['份量补充', '中午吃了一碗牛肉面嗯是小碗的', '12:40', r => {
+    const items = r.meals.flatMap(m => m.items || []);
+    return (items.length === 1 && /面/.test(items[0].name)) || '记成了 ' + items.map(i => i.name + i.amount).join('、');
+  }],
+  ['只说距离', '早上跑了五公里', '08:30', r => {
+    const run = r.workouts[0];
+    return (run && run.durationMin >= 15 && run.durationMin <= 60 && !r.meals.length) || '结果：' + JSON.stringify(r.workouts);
   }],
   ['刚吃', '刚吃了一份猪脚饭', '12:40', r => types(r) === '午餐' || '餐次是 ' + types(r)],
   ['下午茶', '下午喝了杯奶茶吃了块蛋糕', '17:30', r => (r.meals.length && r.meals.every(m => m.mealType === '加餐/补剂')) || '餐次是 ' + types(r)]

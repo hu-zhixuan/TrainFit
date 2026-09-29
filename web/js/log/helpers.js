@@ -62,6 +62,13 @@
     return out;
   }
 
+  /** 按说到的吃饭时间把原话切段，第一个时间词前面的话算第一段：[{type:'早餐', text:'今天早上吃了…'}, {type:'晚餐', text:'晚上…'}] */
+  function mealSegments(text) {
+    const s = String(text || '');
+    const hits = Array.from(s.matchAll(MEAL_WORDS_RE));
+    return hits.map((m, i) => ({ type: MEAL_WORDS[m[0]], text: s.slice(i ? m.index : 0, i + 1 < hits.length ? hits[i + 1].index : s.length) }));
+  }
+
   // ---------------------------------------------------------------------------
   // 体重：「体重62.5」「今天称了124斤」「61.8」
   // ---------------------------------------------------------------------------
@@ -103,7 +110,7 @@
     return '胸部';
   }
 
-  Object.assign(TF, { MUSCLES, MEAL_TYPES, num, cleanText, round1, mealTypeByHour, normMealType, mealTimes, toKg, quickWeight, findWeight, guessMuscle });
+  Object.assign(TF, { MUSCLES, MEAL_TYPES, num, cleanText, round1, mealTypeByHour, normMealType, mealTimes, mealSegments, toKg, quickWeight, findWeight, guessMuscle });
 
   if (typeof module !== 'undefined' && module.exports) module.exports = TF;
 })(typeof window !== 'undefined' ? window : globalThis);

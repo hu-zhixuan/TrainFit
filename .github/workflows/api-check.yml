@@ -18,6 +18,7 @@ jobs:
           LLM_MODEL: ${{ vars.LLM_MODEL }}
         run: |
           SPLIT="原话：早上+晚上,无标点：早+晚"
-          PARSER=old ONLY="$SPLIT" ROUNDS=4 node .github/api_check.js
+          NEWC="吃练混说,份量补充,只说距离"
           PARSER=new ONLY="$SPLIT" ROUNDS=4 node .github/api_check.js
-          PARSER=new SKIP="$SPLIT" node .github/api_check.js
+          PARSER=new ONLY="$NEWC" ROUNDS=2 node .github/api_check.js
+          PARSER=new SKIP="$SPLIT,$NEWC" node .github/api_check.js

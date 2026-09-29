@@ -105,6 +105,42 @@ test('一句话说了早上和晚上：提示词里提醒大模型分成两餐�
   assert.doesNotMatch(one[1].content, /注意：这句话说到了不同的时间/);
 });
 
+test('兜底：大模型把早上和晚上吃的记成一条时，按原话拆开', () => {
+  const said = '今天早上吃了一份呃荷叶鸡然后有一小份然后两个茶叶大晚上吃了两个香蕉两勺蛋白粉，七百毫升牛奶';
+  // 用户截图里的结果：全记成了早餐
+  const merged = { add: { meals: [{ mealType: '早餐', foodSummary: '荷叶鸡1小份、茶叶蛋2个、香蕉2根、蛋白粉2勺、牛奶700ml', items: [
+    { name: '荷叶鸡', amount: '1小份', grams: 350, whole: true, calories: 520, proteinG: 30, carbsG: 50, fatG: 22 },
+    { name: '茶叶蛋', amount: '2个', grams: 100, whole: true, calories: 150, proteinG: 13, carbsG: 1, fatG: 10 },
+    { name: '香蕉', amount: '2根', grams: 240, whole: true, calories: 206, proteinG: 3, carbsG: 50, fatG: 0.5 },
+    { name: '蛋白粉', amount: '2勺', grams: 60, whole: true, calories: 240, proteinG: 48, carbsG: 6, fatG: 3 },
+    { name: '牛奶', amount: '700ml', grams: 700, whole: true, calories: 448, proteinG: 21, carbsG: 34, fatG: 25 }
+  ] }] } };
+  const night = new Date('2026-09-29T21:22:00');
+  const r = Parser.normalize(merged, { said, now: night });
+  assert.deepStrictEqual(r.meals.map(m => [m.mealType, m.foodSummary, m.calories]), [
+    ['早餐', '荷叶鸡1小份、茶叶蛋2个', 670],
+    ['晚餐', '香蕉2根、蛋白粉2勺、牛奶700ml', 894]
+  ]);
+  assert.strictEqual(r.meals[1].proteinG, 72);
+  // 大模型已经分好了：不动
+  const ok = Parser.normalize({ add: { meals: [
+    { mealType: '早餐', foodSummary: '荷叶鸡', items: [merged.add.meals[0].items[0]] },
+    { mealType: '晚餐', foodSummary: '香蕉', items: [merged.add.meals[0].items[2]] }
+  ] } }, { said, now: night });
+  assert.deepStrictEqual(ok.meals.map(m => m.mealType), ['早餐', '晚餐']);
+  // 有一样东西在原话里找不到（比如大模型自己加的）：不拆，免得拆错
+  const extra = JSON.parse(JSON.stringify(merged));
+  extra.add.meals[0].items.push({ name: '烹调油', grams: 10, calories: 90 });
+  assert.strictEqual(Parser.normalize(extra, { said, now: night }).meals.length, 1);
+  // 只说了一个时间：不拆
+  assert.strictEqual(Parser.normalize(merged, { said: '早上荷叶鸡茶叶蛋香蕉蛋白粉牛奶', now: night }).meals.length, 1);
+  // 同一样东西早上晚上都说了，分不清：不拆
+  const both = Parser.normalize({ add: { meals: [{ mealType: '晚餐', foodSummary: '鸡蛋、面条', items: [
+    { name: '鸡蛋', amount: '2个', whole: true, calories: 140 }, { name: '面条', amount: '1碗', whole: true, calories: 400 }
+  ] }] } }, { said: '早上吃了鸡蛋晚上又吃了鸡蛋和面条', now: night });
+  assert.strictEqual(both.meals.length, 1);
+});
+
 test('大模型写的「早饭」「夜宵」认成标准餐次，不再按现在的钟点乱猜', () => {
   assert.strictEqual(TF.normMealType('早饭'), '早餐');
   assert.strictEqual(TF.normMealType('夜宵'), '加餐/补剂');
