@@ -89,6 +89,11 @@ const CASES = [
     const items = r.meals.flatMap(m => m.items || []);
     return (items.length === 1 && /面/.test(items[0].name)) || '记成了 ' + items.map(i => i.name + i.amount).join('、');
   }],
+  ['错字+补份量', '中午吃了一个肉夹馍嗯然后是大份的然后一瓶冰红叉', '12:50', r => {
+    const items = r.meals.flatMap(m => m.items || []);
+    const names = items.map(i => i.name + i.amount).join('、');
+    return (items.length === 2 && items.some(i => /肉夹馍/.test(i.name)) && items.some(i => /冰红茶/.test(i.name))) || '记成了 ' + names;
+  }],
   ['只说距离', '早上跑了五公里', '08:30', r => {
     const run = r.workouts[0];
     return (run && run.durationMin >= 15 && run.durationMin <= 60 && !r.meals.length) || '结果：' + JSON.stringify(r.workouts);

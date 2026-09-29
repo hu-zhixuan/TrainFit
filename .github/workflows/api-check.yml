@@ -17,8 +17,6 @@ jobs:
           LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
           LLM_MODEL: ${{ vars.LLM_MODEL }}
         run: |
-          SPLIT="原话：早上+晚上,无标点：早+晚"
-          NEWC="吃练混说,份量补充,只说距离"
-          PARSER=new ONLY="$SPLIT" ROUNDS=4 node .github/api_check.js
-          PARSER=new ONLY="$NEWC" ROUNDS=2 node .github/api_check.js
-          PARSER=new SKIP="$SPLIT,$NEWC" node .github/api_check.js
+          PARSER=new ONLY="原话：早上+晚上" ROUNDS=4 node .github/api_check.js
+          PARSER=new ONLY="份量补充,错字+补份量,无标点：早+晚" ROUNDS=2 node .github/api_check.js
+          PARSER=new SKIP="原话：早上+晚上,份量补充,错字+补份量,无标点：早+晚" node .github/api_check.js

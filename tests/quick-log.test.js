@@ -108,7 +108,7 @@ test('一句话说了早上和晚上：提示词里提醒大模型分成两餐�
 test('兜底：大模型把早上和晚上吃的记成一条时，按原话拆开', () => {
   const said = '今天早上吃了一份呃荷叶鸡然后有一小份然后两个茶叶大晚上吃了两个香蕉两勺蛋白粉，七百毫升牛奶';
   // 用户截图里的结果：全记成了早餐
-  const merged = { add: { meals: [{ mealType: '早餐', foodSummary: '荷叶鸡1小份、茶叶蛋2个、香蕉2根、蛋白粉2勺、牛奶700ml', items: [
+  const merged = { reply: '已记早餐', add: { meals: [{ mealType: '早餐', foodSummary: '荷叶鸡1小份、茶叶蛋2个、香蕉2根、蛋白粉2勺、牛奶700ml', items: [
     { name: '荷叶鸡', amount: '1小份', grams: 350, whole: true, calories: 520, proteinG: 30, carbsG: 50, fatG: 22 },
     { name: '茶叶蛋', amount: '2个', grams: 100, whole: true, calories: 150, proteinG: 13, carbsG: 1, fatG: 10 },
     { name: '香蕉', amount: '2根', grams: 240, whole: true, calories: 206, proteinG: 3, carbsG: 50, fatG: 0.5 },
@@ -122,6 +122,7 @@ test('兜底：大模型把早上和晚上吃的记成一条时，按原话拆�
     ['晚餐', '香蕉2根、蛋白粉2勺、牛奶700ml', 894]
   ]);
   assert.strictEqual(r.meals[1].proteinG, 72);
+  assert.strictEqual(r.reply, '分开记了早餐、晚餐');
   // 大模型已经分好了：不动
   const ok = Parser.normalize({ add: { meals: [
     { mealType: '早餐', foodSummary: '荷叶鸡', items: [merged.add.meals[0].items[0]] },
