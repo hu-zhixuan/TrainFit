@@ -10,12 +10,5 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: Probe free ASR with existing keys
-        env:
-          ASR_API_KEY: ${{ secrets.ASR_API_KEY }}
-          ASR_BASE_URL: ${{ vars.ASR_BASE_URL }}
-          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
-          LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
-          LLM_MODEL: ${{ vars.LLM_MODEL }}
-        run: |
-          node .github/asr_probe.js
+      - name: Fetch Qianwen docs
+        run: python3 .github/doc_fetch.py
