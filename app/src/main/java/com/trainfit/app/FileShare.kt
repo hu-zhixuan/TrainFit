@@ -7,6 +7,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
+import android.provider.DocumentsContract
 import android.provider.MediaStore
 import android.util.Base64
 import androidx.core.content.FileProvider
@@ -15,13 +16,20 @@ import java.io.File
 /**
  * 备份和分享用到的文件操作（给 NativeBridge 调）：
  *  - 分享一个文件 / 一张图片：写到 cache/share/，用 FileProvider 交给系统分享面板（微信、网盘…）
- *  - 存到手机公共目录（下载 / 相册）：卸载 App 后文件还在，重装后从「从备份恢复」选它就能导回来。
+ *  - 存到手机公共目录（下载 / 相册）：卸载 App 后文件还在。
  *    用 MediaStore，只支持 Android 10 及以上；更老的系统返回空字符串，网页那边会提示用分享
- *  - 读用户选的文件（「从备份恢复」）
+ *  - 重装后一键找回（照 Mihon 的做法）：系统的文件夹授权页一打开就停在「下载/练食AI」，
+ *    用户点「使用此文件夹」→「允许」，我们在里面找最新的备份读出来。授权会记住，
+ *    之后的自动备份也写进这个文件夹的同一个文件（重装后 MediaStore 认不出以前的文件，会另起一个「(1)」）
+ *  - 读用户选的文件 / 从微信「用其他应用打开」过来的文件
  */
 object FileShare {
     private const val DIR = "练食AI"
     private const val MAX_READ = 30 * 1024 * 1024
+    private const val PREFS = "trainfit_files"
+    private const val KEY_TREE = "backup_tree"
+    private const val EXTERNAL_DOCS = "com.android.externalstorage.documents"
+    private const val BACKUP_PREFIX = "练食AI备份"
 
     private fun shareDir(context: Context): File = File(context.cacheDir, "share").apply { mkdirs() }
 
@@ -52,8 +60,19 @@ object FileShare {
         share(context, file, "image/png", title)
     }
 
-    /** 存到「下载/练食AI/」，同名的（这次安装写过的）直接覆盖。返回给用户看的位置，失败返回 "" */
+    /**
+     * 存到「下载/练食AI/」，同名的直接覆盖。返回给用户看的位置，失败返回 ""。
+     * 用户授权过文件夹（一键找回时）就写进那个文件夹；否则用 MediaStore（只认得这次安装写过的文件）
+     */
     fun saveToDownloads(context: Context, name: String, mime: String, text: String): String {
+        savedTree(context)?.let { tree ->
+            try {
+                val where = saveToTree(context, tree, name, mime, text)
+                if (where.isNotEmpty()) return where
+            } catch (e: Exception) {
+                // 文件夹被删了、授权被收回：退回 MediaStore
+            }
+        }
         if (Build.VERSION.SDK_INT < 29) return ""
         return try {
             val uri = upsert(context, MediaStore.Downloads.EXTERNAL_CONTENT_URI, Environment.DIRECTORY_DOWNLOADS, name, mime) ?: return ""
@@ -84,6 +103,79 @@ object FileShare {
         }
     } catch (e: Exception) {
         null
+    }
+
+    // ================= 一键找回：用户授权的文件夹 =================
+
+    private fun prefs(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+
+    /** 文件夹授权页一打开就停在「下载/练食AI」（Android 8 及以上） */
+    fun backupFolderUri(): Uri = DocumentsContract.buildDocumentUri(EXTERNAL_DOCS, "primary:${Environment.DIRECTORY_DOWNLOADS}/$DIR")
+
+    /** 记住用户给的文件夹（重启手机后也还能用） */
+    fun rememberTree(context: Context, tree: Uri) {
+        try {
+            context.contentResolver.takePersistableUriPermission(tree, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+        } catch (e: Exception) {
+            // 有的文件管理器不给长期授权：这次照样能读，只是自动备份还走 MediaStore
+        }
+        prefs(context).edit().putString(KEY_TREE, tree.toString()).apply()
+    }
+
+    private fun savedTree(context: Context): Uri? {
+        val s = prefs(context).getString(KEY_TREE, null) ?: return null
+        val uri = Uri.parse(s)
+        val ok = context.contentResolver.persistedUriPermissions.any { it.uri == uri && it.isWritePermission }
+        return if (ok) uri else null
+    }
+
+    private class Doc(val uri: Uri, val name: String, val modified: Long)
+
+    private fun children(context: Context, tree: Uri): List<Doc> {
+        val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree))
+        val cols = arrayOf(
+            DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+            DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+            DocumentsContract.Document.COLUMN_LAST_MODIFIED
+        )
+        val out = mutableListOf<Doc>()
+        context.contentResolver.query(childrenUri, cols, null, null, null)?.use { c ->
+            while (c.moveToNext()) {
+                val id = c.getString(0) ?: continue
+                val name = c.getString(1) ?: ""
+                val modified = if (c.isNull(2)) 0L else c.getLong(2)
+                out.add(Doc(DocumentsContract.buildDocumentUriUsingTree(tree, id), name, modified))
+            }
+        }
+        return out
+    }
+
+    /** 在用户给的文件夹里找最新的备份（练食AI备份*.json，没有就任意 .json），读出来；没有返回 null */
+    fun readNewestBackup(context: Context, tree: Uri): String? {
+        val json = children(context, tree).filter { it.name.endsWith(".json", ignoreCase = true) }
+        val best = json.filter { it.name.startsWith(BACKUP_PREFIX) }.maxByOrNull { it.modified }
+            ?: json.maxByOrNull { it.modified }
+            ?: return null
+        return readText(context, best.uri)
+    }
+
+    /** 写进用户给的文件夹，同名的覆盖。返回给用户看的位置 */
+    private fun saveToTree(context: Context, tree: Uri, name: String, mime: String, text: String): String {
+        val resolver = context.contentResolver
+        val uri = children(context, tree).firstOrNull { it.name == name }?.uri
+            ?: DocumentsContract.createDocument(
+                resolver,
+                DocumentsContract.buildDocumentUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree)),
+                mime,
+                name
+            )
+            ?: return ""
+        val bytes = text.toByteArray(Charsets.UTF_8)
+        val out = try { resolver.openOutputStream(uri, "wt") } catch (e: Exception) { resolver.openOutputStream(uri, "rwt") }
+        out?.use { it.write(bytes) } ?: return ""
+        val folder = DocumentsContract.getTreeDocumentId(tree).substringAfter(':')
+            .replaceFirst(Environment.DIRECTORY_DOWNLOADS, "下载")
+        return if (folder.isBlank()) name else "$folder/$name"
     }
 
     /** 找这次安装自己写过的同名文件（覆盖它），没有就新建 */

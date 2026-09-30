@@ -29,7 +29,7 @@
 - 像素小人在 `web/js/app/buddy.js`：男生照着用户本人的照片画（黑色乱发、刘海压眼、黑色棒球服白袖子），另有女生角色；用户要「少年感、酷一点」，别画腮红、大嘴这种萌系。它是 `position:fixed` 的，`placeBuddy` 让它趴在最上面那一层（修改 / 分享面板 > 提示条 / 录音面板 > 输入栏）的上沿；别往顶栏、今天卡片里放，其他界面保持原样。小动作都在 CSS 里，`prefers-reduced-motion` 时不动。样子存在 `profile.buddy`，跟着备份走。
 - App 图标（深绿底 + 发光叶子 + AI 星光）由 `python3 scripts/build-icon.py` 用 Chromium 渲染成 `mipmap-*/ic_launcher*.webp`（自适应图标的前景、背景是位图，因为有光晕）和单色版 `drawable/ic_launcher_monochrome.xml`，不要手改；网页里的同款小图标是 `util.js` 的 `BRAND` / `brandIcon` / `drawBrandIcon`，改形状要两边一起改。图标和小人分开，用户明确说过图标单独设计，要像海外独立 App 那样简洁、有质感。
 - 备份（`web/js/app/backup.js`）只放 `fit_profile / fit_workouts / fit_diet / fit_weights / fit_my_foods`，**不放 AI 接口和语音识别的 key**（`tf_llm_override`、`tf_asr_override`）。新加要持久保存的数据，记得加进备份和 `mergeBackupData`。
-- 安卓原生的文件能力在 `FileShare.kt`（MediaStore 存下载 / 相册只支持 Android 10+；分享走 FileProvider，路径在 `res/xml/file_paths.xml`）。
+- 安卓原生的文件能力在 `FileShare.kt`（MediaStore 存下载 / 相册只支持 Android 10+；分享走 FileProvider，路径在 `res/xml/file_paths.xml`）。恢复备份不能让用户自己翻文件夹找文件（被骂过）：「从备份恢复」先走 `restoreFromFolder`（文件夹授权页直接停在「下载/练食AI」，授权后自动找最新备份，照 Mihon 的做法），找不到才让选文件；微信里「用其他应用打开」也能直接恢复（MainActivity 的 intent-filter + `takeOpenedFile`）。
 - 前端是普通 `<script>`（没有打包工具）：`web/js/app/*.js` 用 `Object.assign(FitnessApp.prototype, …)` 往类上加方法；`web/js/log/*.js` 通过 `window.TF` 共享，**`index.html` 里的加载顺序有依赖**。
 
 ## 测试

@@ -15,8 +15,10 @@
         </intent>
     </queries>
 
+    <!-- hasFragileUserData：卸载时系统问要不要保留数据（Android 10+），勾上后重装还在 -->
     <application
         android:allowBackup="true"
+        android:hasFragileUserData="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"
@@ -24,8 +26,9 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:hardwareAccelerated="true"
-        android:theme="@style/Theme.TrainFit">
-        
+        android:theme="@style/Theme.TrainFit"
+        tools:targetApi="29">
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -33,10 +36,26 @@
             android:hardwareAccelerated="true"
             android:configChanges="orientation|screenSize|keyboardHidden|screenLayout"
             android:windowSoftInputMode="adjustResize"
+            android:launchMode="singleTask"
             android:theme="@style/Theme.TrainFit">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- 微信里点备份文件 →「用其他应用打开」→ 练食AI：直接恢复 -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" />
+                <data android:mimeType="application/json" />
+                <data android:mimeType="text/json" />
+                <data android:mimeType="application/octet-stream" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/json" />
+                <data android:mimeType="text/json" />
             </intent-filter>
         </activity>
 
