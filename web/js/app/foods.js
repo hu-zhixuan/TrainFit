@@ -33,6 +33,7 @@ Object.assign(FitnessApp.prototype, {
     if (food.supp) entry.supp = true;
     this.myFoods = [entry].concat(this.myFoods.filter(f => f !== prev)).slice(0, MY_FOODS_MAX);
     store(MY_FOODS_KEY, this.myFoods);
+    this._backupDirty = true;
     return prev ? Object.assign({}, prev) : null;
   },
 
@@ -42,12 +43,14 @@ Object.assign(FitnessApp.prototype, {
     this.myFoods = this.myFoods.filter(f => this.normFoodName(f.name) !== k);
     if (prev) this.myFoods.unshift(prev);
     store(MY_FOODS_KEY, this.myFoods);
+    this._backupDirty = true;
   },
 
   forgetFood(name) {
     const k = this.normFoodName(name);
     this.myFoods = this.myFoods.filter(f => this.normFoodName(f.name) !== k);
     store(MY_FOODS_KEY, this.myFoods);
+    this._backupDirty = true;
   },
 
   renderMyFoods() {

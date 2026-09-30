@@ -158,6 +158,9 @@ b, .num { font-variant-numeric: tabular-nums; }
   text-align: center;
 }
 .view-title { margin: 0 0 0 8px; font-size: 1.05rem; font-weight: 700; }
+.topbar-actions { display: flex; align-items: center; gap: 2px; margin-left: auto; }
+.share-preview { max-height: 62vh; overflow-y: auto; border-radius: var(--r-md); border: 1px solid var(--line); background: var(--surface-2); }
+.share-preview img { display: block; width: 100%; height: auto; }
 .icon-btn {
   width: 40px;
   height: 40px;
@@ -1059,6 +1062,8 @@ body.no-composer .snackbar { bottom: calc(20px + var(--sab)); }
   transition: border-color 0.15s ease, transform 0.1s ease;
 }
 .ob-opt:active { transform: scale(0.99); border-color: var(--accent); }
+.ob-restore { align-self: center; margin-top: 4px; padding: 8px 12px; background: none; border: 0; color: var(--text-3); font: inherit; font-size: 0.85rem; cursor: pointer; }
+.ob-restore b { color: var(--accent-text); font-weight: 700; margin-left: 4px; }
 .ob-opt b { font-size: 1.05rem; }
 .ob-opt span { font-size: 0.82rem; color: var(--text-3); }
 .ob-foot { margin: 4px 0 0; text-align: center; font-size: 0.76rem; color: var(--text-3); }

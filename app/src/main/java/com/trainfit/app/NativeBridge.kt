@@ -30,13 +30,15 @@ import java.util.concurrent.Executors
  *  - 转文字：  window.__tfAsr(requestId, ok, textOrError)
  *  - 大模型：  window.__tfLlm(requestId, ok, payload)，ok=true 时 payload 是接口原始 JSON 字符串
  *  - 通知权限：window.__tfNotifPerm(granted)
+ *  - 选文件：  window.__tfFile(ok, textOrError)
  */
 class NativeBridge(
     private val activity: ComponentActivity,
     private val evalJs: (String) -> Unit,
     private val requestMicPermission: (onResult: (Boolean) -> Unit) -> Unit,
     private val onSystemBarsLight: (Boolean) -> Unit = {},
-    private val requestNotifPermission: (onResult: (Boolean) -> Unit) -> Unit = { it(false) }
+    private val requestNotifPermission: (onResult: (Boolean) -> Unit) -> Unit = { it(false) },
+    private val pickDocument: (onResult: (android.net.Uri?) -> Unit) -> Unit = { it(null) }
 ) {
     private val main = Handler(Looper.getMainLooper())
     private val io = Executors.newCachedThreadPool()
@@ -271,6 +273,57 @@ class NativeBridge(
     @JavascriptInterface
     fun setSystemBarsLight(light: Boolean) {
         main.post { onSystemBarsLight(light) }
+    }
+
+    // ================= 备份和分享（见 FileShare） =================
+
+    /** 把一段文字存成文件交给系统分享面板（备份文件发到微信、网盘） */
+    @JavascriptInterface
+    fun shareFile(name: String, mime: String, text: String) {
+        io.execute {
+            try {
+                FileShare.shareText(activity, name, mime, text, "发送备份")
+            } catch (e: Exception) {
+                callJs("__tfToast", "没发出去：" + (e.message ?: "未知错误"))
+            }
+        }
+    }
+
+    /** 分享图片（base64 的 PNG） */
+    @JavascriptInterface
+    fun shareImage(name: String, base64Png: String) {
+        io.execute {
+            try {
+                FileShare.shareImage(activity, name, base64Png, "分享")
+            } catch (e: Exception) {
+                callJs("__tfToast", "没分享出去：" + (e.message ?: "未知错误"))
+            }
+        }
+    }
+
+    /** 存到「下载/练食AI/」，返回位置；Android 9 及以下或失败返回 "" */
+    @JavascriptInterface
+    fun saveToDownloads(name: String, mime: String, text: String): String = FileShare.saveToDownloads(activity, name, mime, text)
+
+    /** 存到相册，返回位置；Android 9 及以下或失败返回 "" */
+    @JavascriptInterface
+    fun saveImage(name: String, base64Png: String): String = FileShare.saveImageToGallery(activity, name, base64Png)
+
+    /** 让用户选一个文件（从备份恢复），读出来交给 window.__tfFile(ok, text) */
+    @JavascriptInterface
+    fun pickFile() {
+        main.post {
+            pickDocument { uri ->
+                if (uri == null) {
+                    callJs("__tfFile", false, "CANCEL")
+                } else {
+                    io.execute {
+                        val text = FileShare.readText(activity, uri)
+                        if (text == null) callJs("__tfFile", false, "READ_FAILED") else callJs("__tfFile", true, text)
+                    }
+                }
+            }
+        }
     }
 
     fun shutdown() {

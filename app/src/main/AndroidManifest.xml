@@ -40,6 +40,17 @@
             </intent-filter>
         </activity>
 
+        <!-- 分享备份文件 / 图片给微信等 -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
         <receiver
             android:name=".ReminderReceiver"
             android:exported="false" />
