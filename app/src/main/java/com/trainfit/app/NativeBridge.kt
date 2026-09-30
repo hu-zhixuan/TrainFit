@@ -14,6 +14,7 @@ import com.trainfit.app.asr.VoiceRecorder
 import com.trainfit.app.net.ApiConfig
 import com.trainfit.app.net.ApiResult
 import com.trainfit.app.net.OpenAiApi
+import com.trainfit.app.net.Qianwen
 import org.json.JSONObject
 import java.util.Locale
 import java.util.concurrent.Executors
@@ -117,8 +118,10 @@ class NativeBridge(
 
     @JavascriptInterface
     fun getAsrInfo(): String = JSONObject().apply {
-        put("baseUrl", BuildConfig.ASR_BASE_URL)
-        put("model", BuildConfig.ASR_MODEL)
+        val def = asrConfig("{}")
+        val qw = def.isComplete && Qianwen.matches(def)
+        put("baseUrl", if (qw) Qianwen.endpoint(def).substringBefore("/services/") else BuildConfig.ASR_BASE_URL)
+        put("model", if (qw) Qianwen.model(def) else BuildConfig.ASR_MODEL)
         put("hasKey", BuildConfig.ASR_API_KEY.isNotBlank())
         put("local", if (localAsr.ready) "ready" else if (localAsr.failed) "failed" else "loading")
         put("cloud", cloudStatus)
@@ -127,12 +130,15 @@ class NativeBridge(
     // 松手后用云端大模型再认一遍：上次的结果（设置里显示），接口用不了时先歇一会儿
     @Volatile private var cloudStatus = ""
     @Volatile private var cloudPausedUntil = 0L
+    @Volatile private var cloudPausedFor = "" // 哪个接口 + key 在歇着：设置里换了 key 就马上再试
 
     /** 联网就把刚才那段话交给云端大模型再认一遍，认出来就用它的；没联网、没余额、超时返回 null（用本机的） */
     private fun cloudFinal(local: String, overrideJson: String): String? {
-        if (local.isBlank() || System.currentTimeMillis() < cloudPausedUntil) return null
+        if (local.isBlank()) return null
         val cfg = asrConfig(overrideJson)
         if (!cfg.isComplete) return null
+        val who = cfg.baseUrl + " " + cfg.apiKey
+        if (who == cloudPausedFor && System.currentTimeMillis() < cloudPausedUntil) return null
         val wav = localAsr.lastWav() ?: return null
         val r = OpenAiApi.transcribe(cfg, wav, quick = true)
         if (r.ok && r.body.isNotBlank()) {
@@ -140,8 +146,11 @@ class NativeBridge(
             return r.body
         }
         cloudStatus = r.body
-        // 余额不足、key 不对：半小时内别再试，免得每次都白等；其它（没网、超时）下次照试
-        if (Regex("^HTTP 4(01|02|03)").containsMatchIn(r.body)) cloudPausedUntil = System.currentTimeMillis() + 30 * 60_000L
+        // 余额不足 / 免费额度用完、key 不对：半小时内别再试，免得每次都白等；其它（没网、超时）下次照试
+        if (Regex("^HTTP 4(01|02|03)|Arrearage|FreeTierOnly").containsMatchIn(r.body)) {
+            cloudPausedFor = who
+            cloudPausedUntil = System.currentTimeMillis() + 30 * 60_000L
+        }
         return null
     }
 

@@ -178,7 +178,7 @@ Object.assign(FitnessApp.prototype, {
         <div class="item pending ${failed ? 'failed' : ''}">
           <div class="item-icon">${failed ? ICONS.alert : '<div class="spinner"></div>'}</div>
           <div class="item-main">
-            <div class="item-title">${failed ? esc(x.error || '没整理出来') : '正在整理…'}</div>
+            <div class="item-title">${failed ? esc(x.error || '没整理出来') : `正在整理…<span class="pending-slow" style="animation-delay:${Math.max(0, 15000 - (Date.now() - (x.startedAt || x.ts)))}ms">有点慢，稍等</span>`}</div>
             <div class="item-sub">「${esc(x.text)}」</div>
           </div>
           ${failed ? `<div class="pending-actions">
@@ -258,6 +258,7 @@ Object.assign(FitnessApp.prototype, {
     if (!p || !window.QuickLog) return;
     p.status = 'working';
     p.error = null;
+    p.startedAt = Date.now();
     this.render();
     window.QuickLog.process(p);
   },

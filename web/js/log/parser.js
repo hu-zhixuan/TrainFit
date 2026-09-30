@@ -345,7 +345,7 @@
       let retries = 0;
       for (let i = 0; i < attempts.length; i++) {
         try {
-          const raw = await this.send(attempts[i], override);
+          const raw = await this.sendHedged(attempts[i], override);
           const parsed = this.extractJson(this.contentFromResponse(raw));
           return this.normalize(parsed, Object.assign({ said: text }, ctx));
         } catch (e) {
@@ -361,6 +361,24 @@
         }
       }
       throw lastErr || new Error('LLM_FAILED');
+    },
+
+    /**
+     * 大模型偶尔特别慢（平时 10～18 秒，慢的时候 40 秒以上）：20 秒还没回来就再发一份一样的，
+     * 谁先回来用谁（整理是只读的，多发一份只多花一点 token）。第一份很快就失败的不补发，照原来的重试。
+     */
+    sendHedged(body, override) {
+      const wait = this.hedgeMs == null ? 20000 : this.hedgeMs;
+      return new Promise((resolve, reject) => {
+        let done = false, running = 0, timer = null;
+        const finish = (fn, v) => { if (done) return; done = true; clearTimeout(timer); fn(v); };
+        const go = () => {
+          running += 1;
+          this.send(body, override).then(r => finish(resolve, r), e => { running -= 1; if (!running) finish(reject, e); });
+        };
+        go();
+        if (wait > 0) timer = setTimeout(() => { if (!done) go(); }, wait);
+      });
     },
 
     async send(body, override) {
@@ -398,6 +416,7 @@
       if (msg === 'NO_KEY') return 'AI 接口没有配置 key';
       if (/^HTTP 429/.test(msg)) return 'AI 这会儿太忙（限流），点「重试」';
       if (/^HTTP 401|^HTTP 403/.test(msg)) return 'AI 接口的 key 不对';
+      if (/TIMEOUT|timed out|Timeout/i.test(msg)) return 'AI 这会儿太慢，没等到结果，点「重试」';
       if (this.isTransient(msg)) return '网络不好，AI 没连上，点「重试」';
       return 'AI 没整理出来，点「重试」或「改字」';
     },
