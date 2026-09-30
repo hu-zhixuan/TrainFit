@@ -17,4 +17,4 @@ jobs:
           LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
           LLM_MODEL: ${{ vars.LLM_MODEL }}
         run: |
-          PARSER=new ONLY="奥利奥：无糖三块,奥利奥：吃了两块" ROUNDS=4 node .github/api_check.js
+          node .github/llm_speed.js
