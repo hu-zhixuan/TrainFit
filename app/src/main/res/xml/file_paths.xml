@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 分享用的临时文件都放在 cache/share/（见 FileShare.kt） -->
+<paths>
+    <cache-path name="share" path="share/" />
+</paths>

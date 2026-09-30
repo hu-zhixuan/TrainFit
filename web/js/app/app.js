@@ -58,6 +58,7 @@ class FitnessApp {
   }
 
   saveData() {
+    this._backupDirty = true; // 切到后台时自动备份一份（见 backup.js）
     store('fit_profile', this.profile);
     store('fit_workouts', this.workouts);
     store('fit_diet', this.diet);
@@ -152,6 +153,8 @@ class FitnessApp {
     $('date-prev').addEventListener('click', () => this.shiftDate(-1));
     $('date-next').addEventListener('click', () => this.shiftDate(1));
     this.bindGaugePop();
+    this.bindBackup();
+    this.bindShare();
     $('date-label').addEventListener('click', () => { this.selectedDate = getTodayDateString(); this.render(); });
     $('setup-hint').addEventListener('click', () => this.switchView('settings'));
     $('weight-log').addEventListener('click', () => this.openWeightEditor(getTodayDateString()));
@@ -205,7 +208,8 @@ class FitnessApp {
     window.addEventListener('popstate', () => {
       // 保存 / 取消弹层时自己调的 history.back()：只关弹层，别跟着回到今天页
       if (this._editorBack) { this._editorBack = false; return; }
-      if (!$('edit-overlay').classList.contains('hidden')) this.closeEditor(true);
+      if (!$('share-overlay').classList.contains('hidden')) this.closeShare(true);
+      else if (!$('edit-overlay').classList.contains('hidden')) this.closeEditor(true);
       else if (this.view !== 'today') this.switchView('today', true);
     });
   }
@@ -222,6 +226,7 @@ class FitnessApp {
     title.classList.toggle('hidden', !isSettings);
     title.textContent = isSettings ? '设置' : '';
     document.getElementById('composer').classList.toggle('hidden', view !== 'today');
+    document.getElementById('btn-share').classList.toggle('hidden', view !== 'today');
     document.body.classList.toggle('no-composer', view !== 'today');
     const sb = document.getElementById('btn-settings');
     sb.innerHTML = isSettings ? ICON_CLOSE : ICON_SETTINGS;

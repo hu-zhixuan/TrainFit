@@ -33,9 +33,14 @@
         <button class="tab" data-view="trend" type="button" role="tab">趋势</button>
       </div>
       <h1 class="view-title hidden" id="view-title"></h1>
+      <div class="topbar-actions">
+      <button class="icon-btn" id="btn-share" type="button" aria-label="分享这一天">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7"/><path d="M16 6l-4-4-4 4"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+      </button>
       <button class="icon-btn" id="btn-settings" type="button" aria-label="设置">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="17" x2="20" y2="17"/><circle cx="9" cy="7" r="2.2" fill="var(--bg)"/><circle cx="15" cy="17" r="2.2" fill="var(--bg)"/></svg>
       </button>
+      </div>
     </header>
 
     <main class="views">
@@ -234,6 +239,11 @@
         <div class="card form-card">
           <div class="card-title">数据</div>
           <div class="field-note" id="set-data-note"></div>
+          <div class="field-note" id="set-backup-note"></div>
+          <div class="btn-row">
+            <button type="button" class="btn" id="set-export">发送备份文件</button>
+            <button type="button" class="btn" id="set-import">从备份恢复</button>
+          </div>
           <button type="button" class="btn btn-danger" id="set-clear">清空所有记录</button>
         </div>
 
@@ -289,6 +299,7 @@
         <button class="ob-opt" type="button" data-pick="fit"><b>在健身（减脂 / 增肌）</b><span>吃和练都记：热量赤字、蛋白质、动作进步</span></button>
       </div>
       <p class="ob-foot">之后随时可以在设置里改</p>
+      <button class="ob-restore" id="ob-restore" type="button">重装了 / 换手机了？<b>从备份恢复</b></button>
     </div>
     <div class="ob-step hidden" id="ob-step-2">
       <button class="ob-back" id="ob-back" type="button" aria-label="返回">‹ 返回</button>
@@ -343,6 +354,19 @@
     <div id="ql-snack-list"></div>
   </div>
 
+  <!-- 分享图片预览 -->
+  <div class="sheet-overlay hidden" id="share-overlay">
+    <div class="sheet share-sheet">
+      <div class="sheet-title">分享这一天</div>
+      <div class="share-preview"><img id="share-img" alt="这一天的记录图片"></div>
+      <div class="btn-row">
+        <button type="button" class="btn" id="share-close">关闭</button>
+        <button type="button" class="btn" id="share-save">保存到相册</button>
+        <button type="button" class="btn btn-primary" id="share-send">发给朋友</button>
+      </div>
+    </div>
+  </div>
+
   <div class="toast hidden" id="app-toast" role="status"></div>
   <div class="gauge-pop hidden" id="gauge-pop" role="dialog" aria-label="今天吃得怎么样"></div>
 
@@ -361,6 +385,8 @@
   <script src="js/app/editor.js"></script>
   <script src="js/app/foods.js"></script>
   <script src="js/app/quick.js"></script>
+  <script src="js/app/backup.js"></script>
+  <script src="js/app/share.js"></script>
 
   <!-- 一键记录：按住说话 → 大模型整理 → 保存（顺序有依赖） -->
   <script src="js/log/helpers.js"></script>

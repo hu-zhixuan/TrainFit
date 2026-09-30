@@ -109,6 +109,7 @@ Object.assign(FitnessApp.prototype, {
     this.renderMyFoods();
     const ql = window.QuickLog;
     const days = new Set([...this.workouts, ...this.diet].map(r => r.date)).size;
+    $('set-backup-note').textContent = this.backupNote();
     $('set-data-note').textContent = `共 ${this.diet.length} 条饮食、${this.workouts.length} 条${simple ? '运动' : '训练'}、${this.weights.length} 次体重，覆盖 ${days} 天。`;
   },
 

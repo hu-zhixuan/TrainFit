@@ -2,6 +2,15 @@
  * 第一次打开：选用途（想瘦一点 / 就记记吃了啥 / 在健身），再简单填身体数据。
  */
 Object.assign(FitnessApp.prototype, {
+  /** 在引导页从备份恢复了：用备份里的身体数据和用途，不用再填 */
+  finishOnboardingFromBackup() {
+    if (!this.profile.mode) this.profile.mode = 'fit';
+    this.needsOnboarding = false;
+    this.saveData();
+    document.getElementById('onboard').classList.add('hidden');
+    document.body.classList.remove('onboarding');
+  },
+
   showOnboarding() {
     const ob = document.getElementById('onboard');
     ob.classList.remove('hidden');
@@ -64,6 +73,7 @@ Object.assign(FitnessApp.prototype, {
       this.render();
     };
     $('ob-done').addEventListener('click', () => finish(true));
+    // 「重装了？从备份恢复」在 backup.js 里绑定；恢复成功后走下面的 finishOnboardingFromBackup
     $('ob-skip').addEventListener('click', () => finish(false));
   }
 });

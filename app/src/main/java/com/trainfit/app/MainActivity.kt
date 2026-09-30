@@ -34,6 +34,16 @@ class MainActivity : ComponentActivity() {
     private lateinit var nativeBridge: NativeBridge
     private var pendingNativeMicCallback: ((Boolean) -> Unit)? = null
     private var pendingNotifCallback: ((Boolean) -> Unit)? = null
+    private var pendingDocCallback: ((android.net.Uri?) -> Unit)? = null
+
+    // 从备份恢复：让用户选文件（下载/练食AI/练食AI备份.json，或者微信里存下来的）
+    private val openDocumentLauncher = registerForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        val cb = pendingDocCallback
+        pendingDocCallback = null
+        cb?.invoke(uri)
+    }
 
     // 通知权限（Android 13+）
     private val notifPermissionLauncher = registerForActivityResult(
@@ -91,6 +101,15 @@ class MainActivity : ComponentActivity() {
                     notifPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                 } else {
                     onResult(true)
+                }
+            },
+            pickDocument = { onResult ->
+                pendingDocCallback = onResult
+                try {
+                    openDocumentLauncher.launch(arrayOf("*/*"))
+                } catch (e: Exception) {
+                    pendingDocCallback = null
+                    onResult(null)
                 }
             }
         )
