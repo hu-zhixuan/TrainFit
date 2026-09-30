@@ -221,7 +221,8 @@ test('大模型失败：限流 / 超时会重试，最后还是失败就报错�
     Parser.send = async () => { n += 1; throw new Error('TIMEOUT'); };
     await assert.rejects(() => Parser.parse('两个水煮蛋加乳清蛋白粉700毫升', {}), /TIMEOUT/);
     assert.strictEqual(n, 3);
-    assert.strictEqual(Parser.failReason(new Error('TIMEOUT')), '网络不好，AI 没连上，点「重试」');
+    assert.strictEqual(Parser.failReason(new Error('TIMEOUT')), 'AI 这会儿太慢，没等到结果，点「重试」');
+    assert.strictEqual(Parser.failReason(new Error('UnknownHostException: x')), '网络不好，AI 没连上，点「重试」');
     assert.strictEqual(Parser.failReason(new Error('HTTP 429 x')), 'AI 这会儿太忙（限流），点「重试」');
     assert.strictEqual(Parser.failReason(new Error('NO_KEY')), 'AI 接口没有配置 key');
     // 参数被拒（400）：换不带 thinking 的写法再试一次
@@ -231,6 +232,37 @@ test('大模型失败：限流 / 超时会重试，最后还是失败就报错�
     assert.strictEqual(n, 2);
   } finally {
     Parser.send = origSend;
+    delete Parser.retryWaits;
+  }
+});
+
+test('大模型慢：过一会儿再发一份，谁先回来用谁；第一份很快失败就不补发', async () => {
+  const origSend = Parser.send;
+  Parser.hedgeMs = 30;
+  Parser.retryWaits = [0, 0];
+  const ok = (reply) => JSON.stringify({ choices: [{ message: { content: JSON.stringify({ reply }) } }] });
+  const later = (ms, v, fail) => new Promise((res, rej) => setTimeout(() => (fail ? rej(new Error(v)) : res(v)), ms));
+  try {
+    // 第一份卡住（很久才回来），补发的那份先回来
+    let n = 0;
+    Parser.send = () => { n += 1; return n === 1 ? later(400, ok('慢的')) : later(10, ok('快的')); };
+    const t0 = Date.now();
+    const r = await Parser.parse('随便', {});
+    assert.strictEqual(r.reply, '快的');
+    assert.strictEqual(n, 2);
+    assert.ok(Date.now() - t0 < 300, '不用等慢的那份');
+    // 第一份马上 4xx：不补发，直接按原来的规则换写法
+    n = 0;
+    Parser.send = (body) => { n += 1; return body.thinking ? later(1, 'HTTP 400 bad param', true) : later(1, ok('ok')); };
+    await Parser.parse('随便', {});
+    assert.strictEqual(n, 2);
+    // 两份都失败才算失败
+    n = 0;
+    Parser.send = () => { n += 1; return later(n % 2 ? 60 : 5, 'TIMEOUT', true); };
+    await assert.rejects(() => Parser.parse('随便', {}), /TIMEOUT/);
+  } finally {
+    Parser.send = origSend;
+    delete Parser.hedgeMs;
     delete Parser.retryWaits;
   }
 });

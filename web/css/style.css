@@ -634,6 +634,9 @@ body.has-buddy .views { padding-bottom: calc(var(--cmp-h, 110px) + 52px + var(--
 @keyframes spin { to { transform: rotate(360deg); } }
 .item.failed { border-color: color-mix(in srgb, var(--danger) 45%, var(--line)); }
 .item.failed .item-icon { background: var(--danger-soft); color: var(--danger); }
+/* 大模型慢（15 秒还没好）：标题后面淡出一句「有点慢，稍等」，别让人以为卡住了 */
+.pending-slow { margin-left: 8px; font-size: 13px; font-weight: 400; color: var(--text-3); opacity: 0; animation: pendSlow 0.4s ease forwards; }
+@keyframes pendSlow { to { opacity: 1; } }
 .pending-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 8px; }
 .chip {
   border: 1px solid var(--line);

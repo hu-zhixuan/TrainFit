@@ -56,6 +56,7 @@ object OpenAiApi {
      * quick：松手后「再认一遍」用，等不起——连接 3 秒、读 6 秒，只试一次，不行就用本机的结果
      */
     fun transcribe(cfg: ApiConfig, wav: ByteArray, quick: Boolean = false): ApiResult {
+        if (Qianwen.matches(cfg)) return Qianwen.transcribe(cfg, wav, quick)
         var lastError = ""
         for (attempt in 0 until (if (quick) 1 else 2)) {
             try {
@@ -99,7 +100,7 @@ object OpenAiApi {
         .replace(Regex("^\\s*language\\s+\\S+\\s*", RegexOption.IGNORE_CASE), "")
         .trim()
 
-    private fun readResponse(conn: HttpURLConnection): Pair<Int, String> {
+    internal fun readResponse(conn: HttpURLConnection): Pair<Int, String> {
         val code = conn.responseCode
         val stream = if (code in 200..299) conn.inputStream else conn.errorStream
         val text = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
@@ -107,5 +108,5 @@ object OpenAiApi {
         return code to text
     }
 
-    private fun describe(e: Exception) = "${e.javaClass.simpleName}: ${e.message.orEmpty()}"
+    internal fun describe(e: Exception) = "${e.javaClass.simpleName}: ${e.message.orEmpty()}"
 }
