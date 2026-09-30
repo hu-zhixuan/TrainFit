@@ -34,16 +34,16 @@ async function chatAudio(base, key, model) {
 (async () => {
   // 1) 硅基流动的 key：余额、状态
   const sfBase = (process.env.ASR_BASE_URL || 'https://api.siliconflow.cn/v1').replace(/\/+$/, '');
-  const sfKey = process.env.ASR_API_KEY || '';
-  const u = await j(`${sfBase}/user/info`, sfKey);
+  const sfKey = (process.env.ASR_API_KEY || '').trim();
+  const u = { status: 0, body: '' };
   let info = u.body.slice(0, 200);
   try { const d = JSON.parse(u.body).data || {}; info = `balance=${d.balance} charge=${d.chargeBalance} total=${d.totalBalance} status=${d.status} introduction=${d.introduction ? 'y' : 'n'}`; } catch (e) {}
-  note('硅基流动账户', `${host(sfBase)} ${u.status} ${info}`);
+  // 余额接口已下线（410）
   note('硅基流动 SenseVoiceSmall', await stt(sfBase, sfKey, 'FunAudioLLM/SenseVoiceSmall'));
 
   // 2) 大模型那把 key：有哪些模型、能不能听录音
   const base = (process.env.LLM_BASE_URL || 'https://api.atria-asi.ai/v1').replace(/\/+$/, '');
-  const key = process.env.LLM_API_KEY || '';
+  const key = (process.env.LLM_API_KEY || '').trim();
   const model = process.env.LLM_MODEL || 'Atria-Dawn-Preview';
   const m = await j(`${base}/models`, key);
   let ids = [];
