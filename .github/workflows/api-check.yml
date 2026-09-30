@@ -10,11 +10,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: Call LLM exactly like the app does
+      - name: Compare cloud ASR (千问 sk-ws- key 自动测 qwen3-asr-flash)
         env:
-          TZ: Asia/Shanghai
-          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
-          LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
-          LLM_MODEL: ${{ vars.LLM_MODEL }}
+          ASR_API_KEY: ${{ secrets.ASR_API_KEY }}
+          ASR_BASE_URL: ${{ vars.ASR_BASE_URL }}
         run: |
-          node .github/llm_speed.js
+          case "$(printf %s "$ASR_API_KEY" | head -c 6)" in
+            sk-ws-) node .github/asr_cloud_check.js && NO_CONTEXT=1 node .github/asr_cloud_check.js ;;
+            *) echo "::notice title=ASR key::还不是千问的 key（sk-ws- 开头），先不测" ;;
+          esac
