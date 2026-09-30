@@ -30,7 +30,8 @@ import java.util.concurrent.Executors
  *  - 转文字：  window.__tfAsr(requestId, ok, textOrError)
  *  - 大模型：  window.__tfLlm(requestId, ok, payload)，ok=true 时 payload 是接口原始 JSON 字符串
  *  - 通知权限：window.__tfNotifPerm(granted)
- *  - 选文件：  window.__tfFile(ok, textOrError)
+ *  - 选文件 / 一键找回：window.__tfFile(ok, textOrError)，失败时 textOrError = CANCEL | NO_BACKUP | READ_FAILED
+ *  - 别的 App 打开过来的文件：window.__tfOpenedFile()，网页再调 takeOpenedFile() 取内容
  */
 class NativeBridge(
     private val activity: ComponentActivity,
@@ -38,7 +39,8 @@ class NativeBridge(
     private val requestMicPermission: (onResult: (Boolean) -> Unit) -> Unit,
     private val onSystemBarsLight: (Boolean) -> Unit = {},
     private val requestNotifPermission: (onResult: (Boolean) -> Unit) -> Unit = { it(false) },
-    private val pickDocument: (onResult: (android.net.Uri?) -> Unit) -> Unit = { it(null) }
+    private val pickDocument: (onResult: (android.net.Uri?) -> Unit) -> Unit = { it(null) },
+    private val pickFolder: (onResult: (android.net.Uri?) -> Unit) -> Unit = { it(null) }
 ) {
     private val main = Handler(Looper.getMainLooper())
     private val io = Executors.newCachedThreadPool()
@@ -324,6 +326,50 @@ class NativeBridge(
                 }
             }
         }
+    }
+
+    /** 一键找回：用户授权「下载/练食AI」文件夹后，找最新的备份交给 window.__tfFile(ok, text) */
+    @JavascriptInterface
+    fun restoreFromFolder() {
+        main.post {
+            pickFolder { tree ->
+                if (tree == null) {
+                    callJs("__tfFile", false, "CANCEL")
+                } else {
+                    io.execute {
+                        try {
+                            FileShare.rememberTree(activity, tree)
+                            val text = FileShare.readNewestBackup(activity, tree)
+                            if (text == null) callJs("__tfFile", false, "NO_BACKUP") else callJs("__tfFile", true, text)
+                        } catch (e: Exception) {
+                            callJs("__tfFile", false, "READ_FAILED")
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @Volatile
+    private var openedText: String? = null
+
+    /** 微信里点备份文件 →「用其他应用打开」→ 练食AI：先读出来放着，网页准备好了来取 */
+    fun openedFile(uri: android.net.Uri) {
+        io.execute {
+            val text = FileShare.readText(activity, uri)
+            if (text != null) {
+                openedText = text
+                callJs("__tfOpenedFile")
+            }
+        }
+    }
+
+    /** 取走别的 App 打开过来的文件内容（取一次就清掉）；没有返回 "" */
+    @JavascriptInterface
+    fun takeOpenedFile(): String {
+        val t = openedText ?: ""
+        openedText = null
+        return t
     }
 
     fun shutdown() {

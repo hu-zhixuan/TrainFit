@@ -1,9 +1,14 @@
 package com.trainfit.app
 
 import android.Manifest
+import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.provider.DocumentsContract
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.RenderProcessGoneDetail
@@ -15,6 +20,7 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.FrameLayout
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
@@ -35,13 +41,28 @@ class MainActivity : ComponentActivity() {
     private var pendingNativeMicCallback: ((Boolean) -> Unit)? = null
     private var pendingNotifCallback: ((Boolean) -> Unit)? = null
     private var pendingDocCallback: ((android.net.Uri?) -> Unit)? = null
+    private var pendingTreeCallback: ((android.net.Uri?) -> Unit)? = null
 
-    // 从备份恢复：让用户选文件（下载/练食AI/练食AI备份.json，或者微信里存下来的）
+    // 从备份恢复：让用户选文件（微信、网盘里存下来的）；选择器一打开就停在「下载/练食AI」
     private val openDocumentLauncher = registerForActivityResult(
-        ActivityResultContracts.OpenDocument()
+        object : ActivityResultContracts.OpenDocument() {
+            override fun createIntent(context: Context, input: Array<String>): Intent =
+                super.createIntent(context, input).apply {
+                    if (Build.VERSION.SDK_INT >= 26) putExtra(DocumentsContract.EXTRA_INITIAL_URI, FileShare.backupFolderUri())
+                }
+        }
     ) { uri ->
         val cb = pendingDocCallback
         pendingDocCallback = null
+        cb?.invoke(uri)
+    }
+
+    // 一键找回：让用户授权「下载/练食AI」这个文件夹，我们自己在里面找最新的备份
+    private val openTreeLauncher = registerForActivityResult(
+        ActivityResultContracts.OpenDocumentTree()
+    ) { uri ->
+        val cb = pendingTreeCallback
+        pendingTreeCallback = null
         cb?.invoke(uri)
     }
 
@@ -111,6 +132,17 @@ class MainActivity : ComponentActivity() {
                     pendingDocCallback = null
                     onResult(null)
                 }
+            },
+            pickFolder = { onResult ->
+                pendingTreeCallback = onResult
+                try {
+                    // 系统的授权页上没有说明，先提示一句要点哪里
+                    Toast.makeText(this, "点下面的「使用此文件夹」，再点「允许」", Toast.LENGTH_LONG).show()
+                    openTreeLauncher.launch(if (Build.VERSION.SDK_INT >= 26) FileShare.backupFolderUri() else null)
+                } catch (e: Exception) {
+                    pendingTreeCallback = null
+                    onResult(null)
+                }
             }
         )
         Reminders.ensureChannels(this)
@@ -121,7 +153,32 @@ class MainActivity : ComponentActivity() {
 
         // 3. Configure Back Press Navigation for WebView History
         setupBackNavigation()
+
+        // 4. 从微信等「用其他应用打开」备份文件（切深浅色重建时不再处理一遍）
+        if (savedInstanceState == null) handleOpenIntent(intent)
     }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleOpenIntent(intent)
+    }
+
+    /** 别的 App 打开 / 分享过来的文件（备份）：读出来交给网页恢复 */
+    private fun handleOpenIntent(intent: Intent?) {
+        if (intent == null) return
+        val uri: Uri? = when (intent.action) {
+            Intent.ACTION_VIEW -> intent.data
+            Intent.ACTION_SEND ->
+                if (Build.VERSION.SDK_INT >= 33) intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
+                else getStreamLegacy(intent)
+            else -> null
+        }
+        if (uri != null) nativeBridge.openedFile(uri)
+    }
+
+    @Suppress("DEPRECATION")
+    private fun getStreamLegacy(intent: Intent): Uri? = intent.getParcelableExtra(Intent.EXTRA_STREAM)
 
     private fun setupEdgeToEdgeDarkTheme() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
