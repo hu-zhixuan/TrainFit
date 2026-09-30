@@ -4,11 +4,13 @@
  * 跳到最上面那一层的上沿趴着。别的界面一点不动。
  *
  * 表情跟今天的健康度走：没记 → 发呆（夜里闭眼打 Z），不健康 → 冒汗，还行 → 平常，健康 → 哼歌，非常健康 → 戴墨镜。
- * 小动作：头发隔一会儿晃一下、眨眼、偶尔左右看一眼；点一下抬手打招呼；记上一顿蹦一下；Z 往上飘、音符一跳一跳。
+ * 小动作：头发隔一会儿晃一下、眨眼、偶尔左右看一眼；隔半分钟左右自己站起来伸个懒腰、溜达两步；
+ * 点一下站起来招手；按住说话时站起来听；记上一顿举手欢呼；Z 往上飘、音符一跳一跳。
+ * 第一次用时由它带着看三步新手教程（tf_tour），设置里能再看一遍。
  * 连续记录的天数换装备：3 天头带，7 天棒球帽，30 天皇冠。点一下弹个气泡：连续几天、今天怎么样、蛋白还差多少。
  * 设置 →「外观」里换角色（男生 / 女生，默认跟着性别）、发色、衣服，也能关掉。存在 profile.buddy 里，跟着备份走。
  *
- * 画法：24×17 的像素图，叠上眼睛、装备，自动描一圈深色边（浅色背景上也看得清）；特效单独一层（好让它动）。
+ * 画法：趴着 24×17、站着 24×25 的像素图，叠上眼睛、装备，自动描一圈深色边（浅色背景上也看得清）；特效单独一层（好让它动）。
  * 输出 SVG，每种颜色一条 path，shape-rendering=crispEdges；动画全在 CSS 里。
  */
 (function (root) {
@@ -41,6 +43,76 @@
         'wwwwwwwwwwwwwwwwwwwwwwww'
       ],
       tufts: ['..........H.HH..H.......', '...........H.HH..H......'],
+      // 站起来：头（和趴着一样，最后一行是下巴）+ 身子 + 腿；招手两帧、伸懒腰、走路两帧
+      stand: {
+        head: [
+          '..........H.HH..H.......',
+          '........HHHHHHHHH.......',
+          '......HHHLLHHHHHHHH.....',
+          '.....HHHLHHHHHHHHHHH....',
+          '.....HHHHHHHHHHHHHLHH...',
+          '....HHHHHHHHHHHHHHHHH...',
+          '....HHHHHHHHHHHHHHHHHH..',
+          '....HHHHhHHHhHHHHhHHHH..',
+          '....HHHhSHhSSShSHhHHHH..',
+          '.....HHssssssssssHHH....',
+          '.....HHSEESSSSEESHH.....',
+          '......HSSSSSSSSSSH......',
+          '.......sSSSSSSSSs.......'
+        ],
+        body: [
+          '.........jWjjWj.........',
+          '.......WWJjWWjJWW.......',
+          '......WWWJJJJJJWWW......',
+          '......WWwJWWJJJJwWW.....',
+          '......WWwJWWJJJJwWW.....',
+          '......WWwJJJJJJJwWW.....',
+          '......SS.JJJJJJJ.SS.....',
+          '.........PPPPPPP........'
+        ],
+        wave: [
+          '.........jWjjWj.....SS..',
+          '.......WWJjWWjJWW..WW...',
+          '......WWWJJJJJJWWWWW....',
+          '......WWwJWWJJJJJWW.....',
+          '......WWwJWWJJJJJ.......',
+          '......WWwJJJJJJJJ.......',
+          '......SS.JJJJJJJJ.......',
+          '.........PPPPPPP........'
+        ],
+        wave2: [
+          '.........jWjjWj......SS.',
+          '.......WWJjWWjJWW...WW..',
+          '......WWWJJJJJJWWWWWW...',
+          '......WWwJWWJJJJJWW.....',
+          '......WWwJWWJJJJJ.......',
+          '......WWwJJJJJJJJ.......',
+          '......SS.JJJJJJJJ.......',
+          '.........PPPPPPP........'
+        ],
+        stretch: [
+          '.........jWjjWj.........',
+          '........JJjWWjJJ........',
+          '........JJJJJJJJ........',
+          '........JWWJJJJJ........',
+          '........JWWJJJJJ........',
+          '........JJJJJJJJ........',
+          '........JJJJJJJJ........',
+          '.........PPPPPPP........'
+        ],
+        legs: [
+          '.........PPP.PPP........',
+          '.........PPP.PPP........',
+          '.........PPP.PPP........',
+          '........WWWW.WWWW.......'
+        ],
+        walk: [
+          '........PPP...PPP.......',
+          '.......PPP.....PPP......',
+          '.......PPP.....PPP......',
+          '......WWWW.....WWWW.....'
+        ]
+      },
       eyeX: 7,
       eyes: { chill: 'SEESSSSEES', closed: 'SssSSSSssS', left: 'EESSSSEESS', right: 'SSEESSSSEE' }
     },
@@ -67,6 +139,75 @@
       ],
       // 头顶一根呆毛，两帧来回晃
       tufts: ['...........HH...........', '............HH..........'],
+      stand: {
+        head: [
+          '...........HH...........',
+          '........HHHHHHHHH.......',
+          '......HHHLLHHHHHHHH.....',
+          '.....HHHLHHHHHHHHHHH....',
+          '.....HHHHHHHHHHHHHHHH...',
+          '....HHHHHHHHHHHHHHHHH...',
+          '....HHHHHHHHHHHHHHHHHH..',
+          '....HHHHHHHHHHHHHHHHHH..',
+          '....HHHhHHHHhHHHHhHHHH..',
+          '....HHhssssssssssHHHH...',
+          '....HHESEESSSSEESEHHH...',
+          '....HHSSSSSSSSSSSSHHH...',
+          '....HHHsSSSSSSSSsHHHH...'
+        ],
+        body: [
+          '....HHH..jWjjWj..HHH....',
+          '....HHWWJjWWjJWWHHH.....',
+          '.....HWWJJJJJJWWWH......',
+          '......WWwJWWJJJJwWW.....',
+          '......WWwJWWJJJJwWW.....',
+          '......WWwJJJJJJJwWW.....',
+          '......SS.JJJJJJJ.SS.....',
+          '........PPPPPPPPP.......'
+        ],
+        wave: [
+          '....HHH..jWjjWj....SS...',
+          '....HHWWJjWWjJWW..WW....',
+          '.....HWWJJJJJJWWWWW.....',
+          '......WWwJWWJJJJJWW.....',
+          '......WWwJWWJJJJJ.......',
+          '......WWwJJJJJJJJ.......',
+          '......SS.JJJJJJJJ.......',
+          '........PPPPPPPPP.......'
+        ],
+        wave2: [
+          '....HHH..jWjjWj.....SS..',
+          '....HHWWJjWWjJWW...WW...',
+          '.....HWWJJJJJJWWWWWW....',
+          '......WWwJWWJJJJJWW.....',
+          '......WWwJWWJJJJJ.......',
+          '......WWwJJJJJJJJ.......',
+          '......SS.JJJJJJJJ.......',
+          '........PPPPPPPPP.......'
+        ],
+        stretch: [
+          '....HHH..jWjjWj..HHH....',
+          '....HHH.JJjWWjJJHHH.....',
+          '.....HH.JJJJJJJJHH......',
+          '........JWWJJJJJ........',
+          '........JWWJJJJJ........',
+          '........JJJJJJJJ........',
+          '........JJJJJJJJ........',
+          '........PPPPPPPPP.......'
+        ],
+        legs: [
+          '.......PPPPPPPPPPP......',
+          '.........SS...SS........',
+          '.........pp...pp........',
+          '........WWWW.WWWW.......'
+        ],
+        walk: [
+          '.......PPPPPPPPPPP......',
+          '........SS.....SS.......',
+          '.......pp.......pp......',
+          '......WWWW.....WWWW.....'
+        ]
+      },
       eyeX: 6,
       eyes: { chill: 'ESEESSSSEESE', closed: 'ESssSSSSssSE', left: 'EEESSSSEESSE', right: 'ESSEESSSSEEE' }
     }
@@ -74,11 +215,8 @@
   const EYE_Y = 10;
   const ART = {
     shades: { x: 6, y: 9, rows: ['KKKKKKKKKKKK', '.KkKK..KkKK.'] },
-    // 抬手打招呼：右手从胳膊上竖起来，两帧左右摆
-    wave: [
-      { x: 22, y: 7, rows: ['SS', 'SS', 'WW', 'WW', 'WW', 'WW', 'WW'] },
-      { x: 22, y: 7, rows: ['.SS', '.SS', 'WW.', 'WW.', 'WW.', 'WW.', 'WW.'] }
-    ],
+    // 站着伸懒腰 / 欢呼：两只手举过头顶
+    armsUp: { x: 5, y: 0, rows: ['SS............SS'].concat(Array(10).fill('WW............WW'), ['.W............W.']) },
     gear: {
       band: { x: 4, y: 5, rows: ['GGGGGGGGGGGGGGGGG', 'GGGGGGGGGGWGGGGGGG'] },
       cap: {
@@ -101,9 +239,26 @@
       sparkle: { x: 20, y: -3, rows: ['.X.', 'XXX', '.X.'] }
     }
   };
-  const AW = 24, AH = 17;
-  const M = 3;                 // 四周留白（描边 + 特效）；底下不留：胳膊直接搭在下面那个框的边上
+  const AW = 24, AH = 17, AH_STAND = 25;
+  const M = 3;                 // 四周留白（描边 + 特效）；底下不留：胳膊 / 鞋直接搭在下面那个框的边上
   const GW = AW + M * 2, GH = AH + M;
+  const POSES = ['lie', 'stand', 'walk', 'wave', 'stretch'];
+  const heightOf = (pose) => (pose && pose !== 'lie' ? AH_STAND : AH) + M;
+
+  /** 这个姿势这一帧的原图（不含眼睛、装备） */
+  function poseRows(ch, pose, frame) {
+    if (!pose || pose === 'lie') {
+      const body = ch.body.slice();
+      body[0] = ch.tufts[frame ? 1 : 0];
+      return body;
+    }
+    const st = ch.stand;
+    const head = st.head.slice();
+    head[0] = ch.tufts[frame ? 1 : 0];
+    const body = pose === 'wave' ? (frame ? st.wave2 : st.wave) : pose === 'stretch' ? st.stretch : st.body;
+    const legs = pose === 'walk' && frame ? st.walk : st.legs;
+    return head.concat(body, legs);
+  }
 
   const HAIR = {
     black: { label: '黑', H: '#3a2d27', h: '#221a16', L: '#5a4840' },
@@ -120,7 +275,8 @@
   const BASE_COLORS = {
     S: '#f0c9a4', s: '#dcae8a', E: '#241a15', K: '#141519', k: '#5b6170',
     G: '#10b981', g: '#0a7a56', A: '#e7b53c', a: '#fbe08a',
-    B: '#7cc4f5', Z: '#9aa3b5', N: '#9aa3b5', X: '#ffd84d', O: '#17120f'
+    B: '#7cc4f5', Z: '#9aa3b5', N: '#9aa3b5', X: '#ffd84d', O: '#17120f',
+    P: '#2b2c33', p: '#1c1d22'
   };
   const DEFAULT_LOOK = { show: true, hair: 'black', outfit: 'varsity' };
 
@@ -153,7 +309,8 @@
 
   /**
    * 拼出一帧像素图（不含特效）。
-   * @param {{char, hair, outfit, mood, gear:string[], frame:0|1, eyes?:string, wave?:0|1|2}} o
+   * @param {{char, hair, outfit, mood, gear:string[], pose?:string, frame:0|1, eyes?:string}} o
+   *   pose：lie 趴着（默认）/ stand 站着 / walk 走路 / wave 站着招手 / stretch 伸懒腰（举手欢呼）
    * @returns {{ w, h, px: string[][], colors: Object }}  px[y][x] 是颜色代码，'.' 透明
    */
   function compose(o) {
@@ -161,39 +318,40 @@
     const l = look(o);
     const ch = CHARS[l.char];
     const mood = MOODS[o.mood] || MOODS.idle;
-    const px = Array.from({ length: GH }, () => Array(GW).fill('.'));
+    const pose = POSES.includes(o.pose) ? o.pose : 'lie';
+    const H = heightOf(pose);
+    const px = Array.from({ length: H }, () => Array(GW).fill('.'));
     const put = (x, y, rows) => rows.forEach((r, dy) => [...r].forEach((c, dx) => {
       const X = x + dx + M, Y = y + dy + M;
-      if (c === '.' || Y < 0 || Y >= GH || X < 0 || X >= GW) return;
+      if (c === '.' || Y < 0 || Y >= H || X < 0 || X >= GW) return;
       px[Y][X] = c === ',' ? '.' : c;
     }));
-    const body = ch.body.slice();
-    body[0] = ch.tufts[o.frame ? 1 : 0];
-    put(0, 0, body);
+    put(0, 0, poseRows(ch, pose, o.frame));
     const eyes = o.eyes || mood.eyes;
     if (eyes === 'shades') put(ART.shades.x, ART.shades.y, ART.shades.rows);
     else put(ch.eyeX, EYE_Y, [ch.eyes[eyes] || ch.eyes.chill]);
     (o.gear || []).forEach(k => { const g = ART.gear[k]; if (g) put(g.x, g.y, g.rows); });
-    if (o.wave) { const w = ART.wave[o.wave - 1]; put(w.x, w.y, w.rows); }
+    if (pose === 'stretch') put(ART.armsUp.x, ART.armsUp.y, ART.armsUp.rows);
     // 描边：透明格子挨着有颜色的格子就涂深色
-    const filled = (x, y) => y >= 0 && y < GH && x >= 0 && x < GW && px[y][x] !== '.' && px[y][x] !== 'O';
-    for (let y = 0; y < GH; y++) for (let x = 0; x < GW; x++) {
+    const filled = (x, y) => y >= 0 && y < H && x >= 0 && x < GW && px[y][x] !== '.' && px[y][x] !== 'O';
+    for (let y = 0; y < H; y++) for (let x = 0; x < GW; x++) {
       if (px[y][x] === '.' && (filled(x + 1, y) || filled(x - 1, y) || filled(x, y + 1) || filled(x, y - 1))) px[y][x] = 'O';
     }
     const hair = HAIR[l.hair], outfit = OUTFITS[l.outfit];
     const colors = Object.assign({}, BASE_COLORS, { H: hair.H, h: hair.h, L: hair.L, J: outfit.J, W: outfit.W, w: outfit.w });
-    return { w: GW, h: GH, px, colors };
+    return { w: GW, h: H, px, colors };
   }
 
   /** 特效单独一张（不描边），好让 CSS 让它飘、跳、闪 */
   function fxLayer(o, colors) {
     const mood = MOODS[o.mood] || MOODS.idle;
-    const px = Array.from({ length: GH }, () => Array(GW).fill('.'));
+    const H = heightOf(o.pose);
+    const px = Array.from({ length: H }, () => Array(GW).fill('.'));
     if (mood.fx) {
       const f = ART.fx[mood.fx];
       f.rows.forEach((r, dy) => [...r].forEach((c, dx) => {
         const X = f.x + dx + M, Y = f.y + dy + M;
-        if (c !== '.' && Y >= 0 && Y < GH && X >= 0 && X < GW) px[Y][X] = c;
+        if (c !== '.' && Y >= 0 && Y < H && X >= 0 && X < GW) px[Y][X] = c;
       }));
     }
     return { px, colors, fx: mood.fx };
@@ -219,11 +377,14 @@
   /**
    * 完整的 SVG。几层叠在一起，动不动、什么时候显示全由 CSS 管：
    *  bd-fa / bd-fb 头发两帧；bd-blink 眨眼、bd-lookl / bd-lookr 左右看（只盖眼睛那一行）；
-   *  bd-wa / bd-wb 招手两帧；bd-fx 特效
+   *  bd-fx 特效。
+   *  站着的姿势（pose-stand / walk / wave / stretch）只有两帧，CSS 按姿势决定换帧快慢（走路、招手换得快）。
    */
   function svg(o) {
-    const frame = (extra) => compose(Object.assign({}, o, extra));
+    const pose = POSES.includes(o.pose) ? o.pose : 'lie';
+    const frame = (extra) => compose(Object.assign({}, o, { pose }, extra));
     const a = frame({ frame: 0 });
+    const H = a.h;
     const mood = MOODS[o.mood] || MOODS.idle;
     const eyeRow = (y) => y === EYE_Y + M;
     let eyesLayers = '';
@@ -232,10 +393,9 @@
         `<g class="bd-lookl">${paths(frame({ eyes: 'left' }), eyeRow)}</g>` +
         `<g class="bd-lookr">${paths(frame({ eyes: 'right' }), eyeRow)}</g>`;
     }
-    const fx = fxLayer(o, a.colors);
-    return `<svg class="buddy-svg" viewBox="0 0 ${GW} ${GH}" width="${GW * 2}" height="${GH * 2}" shape-rendering="crispEdges" aria-hidden="true">` +
+    const fx = fxLayer(Object.assign({}, o, { pose }), a.colors);
+    return `<svg class="buddy-svg pose-${pose}" viewBox="0 0 ${GW} ${H}" width="${GW * 2}" height="${H * 2}" shape-rendering="crispEdges" aria-hidden="true">` +
       `<g class="bd-fa">${paths(a)}</g><g class="bd-fb">${paths(frame({ frame: 1 }))}</g>` +
-      `<g class="bd-wa">${paths(frame({ wave: 1 }))}</g><g class="bd-wb">${paths(frame({ wave: 2 }))}</g>` +
       eyesLayers +
       (fx.fx ? `<g class="bd-fx bd-fx-${fx.fx}">${paths(fx)}</g>` : '') +
       '</svg>';
@@ -284,7 +444,7 @@
     return { mood, say: tip || (pLeft > 0 ? `蛋白质还差 ${pLeft}g` : '还行，再均衡一点') };
   }
 
-  const Buddy = { CHARS, ART, HAIR, OUTFITS, DEFAULT_LOOK, MOODS, LEVEL_MOOD, GEAR_STEPS, W: GW, H: GH, look, gearFor, compose, paths, svg, streakOf, nextGear, moodOf };
+  const Buddy = { CHARS, ART, HAIR, OUTFITS, DEFAULT_LOOK, MOODS, LEVEL_MOOD, GEAR_STEPS, POSES, W: GW, H: GH, heightOf, look, gearFor, compose, paths, svg, streakOf, nextGear, moodOf };
   TF.Buddy = Buddy;
   if (typeof module !== 'undefined' && module.exports) module.exports = Buddy;
 })(typeof window !== 'undefined' ? window : globalThis);
@@ -302,23 +462,20 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     const btn = document.getElementById('buddy');
     if (!btn) return;
     const look = this.buddyLook();
-    const show = look.show && this.view === 'today' && !this.needsOnboarding;
+    const show = (look.show || this._touring) && this.view === 'today' && !this.needsOnboarding;
     btn.classList.toggle('hidden', !show);
     document.body.classList.toggle('has-buddy', show);
-    if (!show) return;
+    if (!show) { this.buddyStop(); return; }
     const st = this.buddyState();
-    const key = [look.char, look.hair, look.outfit, st.mood, st.gear.join('+')].join('|');
-    if (btn.dataset.key !== key) {
-      const first = !btn.dataset.key;
-      btn.dataset.key = key;
-      btn.innerHTML = TF.Buddy.svg({ char: look.char, hair: look.hair, outfit: look.outfit, mood: st.mood, gear: st.gear });
-      if (!first) this.buddyHop();
-      // 连续记录拿到新装备（头带 → 棒球帽 → 皇冠）：来一段小琶音
-      const rank = (g) => TF.Buddy.GEAR_STEPS.findIndex(s => s.gear === g[0]);
-      if (!first && this._buddyGear && rank(st.gear) > rank(this._buddyGear)) window.Sound && window.Sound.play('unlock', 0.6);
-    } else if (this._buddyCount != null && st.count > this._buddyCount) {
-      this.buddyHop(); // 又记了一顿：跳一下
-    }
+    this._buddySt = st;
+    const moreFood = this._buddyCount != null && st.count > this._buddyCount;
+    const rank = (g) => TF.Buddy.GEAR_STEPS.findIndex(x => x.gear === g[0]);
+    const levelUp = this._buddyGear && rank(st.gear) > rank(this._buddyGear);
+    const first = !btn.dataset.key;
+    this.buddyDraw();
+    if (levelUp) window.Sound && window.Sound.play('unlock', 0.6); // 连续记录拿到新装备：小琶音
+    // 又记了一顿：站起来举手欢呼一下
+    if (!first && (moreFood || levelUp)) this.buddyDo([['stretch', 750], ['stand', 250]]);
     this._buddyCount = st.count;
     this._buddyGear = st.gear;
     btn.setAttribute('aria-label', `小人：${st.say}`);
@@ -379,21 +536,108 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     if (!btn.classList.contains('placed')) requestAnimationFrame(() => btn.classList.add('placed'));
   },
 
-  buddyHop() {
+  /** 按现在的样子、心情、姿势画出来（样子没变就不重画） */
+  buddyDraw() {
     const btn = document.getElementById('buddy');
-    btn.classList.remove('hop');
-    void btn.offsetWidth;
-    btn.classList.add('hop');
+    if (!btn || btn.classList.contains('hidden')) return;
+    const look = this.buddyLook();
+    const st = this._buddySt || this.buddyState();
+    const pose = this._pose || 'lie';
+    const key = [look.char, look.hair, look.outfit, st.mood, st.gear.join('+'), pose].join('|');
+    if (btn.dataset.key === key) return;
+    const posed = btn.dataset.pose !== pose;
+    btn.dataset.key = key;
+    btn.dataset.pose = pose;
+    let move = btn.querySelector('.bd-move');
+    if (!move) { btn.innerHTML = '<span class="bd-move"></span>'; move = btn.querySelector('.bd-move'); }
+    move.innerHTML = TF.Buddy.svg({ char: look.char, hair: look.hair, outfit: look.outfit, mood: st.mood, gear: st.gear, pose });
+    if (posed) this.placeBuddy(); // 站起来 / 趴下高度变了，底边还贴着那个框
   },
 
-  /** 点一下：抬手打个招呼 */
-  buddyWave() {
+  buddyPose(pose) {
+    this._pose = pose;
+    this.buddyDraw();
+  },
+
+  reducedMotion() {
+    try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; }
+  },
+
+  /**
+   * 一串动作：[[姿势, 毫秒, 开始时顺手做的事], …]，做完趴回去。新的动作会打断旧的。
+   * 减少动态效果时只停在第一个姿势，不走来走去。
+   */
+  buddyDo(steps, then) {
+    const token = this._actToken = (this._actToken || 0) + 1;
+    clearTimeout(this._actTimer);
+    const reduced = this.reducedMotion();
+    let i = 0;
+    const next = () => {
+      if (token !== this._actToken) return;
+      if (i >= steps.length) {
+        this.buddyMove(0, 0);
+        this.buddyPose(this._listening ? 'stand' : 'lie');
+        this._acting = false;
+        if (then) then();
+        return;
+      }
+      const [pose, ms, fn] = steps[i++];
+      this.buddyPose(reduced && pose === 'walk' ? 'stand' : pose);
+      if (fn && !reduced) fn();
+      this._actTimer = setTimeout(next, ms);
+    };
+    this._acting = true;
+    next();
+  },
+
+  buddyStop() {
+    this._actToken = (this._actToken || 0) + 1;
+    clearTimeout(this._actTimer);
+    this._acting = false;
+    this.buddyMove(0, 0);
+    if (this._pose && this._pose !== 'lie') { this._pose = 'lie'; this.buddyDraw(); }
+  },
+
+  /** 沿着那个框的边走：往左 x 像素，用 ms 毫秒走过去 */
+  buddyMove(x, ms) {
+    const move = document.querySelector('#buddy .bd-move');
+    if (!move) return;
+    move.style.transition = ms ? `transform ${ms}ms linear` : '';
+    move.style.transform = x ? `translateX(${x}px)` : '';
+  },
+
+  /** 自己动一动：隔半分钟左右，伸个懒腰，或者站起来溜达两步 */
+  buddyIdle() {
+    clearTimeout(this._idleT);
+    this._idleT = setTimeout(() => this.buddyIdle(), 20000 + Math.random() * 25000);
     const btn = document.getElementById('buddy');
-    btn.classList.remove('wave');
-    void btn.offsetWidth;
-    btn.classList.add('wave');
-    clearTimeout(this._buddyWaveT);
-    this._buddyWaveT = setTimeout(() => btn.classList.remove('wave'), 1100);
+    const busy = document.getElementById('composer').classList.contains('recording') || document.getElementById('composer').classList.contains('busy');
+    if (document.hidden || !btn || btn.classList.contains('hidden') || this._acting || this._touring || this._listening || busy ||
+        this.reducedMotion() || String(btn.style.zIndex) !== '31' || !document.getElementById('buddy-pop').classList.contains('hidden')) return;
+    const r = Math.random();
+    if (r < 0.4) {
+      this.buddyDo([['stand', 350], ['stretch', 1100], ['stand', 300]]);
+    } else if (r < 0.85) {
+      // 往左溜达几步，停下来左右看看，再走回来
+      this.buddyDo([
+        ['stand', 300],
+        ['walk', 1500, () => this.buddyMove(-48, 1500)],
+        ['stand', 900],
+        ['walk', 1500, () => this.buddyMove(0, 1500)],
+        ['stand', 250]
+      ]);
+    } else {
+      this.buddyDo([['stand', 900]]);
+    }
+  },
+
+  /** 按住说话时站起来听着，说完趴回去 */
+  buddyListen(on) {
+    if (on === !!this._listening) return;
+    this._listening = on;
+    if (this._touring) return;
+    if (on) { this.buddyStop(); this.buddyPose('stand'); }
+    else if (!this._acting) this.buddyPose('lie');
   },
 
   showBuddyPop() {
@@ -417,7 +661,8 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       e.stopPropagation();
       window.Haptics && window.Haptics.fire('tick');
       window.Sound && window.Sound.play('blip');
-      this.buddyWave();
+      if (this._touring) { this.tourNext(); return; }
+      this.buddyDo([['wave', 1800], ['stand', 400]]);
       document.getElementById('gauge-pop').classList.add('hidden');
       if (pop.classList.contains('hidden')) this.showBuddyPop(); else close();
     });
@@ -426,7 +671,13 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     document.addEventListener('click', (e) => { if (!pop.contains(e.target)) close(); });
     window.addEventListener('scroll', close, { passive: true, capture: true });
     // 下面那一层出现 / 消失 / 变高（提示条、录音、面板、键盘弹起）时跟着跳过去
-    const place = () => { this.placeBuddy(); clearTimeout(this._buddyPlaceT); this._buddyPlaceT = setTimeout(() => this.placeBuddy(), 260); };
+    const place = () => {
+      const c = document.getElementById('composer').classList;
+      this.buddyListen(c.contains('recording'));
+      this.placeBuddy();
+      clearTimeout(this._buddyPlaceT);
+      this._buddyPlaceT = setTimeout(() => this.placeBuddy(), 260);
+    };
     window.addEventListener('resize', () => { close(); place(); });
     if (window.visualViewport) window.visualViewport.addEventListener('resize', place);
     const ids = ['ql-snackbar', 'rec-panel', 'composer', 'edit-overlay', 'share-overlay'];
@@ -438,7 +689,96 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       document.querySelectorAll('.sheet').forEach(el => ro.observe(el));
     }
     // 过了零点、晚上犯困：回到前台时重画一下
-    document.addEventListener('visibilitychange', () => { if (!document.hidden) this.renderBuddy(); });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) this.renderBuddy(); else this.buddyStop(); });
+    this.buddyIdle();
+    this.bindTour();
+  },
+
+  // ================= 新手教程：小人带着看三步 =================
+  tourSteps() {
+    const simple = this.isSimple();
+    return [
+      { pose: 'wave', target: () => document.querySelector('#voice-row:not(.hidden) .talk-btn') || document.querySelector('#text-row:not(.hidden) .cmp-text'),
+        text: simple ? '嗨，我陪你记。按住下面这个按钮，说说今天吃了啥，松手就记好了。' : '嗨，我陪你记。按住下面这个按钮，一口气说完今天练了啥、吃了啥，松手就记好了。',
+        eg: simple ? '「早上包子豆浆，中午黄焖鸡」' : '「卧推80公斤4组8个，中午黄焖鸡」' },
+      { pose: 'stand', target: () => document.getElementById('timeline'),
+        text: '说错了不用改字，再说一句「改成一碗」「删掉奶茶」就行。点开一条也能改。' },
+      { pose: 'stretch', target: () => document.getElementById('thermo'),
+        text: '右上角这根温度计告诉你今天吃得健不健康。点我能看连续记了几天——连着记，我会换装备哦。' }
+    ];
+  },
+
+  startTour() {
+    if (this.view !== 'today') this.switchView('today');
+    this._touring = true;
+    this._tourStep = 0;
+    document.getElementById('buddy-pop').classList.add('hidden');
+    this.renderBuddy();
+    this.buddyStop();
+    setTimeout(() => this.showTourStep(), 250);
+  },
+
+  showTourStep() {
+    const steps = this.tourSteps();
+    const step = steps[this._tourStep];
+    const pop = document.getElementById('tour-pop');
+    document.querySelectorAll('.tour-glow').forEach(el => el.classList.remove('tour-glow'));
+    if (!step) { this.endTour(); return; }
+    this._pose = step.pose;
+    this.buddyDraw();
+    const t = step.target && step.target();
+    if (t) t.classList.add('tour-glow');
+    const last = this._tourStep === steps.length - 1;
+    pop.innerHTML = `<p class="tour-text">${esc(step.text)}</p>${step.eg ? `<p class="tour-eg">${esc(step.eg)}</p>` : ''}` +
+      `<div class="tour-actions"><button type="button" class="tour-skip" data-tour="skip">${last ? '' : '跳过'}</button>` +
+      `<span class="tour-dots">${steps.map((_, i) => `<i class="${i === this._tourStep ? 'on' : ''}"></i>`).join('')}</span>` +
+      `<button type="button" class="tour-next" data-tour="next">${last ? '开始吧' : '下一步'}</button></div>`;
+    pop.classList.remove('hidden');
+    const place = () => {
+      const r = document.getElementById('buddy').getBoundingClientRect();
+      pop.style.bottom = Math.round(window.innerHeight - r.top + 6) + 'px';
+      pop.style.right = Math.max(12, Math.round(window.innerWidth - r.right)) + 'px';
+    };
+    place();
+    setTimeout(place, 320);
+  },
+
+  tourNext() {
+    this._tourStep++;
+    window.Sound && window.Sound.play('blip');
+    this.showTourStep();
+  },
+
+  endTour() {
+    this._touring = false;
+    try { localStorage.setItem('tf_tour', 'done'); } catch (e) {}
+    document.getElementById('tour-pop').classList.add('hidden');
+    document.querySelectorAll('.tour-glow').forEach(el => el.classList.remove('tour-glow'));
+    this._pose = 'lie';
+    this.renderBuddy();
+    this.buddyDraw();
+  },
+
+  /** 第一次用（新装的走完引导、老用户升级后）自动带一遍；设置里能再看 */
+  maybeTour() {
+    let done = false;
+    try { done = localStorage.getItem('tf_tour') === 'done'; } catch (e) {}
+    if (done || this.needsOnboarding || this._touring) return;
+    setTimeout(() => { if (!this.needsOnboarding && this.view === 'today' && !this._touring) this.startTour(); }, 900);
+  },
+
+  bindTour() {
+    const pop = document.getElementById('tour-pop');
+    pop.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const b = e.target.closest('[data-tour]');
+      if (!b) return;
+      if (b.dataset.tour === 'skip') this.endTour(); else this.tourNext();
+    });
+    const again = document.getElementById('buddy-tour');
+    if (again) again.addEventListener('click', () => this.startTour());
+    window.addEventListener('resize', () => { if (this._touring) this.showTourStep(); });
+    this.maybeTour();
   },
 
   /** 设置 →「外观」里的小人：预览、角色、发色、衣服、显示开关 */

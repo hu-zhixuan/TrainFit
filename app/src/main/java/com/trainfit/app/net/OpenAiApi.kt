@@ -51,10 +51,13 @@ object OpenAiApi {
         }
     }
 
-    /** 上传一段 WAV 转文字；网络抖动或限流时再试一次。成功时 body 是识别出的文字 */
-    fun transcribe(cfg: ApiConfig, wav: ByteArray): ApiResult {
+    /**
+     * 上传一段 WAV 转文字；网络抖动或限流时再试一次。成功时 body 是识别出的文字。
+     * quick：松手后「再认一遍」用，等不起——连接 3 秒、读 6 秒，只试一次，不行就用本机的结果
+     */
+    fun transcribe(cfg: ApiConfig, wav: ByteArray, quick: Boolean = false): ApiResult {
         var lastError = ""
-        for (attempt in 0 until 2) {
+        for (attempt in 0 until (if (quick) 1 else 2)) {
             try {
                 val boundary = "----TrainFit" + System.currentTimeMillis()
                 val out = ByteArrayOutputStream()
@@ -66,8 +69,8 @@ object OpenAiApi {
 
                 val conn = (URL("${cfg.baseUrl}/audio/transcriptions").openConnection() as HttpURLConnection).apply {
                     requestMethod = "POST"
-                    connectTimeout = 10000
-                    readTimeout = 30000
+                    connectTimeout = if (quick) 3000 else 10000
+                    readTimeout = if (quick) 6000 else 30000
                     doOutput = true
                     setFixedLengthStreamingMode(body.size)
                     setRequestProperty("Authorization", "Bearer ${cfg.apiKey}")
@@ -78,7 +81,7 @@ object OpenAiApi {
                 val (code, text) = readResponse(conn)
                 if (code in 200..299) {
                     val said = try { JSONObject(text).optString("text") } catch (_: Exception) { text }
-                    return ApiResult(true, said.trim())
+                    return ApiResult(true, cleanAsrText(said))
                 }
                 lastError = "HTTP $code ${text.take(200)}"
                 if (code in 400..499 && code != 429) break
@@ -88,6 +91,13 @@ object OpenAiApi {
         }
         return ApiResult(false, lastError)
     }
+
+    /** Qwen3-ASR 有时带「language Chinese<asr_text>」这类标记：去掉 */
+    fun cleanAsrText(raw: String): String = raw
+        .replace(Regex("(?s)^.*<asr_text>"), "")
+        .replace(Regex("<[^>]{1,40}>"), "")
+        .replace(Regex("^\\s*language\\s+\\S+\\s*", RegexOption.IGNORE_CASE), "")
+        .trim()
 
     private fun readResponse(conn: HttpURLConnection): Pair<Int, String> {
         val code = conn.responseCode

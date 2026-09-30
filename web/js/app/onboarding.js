@@ -9,6 +9,7 @@ Object.assign(FitnessApp.prototype, {
     this.saveData();
     document.getElementById('onboard').classList.add('hidden');
     document.body.classList.remove('onboarding');
+    this.maybeTour();
   },
 
   showOnboarding() {
@@ -72,6 +73,7 @@ Object.assign(FitnessApp.prototype, {
       document.body.classList.remove('onboarding');
       window.Haptics && window.Haptics.fire('success');
       this.render();
+      this.maybeTour(); // 小人带着看三步
     };
     $('ob-done').addEventListener('click', () => finish(true));
     // 「重装了？从备份恢复」在 backup.js 里绑定；恢复成功后走下面的 finishOnboardingFromBackup
