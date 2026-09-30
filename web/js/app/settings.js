@@ -98,6 +98,7 @@ Object.assign(FitnessApp.prototype, {
     setSeg('set-theme', this.theme);
     $('set-theme-note').textContent = this.theme === 'system' ? `手机现在是${this.systemIsLight() ? '浅色' : '深色'}模式，App 跟着变` : '';
     this.renderBuddySettings();
+    if (window.QuickLog && window.QuickLog.refreshAsrHint) window.QuickLog.refreshAsrHint();
     const setVal = (id, v) => { if (document.activeElement !== $(id)) $(id).value = v; };
     setVal('set-height', p.heightCm);
     setVal('set-weight', p.weightKg);

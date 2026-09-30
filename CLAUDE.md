@@ -30,6 +30,8 @@
 - App 图标（深绿底 + 发光叶子 + AI 星光）由 `python3 scripts/build-icon.py` 用 Chromium 渲染成 `mipmap-*/ic_launcher*.webp`（自适应图标的前景、背景是位图，因为有光晕）和单色版 `drawable/ic_launcher_monochrome.xml`，不要手改；网页里的同款小图标是 `util.js` 的 `BRAND` / `brandIcon` / `drawBrandIcon`，改形状要两边一起改。图标和小人分开，用户明确说过图标单独设计，要像海外独立 App 那样简洁、有质感。
 - 备份（`web/js/app/backup.js`）只放 `fit_profile / fit_workouts / fit_diet / fit_weights / fit_my_foods`，**不放 AI 接口和语音识别的 key**（`tf_llm_override`、`tf_asr_override`）。新加要持久保存的数据，记得加进备份和 `mergeBackupData`。
 - 安卓原生的文件能力在 `FileShare.kt`（MediaStore 存下载 / 相册只支持 Android 10+；分享走 FileProvider，路径在 `res/xml/file_paths.xml`）。恢复备份不能让用户自己翻文件夹找文件（被骂过）：「从备份恢复」先走 `restoreFromFolder`（文件夹授权页直接停在「下载/练食AI」，授权后自动找最新备份，照 Mihon 的做法），找不到才让选文件；微信里「用其他应用打开」也能直接恢复（MainActivity 的 intent-filter + `takeOpenedFile`）。
+- 语音识别是两段式：说话时本机 SenseVoice 边说边出字；松手后联网就把这段话（`LocalAsr.lastWav`）交给云端大模型再认一遍（`NativeBridge.cloudFinal`，默认硅基流动 `Qwen/Qwen3-ASR-1.7B`，做法参考 GitHub 上的安卓语音输入法 BryceWG/BiBi-Keyboard），5 秒内没回来 / 失败就用本机的；401/402/403 之后半小时不再试。2026-10 实测仓库里的硅基流动 key 余额不足（HTTP 402），要用户充值才生效。云端模型对比脚本在 `claude/api-check` 分支的 `.github/asr_cloud_check.js`。
+- 小人的动作（`buddy.js` 的 `buddyDo` / `buddyIdle` / `buddyListen`）：站起来的姿势（stand / walk / wave / stretch）和趴着共用头部、眼睛、装备的坐标；新手教程（`startTour`，`tf_tour`）也由小人带，三步、每步一句话，别加长。
 - 本机识别（`asr/LocalAsr.kt`）：录音线程只收声音、识别线程切句和边说边出字（以前在录音线程里识别，说长了会丢声音）；松手后 25 秒以内整段再认一遍。换模型前在沙箱里用 `pip install sherpa-onnx` + kokoro TTS 合成的句子对比错字率（做法见 v3.3 的 PR）。
 - 音效在 `web/js/log/sound.js`（Web Audio 现场合成，不放音频文件），挂在和震动一样的时机；手机静音时不响（原生 `soundAllowed`），设置里能关（`tf_sound`）。开始说话的音要短，松手的音延后 0.15 秒，别被麦克风录进去。
 - 前端是普通 `<script>`（没有打包工具）：`web/js/app/*.js` 用 `Object.assign(FitnessApp.prototype, …)` 往类上加方法；`web/js/log/*.js` 通过 `window.TF` 共享，**`index.html` 里的加载顺序有依赖**。

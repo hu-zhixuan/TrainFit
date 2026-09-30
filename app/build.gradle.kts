@@ -32,16 +32,17 @@ android {
         applicationId = "com.trainfit.ai"
         minSdk = 24
         targetSdk = 34
-        versionCode = 29
-        versionName = "3.3"
+        versionCode = 30
+        versionName = "3.4"
 
         buildConfigField("String", "LLM_BASE_URL", llmConfig("LLM_BASE_URL", "https://api.atria-asi.ai/v1"))
         buildConfigField("String", "LLM_MODEL", llmConfig("LLM_MODEL", "Atria-Dawn-Preview"))
         buildConfigField("String", "LLM_API_KEY", llmConfig("LLM_API_KEY", ""))
 
-        // 语音转文字（OpenAI 兼容 /audio/transcriptions），默认硅基流动 SenseVoice
+        // 云端语音转文字（OpenAI 兼容 /audio/transcriptions），默认硅基流动上的 Qwen3-ASR 大模型：
+        // 松手后联网就用它再认一遍（比手机本机的 SenseVoice 准）；本机识别用不了时也用它
         buildConfigField("String", "ASR_BASE_URL", llmConfig("ASR_BASE_URL", "https://api.siliconflow.cn/v1"))
-        buildConfigField("String", "ASR_MODEL", llmConfig("ASR_MODEL", "FunAudioLLM/SenseVoiceSmall"))
+        buildConfigField("String", "ASR_MODEL", llmConfig("ASR_MODEL", "Qwen/Qwen3-ASR-1.7B"))
         buildConfigField("String", "ASR_API_KEY", llmConfig("ASR_API_KEY", ""))
     }
 

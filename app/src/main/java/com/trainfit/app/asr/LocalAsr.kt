@@ -227,11 +227,30 @@ class LocalAsr(private val assets: AssetManager) {
         // 整段重新识别：从第一次说话到最后一次说话（前后各多 0.3 秒）；VAD 没听到人声就整段识别兜底
         val from = if (firstSpeech >= 0) maxOf(0, firstSpeech - PAD) else 0
         val to = if (lastSpeechEnd > 0) minOf(n, lastSpeechEnd + PAD) else n
+        lastSpeech = if (to - from > SAMPLE_RATE / 2) synchronized(lock) { all.copyOfRange(from, minOf(to, from + SAMPLE_RATE * 60)) } else null
         if (to - from in (SAMPLE_RATE / 2)..FULL_PASS_MAX) {
             val whole = decode(synchronized(lock) { all.copyOfRange(from, to) })
             if (whole.isNotBlank()) return whole.trim()
         }
         return segments.trim()
+    }
+
+    /** 刚才那段话（去掉前后的静音，最多 60 秒）：给云端大模型再认一遍用 */
+    @Volatile private var lastSpeech: FloatArray? = null
+
+    /** 刚才那段话的 16kHz 16bit 单声道 WAV；没有返回 null */
+    fun lastWav(): ByteArray? {
+        val f = lastSpeech ?: return null
+        val pcm = java.nio.ByteBuffer.allocate(f.size * 2).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+        for (v in f) pcm.putShort((v.coerceIn(-1f, 1f) * 32767).toInt().toShort())
+        val data = pcm.array()
+        val header = java.nio.ByteBuffer.allocate(44).order(java.nio.ByteOrder.LITTLE_ENDIAN).apply {
+            put("RIFF".toByteArray()); putInt(36 + data.size); put("WAVE".toByteArray())
+            put("fmt ".toByteArray()); putInt(16); putShort(1.toShort()); putShort(1.toShort())
+            putInt(SAMPLE_RATE); putInt(SAMPLE_RATE * 2); putShort(2.toShort()); putShort(16.toShort())
+            put("data".toByteArray()); putInt(data.size)
+        }.array()
+        return header + data
     }
 
     fun cancel() {
@@ -249,6 +268,7 @@ class LocalAsr(private val assets: AssetManager) {
 
     // ---------------- 内部（只在识别线程，或录完之后调用） ----------------
     private fun resetState() {
+        lastSpeech = null
         committed.clear()
         processed = 0
         speechStart = -1

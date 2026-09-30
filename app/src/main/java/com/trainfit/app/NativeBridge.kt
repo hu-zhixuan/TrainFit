@@ -121,7 +121,29 @@ class NativeBridge(
         put("model", BuildConfig.ASR_MODEL)
         put("hasKey", BuildConfig.ASR_API_KEY.isNotBlank())
         put("local", if (localAsr.ready) "ready" else if (localAsr.failed) "failed" else "loading")
+        put("cloud", cloudStatus)
     }.toString()
+
+    // 松手后用云端大模型再认一遍：上次的结果（设置里显示），接口用不了时先歇一会儿
+    @Volatile private var cloudStatus = ""
+    @Volatile private var cloudPausedUntil = 0L
+
+    /** 联网就把刚才那段话交给云端大模型再认一遍，认出来就用它的；没联网、没余额、超时返回 null（用本机的） */
+    private fun cloudFinal(local: String, overrideJson: String): String? {
+        if (local.isBlank() || System.currentTimeMillis() < cloudPausedUntil) return null
+        val cfg = asrConfig(overrideJson)
+        if (!cfg.isComplete) return null
+        val wav = localAsr.lastWav() ?: return null
+        val r = OpenAiApi.transcribe(cfg, wav, quick = true)
+        if (r.ok && r.body.isNotBlank()) {
+            cloudStatus = "ok"
+            return r.body
+        }
+        cloudStatus = r.body
+        // 余额不足、key 不对：半小时内别再试，免得每次都白等；其它（没网、超时）下次照试
+        if (Regex("^HTTP 4(01|02|03)").containsMatchIn(r.body)) cloudPausedUntil = System.currentTimeMillis() + 30 * 60_000L
+        return null
+    }
 
     @JavascriptInterface
     fun startRecording() {
@@ -161,8 +183,9 @@ class NativeBridge(
     fun stopRecording(requestId: String, overrideJson: String) {
         io.execute {
             if (usingLocal) {
-                // 本机识别：松手后把整段话再识别一遍（几百毫秒到一两秒）
-                val text = localAsr.stop()
+                // 本机识别：松手后把整段话再识别一遍（几百毫秒到一两秒）；联网再交给云端大模型认一遍
+                val local = localAsr.stop()
+                val text = cloudFinal(local, overrideJson) ?: local
                 if (text.isNotBlank()) callJs("__tfAsr", requestId, true, text)
                 else callJs("__tfAsr", requestId, false, if (localAsr.ready) "NO_SPEECH" else "LOCAL_NOT_READY")
                 return@execute

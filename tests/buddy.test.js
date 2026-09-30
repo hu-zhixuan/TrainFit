@@ -61,7 +61,7 @@ test('像素图：尺寸固定、描了边、换衣服换发色都能拼', () =>
   for (const c of new Set(flat.replace(/\./g, ''))) assert.ok(img.colors[c], c);
   // SVG：两帧头发、两帧招手、睁眼时的眨眼和左右看、特效单独一层
   const svg = Buddy.svg({ mood: 'good', gear: [] });
-  for (const k of ['bd-fa', 'bd-fb', 'bd-wa', 'bd-wb', 'bd-blink', 'bd-lookl', 'bd-lookr', 'bd-fx-note']) assert.ok(svg.includes(k), k);
+  for (const k of ['bd-fa', 'bd-fb', 'bd-blink', 'bd-lookl', 'bd-lookr', 'bd-fx-note', 'pose-lie']) assert.ok(svg.includes(k), k);
   assert.ok(!Buddy.svg({ mood: 'sleepy', gear: [] }).includes('bd-blink'));
   assert.ok(!Buddy.svg({ mood: 'great', gear: [] }).includes('bd-blink'));   // 戴墨镜不眨眼
 });
@@ -76,16 +76,32 @@ test('设置里没选过就是默认样子，选过的保留', () => {
   assert.strictEqual(Buddy.look({ char: 'boy' }, 'female').char, 'boy');
 });
 
-test('女生：长头发搭在胳膊上，眼角有眼线；招手的手伸出头发外面', () => {
+test('女生：长头发搭在胳膊上，眼角有眼线；站着招手时手举在外面', () => {
   const g = Buddy.compose({ char: 'girl', mood: 'ok', gear: [] }).px.map(r => r.join(''));
   const W = Buddy.W;
   assert.strictEqual(g.length, Buddy.H);
   assert.ok(g.every(r => r.length === W));
   assert.ok(g[3 + 14].includes('H'), '头发搭在胳膊那一行');
-  const boy = Buddy.compose({ char: 'boy', mood: 'ok', gear: [], wave: 1 }).px.map(r => r.join(''));
-  assert.ok(boy[3 + 7].slice(3 + 22, 3 + 24) === 'SS', '手在头发外面');
+  const boy = Buddy.compose({ char: 'boy', mood: 'ok', gear: [], pose: 'wave' }).px.map(r => r.join(''));
+  assert.ok(boy[3 + 13].slice(3 + 20, 3 + 22) === 'SS', '站着招手：手举在肩膀外面');
   // 每个角色、每种心情都拼得出来
   for (const char of Object.keys(Buddy.CHARS)) for (const mood of Object.keys(Buddy.MOODS)) {
     assert.ok(Buddy.svg({ char, mood, gear: ['cap'] }).startsWith('<svg'));
+  }
+});
+
+test('站起来的几个姿势：高度一样、鞋在最底下一行，走路两帧腿不一样，伸懒腰手举过头', () => {
+  for (const char of Object.keys(Buddy.CHARS)) {
+    const stand = Buddy.compose({ char, pose: 'stand', mood: 'ok', gear: [] });
+    assert.strictEqual(stand.h, Buddy.heightOf('stand'));
+    assert.ok(stand.h > Buddy.heightOf('lie'));
+    assert.ok(stand.px[stand.h - 1].filter(c => c === 'W').length >= 6, char + ' 鞋');
+    const w0 = Buddy.compose({ char, pose: 'walk', frame: 0 }).px.map(r => r.join('')).join('\n');
+    const w1 = Buddy.compose({ char, pose: 'walk', frame: 1 }).px.map(r => r.join('')).join('\n');
+    assert.notStrictEqual(w0, w1, char + ' 走路两帧');
+    const up = Buddy.compose({ char, pose: 'stretch' }).px.map(r => r.join(''));
+    assert.ok(up[3].includes('S'), char + ' 伸懒腰：手在头顶那一行');
+    // 眼睛、装备的位置和趴着一样
+    assert.ok(Buddy.svg({ char, pose: 'stand', mood: 'great', gear: ['crown'] }).includes('pose-stand'));
   }
 });
