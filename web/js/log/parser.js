@@ -14,6 +14,35 @@
 
   const summaryOf = (items) => cleanText(items.map(it => it.name + (it.amount || '')).join('、'), 60);
 
+  /**
+   * 回头改一餐里的某几样（「刚才那个牛奶是甜的，包装上写…」）：大模型只给改的那几样，按名字替换，其他原样保留。
+   * 名字先找一模一样的，再找公共片段最长且唯一的（「甜牛奶」→ 原来的「鲜牛奶」）；对不上就当新加的一样。
+   * @param old 原来的 items；patch 改后的几样（可带 was: 原名）；removes 要去掉的名字
+   */
+  function mergeItems(old, patch, removes) {
+    const out = (old || []).slice();
+    const norm = (s) => FoodDB.norm(s);
+    const find = (name) => {
+      const k = norm(name);
+      const exact = out.findIndex(x => norm(x.name) === k);
+      if (exact >= 0) return exact;
+      let best = -1, len = 1, tie = false;
+      out.forEach((x, i) => {
+        const l = common(k, norm(x.name));
+        if (l > len) { best = i; len = l; tie = false; } else if (l === len && best >= 0) tie = true;
+      });
+      return tie ? -1 : best;
+    };
+    (removes || []).forEach(n => { const i = find(n); if (i >= 0) out.splice(i, 1); });
+    (patch || []).forEach(it => {
+      const next = Object.assign({}, it);
+      delete next.was;
+      const i = find(it.was || it.name);
+      if (i >= 0) out[i] = next; else out.push(next);
+    });
+    return out;
+  }
+
   /** 补剂和饭菜分开：补剂都放进一条「加餐/补剂」 */
   function separateSupps(meals) {
     const out = [];
@@ -102,8 +131,10 @@
         '   补剂和药（维生素、钙、镁、锌、铁、鱼油、益生菌、肌酸、药片…，蛋白粉不算补剂）：每样一项，加 "kind":"supplement"，不管什么时间都放进 mealType 为 加餐/补剂 的那条 meal，和饭菜分开。calories 按实际（普通片剂、胶囊是 0，鱼油一粒约 9，软糖一粒约 10）。含这些营养素就写 nutrients（这一项的总量，只用这些名字和单位）：' + Object.keys(NUTRIENTS).map(k => `${k}(${NUTRIENTS[k].unit})`).join('、') + '。用户没说剂量就按常见的一片 / 一粒估（维生素D 1μg = 40IU）；复合维生素也按常见一粒写出主要几种（维生素C、维生素D、维生素A、锌、钙、镁…）。药和说不清成分的补剂可以不写 nutrients。例：{"mealType":"加餐/补剂","foodSummary":"鱼油2粒、维生素D1粒","items":[{"name":"鱼油","amount":"2粒","kind":"supplement","calories":18,"fatG":2,"nutrients":{"EPA+DHA":600}},{"name":"维生素D","amount":"1粒","kind":"supplement","calories":0,"nutrients":{"维生素D":10}}]}',
         '   水、黑咖啡、茶这类没有热量的也记，calories 写 0。',
         '   用户念了包装上的营养数（「包装上写每100克210大卡」「一包300大卡」），严格按用户给的数算，这一项加 "source":"label"。',
+        '   item 的 name 要具体到用户说的那种（「甜牛奶」不要写成「牛奶」，「肉松面包」不要写成「面包」），改过的数会按这个名字记住。',
         '   下面「记住的食物」是用户确认过的数：说到同样的东西（同名或明显是同一样）就用那里的名字，数值按份数换算；只是相似的不要套用。burnedCalories 按常见强度估算。',
-        '5. 用户说「记错了/改成/其实是/只吃了一半/删掉/不算」等，是在改已有记录：用 update（set 里只写要改的字段；饮食份量变了就在 set 里给新的 items，或同时改热量和三大营养素）或 delete，引用下面的编号，不要重复新增。',
+        '5. 用户说「记错了/改成/其实是/只吃了一半/删掉/不算」，或者回头补充某样东西（「刚才那个牛奶是甜的，包装上写每100毫升290千焦」「鸡蛋其实只吃了一个」），是在改已有记录：用 update 或 delete，引用下面的编号，不要重复新增。',
+        '   update 的 set 里只写要改的字段。改一餐里的某几样：set.items 里只写这几样（写全 name、amount、grams 和数值），name 用下面记录里的原名，换了名字就加 "was":"原名"；没写到的会原样保留。去掉某一样写 {"name":"原名","remove":true}。整餐的量都变了（「只吃了一半」）就把每一样都写上。',
         '6. 说「昨天」「昨晚」dayOffset=-1，「前天」=-2，否则 0；修改和删除只针对下面列出的这天记录。',
         '7. 用户报自己的体重（「体重62.5」「今天称了124斤」「早上61公斤」）：bodyWeight 填公斤数（斤÷2；没说单位就参考下面的最近体重判断是斤还是公斤）。没说体重就填 null。训练用的重量不是体重。',
         '8. 用户让你记住某样东西的热量（「记住，糯米鸡一个350大卡」），或念了包装上的营养数：在 remember 里写一份的量 {"name","amount","grams","calories","proteinG","carbsG","fatG"}，补剂再加 "kind":"supplement" 和 nutrients。只是让你记住、没说吃了，就不要加进 meals。',
@@ -180,8 +211,18 @@
           if (v !== null && v >= 0) set[k] = k === 'weightKg' || /G$/.test(k) ? round1(v) : Math.round(v);
         });
         if (Array.isArray(u.set.items)) {
-          const items = u.set.items.map(ground).filter(Boolean);
-          if (items.length) Object.assign(set, sumItems(items), { items });
+          const removes = u.set.items.filter(it => it && it.remove).map(it => cleanText(it.name, 20)).filter(Boolean);
+          const items = u.set.items.filter(it => it && !it.remove).map(raw => {
+            const g = ground(raw);
+            if (g && raw.was) g.was = cleanText(raw.was, 20);
+            return g;
+          }).filter(Boolean);
+          // 改的是具体几样：合计由保存时合并出来的明细重算，大模型给的合计不用
+          if (items.length || removes.length) {
+            ['calories', 'proteinG', 'carbsG', 'fatG'].forEach(k => delete set[k]);
+            set.items = items;
+            if (removes.length) set.removeItems = removes;
+          }
         }
         if (set.muscleGroup && !MUSCLES.includes(set.muscleGroup)) delete set.muscleGroup;
         if (Object.keys(set).length) out.updates.push({ ref: u.ref, set });
@@ -371,7 +412,7 @@
     }
   };
 
-  Object.assign(TF, { Parser });
+  Object.assign(TF, { Parser, mergeItems });
 
   if (typeof module !== 'undefined' && module.exports) module.exports = TF;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -948,16 +948,24 @@ body.no-composer .snackbar { bottom: calc(20px + var(--sab)); }
 /* ---------- 饮食明细 ---------- */
 .breakdown { background: var(--surface-2); border-radius: var(--r-md); padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; }
 .breakdown-head { font-size: 0.78rem; font-weight: 700; color: var(--text-2); }
-.breakdown-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 0.85rem; font-variant-numeric: tabular-nums; }
-.breakdown-row small b { font-weight: 700; color: var(--text-2); }
-.breakdown-row em.src { font-style: normal; font-size: 0.7rem; font-weight: 700; color: var(--accent-text); background: var(--accent-soft); border-radius: 5px; padding: 0 5px; margin-left: 4px; }
+.breakdown-row { display: flex; flex-direction: column; gap: 6px; padding: 9px 0 10px; border-top: 1px solid var(--line); font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+.breakdown-head + .breakdown-row { border-top: 0; padding-top: 4px; }
+.breakdown-row em.src { font-style: normal; font-size: 0.7rem; font-weight: 700; color: var(--accent-text); background: var(--accent-soft); border-radius: 5px; padding: 0 5px; margin-left: auto; flex: none; }
 .breakdown-row em.src.est { color: var(--meal); background: var(--meal-soft); }
 .breakdown-row em.src.mine { color: var(--lift); background: var(--lift-soft); }
-.bd-name { display: flex; flex-direction: column; min-width: 0; }
-.bd-name small { font-size: 0.72rem; color: var(--text-3); }
-.bd-val { display: flex; align-items: center; gap: 4px; flex: none; font-size: 0.8rem; color: var(--text-2); }
+.bd-top { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.bd-name { font-weight: 650; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bd-name small { margin-left: 6px; font-size: 0.72rem; font-weight: 500; color: var(--text-3); }
+.bd-nut { font-size: 0.72rem; color: var(--text-3); margin-top: -3px; }
+/* 每一样：份量 / 热量 / 蛋白质 */
+.bd-fields { display: grid; grid-template-columns: 1.15fr 1fr 1fr; gap: 8px; }
+.bd-f { display: flex; align-items: center; gap: 4px; min-width: 0; font-size: 0.72rem; color: var(--text-3); white-space: nowrap; }
+.bd-f .bd-input { flex: 1; min-width: 0; width: auto; }
+.bd-f-amt .bd-input { text-align: left; }
+.bd-total { padding-top: 8px; border-top: 1px solid var(--line); font-size: 0.8rem; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.bd-total b { color: var(--text); font-weight: 750; }
 .bd-input {
-  width: 64px; padding: 4px 6px; text-align: right; font-weight: 650; font-size: 0.92rem; font-variant-numeric: tabular-nums;
+  width: 64px; padding: 5px 7px; text-align: right; font-weight: 650; font-size: 0.92rem; font-variant-numeric: tabular-nums;
   background: var(--surface); border: 1px solid var(--line); border-radius: 8px; color: var(--text);
 }
 .bd-input:focus { outline: none; border-color: var(--accent); }
