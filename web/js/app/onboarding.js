@@ -14,6 +14,8 @@ Object.assign(FitnessApp.prototype, {
   showOnboarding() {
     const ob = document.getElementById('onboard');
     ob.classList.remove('hidden');
+    const logo = ob.querySelector('.ob-logo');
+    if (logo && TF.Buddy) logo.innerHTML = TF.Buddy.svg(Object.assign({}, this.buddyLook(), { mood: 'good', gear: [] }));
     document.getElementById('ob-step-1').classList.remove('hidden');
     document.getElementById('ob-step-2').classList.add('hidden');
     document.body.classList.add('onboarding');

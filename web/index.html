@@ -34,6 +34,7 @@
       </div>
       <h1 class="view-title hidden" id="view-title"></h1>
       <div class="topbar-actions">
+      <button class="buddy hidden" id="buddy" type="button" aria-label="小人"></button>
       <button class="icon-btn" id="btn-share" type="button" aria-label="分享这一天">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7"/><path d="M16 6l-4-4-4 4"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
       </button>
@@ -169,7 +170,7 @@
           </div>
           <div class="field-grid field-grid-2" id="goal-grid">
             <label class="field"><span class="field-label" id="set-deficit-l">每天热量赤字 kcal</span><input class="input" id="set-deficit" type="number" inputmode="numeric"></label>
-            <label class="field fit-only"><span class="field-label">每天蛋白质 g</span><input class="input" id="set-protein" type="number" inputmode="numeric"></label>
+            <label class="field"><span class="field-label">每天蛋白质 g</span><input class="input" id="set-protein" type="number" inputmode="numeric"></label>
           </div>
           <div class="field-note" id="set-goal-note"></div>
         </div>
@@ -182,6 +183,17 @@
             <button class="seg-btn" data-value="light" type="button">浅色</button>
           </div>
           <div class="field-note" id="set-theme-note"></div>
+          <div class="buddy-set">
+            <div class="buddy-preview" id="buddy-preview"></div>
+            <div class="buddy-opts">
+              <div class="buddy-opt"><span>头发</span><div class="swatches" id="buddy-hair"></div></div>
+              <div class="buddy-opt"><span>衣服</span><div class="swatches" id="buddy-outfit"></div></div>
+            </div>
+          </div>
+          <div class="switch-row">
+            <div class="switch-text"><b>顶上的小人</b><small id="buddy-note"></small></div>
+            <input type="checkbox" class="switch" id="buddy-show" aria-label="显示小人">
+          </div>
         </div>
 
         <div class="card form-card">
@@ -369,6 +381,7 @@
 
   <div class="toast hidden" id="app-toast" role="status"></div>
   <div class="gauge-pop hidden" id="gauge-pop" role="dialog" aria-label="今天吃得怎么样"></div>
+  <div class="buddy-pop hidden" id="buddy-pop" role="dialog" aria-label="小人"></div>
 
   <!-- 食物营养库 -->
   <script src="js/data/food_db.js"></script>
@@ -387,6 +400,7 @@
   <script src="js/app/quick.js"></script>
   <script src="js/app/backup.js"></script>
   <script src="js/app/share.js"></script>
+  <script src="js/app/buddy.js"></script>
 
   <!-- 一键记录：按住说话 → 大模型整理 → 保存（顺序有依赖） -->
   <script src="js/log/helpers.js"></script>

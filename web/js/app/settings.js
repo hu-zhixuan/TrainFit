@@ -93,16 +93,17 @@ Object.assign(FitnessApp.prototype, {
     $('set-goal-note').textContent = simple
       ? '想增重时填负数，比如 -250 表示每天多吃 250 kcal。改完自动保存。'
       : '增肌时赤字填负数，比如 -250 表示每天多吃 250 kcal。改完自动保存。';
-    $('set-mode-note').textContent = simple ? '只显示吃了多少、还能吃多少和体重。说了运动也会记。' : '训练、蛋白质、热量赤字和动作进步都会显示。';
-    $('rem-night-desc').textContent = simple ? '今天还能吃多少' : '今天还能吃多少、蛋白还差多少';
+    $('set-mode-note').textContent = simple ? '只显示吃了多少、还能吃多少、蛋白质和体重。说了运动也会记。' : '训练、蛋白质、热量赤字和动作进步都会显示。';
+    $('rem-night-desc').textContent = '今天还能吃多少、蛋白还差多少';
     setSeg('set-theme', this.theme);
     $('set-theme-note').textContent = this.theme === 'system' ? `手机现在是${this.systemIsLight() ? '浅色' : '深色'}模式，App 跟着变` : '';
+    this.renderBuddySettings();
     const setVal = (id, v) => { if (document.activeElement !== $(id)) $(id).value = v; };
     setVal('set-height', p.heightCm);
     setVal('set-weight', p.weightKg);
     setVal('set-age', p.age);
     setVal('set-deficit', p.targetDeficitKcal);
-    setVal('set-protein', p.targetProteinG);
+    setVal('set-protein', this.gaugeProteinTarget());
     const budget = p.tdee - (p.targetDeficitKcal || 0);
     $('set-tdee-note').textContent = `每天日常消耗约 ${fmt(p.tdee)} kcal（不含训练）。按目标，不训练的日子大约吃 ${fmt(budget)} kcal。`;
     this.renderReminders();

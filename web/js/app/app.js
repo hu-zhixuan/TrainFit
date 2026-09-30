@@ -155,6 +155,8 @@ class FitnessApp {
     this.bindGaugePop();
     this.bindBackup();
     this.bindShare();
+    this.bindBuddy();
+    this.bindBuddySettings();
     $('date-label').addEventListener('click', () => { this.selectedDate = getTodayDateString(); this.render(); });
     $('setup-hint').addEventListener('click', () => this.switchView('settings'));
     $('weight-log').addEventListener('click', () => this.openWeightEditor(getTodayDateString()));
@@ -256,8 +258,8 @@ class FitnessApp {
       window.TrainFitNative.updateDayState(JSON.stringify({
         date: today, meals, count,
         remaining: Math.round(s.remaining),
-        showProtein: !this.isSimple(),
-        proteinLeft: Math.max(0, Math.round((this.profile.targetProteinG || 0) - s.protein))
+        showProtein: true,
+        proteinLeft: Math.max(0, Math.round(this.gaugeProteinTarget() - s.protein))
       }));
     } catch (e) {}
   }
@@ -268,6 +270,7 @@ class FitnessApp {
     if (this.view === 'today') this.renderToday();
     else if (this.view === 'trend') this.renderTrend();
     else if (this.view === 'settings') this.renderSettings();
+    this.renderBuddy();
   }
 
   /** 系统当前是不是浅色：安卓 App 问原生，浏览器看 prefers-color-scheme */

@@ -11,9 +11,10 @@ Object.assign(FitnessApp.prototype, {
     return `${md} 周${WEEKDAYS[d.getDay()]}`;
   },
 
-  /** 只记吃的时，蛋白质目标按每公斤 1.2g 算（健身的用设置里的目标） */
+  /** 每天蛋白质目标：自己设过就用设的；没设过，健身按设置里的（默认体重×2），只记吃的按每公斤 1.2g */
   gaugeProteinTarget() {
-    return this.isSimple() ? Math.round((this.profile.weightKg || 60) * 1.2) : (this.profile.targetProteinG || 0);
+    if (this.isSimple() && !this.profile.proteinTouched) return Math.round((this.profile.weightKg || 60) * 1.2);
+    return this.profile.targetProteinG || 0;
   },
 
   /** 健康度温度计：水银涨到哪一档，点一下看三项各怎么样 */
@@ -114,18 +115,20 @@ Object.assign(FitnessApp.prototype, {
     const simple = this.isSimple();
     if (simple) {
       const perMonth = Math.abs(target) * 30 / 7700;
-      $('hero-foot').textContent = target > 0 ? `每天少吃 ${fmt(target)} kcal，一个月大约瘦 ${perMonth.toFixed(1)} kg`
-        : target < 0 ? `每天多吃 ${fmt(-target)} kcal，一个月大约长 ${perMonth.toFixed(1)} kg` : '按保持现在的体重算';
+      // 只记吃的也看蛋白质；运动消耗有才写在底下那行
+      $('hero-foot').textContent = (target > 0 ? `每天少吃 ${fmt(target)} kcal，一个月大约瘦 ${perMonth.toFixed(1)} kg`
+        : target < 0 ? `每天多吃 ${fmt(-target)} kcal，一个月大约长 ${perMonth.toFixed(1)} kg` : '按保持现在的体重算') +
+        (s.workoutBurn ? ` · 运动 +${fmt(s.workoutBurn)}` : '');
       $('st-burn-l').textContent = '今天预算';
       $('st-burn').textContent = fmt(s.budget);
-      $('st-protein-l').textContent = '运动消耗';
-      $('st-protein').textContent = s.workoutBurn ? '+' + fmt(s.workoutBurn) : '0';
+      $('st-protein-l').textContent = '蛋白质';
+      $('st-protein').innerHTML = `${fmt(s.protein)}<small> / ${fmt(this.gaugeProteinTarget())}g</small>`;
     } else {
       $('hero-foot').textContent = `预算 ${fmt(s.budget)} = 消耗 ${fmt(s.totalBurn)} ${target >= 0 ? '− 目标赤字 ' + fmt(target) : '+ 目标盈余 ' + fmt(-target)}`;
       $('st-burn-l').textContent = '训练消耗';
       $('st-burn').textContent = s.workoutBurn ? '+' + fmt(s.workoutBurn) : '0';
       $('st-protein-l').textContent = '蛋白质';
-      $('st-protein').textContent = `${fmt(s.protein)} / ${fmt(this.profile.targetProteinG)}g`;
+      $('st-protein').innerHTML = `${fmt(s.protein)}<small> / ${fmt(this.gaugeProteinTarget())}g</small>`;
     }
     $('st-intake').textContent = fmt(s.intake);
 
@@ -144,7 +147,7 @@ Object.assign(FitnessApp.prototype, {
     const tl = $('timeline');
     let html = pend.map(p => this.renderRow({ kind: 'pending', ts: p.ts, rec: p })).join('');
     if (meals.length) {
-      html += `<div class="group-head"><span>饮食</span><b>${fmt(s.intake)} kcal${simple ? '' : ` · 蛋白 ${fmt(s.protein)}g`}</b></div>`;
+      html += `<div class="group-head"><span>饮食</span><b>${fmt(s.intake)} kcal · 蛋白 ${fmt(s.protein)}g</b></div>`;
       html += meals.map(d => this.renderRow({ kind: 'meal', ts: recordTs(d), rec: d })).join('');
     }
     if (lifts.length) {
@@ -189,7 +192,8 @@ Object.assign(FitnessApp.prototype, {
       // 只有补剂的一条：标「补剂」，下面写含的营养素
       const suppOnly = isSuppOnly(x);
       const macro = suppOnly ? TF.nutrientsText(sumNutrients(x.items), 3)
-        : this.isSimple() ? '' : [x.proteinG ? `蛋白 ${round1(x.proteinG)}g` : '', x.carbsG ? `碳水 ${round1(x.carbsG)}g` : '', x.fatG ? `脂肪 ${round1(x.fatG)}g` : ''].filter(Boolean).join(' · ');
+        : this.isSimple() ? (x.proteinG ? `蛋白 ${round1(x.proteinG)}g` : '')
+        : [x.proteinG ? `蛋白 ${round1(x.proteinG)}g` : '', x.carbsG ? `碳水 ${round1(x.carbsG)}g` : '', x.fatG ? `脂肪 ${round1(x.fatG)}g` : ''].filter(Boolean).join(' · ');
       return `
         <button class="item" data-kind="meal" data-id="${esc(x.id)}" type="button">
           <div class="item-icon meal">${ICONS.meal}</div>
