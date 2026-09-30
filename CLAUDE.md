@@ -16,7 +16,7 @@
 3. **大模型挑大梁**：糯米鸡、饭团、一碗面这种整份的东西让大模型按常见大小整体估（`whole=true`），不要拆成原料；只有米饭、鸡蛋这类单一食材才按成分表重算。成分表里的生重 / 干重条目（`(生)`、`(干)`）只认全名，别让「糯米鸡」匹配到「糯米(生)」。
 4. **蛋白质要准**：用户最在意蛋白质。食物库里名字对上但其实不是一回事的条目要处理（成分表的「蛋白粉」是 50% 的品牌货、「虾仁」是 10.4g 的红虾仁，都在 `scripts/build-food-db.js` 的 `CFCT_SKIP` 里跳过）；单独吃的肉按生重算。改食物库只改 `scripts/build-food-db.js` 再重新生成（数据：`git clone --depth 1 https://github.com/Sanotsu/china-food-composition-data`）。
 5. **失败不要乱记**：大模型调用失败时不能用规则猜着写数据（v2.6.1 之前把「蛋白粉 700 毫升」记成 2838 千卡）。失败就留「没整理好」卡片，让用户重试或改字。
-6. **能用现成方案就用**：本机语音识别照搬 sherpa-onnx 官方 Android demo；成分表数据来自 Sanotsu/china-food-composition-data。先查 GitHub 上有没有成熟做法。
+6. **能用现成方案就用**：本机语音识别照搬 sherpa-onnx 官方 Android demo（模型也用它默认的 SenseVoice int8 2024-07-17；2025-09-09 那版是粤语微调的，别换；FunASR-Nano、Qwen3-ASR、FireRedASR 更准但 500～840MB，手机上装不下也不够快）；成分表数据来自 Sanotsu/china-food-composition-data。先查 GitHub 上有没有成熟做法。
 7. 用户的叫法：「口喷」（按住说一大段）、「热量赤字」（不要写「缺口」）。
 
 ## 工作流
@@ -30,6 +30,8 @@
 - App 图标（深绿底 + 发光叶子 + AI 星光）由 `python3 scripts/build-icon.py` 用 Chromium 渲染成 `mipmap-*/ic_launcher*.webp`（自适应图标的前景、背景是位图，因为有光晕）和单色版 `drawable/ic_launcher_monochrome.xml`，不要手改；网页里的同款小图标是 `util.js` 的 `BRAND` / `brandIcon` / `drawBrandIcon`，改形状要两边一起改。图标和小人分开，用户明确说过图标单独设计，要像海外独立 App 那样简洁、有质感。
 - 备份（`web/js/app/backup.js`）只放 `fit_profile / fit_workouts / fit_diet / fit_weights / fit_my_foods`，**不放 AI 接口和语音识别的 key**（`tf_llm_override`、`tf_asr_override`）。新加要持久保存的数据，记得加进备份和 `mergeBackupData`。
 - 安卓原生的文件能力在 `FileShare.kt`（MediaStore 存下载 / 相册只支持 Android 10+；分享走 FileProvider，路径在 `res/xml/file_paths.xml`）。恢复备份不能让用户自己翻文件夹找文件（被骂过）：「从备份恢复」先走 `restoreFromFolder`（文件夹授权页直接停在「下载/练食AI」，授权后自动找最新备份，照 Mihon 的做法），找不到才让选文件；微信里「用其他应用打开」也能直接恢复（MainActivity 的 intent-filter + `takeOpenedFile`）。
+- 本机识别（`asr/LocalAsr.kt`）：录音线程只收声音、识别线程切句和边说边出字（以前在录音线程里识别，说长了会丢声音）；松手后 25 秒以内整段再认一遍。换模型前在沙箱里用 `pip install sherpa-onnx` + kokoro TTS 合成的句子对比错字率（做法见 v3.3 的 PR）。
+- 音效在 `web/js/log/sound.js`（Web Audio 现场合成，不放音频文件），挂在和震动一样的时机；手机静音时不响（原生 `soundAllowed`），设置里能关（`tf_sound`）。开始说话的音要短，松手的音延后 0.15 秒，别被麦克风录进去。
 - 前端是普通 `<script>`（没有打包工具）：`web/js/app/*.js` 用 `Object.assign(FitnessApp.prototype, …)` 往类上加方法；`web/js/log/*.js` 通过 `window.TF` 共享，**`index.html` 里的加载顺序有依赖**。
 
 ## 测试
@@ -54,6 +56,6 @@
 ## 聊过但还没做的
 
 - **降低使用门槛**：出一个网页版链接（`web/` 本来就是网页，放到免费托管上），用一个小中转服务（比如 Cloudflare Worker）藏 key 并按人限流；iPhone 也能用。用户还没决定。
-- **安装包瘦身**：现在 112MB，大头是本机语音模型；可以改成首次打开时后台下载。
+- **安装包瘦身**：v3.3 换成 SenseVoice 后约 260MB，大头是本机语音模型（239MB）；可以改成首次打开时后台下载（国内从 GitHub 下载慢，可以考虑 hf-mirror / ModelScope）。
 - **拍照记录**：讨论过，用户觉得难，先不做。
 - **验证是不是自嗨**：除了用户自己，还没有人持续在用。建议先看他姐姐和推特来的人一周后还在不在记，再决定加什么功能，别一直堆功能。

@@ -200,7 +200,7 @@
         </div>
 
         <div class="card form-card">
-          <div class="card-title">提醒与震动</div>
+          <div class="card-title">提醒、震动和音效</div>
           <div class="switch-row">
             <div class="switch-text"><b>午餐提醒</b><small>午饭还没记才提醒</small></div>
             <input type="time" class="time-input" id="rem-lunch-time" value="12:40">
@@ -219,6 +219,10 @@
           <div class="switch-row">
             <div class="switch-text"><b>震动反馈</b><small>按下、开始、结束、记好时轻震一下</small></div>
             <input type="checkbox" class="switch" id="set-haptics" aria-label="震动反馈">
+          </div>
+          <div class="switch-row">
+            <div class="switch-text"><b>音效</b><small>开始说话、记好了、撤销时轻轻响一声；手机静音时不响</small></div>
+            <input type="checkbox" class="switch" id="set-sound" aria-label="音效">
           </div>
           <p class="field-note" id="rem-note"></p>
         </div>
@@ -409,6 +413,7 @@
   <!-- 一键记录：按住说话 → 大模型整理 → 保存（顺序有依赖） -->
   <script src="js/log/helpers.js"></script>
   <script src="js/log/native.js"></script>
+  <script src="js/log/sound.js"></script>
   <script src="js/log/food.js"></script>
   <script src="js/log/parser.js"></script>
   <script src="js/log/quick_log.js"></script>

@@ -161,7 +161,7 @@ class NativeBridge(
     fun stopRecording(requestId: String, overrideJson: String) {
         io.execute {
             if (usingLocal) {
-                // 本机识别：松手时只剩最后一句要识别
+                // 本机识别：松手后把整段话再识别一遍（几百毫秒到一两秒）
                 val text = localAsr.stop()
                 if (text.isNotBlank()) callJs("__tfAsr", requestId, true, text)
                 else callJs("__tfAsr", requestId, false, if (localAsr.ready) "NO_SPEECH" else "LOCAL_NOT_READY")
@@ -222,6 +222,15 @@ class NativeBridge(
     /** kind: tick | tap | start | stop | success | error */
     @JavascriptInterface
     fun haptic(kind: String) = haptics.fire(kind)
+
+    /** 网页的音效：手机静音 / 震动模式时不响 */
+    @JavascriptInterface
+    fun soundAllowed(): Boolean = try {
+        val am = activity.getSystemService(android.content.Context.AUDIO_SERVICE) as android.media.AudioManager
+        am.ringerMode == android.media.AudioManager.RINGER_MODE_NORMAL
+    } catch (e: Exception) {
+        true
+    }
 
     // ================= 通知 =================
 

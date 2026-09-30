@@ -246,6 +246,7 @@ Object.assign(FitnessApp.prototype, {
     const p = this.pending.find(x => x.id === id);
     if (!p) return;
     window.Haptics && window.Haptics.fire('error');
+    window.Sound && window.Sound.play('error');
     p.status = 'failed';
     p.error = message || '没整理出来';
     this.savePending();

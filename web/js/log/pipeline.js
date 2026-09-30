@@ -197,6 +197,7 @@
       const eq = kcal > 0 && app.equivText ? app.equivText(kcal) : '';
       if (eq) lines.push(eq);
       Haptics.fire('success');
+      root.Sound && root.Sound.play('success');
       // App 在后台（比如说完就锁屏了）：发一条通知
       if (typeof document !== 'undefined' && document.hidden && Native.has() && root.TrainFitNative.showNotification) {
         try { root.TrainFitNative.showNotification(t.replace(/^✓\s*/, ''), lines.join('\n')); } catch (e) {}
@@ -236,6 +237,7 @@
 
     undo() {
       Haptics.fire('tap');
+      root.Sound && root.Sound.play('undo');
       const fn = this._undoFn;
       this._undoFn = null;
       this.hideSnack();

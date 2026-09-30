@@ -313,10 +313,14 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       btn.dataset.key = key;
       btn.innerHTML = TF.Buddy.svg({ char: look.char, hair: look.hair, outfit: look.outfit, mood: st.mood, gear: st.gear });
       if (!first) this.buddyHop();
+      // 连续记录拿到新装备（头带 → 棒球帽 → 皇冠）：来一段小琶音
+      const rank = (g) => TF.Buddy.GEAR_STEPS.findIndex(s => s.gear === g[0]);
+      if (!first && this._buddyGear && rank(st.gear) > rank(this._buddyGear)) window.Sound && window.Sound.play('unlock', 0.6);
     } else if (this._buddyCount != null && st.count > this._buddyCount) {
       this.buddyHop(); // 又记了一顿：跳一下
     }
     this._buddyCount = st.count;
+    this._buddyGear = st.gear;
     btn.setAttribute('aria-label', `小人：${st.say}`);
     this.placeBuddy();
     if (!document.getElementById('buddy-pop').classList.contains('hidden')) this.showBuddyPop();
@@ -412,6 +416,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       window.Haptics && window.Haptics.fire('tick');
+      window.Sound && window.Sound.play('blip');
       this.buddyWave();
       document.getElementById('gauge-pop').classList.add('hidden');
       if (pop.classList.contains('hidden')) this.showBuddyPop(); else close();
