@@ -402,22 +402,23 @@ body.no-composer .views { padding-bottom: calc(32px + var(--sab)); }
 .gauge-warn { margin: 8px 0 0; padding: 7px 10px; border-radius: var(--r-sm); font-size: 0.76rem; line-height: 1.5; color: var(--danger); background: var(--danger-soft); }
 @media (prefers-reduced-motion: reduce) { .gauge-pop { animation: none; } }
 
-/* ---------- 顶栏小人 ---------- */
+/* ---------- 小人：趴在输入栏（或弹出的提示条、录音面板）上沿 ---------- */
 .buddy {
-  width: 40px;
+  position: absolute;
+  right: 18px;
+  bottom: calc(100% - 1px);
+  width: 60px;
   height: 40px;
-  padding: 0 0 2px;
-  display: inline-flex;
-  align-items: flex-end;
-  justify-content: center;
+  padding: 0;
+  display: block;
   border: none;
-  border-radius: 12px;
   background: transparent;
-  overflow: visible;
+  transition: transform 0.22s cubic-bezier(0.3, 1.35, 0.5, 1);
+  -webkit-tap-highlight-color: transparent;
 }
-.buddy:active { background: var(--surface-2); }
-.buddy-svg { display: block; width: 36.3px; height: 38px; }
+.buddy-svg { display: block; width: 60px; height: 40px; }
 .buddy-svg .bd-fb, .buddy-svg .bd-blink { opacity: 0; }
+body.has-buddy .views { padding-bottom: calc(var(--cmp-h, 110px) + 52px + var(--sab)); }
 @media (prefers-reduced-motion: no-preference) {
   /* 头顶那几撮头发隔一会儿晃一下，偶尔眨眼；记上一顿、点一下会蹦一下 */
   .buddy .bd-fa { animation: bdSwayA 4.4s steps(1, end) infinite; }
@@ -445,8 +446,8 @@ body.no-composer .views { padding-bottom: calc(32px + var(--sab)); }
   border: 1px solid var(--line);
   border-radius: var(--r-md);
   box-shadow: var(--shadow);
-  transform-origin: top right;
-  animation: gaugePopIn 0.18s ease;
+  transform-origin: bottom right;
+  animation: buddyPopIn 0.18s ease;
   --th-text: var(--text);
 }
 .buddy-pop[data-level="0"] { --th-text: var(--danger); }
@@ -457,14 +458,15 @@ body.no-composer .views { padding-bottom: calc(32px + var(--sab)); }
 .buddy-pop-head b { font-size: 1.05rem; color: var(--text); font-variant-numeric: tabular-nums; margin: 0 1px; }
 .buddy-say { margin: 6px 0 0; font-size: 0.95rem; font-weight: 700; line-height: 1.45; color: var(--th-text); }
 .buddy-foot { margin: 8px 0 0; padding-top: 8px; border-top: 1px solid var(--line); font-size: 0.72rem; line-height: 1.5; color: var(--text-3); }
+@keyframes buddyPopIn { from { opacity: 0; transform: scale(0.94) translateY(4px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .buddy-pop { animation: none; } }
 
 /* 设置里的小人：预览 + 发色 + 衣服 */
 .buddy-set { display: flex; align-items: center; gap: 14px; margin: 14px 0 12px; }
 .buddy-preview {
   flex: none;
-  width: 76px;
-  height: 76px;
+  width: 88px;
+  height: 70px;
   display: flex;
   align-items: flex-end;
   justify-content: center;
@@ -472,7 +474,8 @@ body.no-composer .views { padding-bottom: calc(32px + var(--sab)); }
   background: var(--surface-2);
   overflow: hidden;
 }
-.buddy-preview svg { width: 66px; height: 69px; }
+/* 预览里也趴在一条边上 */
+.buddy-preview svg { flex: none; width: 90px; height: 60px; border-bottom: 2px solid var(--line); box-sizing: content-box; }
 .buddy-opts { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .buddy-opt { display: flex; align-items: center; gap: 10px; }
 .buddy-opt > span { flex: none; font-size: 0.82rem; color: var(--text-2); }
@@ -1131,8 +1134,6 @@ body.no-composer .snackbar { bottom: calc(20px + var(--sab)); }
 }
 .ob-brand { display: flex; align-items: center; gap: 8px; font-weight: 750; font-size: 0.95rem; color: var(--text-2); }
 .ob-logo { width: 30px; height: 30px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; background: var(--accent); color: var(--accent-ink); }
-.ob-logo:has(.buddy-svg) { width: 34px; height: 36px; align-items: flex-end; background: none; }
-.ob-logo .buddy-svg { width: 33px; height: 34.5px; }
 .ob-title { margin: 12px 0 0; font-size: 1.75rem; line-height: 1.25; font-weight: 800; letter-spacing: -0.01em; }
 .ob-sub { margin: 0; color: var(--text-2); font-size: 0.92rem; line-height: 1.55; }
 .ob-options { display: flex; flex-direction: column; gap: 10px; margin-top: 6px; }

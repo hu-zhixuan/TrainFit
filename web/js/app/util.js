@@ -42,6 +42,19 @@ const PENDING_KEY = 'tf_pending';
 const svgIcon = (d, size = 20) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
 const ICON_SETTINGS = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="17" x2="20" y2="17"/><circle cx="9" cy="7" r="2.2" fill="var(--bg)"/><circle cx="15" cy="17" r="2.2" fill="var(--bg)"/></svg>';
 const ICON_CLOSE = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>';
+/** 品牌标志（和 App 图标一样：碗 + 声波热气），坐标在 108×108 画布上；由 scripts/build-icon.py --web 输出 */
+const BRAND_PATHS = [
+  'M30.25,55H77.75A2.25,2.25 0 0 1 80,57.25V57.25A2.25,2.25 0 0 1 77.75,59.5H30.25A2.25,2.25 0 0 1 28,57.25V57.25A2.25,2.25 0 0 1 30.25,55Z',
+  'M77,57A23,23 0 0 1 31,57Z',
+  'M47.5,78H60.5A1.5,1.5 0 0 1 62,79.5V81.5A1.5,1.5 0 0 1 60.5,83H47.5A1.5,1.5 0 0 1 46,81.5V79.5A1.5,1.5 0 0 1 47.5,78Z',
+  'M38,37H38A2.6,2.6 0 0 1 40.6,39.6V46.4A2.6,2.6 0 0 1 38,49H38A2.6,2.6 0 0 1 35.4,46.4V39.6A2.6,2.6 0 0 1 38,37Z',
+  'M46,27H46A2.6,2.6 0 0 1 48.6,29.6V46.4A2.6,2.6 0 0 1 46,49H46A2.6,2.6 0 0 1 43.4,46.4V29.6A2.6,2.6 0 0 1 46,27Z',
+  'M54,34H54A2.6,2.6 0 0 1 56.6,36.6V46.4A2.6,2.6 0 0 1 54,49H54A2.6,2.6 0 0 1 51.4,46.4V36.6A2.6,2.6 0 0 1 54,34Z',
+  'M62,23H62A2.6,2.6 0 0 1 64.6,25.6V46.4A2.6,2.6 0 0 1 62,49H62A2.6,2.6 0 0 1 59.4,46.4V25.6A2.6,2.6 0 0 1 62,23Z',
+  'M70,38H70A2.6,2.6 0 0 1 72.6,40.6V46.4A2.6,2.6 0 0 1 70,49H70A2.6,2.6 0 0 1 67.4,46.4V40.6A2.6,2.6 0 0 1 70,38Z'
+];
+const BRAND_SVG = (size) => `<svg width="${size}" height="${size}" viewBox="24 20 60 66" fill="currentColor" aria-hidden="true">${BRAND_PATHS.map(d => `<path d="${d}"/>`).join('')}</svg>`;
+
 const ICONS = {
   meal: svgIcon('<path d="M3 11h18a9 9 0 0 1-18 0z"/><path d="M8 3.5c-.6.8-.6 1.7 0 2.5M12 3.5c-.6.8-.6 1.7 0 2.5M16 3.5c-.6.8-.6 1.7 0 2.5"/>'),
   lift: svgIcon('<path d="M6.5 6.5v11M17.5 6.5v11M3.5 9v6M20.5 9v6M6.5 12h11"/>'),

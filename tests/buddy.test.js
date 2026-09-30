@@ -16,21 +16,23 @@ test('连续记录：今天记了从今天数，今天还没记从昨天数，�
   assert.strictEqual(Buddy.streakOf(['2026-10-01', '2026-09-30', '2026-09-29'], '2026-10-01'), 3);
 });
 
-test('配饰：3 天头带，7 天加奖牌，30 天皇冠换掉头带', () => {
+test('装备：3 天头带，7 天棒球帽，30 天皇冠（只戴最好的那一样）', () => {
   assert.deepStrictEqual(Buddy.gearFor(2), []);
   assert.deepStrictEqual(Buddy.gearFor(3), ['band']);
-  assert.deepStrictEqual(Buddy.gearFor(7), ['band', 'medal']);
-  assert.deepStrictEqual(Buddy.gearFor(30), ['crown', 'medal']);
-  assert.deepStrictEqual(Buddy.nextGear(5), { name: '奖牌', days: 2 });
+  assert.deepStrictEqual(Buddy.gearFor(7), ['cap']);
+  assert.deepStrictEqual(Buddy.gearFor(45), ['crown']);
+  assert.deepStrictEqual(Buddy.nextGear(5), { name: '棒球帽', days: 2 });
   assert.strictEqual(Buddy.nextGear(30), null);
 });
 
-test('表情跟着健康度：没记发呆、夜里犯困、四档各不一样', () => {
+test('表情跟着健康度：没记发呆、夜里犯困、不健康冒汗、非常健康戴墨镜', () => {
   const g = (d) => HealthGauge.evaluate(Object.assign({ budget: 2000, targetProteinG: 144, hour: 22 }, d));
   assert.strictEqual(Buddy.moodOf(g({ intake: 0, protein: 0, fat: 0 }), 11, 144).mood, 'idle');
   assert.strictEqual(Buddy.moodOf(g({ intake: 0, protein: 0, fat: 0 }), 23, 144).mood, 'sleepy');
   assert.strictEqual(Buddy.moodOf(g({ intake: 3000, protein: 40, fat: 150 }), 22, 104).mood, 'bad');
-  assert.strictEqual(Buddy.moodOf(g({ intake: 1900, protein: 140, fat: 65 }), 22, 4).mood, 'great');
+  const great = Buddy.moodOf(g({ intake: 1900, protein: 140, fat: 65 }), 22, 4);
+  assert.strictEqual(great.mood, 'great');
+  assert.strictEqual(Buddy.MOODS[great.mood].eyes, 'shades');
 });
 
 test('健康档的话不自相矛盾；蛋白差得多就说还差几克', () => {
@@ -43,21 +45,30 @@ test('健康档的话不自相矛盾；蛋白差得多就说还差几克', () =>
 });
 
 test('像素图：尺寸固定、描了边、换衣服换发色都能拼', () => {
-  const img = Buddy.compose({ mood: 'great', gear: ['crown', 'medal'], hair: 'brown', outfit: 'jersey' });
+  const img = Buddy.compose({ mood: 'great', gear: ['crown'], hair: 'brown', outfit: 'navy' });
   assert.strictEqual(img.px.length, Buddy.H);
   assert.ok(img.px.every(r => r.length === Buddy.W));
   const flat = img.px.map(r => r.join('')).join('');
-  assert.ok(flat.includes('O') && flat.includes('A') && flat.includes('N'));
+  assert.ok(flat.includes('O') && flat.includes('A') && flat.includes('K'), '描边、皇冠、墨镜');
   assert.strictEqual(img.colors.H, Buddy.HAIR.brown.H);
+  assert.strictEqual(img.colors.J, Buddy.OUTFITS.navy.J);
+  // 最底下一行是胳膊（直接搭在输入栏的边上，下面不留空）
+  assert.ok(img.px[Buddy.H - 1].filter(c => c === 'w').length >= 20);
+  // 棒球帽把头顶翘起的头发压住
+  const cap = Buddy.compose({ mood: 'ok', gear: ['cap'] }).px.map(r => r.join(''));
+  assert.ok(!cap[3].includes('H'));
   // 每个颜色代码都有颜色
   for (const c of new Set(flat.replace(/\./g, ''))) assert.ok(img.colors[c], c);
   // SVG：两帧头发 + 睁眼时的眨眼帧
   const svg = Buddy.svg({ mood: 'good', gear: [] });
   assert.ok(svg.includes('bd-fa') && svg.includes('bd-fb') && svg.includes('bd-blink'));
   assert.ok(!Buddy.svg({ mood: 'sleepy', gear: [] }).includes('bd-blink'));
+  assert.ok(!Buddy.svg({ mood: 'great', gear: [] }).includes('bd-blink'));   // 戴墨镜不眨眼
 });
 
 test('设置里没选过就是默认样子，选过的保留', () => {
   assert.deepStrictEqual(Buddy.look(undefined), { show: true, hair: 'black', outfit: 'varsity' });
   assert.deepStrictEqual(Buddy.look({ hair: 'blond', show: false }), { show: false, hair: 'blond', outfit: 'varsity' });
+  // 以前存过、现在没有的样子回到默认
+  assert.deepStrictEqual(Buddy.look({ outfit: 'jersey' }), { show: true, hair: 'black', outfit: 'varsity' });
 });

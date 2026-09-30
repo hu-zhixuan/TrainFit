@@ -34,7 +34,6 @@
       </div>
       <h1 class="view-title hidden" id="view-title"></h1>
       <div class="topbar-actions">
-      <button class="buddy hidden" id="buddy" type="button" aria-label="小人"></button>
       <button class="icon-btn" id="btn-share" type="button" aria-label="分享这一天">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7"/><path d="M16 6l-4-4-4 4"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
       </button>
@@ -191,7 +190,7 @@
             </div>
           </div>
           <div class="switch-row">
-            <div class="switch-text"><b>顶上的小人</b><small id="buddy-note"></small></div>
+            <div class="switch-text"><b>显示小人</b><small id="buddy-note"></small></div>
             <input type="checkbox" class="switch" id="buddy-show" aria-label="显示小人">
           </div>
         </div>
@@ -273,6 +272,7 @@
 
     <!-- 底部：一个按钮，按住说话（或点一下开始、再点一下结束） -->
     <div class="composer" id="composer">
+      <button class="buddy hidden" id="buddy" type="button" aria-label="小人"></button>
       <div class="chips" id="cmp-chips" aria-label="打字联想：点一下就记"></div>
       <div class="cmp-status hidden" id="cmp-status" role="status"></div>
 
@@ -302,7 +302,7 @@
   <!-- 第一次打开：选用途 + 填身体数据 -->
   <div class="onboard hidden" id="onboard">
     <div class="ob-step" id="ob-step-1">
-      <div class="ob-brand"><span class="ob-logo"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg></span>练食AI</div>
+      <div class="ob-brand"><span class="ob-logo" id="ob-logo"></span>练食AI</div>
       <h2 class="ob-title">说一句话，<br>帮你记下今天吃了啥</h2>
       <p class="ob-sub">按住说「中午一碗牛肉面加个蛋」，热量自动算好。你主要想用它做什么？</p>
       <div class="ob-options">
