@@ -5,7 +5,7 @@
 (function (root) {
   'use strict';
   const TF = root.TF = root.TF || {};
-  const { MEAL_TYPES, quickWeight, Native, Haptics, Parser, QuickLog } = TF;
+  const { MEAL_TYPES, quickWeight, Native, Haptics, Parser, QuickLog, mergeItems, sumItems } = TF;
 
   Object.assign(QuickLog, {
     // ----- 解析 + 保存（后台进行，不用等） -----
@@ -24,7 +24,7 @@
       app.diet.filter(d => d.date === date).forEach(d => dayRecords.push({
         kind: 'meal', id: d.id,
         text: `${(d.mealType || '').replace('/补剂', '')} ${d.foodSummary} ${d.calories}kcal 蛋白${d.proteinG || 0} 碳水${d.carbsG || 0} 脂肪${d.fatG || 0}` +
-          (Array.isArray(d.items) && d.items.length ? `（${d.items.map(i => `${i.name}${i.grams ? i.grams + 'g' : ''}`).join('、')}）` : '')
+          (Array.isArray(d.items) && d.items.length ? `（${d.items.map(i => `${i.name}${i.amount ? ' ' + i.amount : ''}${i.grams ? ' ' + i.grams + 'g' : ''} ${i.calories}kcal 蛋白${i.proteinG || 0}`).join('、')}）` : '')
       }));
       app.workouts.filter(w => w.date === date).forEach(w => dayRecords.push({
         kind: 'workout', id: w.id,
@@ -91,9 +91,16 @@
         if (!rec) return;
         batch.before.push({ kind: r.kind, snapshot: JSON.parse(JSON.stringify(rec)) });
         Object.keys(u.set).forEach(k => {
-          if (r.kind === 'meal' && ['mealType', 'foodSummary', 'calories', 'proteinG', 'carbsG', 'fatG', 'items'].includes(k)) rec[k] = u.set[k];
+          if (r.kind === 'meal' && ['mealType', 'foodSummary', 'calories', 'proteinG', 'carbsG', 'fatG'].includes(k)) rec[k] = u.set[k];
           if (r.kind === 'workout' && ['exerciseName', 'muscleGroup', 'weightKg', 'sets', 'reps', 'durationMin', 'burnedCalories'].includes(k)) rec[k] = u.set[k];
         });
+        // 改了其中几样：按名字换掉 / 去掉，其他原样保留，合计重算
+        if (r.kind === 'meal' && (u.set.items || u.set.removeItems)) {
+          const items = mergeItems(rec.items, u.set.items, u.set.removeItems);
+          rec.items = items.length ? items : undefined;
+          Object.assign(rec, sumItems(items));
+          if (!u.set.foodSummary && items.length) rec.foodSummary = items.map(it => it.name + (it.amount || '')).join('、').slice(0, 60);
+        }
         batch.changed.push(r.kind === 'meal' ? `改 · ${rec.foodSummary} ${rec.calories} kcal` :
           `改 · ${rec.exerciseName} ${rec.durationMin ? rec.durationMin + ' 分钟' : (rec.weightKg > 0 ? rec.weightKg + 'kg' : '自重') + ' ' + rec.sets + '×' + rec.reps}`);
       });

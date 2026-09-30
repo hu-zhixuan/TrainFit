@@ -276,3 +276,33 @@ test('记住的补剂：按粒数换算营养素', () => {
   assert.deepStrictEqual(it.nutrients, { 'EPA+DHA': 2100 });
   assert.strictEqual(TF.MyFoods.clean({ name: '锌片', calories: 0 }), null); // 0 热量又没营养素：不记
 });
+
+test('回头补一句只改那一样：其他原样保留，名字对得上就替换', () => {
+  const old = [
+    { name: '鸡蛋', amount: '2个', grams: 100, calories: 139, proteinG: 13.1, carbsG: 2.4, fatG: 8.6, src: '成分表' },
+    { name: '鲜牛奶', amount: '200毫升', grams: 200, calories: 128, proteinG: 6.4, carbsG: 9.6, fatG: 7.2, src: '菜品库' },
+    { name: '乳清蛋白粉', amount: '30克', grams: 30, calories: 116, proteinG: 23.4, carbsG: 2.6, fatG: 1.2, src: '菜品库' }
+  ];
+  // 「刚才那个牛奶是甜牛奶，包装上写…」：叫法变了也能对上（公共片段「牛奶」）
+  const sweet = TF.mergeItems(old, [{ name: '甜牛奶', amount: '250毫升', grams: 250, calories: 173, proteinG: 7, src: '包装' }]);
+  assert.deepStrictEqual(sweet.map(i => i.name), ['鸡蛋', '甜牛奶', '乳清蛋白粉']);
+  assert.strictEqual(sweet[0], old[0]); // 没说到的原样保留
+  // was 指明原名；去掉某一样；新加的一样
+  const r = TF.mergeItems(old, [{ name: '全麦面包', amount: '1片', calories: 90, was: '乳清蛋白粉' }, { name: '香蕉', amount: '1根', calories: 90 }], ['鸡蛋']);
+  assert.deepStrictEqual(r.map(i => i.name), ['鲜牛奶', '全麦面包', '香蕉']);
+  assert.strictEqual(r[1].was, undefined);
+
+  // 大模型给的 update：只带改的那一样，合计不用它给的，保存时合并后重算
+  const ctx = { dayRecords: [{ ref: 'r1', kind: 'meal', id: 'd1' }] };
+  const n = Parser.normalize({ update: [{ ref: 'r1', set: { calories: 999, proteinG: 1, items: [
+    { name: '甜牛奶', was: '鲜牛奶', amount: '250毫升', grams: 250, source: 'label', calories: 173, proteinG: 7, carbsG: 22, fatG: 5.5 },
+    { name: '鸡蛋', remove: true }] } }] }, ctx);
+  const set = n.updates[0].set;
+  assert.strictEqual(set.calories, undefined);
+  assert.strictEqual(set.items[0].was, '鲜牛奶');
+  assert.strictEqual(set.items[0].src, '包装');
+  assert.deepStrictEqual(set.removeItems, ['鸡蛋']);
+  const merged = TF.mergeItems(old, set.items, set.removeItems);
+  assert.deepStrictEqual(merged.map(i => i.name), ['甜牛奶', '乳清蛋白粉']);
+  assert.strictEqual(TF.sumItems(merged).proteinG, 30.4);
+});

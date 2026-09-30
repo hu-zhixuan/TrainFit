@@ -32,8 +32,8 @@ android {
         applicationId = "com.trainfit.ai"
         minSdk = 24
         targetSdk = 34
-        versionCode = 24
-        versionName = "2.8"
+        versionCode = 25
+        versionName = "2.9"
 
         buildConfigField("String", "LLM_BASE_URL", llmConfig("LLM_BASE_URL", "https://api.atria-asi.ai/v1"))
         buildConfigField("String", "LLM_MODEL", llmConfig("LLM_MODEL", "Atria-Dawn-Preview"))
