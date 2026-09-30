@@ -3,8 +3,11 @@ const fs = require('fs');
 const path = require('path');
 
 const BASE = (process.env.ASR_BASE_URL || 'https://api.siliconflow.cn/v1').replace(/\/+$/, '');
-const KEY = process.env.ASR_API_KEY || '';
-const MODELS = (process.env.MODELS || 'FunAudioLLM/SenseVoiceSmall,Qwen/Qwen3-ASR-1.7B,XingChenAGI/XingChenASR-V3.2,XingChenAGI/XingChenASR-V3.2-Ultra,TeleAI/TeleSpeechASR').split(',');
+const KEY = (process.env.ASR_API_KEY || '').split(/\r?\n/).map(s => s.trim()).find(Boolean) || '';
+// 千问 AI 平台（sk-ws- 开头的 key）：和 App 一样走 multimodal-generation，录音 base64 放进 JSON
+const QW = KEY.startsWith('sk-ws-');
+const QW_CONTEXT = '健身和饮食记录。常见词：卧推、深蹲、硬拉、引体向上、划船、推举、飞鸟、弯举、组、个、公斤、跑步机、椭圆机、蛋白粉、乳清蛋白、鸡胸肉、茶叶蛋、豆浆、燕麦、米饭、牛肉面、千卡、大卡、毫升、克。';
+const MODELS = (process.env.MODELS || (QW ? 'qwen3-asr-flash' : '') || 'FunAudioLLM/SenseVoiceSmall,Qwen/Qwen3-ASR-1.7B,XingChenAGI/XingChenASR-V3.2,XingChenAGI/XingChenASR-V3.2-Ultra,TeleAI/TeleSpeechASR').split(',');
 const DIR = path.join(__dirname, 'asr_wavs');
 const sents = fs.readFileSync(path.join(DIR, 'sentences.txt'), 'utf8').split('\n').map(s => s.trim()).filter(Boolean);
 const files = fs.readdirSync(DIR).filter(f => f.endsWith('.wav')).sort();
@@ -44,8 +47,25 @@ function clean(t) { // Qwen3-ASR 可能带 language / <asr_text> 之类标记
   return String(t || '').replace(/^.*<asr_text>/s, '').replace(/<[^>]+>/g, '').replace(/^language\s+\S+\s*/i, '').trim();
 }
 
+async function transcribeQw(model, buf) {
+  const ctx = process.env.NO_CONTEXT ? '' : QW_CONTEXT;
+  const body = { model, input: { messages: [
+    { role: 'system', content: [{ text: ctx }] },
+    { role: 'user', content: [{ audio: 'data:audio/wav;base64,' + buf.toString('base64') }] }] },
+    parameters: { asr_options: { enable_itn: true, language: 'zh' } } };
+  const t0 = Date.now();
+  const r = await fetch('https://maas.qianwenaiapi.com/api/v1/services/aigc/multimodal-generation/generation', { method: 'POST', headers: { Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json', 'X-DashScope-SSE': 'disable' }, body: JSON.stringify(body) });
+  const ms = Date.now() - t0;
+  const text = await r.text();
+  if (!r.ok) return { ok: false, ms, err: `HTTP ${r.status} ${text.slice(0, 160)}` };
+  let t = '';
+  try { t = (JSON.parse(text).output.choices[0].message.content || []).map(c => c.text || '').find(Boolean) || ''; } catch (e) { t = text; }
+  return { ok: true, ms, text: clean(t), raw: t };
+}
+
 async function transcribe(model, file) {
   const buf = fs.readFileSync(path.join(DIR, file));
+  if (QW) return transcribeQw(model, buf);
   const fd = new FormData();
   fd.append('model', model);
   fd.append('file', new Blob([buf], { type: 'audio/wav' }), file);
