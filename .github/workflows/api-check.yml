@@ -10,5 +10,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: Fetch Qianwen docs
-        run: python3 .github/doc_fetch.py
+      - name: Call LLM exactly like the app does
+        env:
+          TZ: Asia/Shanghai
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
+          LLM_MODEL: ${{ vars.LLM_MODEL }}
+        run: |
+          PARSER=new ONLY="奥利奥：无糖三块,奥利奥：吃了两块" ROUNDS=4 node .github/api_check.js

@@ -51,6 +51,10 @@ const types = (r) => r.meals.map(m => m.mealType.replace('/补剂', '')).join(',
 const itemNames = (m) => (m.items || []).map(i => i.name).join(',') + ',' + m.foodSummary;
 
 const CASES = [
+  // ---- 包装零食（用户反馈卡在「正在整理」） ----
+  ['奥利奥：无糖三块', '无糖奥利奥三块', '07:20', r => (r.meals.length === 1 && /奥利奥/.test(itemNames(r.meals[0])) && r.meals[0].calories >= 90 && r.meals[0].calories <= 260) || '结果：' + allItems(r) + ' reply=' + r.reply],
+  ['奥利奥：吃了两块', '刚吃了两块奥利奥', '15:30', r => (r.meals.length === 1 && /奥利奥/.test(itemNames(r.meals[0])) && r.meals[0].calories >= 60 && r.meals[0].calories <= 200) || '结果：' + allItems(r) + ' reply=' + r.reply],
+
   // ---- 补剂、零热量 ----
   ['补剂：鱼油+维D', '早上吃了两粒鱼油一片维生素D', '08:30', r => {
     const sup = r.meals.flatMap(m => (m.items || []).filter(i => i.supp));
