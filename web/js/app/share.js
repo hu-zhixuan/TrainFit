@@ -68,11 +68,8 @@ Object.assign(FitnessApp.prototype, {
     ctx.fillStyle = C.bg;
     ctx.fillRect(0, 0, W, H);
 
-    // 顶部：品牌 + 日期
-    rr(P, 20, 24, 24, 7, C.accent);
-    ctx.strokeStyle = C.accentInk; ctx.lineWidth = 1.8; ctx.lineCap = 'round';
-    ctx.beginPath(); ctx.roundRect(P + 9.5, 25, 5, 9, 2.5); ctx.stroke();
-    ctx.beginPath(); ctx.arc(P + 12, 32, 5.2, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
+    // 顶部：品牌（和 App 图标一样）+ 日期
+    drawBrandIcon(ctx, P, 20, 24);
     text('练食AI', P + 32, 37, font(750, 14), C.text2);
     text(this.dateLabel(date).replace('今天 · ', '今天 '), W - P, 37, font(600, 13), C.text2, 'right');
 
@@ -86,13 +83,11 @@ Object.assign(FitnessApp.prototype, {
     text(`预算 ${fmt(s.budget)}`, W - P, 128, font(600, 13), C.text3, 'right');
 
     // 三个小格
+    const deficitCell = ['热量赤字', s.deficit < 0 ? `盈余 ${fmt(-s.deficit)}` : fmt(s.deficit), s.deficit >= target ? C.accentText : s.deficit < 0 ? C.danger : C.text];
+    const proteinCell = ['蛋白质', `${fmt(s.protein)}g`, s.protein >= this.gaugeProteinTarget() * 0.9 ? C.accentText : C.text];
     const cells = simple
-      ? [['还能吃', s.remaining < 0 ? `超 ${fmt(-s.remaining)}` : fmt(s.remaining), s.remaining < 0 ? C.danger : C.text],
-         ['热量赤字', s.deficit < 0 ? `盈余 ${fmt(-s.deficit)}` : fmt(s.deficit), s.deficit >= target ? C.accentText : s.deficit < 0 ? C.danger : C.text],
-         ['运动消耗', s.workoutBurn ? '+' + fmt(s.workoutBurn) : '0', C.text]]
-      : [['热量赤字', s.deficit < 0 ? `盈余 ${fmt(-s.deficit)}` : fmt(s.deficit), s.deficit >= target ? C.accentText : s.deficit < 0 ? C.danger : C.text],
-         ['蛋白质', `${fmt(s.protein)}g`, s.protein >= (this.profile.targetProteinG || 0) * 0.9 ? C.accentText : C.text],
-         ['训练消耗', s.workoutBurn ? '+' + fmt(s.workoutBurn) : '0', C.text]];
+      ? [['还能吃', s.remaining < 0 ? `超 ${fmt(-s.remaining)}` : fmt(s.remaining), s.remaining < 0 ? C.danger : C.text], proteinCell, deficitCell]
+      : [deficitCell, proteinCell, ['训练消耗', s.workoutBurn ? '+' + fmt(s.workoutBurn) : '0', C.text]];
     const cw = (W - P * 2 - 16) / 3;
     cells.forEach(([label, val, color], i) => {
       const x = P + i * (cw + 8);
@@ -128,7 +123,7 @@ Object.assign(FitnessApp.prototype, {
       y += 40;
     };
     if (meals.length) {
-      section('饮食', `${fmt(s.intake)} kcal${simple ? '' : ` · 蛋白 ${fmt(s.protein)}g`}`);
+      section('饮食', `${fmt(s.intake)} kcal · 蛋白 ${fmt(s.protein)}g`);
       meals.forEach(d => {
         const tag = isSuppOnly(d) ? '补剂' : (d.mealType || '').replace('/补剂', '');
         ctx.font = font(700, 11);
@@ -140,7 +135,7 @@ Object.assign(FitnessApp.prototype, {
         text(`${fmt(d.calories)}`, W - P - 28, y + 19, font(800, 14), C.text, 'right');
         text('kcal', W - P, y + 19, font(600, 10.5), C.text3, 'right');
         const sub = isSuppOnly(d) ? TF.nutrientsText(sumNutrients(d.items), 3)
-          : simple ? '' : [d.proteinG ? `蛋白 ${round1(d.proteinG)}g` : '', d.carbsG ? `碳水 ${round1(d.carbsG)}g` : '', d.fatG ? `脂肪 ${round1(d.fatG)}g` : ''].filter(Boolean).join(' · ');
+          : simple ? (d.proteinG ? `蛋白 ${round1(d.proteinG)}g` : '') : [d.proteinG ? `蛋白 ${round1(d.proteinG)}g` : '', d.carbsG ? `碳水 ${round1(d.carbsG)}g` : '', d.fatG ? `脂肪 ${round1(d.fatG)}g` : ''].filter(Boolean).join(' · ');
         if (sub) { ctx.font = font(500, 11.5); text(fit(sub, W - P * 2 - tw - 8), P + tw + 8, y + 37, font(500, 11.5), C.text3); }
         y += MEAL_H;
       });

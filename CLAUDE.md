@@ -26,6 +26,8 @@
 - squash 合并后，`build-apk.yml` 按 `app/build.gradle.kts` 里的 `versionName` 打包并发布 Release，说明取自 `CHANGELOG.md` 里 `## v版本号 · 标题` 那一节。**每次发版都要同时改 `versionCode`、`versionName`，并在 CHANGELOG 顶部加一节**。只改文档（`*.md`）不会触发发版。
 - 改界面只改 `web/`；`app/src/main/assets/` 是编译时从 `web/` 复制过去的，不进仓库。
 - `web/js/data/food_db.js` 是 `scripts/build-food-db.js` 生成的，不要手改。
+- 像素小人在 `web/js/app/buddy.js`：男生照着用户本人的照片画（黑色乱发、刘海压眼、黑色棒球服白袖子），另有女生角色；用户要「少年感、酷一点」，别画腮红、大嘴这种萌系。它是 `position:fixed` 的，`placeBuddy` 让它趴在最上面那一层（修改 / 分享面板 > 提示条 / 录音面板 > 输入栏）的上沿；别往顶栏、今天卡片里放，其他界面保持原样。小动作都在 CSS 里，`prefers-reduced-motion` 时不动。样子存在 `profile.buddy`，跟着备份走。
+- App 图标（深绿底 + 发光叶子 + AI 星光）由 `python3 scripts/build-icon.py` 用 Chromium 渲染成 `mipmap-*/ic_launcher*.webp`（自适应图标的前景、背景是位图，因为有光晕）和单色版 `drawable/ic_launcher_monochrome.xml`，不要手改；网页里的同款小图标是 `util.js` 的 `BRAND` / `brandIcon` / `drawBrandIcon`，改形状要两边一起改。图标和小人分开，用户明确说过图标单独设计，要像海外独立 App 那样简洁、有质感。
 - 备份（`web/js/app/backup.js`）只放 `fit_profile / fit_workouts / fit_diet / fit_weights / fit_my_foods`，**不放 AI 接口和语音识别的 key**（`tf_llm_override`、`tf_asr_override`）。新加要持久保存的数据，记得加进备份和 `mergeBackupData`。
 - 安卓原生的文件能力在 `FileShare.kt`（MediaStore 存下载 / 相册只支持 Android 10+；分享走 FileProvider，路径在 `res/xml/file_paths.xml`）。
 - 前端是普通 `<script>`（没有打包工具）：`web/js/app/*.js` 用 `Object.assign(FitnessApp.prototype, …)` 往类上加方法；`web/js/log/*.js` 通过 `window.TF` 共享，**`index.html` 里的加载顺序有依赖**。

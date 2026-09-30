@@ -169,7 +169,7 @@
           </div>
           <div class="field-grid field-grid-2" id="goal-grid">
             <label class="field"><span class="field-label" id="set-deficit-l">每天热量赤字 kcal</span><input class="input" id="set-deficit" type="number" inputmode="numeric"></label>
-            <label class="field fit-only"><span class="field-label">每天蛋白质 g</span><input class="input" id="set-protein" type="number" inputmode="numeric"></label>
+            <label class="field"><span class="field-label">每天蛋白质 g</span><input class="input" id="set-protein" type="number" inputmode="numeric"></label>
           </div>
           <div class="field-note" id="set-goal-note"></div>
         </div>
@@ -182,6 +182,21 @@
             <button class="seg-btn" data-value="light" type="button">浅色</button>
           </div>
           <div class="field-note" id="set-theme-note"></div>
+          <div class="buddy-set">
+            <div class="buddy-preview" id="buddy-preview"></div>
+            <div class="buddy-opts">
+              <div class="seg seg-sm" id="buddy-char">
+                <button class="seg-btn" data-value="boy" type="button">男生</button>
+                <button class="seg-btn" data-value="girl" type="button">女生</button>
+              </div>
+              <div class="buddy-opt"><span>头发</span><div class="swatches" id="buddy-hair"></div></div>
+              <div class="buddy-opt"><span>衣服</span><div class="swatches" id="buddy-outfit"></div></div>
+            </div>
+          </div>
+          <div class="switch-row">
+            <div class="switch-text"><b>显示小人</b><small id="buddy-note"></small></div>
+            <input type="checkbox" class="switch" id="buddy-show" aria-label="显示小人">
+          </div>
         </div>
 
         <div class="card form-card">
@@ -290,7 +305,7 @@
   <!-- 第一次打开：选用途 + 填身体数据 -->
   <div class="onboard hidden" id="onboard">
     <div class="ob-step" id="ob-step-1">
-      <div class="ob-brand"><span class="ob-logo"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg></span>练食AI</div>
+      <div class="ob-brand"><span class="ob-logo" id="ob-logo"></span>练食AI</div>
       <h2 class="ob-title">说一句话，<br>帮你记下今天吃了啥</h2>
       <p class="ob-sub">按住说「中午一碗牛肉面加个蛋」，热量自动算好。你主要想用它做什么？</p>
       <div class="ob-options">
@@ -369,6 +384,8 @@
 
   <div class="toast hidden" id="app-toast" role="status"></div>
   <div class="gauge-pop hidden" id="gauge-pop" role="dialog" aria-label="今天吃得怎么样"></div>
+  <button class="buddy hidden" id="buddy" type="button" aria-label="小人"></button>
+  <div class="buddy-pop hidden" id="buddy-pop" role="dialog" aria-label="小人"></div>
 
   <!-- 食物营养库 -->
   <script src="js/data/food_db.js"></script>
@@ -387,6 +404,7 @@
   <script src="js/app/quick.js"></script>
   <script src="js/app/backup.js"></script>
   <script src="js/app/share.js"></script>
+  <script src="js/app/buddy.js"></script>
 
   <!-- 一键记录：按住说话 → 大模型整理 → 保存（顺序有依赖） -->
   <script src="js/log/helpers.js"></script>
