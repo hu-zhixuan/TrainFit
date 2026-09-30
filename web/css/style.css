@@ -402,33 +402,56 @@ body.no-composer .views { padding-bottom: calc(32px + var(--sab)); }
 .gauge-warn { margin: 8px 0 0; padding: 7px 10px; border-radius: var(--r-sm); font-size: 0.76rem; line-height: 1.5; color: var(--danger); background: var(--danger-soft); }
 @media (prefers-reduced-motion: reduce) { .gauge-pop { animation: none; } }
 
-/* ---------- 小人：趴在输入栏（或弹出的提示条、录音面板）上沿 ---------- */
+/* ---------- 小人：趴在最上面那一层（输入栏 / 提示条 / 录音面板 / 修改面板）的上沿 ---------- */
 .buddy {
-  position: absolute;
-  right: 18px;
-  bottom: calc(100% - 1px);
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 31;
   width: 60px;
   height: 40px;
   padding: 0;
   display: block;
   border: none;
   background: transparent;
-  transition: transform 0.22s cubic-bezier(0.3, 1.35, 0.5, 1);
   -webkit-tap-highlight-color: transparent;
 }
-.buddy-svg { display: block; width: 60px; height: 40px; }
-.buddy-svg .bd-fb, .buddy-svg .bd-blink { opacity: 0; }
+.buddy.placed { transition: transform 0.3s cubic-bezier(0.3, 1.3, 0.5, 1); }
+.buddy-svg { display: block; width: 60px; height: 40px; overflow: visible; }
+.buddy-svg .bd-fb, .buddy-svg .bd-wa, .buddy-svg .bd-wb,
+.buddy-svg .bd-blink, .buddy-svg .bd-lookl, .buddy-svg .bd-lookr { opacity: 0; }
 body.has-buddy .views { padding-bottom: calc(var(--cmp-h, 110px) + 52px + var(--sab)); }
 @media (prefers-reduced-motion: no-preference) {
-  /* 头顶那几撮头发隔一会儿晃一下，偶尔眨眼；记上一顿、点一下会蹦一下 */
+  /* 小动作：头发隔一会儿晃一下、眨眼、偶尔左右看一眼；特效飘、跳、闪；记上一顿蹦一下；点一下招手 */
   .buddy .bd-fa { animation: bdSwayA 4.4s steps(1, end) infinite; }
   .buddy .bd-fb { animation: bdSwayB 4.4s steps(1, end) infinite; }
   .buddy .bd-blink { animation: bdBlink 5.7s steps(1, end) infinite 1.3s; }
+  .buddy .bd-lookl { animation: bdLookL 13s steps(1, end) infinite 4s; }
+  .buddy .bd-lookr { animation: bdLookR 13s steps(1, end) infinite 4s; }
+  .buddy .bd-fx-zzz { animation: bdFloat 2.4s steps(3, end) infinite; }
+  .buddy .bd-fx-note { animation: bdBob 1.2s steps(1, end) infinite; }
+  .buddy .bd-fx-sparkle { animation: bdTwinkle 1.8s steps(1, end) infinite; }
+  .buddy .bd-fx-sweat { animation: bdDrip 1.6s steps(1, end) infinite; }
   .buddy.hop .buddy-svg { animation: bdHop 0.5s steps(1, end); }
+  .buddy.wave .bd-fa, .buddy.wave .bd-fb { animation: none; opacity: 0; }
+  .buddy.wave .bd-wa { animation: bdWaveA 1.1s steps(1, end); }
+  .buddy.wave .bd-wb { animation: bdWaveB 1.1s steps(1, end); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .buddy.wave .bd-fa, .buddy.wave .bd-fb { opacity: 0; }
+  .buddy.wave .bd-wa { opacity: 1; }
 }
 @keyframes bdSwayA { 0% { opacity: 1; } 76% { opacity: 0; } 83% { opacity: 1; } 89% { opacity: 0; } 95% { opacity: 1; } }
 @keyframes bdSwayB { 0% { opacity: 0; } 76% { opacity: 1; } 83% { opacity: 0; } 89% { opacity: 1; } 95% { opacity: 0; } }
 @keyframes bdBlink { 0% { opacity: 0; } 62% { opacity: 1; } 65% { opacity: 0; } }
+@keyframes bdLookL { 0% { opacity: 0; } 70% { opacity: 1; } 77% { opacity: 0; } }
+@keyframes bdLookR { 0% { opacity: 0; } 77% { opacity: 1; } 84% { opacity: 0; } }
+@keyframes bdFloat { from { transform: none; opacity: 1; } to { transform: translateY(-3px); opacity: 0.2; } }
+@keyframes bdBob { 0% { transform: none; } 50% { transform: translateY(-1px); } }
+@keyframes bdTwinkle { 0% { opacity: 1; } 55% { opacity: 0.35; } 70% { opacity: 1; } }
+@keyframes bdDrip { 0% { transform: none; } 60% { transform: translateY(1px); } }
+@keyframes bdWaveA { 0% { opacity: 1; } 18% { opacity: 0; } 36% { opacity: 1; } 54% { opacity: 0; } 72% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes bdWaveB { 0% { opacity: 0; } 18% { opacity: 1; } 36% { opacity: 0; } 54% { opacity: 1; } 72% { opacity: 0; } }
 @keyframes bdHop {
   0% { transform: none; }
   15% { transform: translateY(-2px); }
@@ -476,7 +499,8 @@ body.has-buddy .views { padding-bottom: calc(var(--cmp-h, 110px) + 52px + var(--
 }
 /* 预览里也趴在一条边上 */
 .buddy-preview svg { flex: none; width: 90px; height: 60px; border-bottom: 2px solid var(--line); box-sizing: content-box; }
-.buddy-opts { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.buddy-opts { display: flex; flex-direction: column; gap: 10px; min-width: 0; flex: 1; }
+#buddy-char { align-self: flex-start; }
 .buddy-opt { display: flex; align-items: center; gap: 10px; }
 .buddy-opt > span { flex: none; font-size: 0.82rem; color: var(--text-2); }
 .swatches { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -1133,7 +1157,8 @@ body.no-composer .snackbar { bottom: calc(20px + var(--sab)); }
   animation: sheetIn 0.25s ease;
 }
 .ob-brand { display: flex; align-items: center; gap: 8px; font-weight: 750; font-size: 0.95rem; color: var(--text-2); }
-.ob-logo { width: 30px; height: 30px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; background: var(--accent); color: var(--accent-ink); }
+.ob-logo { width: 30px; height: 30px; display: inline-flex; }
+.ob-logo svg { display: block; }
 .ob-title { margin: 12px 0 0; font-size: 1.75rem; line-height: 1.25; font-weight: 800; letter-spacing: -0.01em; }
 .ob-sub { margin: 0; color: var(--text-2); font-size: 0.92rem; line-height: 1.55; }
 .ob-options { display: flex; flex-direction: column; gap: 10px; margin-top: 6px; }

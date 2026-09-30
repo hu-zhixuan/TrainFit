@@ -59,16 +59,33 @@ test('像素图：尺寸固定、描了边、换衣服换发色都能拼', () =>
   assert.ok(!cap[3].includes('H'));
   // 每个颜色代码都有颜色
   for (const c of new Set(flat.replace(/\./g, ''))) assert.ok(img.colors[c], c);
-  // SVG：两帧头发 + 睁眼时的眨眼帧
+  // SVG：两帧头发、两帧招手、睁眼时的眨眼和左右看、特效单独一层
   const svg = Buddy.svg({ mood: 'good', gear: [] });
-  assert.ok(svg.includes('bd-fa') && svg.includes('bd-fb') && svg.includes('bd-blink'));
+  for (const k of ['bd-fa', 'bd-fb', 'bd-wa', 'bd-wb', 'bd-blink', 'bd-lookl', 'bd-lookr', 'bd-fx-note']) assert.ok(svg.includes(k), k);
   assert.ok(!Buddy.svg({ mood: 'sleepy', gear: [] }).includes('bd-blink'));
   assert.ok(!Buddy.svg({ mood: 'great', gear: [] }).includes('bd-blink'));   // 戴墨镜不眨眼
 });
 
 test('设置里没选过就是默认样子，选过的保留', () => {
-  assert.deepStrictEqual(Buddy.look(undefined), { show: true, hair: 'black', outfit: 'varsity' });
-  assert.deepStrictEqual(Buddy.look({ hair: 'blond', show: false }), { show: false, hair: 'blond', outfit: 'varsity' });
+  assert.deepStrictEqual(Buddy.look(undefined), { show: true, hair: 'black', outfit: 'varsity', char: 'boy' });
+  assert.deepStrictEqual(Buddy.look({ hair: 'blond', show: false }), { show: false, hair: 'blond', outfit: 'varsity', char: 'boy' });
   // 以前存过、现在没有的样子回到默认
-  assert.deepStrictEqual(Buddy.look({ outfit: 'jersey' }), { show: true, hair: 'black', outfit: 'varsity' });
+  assert.deepStrictEqual(Buddy.look({ outfit: 'jersey' }), { show: true, hair: 'black', outfit: 'varsity', char: 'boy' });
+  // 没选过角色：跟着性别；选过就用选的
+  assert.strictEqual(Buddy.look(undefined, 'female').char, 'girl');
+  assert.strictEqual(Buddy.look({ char: 'boy' }, 'female').char, 'boy');
+});
+
+test('女生：长头发搭在胳膊上，眼角有眼线；招手的手伸出头发外面', () => {
+  const g = Buddy.compose({ char: 'girl', mood: 'ok', gear: [] }).px.map(r => r.join(''));
+  const W = Buddy.W;
+  assert.strictEqual(g.length, Buddy.H);
+  assert.ok(g.every(r => r.length === W));
+  assert.ok(g[3 + 14].includes('H'), '头发搭在胳膊那一行');
+  const boy = Buddy.compose({ char: 'boy', mood: 'ok', gear: [], wave: 1 }).px.map(r => r.join(''));
+  assert.ok(boy[3 + 7].slice(3 + 22, 3 + 24) === 'SS', '手在头发外面');
+  // 每个角色、每种心情都拼得出来
+  for (const char of Object.keys(Buddy.CHARS)) for (const mood of Object.keys(Buddy.MOODS)) {
+    assert.ok(Buddy.svg({ char, mood, gear: ['cap'] }).startsWith('<svg'));
+  }
 });

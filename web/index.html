@@ -185,6 +185,10 @@
           <div class="buddy-set">
             <div class="buddy-preview" id="buddy-preview"></div>
             <div class="buddy-opts">
+              <div class="seg seg-sm" id="buddy-char">
+                <button class="seg-btn" data-value="boy" type="button">男生</button>
+                <button class="seg-btn" data-value="girl" type="button">女生</button>
+              </div>
               <div class="buddy-opt"><span>头发</span><div class="swatches" id="buddy-hair"></div></div>
               <div class="buddy-opt"><span>衣服</span><div class="swatches" id="buddy-outfit"></div></div>
             </div>
@@ -272,7 +276,6 @@
 
     <!-- 底部：一个按钮，按住说话（或点一下开始、再点一下结束） -->
     <div class="composer" id="composer">
-      <button class="buddy hidden" id="buddy" type="button" aria-label="小人"></button>
       <div class="chips" id="cmp-chips" aria-label="打字联想：点一下就记"></div>
       <div class="cmp-status hidden" id="cmp-status" role="status"></div>
 
@@ -381,6 +384,7 @@
 
   <div class="toast hidden" id="app-toast" role="status"></div>
   <div class="gauge-pop hidden" id="gauge-pop" role="dialog" aria-label="今天吃得怎么样"></div>
+  <button class="buddy hidden" id="buddy" type="button" aria-label="小人"></button>
   <div class="buddy-pop hidden" id="buddy-pop" role="dialog" aria-label="小人"></div>
 
   <!-- 食物营养库 -->

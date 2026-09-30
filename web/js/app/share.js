@@ -68,15 +68,8 @@ Object.assign(FitnessApp.prototype, {
     ctx.fillStyle = C.bg;
     ctx.fillRect(0, 0, W, H);
 
-    // 顶部：品牌（和 App 图标一样的碗 + 声波）+ 日期
-    rr(P, 20, 24, 24, 7, C.accent);
-    ctx.save();
-    ctx.translate(P + 12, 32);
-    ctx.scale(17 / 66, 17 / 66);
-    ctx.translate(-54, -53);
-    ctx.fillStyle = C.accentInk;
-    BRAND_PATHS.forEach(d => ctx.fill(new Path2D(d)));
-    ctx.restore();
+    // 顶部：品牌（和 App 图标一样）+ 日期
+    drawBrandIcon(ctx, P, 20, 24);
     text('练食AI', P + 32, 37, font(750, 14), C.text2);
     text(this.dateLabel(date).replace('今天 · ', '今天 '), W - P, 37, font(600, 13), C.text2, 'right');
 

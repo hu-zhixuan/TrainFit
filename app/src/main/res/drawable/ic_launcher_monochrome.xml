@@ -1,18 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 主题图标（单色）。由 scripts/build-icon.py 生成，不要手改 -->
+<!-- Android 13 主题图标（单色）：叶子（叶脉挖空）+ 星光。由 scripts/build-icon.py 生成，不要手改 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <group android:pivotX="54" android:pivotY="54" android:scaleX="0.86" android:scaleY="0.86">
-        <path android:fillColor="#FFFFFFFF" android:pathData="M30.25,55H77.75A2.25,2.25 0 0 1 80,57.25V57.25A2.25,2.25 0 0 1 77.75,59.5H30.25A2.25,2.25 0 0 1 28,57.25V57.25A2.25,2.25 0 0 1 30.25,55Z" />
-        <path android:fillColor="#FFFFFFFF" android:pathData="M77,57A23,23 0 0 1 31,57Z" />
-        <path android:fillColor="#FFFFFFFF" android:pathData="M47.5,78H60.5A1.5,1.5 0 0 1 62,79.5V81.5A1.5,1.5 0 0 1 60.5,83H47.5A1.5,1.5 0 0 1 46,81.5V79.5A1.5,1.5 0 0 1 47.5,78Z" />
-        <path android:fillColor="#FFFFFFFF" android:pathData="M38,37H38A2.6,2.6 0 0 1 40.6,39.6V46.4A2.6,2.6 0 0 1 38,49H38A2.6,2.6 0 0 1 35.4,46.4V39.6A2.6,2.6 0 0 1 38,37Z" />
-        <path android:fillColor="#FFFFFFFF" android:pathData="M46,27H46A2.6,2.6 0 0 1 48.6,29.6V46.4A2.6,2.6 0 0 1 46,49H46A2.6,2.6 0 0 1 43.4,46.4V29.6A2.6,2.6 0 0 1 46,27Z" />
-        <path android:fillColor="#FFFFFFFF" android:pathData="M54,34H54A2.6,2.6 0 0 1 56.6,36.6V46.4A2.6,2.6 0 0 1 54,49H54A2.6,2.6 0 0 1 51.4,46.4V36.6A2.6,2.6 0 0 1 54,34Z" />
-        <path android:fillColor="#FFFFFFFF" android:pathData="M62,23H62A2.6,2.6 0 0 1 64.6,25.6V46.4A2.6,2.6 0 0 1 62,49H62A2.6,2.6 0 0 1 59.4,46.4V25.6A2.6,2.6 0 0 1 62,23Z" />
-        <path android:fillColor="#FFFFFFFF" android:pathData="M70,38H70A2.6,2.6 0 0 1 72.6,40.6V46.4A2.6,2.6 0 0 1 70,49H70A2.6,2.6 0 0 1 67.4,46.4V40.6A2.6,2.6 0 0 1 70,38Z" />
+    <path android:fillColor="#FFFFFFFF" android:fillType="evenOdd" android:pathData="M36,72 C36,49 50,36 74,34 C72,58 59,72 36,72 Z M38,69.8 C47,61 56,51 68.5,40.5 C69.1,40 69.9,40.8 69.4,41.4 C58,52.5 48.5,62.5 39.6,71.4 Z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M36,72 C34,74 32,75.3 29.4,75.8 C28.9,75.9 28.7,75.2 29.2,75 C31.5,74.2 33.3,72.8 34.9,71 Z" />
+    <group android:translateX="40" android:translateY="40" android:scaleX="0.9" android:scaleY="0.9">
+        <path android:fillColor="#FFFFFFFF" android:pathData="M0,-6 C0.6,-1.4 1.4,-0.6 6,0 C1.4,0.6 0.6,1.4 0,6 C-0.6,1.4 -1.4,0.6 -6,0 C-1.4,-0.6 -0.6,-1.4 0,-6 Z" />
     </group>
 </vector>

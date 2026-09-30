@@ -14,7 +14,7 @@ Object.assign(FitnessApp.prototype, {
   showOnboarding() {
     const ob = document.getElementById('onboard');
     ob.classList.remove('hidden');
-    document.getElementById('ob-logo').innerHTML = BRAND_SVG(20);
+    document.getElementById('ob-logo').innerHTML = brandIcon(30);
     document.getElementById('ob-step-1').classList.remove('hidden');
     document.getElementById('ob-step-2').classList.add('hidden');
     document.body.classList.add('onboarding');
