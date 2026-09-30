@@ -15,6 +15,10 @@ test('只报体重：斤 / 公斤 / 没单位时按上次体重判断', () => {
   assert.strictEqual(quickWeight('61.8', 62), 61.8);
   assert.strictEqual(quickWeight('卧推80公斤'), null);  // 不是只报体重
   assert.strictEqual(quickWeight('今天吃了两个包子'), null);
+  // 本机识别（SenseVoice）直接出数字，还会加标点
+  assert.strictEqual(quickWeight('称了一下，61.8公斤。'), 61.8);
+  assert.strictEqual(quickWeight('体重，62.5。'), 62.5);
+  assert.strictEqual(quickWeight('早上吃了2个包子。'), null);
 });
 
 test('一句话里夹着体重', () => {

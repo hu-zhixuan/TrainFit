@@ -125,7 +125,8 @@
 
   /** 整句话只是在报体重：不用等大模型，直接记 */
   function quickWeight(text, lastKg) {
-    const s = String(text || '').trim().replace(/[，,。.!！~～]+$/, '');
+    // 语音识别会加标点（「称了一下，61.8公斤。」）：句中的逗号、空格去掉，句尾标点去掉
+    const s = String(text || '').trim().replace(/[，,、\s]+/g, '').replace(/[。.!！~～]+$/, '');
     const m = s.match(/^(?:今天|今早|早上|早晨|刚才|刚刚)?\s*(?:的)?\s*(体重|称了?一?下|称了|称重|上秤)?\s*(?:是|为|有|了)?\s*(\d{2,3}(?:\.\d{1,2})?)\s*(斤|公斤|kg|KG|千克)?$/);
     if (!m) return null;
     return toKg(parseFloat(m[2]), m[3], lastKg);

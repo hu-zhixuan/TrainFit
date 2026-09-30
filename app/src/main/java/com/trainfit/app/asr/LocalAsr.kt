@@ -7,20 +7,21 @@ import android.media.AudioRecord
 import android.media.MediaRecorder
 import com.k2fsa.sherpa.onnx.FeatureConfig
 import com.k2fsa.sherpa.onnx.OfflineModelConfig
-import com.k2fsa.sherpa.onnx.OfflineParaformerModelConfig
 import com.k2fsa.sherpa.onnx.OfflineRecognizer
 import com.k2fsa.sherpa.onnx.OfflineRecognizerConfig
+import com.k2fsa.sherpa.onnx.OfflineSenseVoiceModelConfig
 import com.k2fsa.sherpa.onnx.SileroVadModelConfig
 import com.k2fsa.sherpa.onnx.Vad
 import com.k2fsa.sherpa.onnx.VadModelConfig
 import kotlin.math.sqrt
 
 /**
- * 本机语音识别（不联网）。照搬 sherpa-onnx 官方 Android demo「SherpaOnnxSimulateStreamingAsr」的做法：
- *  - 边录边用 Silero VAD 按停顿切句；
- *  - 当前这句每 ~300ms 用 Paraformer 重新识别一次 → 边说边出字；
- *  - 切出来的整句识别后固定下来；
- *  - 用户松手时只剩最后一句要识别，几乎立刻出结果。
+ * 本机语音识别（不联网）。照搬 sherpa-onnx 官方 Android demo「SherpaOnnxSimulateStreamingAsr」的做法，
+ * 模型也用它默认的 SenseVoice（int8，比以前的 Paraformer small 准，数字直接出阿拉伯数字、带标点）：
+ *  - 录音线程只管收声音，不做别的——以前在录音线程里识别，一句话说长了识别一次要大半秒，
+ *    录音缓冲只有 0.2 秒，中间的声音就丢了；
+ *  - 识别线程用 Silero VAD 按停顿切句，当前这句隔一会儿重新识别一次 → 边说边出字；
+ *  - 松手后把整段话（25 秒以内）连起来再识别一遍，上下文完整，比一句句拼起来准；太长就用切好的句子拼。
  * 开始和结束完全由用户控制，停顿不会结束录音。
  */
 class LocalAsr(private val assets: AssetManager) {
@@ -28,9 +29,12 @@ class LocalAsr(private val assets: AssetManager) {
         const val SAMPLE_RATE = 16000
         private const val WINDOW = 512
         private const val MAX_MS = 120_000L
-        private const val MODEL = "asr/paraformer/model.int8.onnx"
-        private const val TOKENS = "asr/paraformer/tokens.txt"
+        private const val MODEL_DIR = "asr/sensevoice"
+        private const val MODEL = "$MODEL_DIR/model.int8.onnx"
+        private const val TOKENS = "$MODEL_DIR/tokens.txt"
         private const val VAD_MODEL = "asr/silero_vad.onnx"
+        private const val FULL_PASS_MAX = SAMPLE_RATE * 25 // 松手后整段重新识别的上限
+        private const val PAD = SAMPLE_RATE * 3 / 10       // 整段识别时前后多留 0.3 秒
     }
 
     @Volatile var ready = false
@@ -40,13 +44,12 @@ class LocalAsr(private val assets: AssetManager) {
 
     private var recognizer: OfflineRecognizer? = null
     private var vad: Vad? = null
-    private val lock = Object()
 
-    /** 加载模型（约 1~2 秒），在后台线程调用 */
+    /** 加载模型（约 1~3 秒），在后台线程调用 */
     fun init() {
         if (ready || failed) return
         try {
-            val files = assets.list("asr/paraformer")?.toList().orEmpty()
+            val files = assets.list(MODEL_DIR)?.toList().orEmpty()
             if (!files.contains("model.int8.onnx") || !files.contains("tokens.txt")) {
                 failed = true
                 return
@@ -56,17 +59,17 @@ class LocalAsr(private val assets: AssetManager) {
                 config = OfflineRecognizerConfig(
                     featConfig = FeatureConfig(sampleRate = SAMPLE_RATE, featureDim = 80),
                     modelConfig = OfflineModelConfig(
-                        paraformer = OfflineParaformerModelConfig(model = MODEL),
+                        // 固定中文：自动判断语言时，纯噪声会被认成韩文、日文
+                        senseVoice = OfflineSenseVoiceModelConfig(model = MODEL, language = "zh", useInverseTextNormalization = true),
                         tokens = TOKENS,
-                        numThreads = 2,
-                        modelType = "paraformer",
+                        numThreads = 4,
                     ),
                 ),
             )
             vad = newVad()
             ready = true
         } catch (t: Throwable) {
-            // 比如 32 位手机没有对应的 .so：退回云端识别
+            // 比如 32 位手机没有对应的 .so、内存不够：退回云端识别
             failed = true
         }
     }
@@ -80,7 +83,7 @@ class LocalAsr(private val assets: AssetManager) {
                 minSilenceDuration = 0.5f,   // 停顿 0.5 秒算一句结束（只是切句，不会停止录音）
                 minSpeechDuration = 0.25f,
                 windowSize = WINDOW,
-                maxSpeechDuration = 20f,
+                maxSpeechDuration = 15f,
             ),
             sampleRate = SAMPLE_RATE,
             numThreads = 1,
@@ -88,15 +91,20 @@ class LocalAsr(private val assets: AssetManager) {
     )
 
     // ---------------- 一次录音 ----------------
+    // all / total 录音线程写、识别线程读，用 lock 保护；其余状态只有识别线程（录完之后是 stop()）在用
+    private val lock = Object()
     @Volatile private var running = false
-    private var thread: Thread? = null
+    private var capture: Thread? = null
+    private var worker: Thread? = null
     private var record: AudioRecord? = null
-    private val committed = mutableListOf<String>()
     private var all = FloatArray(SAMPLE_RATE * 10)
     private var total = 0
+
+    private val committed = mutableListOf<String>()
     private var processed = 0
     private var speechStart = -1
-    private var sawSpeech = false
+    private var firstSpeech = -1
+    private var lastSpeechEnd = -1
 
     val isRecording: Boolean get() = running
 
@@ -111,7 +119,7 @@ class LocalAsr(private val assets: AssetManager) {
                 SAMPLE_RATE,
                 AudioFormat.CHANNEL_IN_MONO,
                 AudioFormat.ENCODING_PCM_16BIT,
-                maxOf(minBuf * 2, SAMPLE_RATE / 5 * 2)
+                maxOf(minBuf * 4, SAMPLE_RATE * 2) // 1 秒的缓冲，手机卡一下也不丢声音
             )
         } catch (e: Exception) {
             return false
@@ -120,14 +128,8 @@ class LocalAsr(private val assets: AssetManager) {
             r.release()
             return false
         }
-        synchronized(lock) {
-            committed.clear()
-            total = 0
-            processed = 0
-            speechStart = -1
-            sawSpeech = false
-            try { vad?.reset() } catch (_: Throwable) {}
-        }
+        synchronized(lock) { total = 0 }
+        resetState()
         try {
             r.startRecording()
         } catch (e: Exception) {
@@ -137,10 +139,10 @@ class LocalAsr(private val assets: AssetManager) {
         record = r
         running = true
         val startedAt = System.currentTimeMillis()
-        thread = Thread {
+
+        // 录音线程：只收声音
+        capture = Thread {
             val chunk = ShortArray(SAMPLE_RATE / 10) // 100ms
-            var lastPartialAt = 0L
-            var lastPartial = ""
             var maxNotified = false
             while (running) {
                 val n = try { r.read(chunk, 0, chunk.size) } catch (e: Exception) { -1 }
@@ -156,78 +158,105 @@ class LocalAsr(private val assets: AssetManager) {
                     total += n
                 }
                 onLevel((sqrt(sum / n) * 4).coerceIn(0.0, 1.0).toFloat())
-
-                if (ready) {
-                    val now = System.currentTimeMillis()
-                    synchronized(lock) {
-                        feedVad()
-                        if (speechStart >= 0 && now - lastPartialAt > 300) {
-                            lastPartialAt = now
-                            val text = currentText(includeTail = true)
-                            if (text.isNotBlank() && text != lastPartial) {
-                                lastPartial = text
-                                onPartial(text)
-                            }
-                        }
-                    }
-                }
                 if (!maxNotified && System.currentTimeMillis() - startedAt >= MAX_MS) {
                     maxNotified = true
                     onMax()
                 }
             }
         }.apply {
-            name = "TrainFitLocalAsr"
+            name = "TrainFitAsrCapture"
+            priority = Thread.MAX_PRIORITY
+            start()
+        }
+
+        // 识别线程：切句、边说边出字
+        worker = Thread {
+            var lastPartialAt = 0L
+            var gap = 300L
+            var lastPartial = ""
+            while (running) {
+                if (!ready) { Thread.sleep(50); continue }
+                val fed = feedAvailable()
+                val now = System.currentTimeMillis()
+                if (speechStart >= 0 && now - lastPartialAt > gap) {
+                    val tail = synchronized(lock) { all.copyOfRange(speechStart, processed) }
+                    val t = decode(tail)
+                    val cost = System.currentTimeMillis() - now
+                    gap = maxOf(300L, cost * 2) // 手机慢就少刷几次，别把 CPU 占满
+                    lastPartialAt = System.currentTimeMillis()
+                    val text = (committed + t).filter { it.isNotBlank() }.joinToString("，")
+                    if (text.isNotBlank() && text != lastPartial) {
+                        lastPartial = text
+                        onPartial(text)
+                    }
+                } else if (!fed) {
+                    Thread.sleep(30)
+                }
+            }
+        }.apply {
+            name = "TrainFitAsrDecode"
             start()
         }
         return true
     }
 
-    /** 停止并返回最终文字（在后台线程调用，通常几十到几百毫秒） */
+    /** 停止并返回最终文字（在后台线程调用） */
     fun stop(): String {
         if (!running && record == null) return ""
         running = false
-        try { thread?.join(1500) } catch (_: Exception) {}
+        try { capture?.join(1500) } catch (_: Exception) {}
         try { record?.stop() } catch (_: Exception) {}
         try { record?.release() } catch (_: Exception) {}
         record = null
-        thread = null
+        capture = null
+        // 识别线程手上那一次识别做完就退出
+        try { worker?.join(10_000) } catch (_: Exception) {}
+        worker = null
 
         // 模型还没加载完（刚打开 App 就按住）：等一下
-        val waitUntil = System.currentTimeMillis() + 8000
+        val waitUntil = System.currentTimeMillis() + 10_000
         while (!ready && !failed && System.currentTimeMillis() < waitUntil) Thread.sleep(50)
         if (!ready) return ""
 
-        synchronized(lock) {
-            feedVad()
-            try { vad?.flush() } catch (_: Throwable) {}
-            drainSegments()
-            var text = committed.filter { it.isNotBlank() }.joinToString("，")
-            // VAD 没检测到人声（比如声音很小）：整段直接识别一遍兜底
-            if (text.isBlank() && total > SAMPLE_RATE / 2) {
-                text = decode(all.copyOfRange(0, total))
-            }
-            return text.trim()
+        feedAvailable()
+        try { vad?.flush() } catch (_: Throwable) {}
+        drainSegments()
+        val segments = committed.filter { it.isNotBlank() }.joinToString("，")
+        val n = synchronized(lock) { total }
+
+        // 整段重新识别：从第一次说话到最后一次说话（前后各多 0.3 秒）；VAD 没听到人声就整段识别兜底
+        val from = if (firstSpeech >= 0) maxOf(0, firstSpeech - PAD) else 0
+        val to = if (lastSpeechEnd > 0) minOf(n, lastSpeechEnd + PAD) else n
+        if (to - from in (SAMPLE_RATE / 2)..FULL_PASS_MAX) {
+            val whole = decode(synchronized(lock) { all.copyOfRange(from, to) })
+            if (whole.isNotBlank()) return whole.trim()
         }
+        return segments.trim()
     }
 
     fun cancel() {
         running = false
-        try { thread?.join(1000) } catch (_: Exception) {}
+        try { capture?.join(1000) } catch (_: Exception) {}
         try { record?.stop() } catch (_: Exception) {}
         try { record?.release() } catch (_: Exception) {}
         record = null
-        thread = null
-        synchronized(lock) {
-            committed.clear()
-            total = 0
-            processed = 0
-            speechStart = -1
-            try { vad?.reset() } catch (_: Throwable) {}
-        }
+        capture = null
+        try { worker?.join(5000) } catch (_: Exception) {}
+        worker = null
+        synchronized(lock) { total = 0 }
+        resetState()
     }
 
-    // ---------------- 内部 ----------------
+    // ---------------- 内部（只在识别线程，或录完之后调用） ----------------
+    private fun resetState() {
+        committed.clear()
+        processed = 0
+        speechStart = -1
+        firstSpeech = -1
+        lastSpeechEnd = -1
+        try { vad?.reset() } catch (_: Throwable) {}
+    }
+
     private fun ensureCapacity(n: Int) {
         if (n <= all.size) return
         var size = all.size
@@ -235,38 +264,34 @@ class LocalAsr(private val assets: AssetManager) {
         all = all.copyOf(size)
     }
 
-    /** 把还没喂给 VAD 的样本按 512 一窗喂进去，顺便收掉已经切好的句子 */
-    private fun feedVad() {
-        val v = vad ?: return
-        while (processed + WINDOW <= total) {
-            v.acceptWaveform(all.copyOfRange(processed, processed + WINDOW))
+    /** 把还没喂给 VAD 的样本按 512 一窗喂进去，顺便识别已经切好的句子。喂了东西返回 true */
+    private fun feedAvailable(): Boolean {
+        val v = vad ?: return false
+        val avail = synchronized(lock) { total }
+        if (processed + WINDOW > avail) return false
+        while (processed + WINDOW <= avail) {
+            val w = synchronized(lock) { all.copyOfRange(processed, processed + WINDOW) }
+            v.acceptWaveform(w)
             processed += WINDOW
             if (speechStart < 0 && v.isSpeechDetected()) {
-                sawSpeech = true
                 speechStart = maxOf(0, processed - SAMPLE_RATE * 4 / 10) // 往前多留 0.4 秒，别吃掉第一个字
             }
             drainSegments()
         }
+        return true
     }
 
     private fun drainSegments() {
         val v = vad ?: return
         while (!v.empty()) {
             val seg = v.front()
+            if (firstSpeech < 0) firstSpeech = seg.start
+            lastSpeechEnd = seg.start + seg.samples.size
             val t = decode(seg.samples)
             if (t.isNotBlank()) committed.add(t)
             v.pop()
             speechStart = -1
         }
-    }
-
-    private fun currentText(includeTail: Boolean): String {
-        val parts = committed.filter { it.isNotBlank() }.toMutableList()
-        if (includeTail && speechStart >= 0 && processed > speechStart) {
-            val t = decode(all.copyOfRange(speechStart, processed))
-            if (t.isNotBlank()) parts.add(t)
-        }
-        return parts.joinToString("，")
     }
 
     private fun decode(samples: FloatArray): String {
@@ -276,11 +301,18 @@ class LocalAsr(private val assets: AssetManager) {
         return try {
             s.acceptWaveform(samples, SAMPLE_RATE)
             r.decode(s)
-            r.getResult(s).text.trim()
+            clean(r.getResult(s).text)
         } catch (t: Throwable) {
             ""
         } finally {
             s.release()
         }
+    }
+
+    /** 只有语气词（「嗯」「啊」，噪声常被认成这些）当没说 */
+    private fun clean(text: String): String {
+        val t = text.trim()
+        val core = t.replace(Regex("[\\p{P}\\s]"), "")
+        return if (core.isEmpty() || core.matches(Regex("[嗯啊呃哦唉额诶]+"))) "" else t
     }
 }

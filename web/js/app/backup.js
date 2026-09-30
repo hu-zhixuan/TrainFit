@@ -142,6 +142,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     if (r.added.myFoods) lines.push(`记住的食物 ${r.added.myFoods} 样`);
     if (r.profileRestored) lines.push('身体数据和目标也恢复了');
     window.Haptics && window.Haptics.fire('success');
+    window.Sound && window.Sound.play('success');
     if (window.QuickLog) window.QuickLog.showUndo('✓ 从备份恢复了', lines, () => this.loadData(snapshot));
     else this.showToast('已从备份恢复');
   },

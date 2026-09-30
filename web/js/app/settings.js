@@ -183,6 +183,10 @@ Object.assign(FitnessApp.prototype, {
       try { localStorage.setItem('tf_haptics', $('set-haptics').checked ? 'on' : 'off'); } catch (e) {}
       if ($('set-haptics').checked && window.Haptics) window.Haptics.fire('success');
     });
+    $('set-sound').addEventListener('change', () => {
+      try { localStorage.setItem('tf_sound', $('set-sound').checked ? 'on' : 'off'); } catch (e) {}
+      if ($('set-sound').checked && window.Sound) window.Sound.play('success');
+    });
   },
 
   renderReminders() {
@@ -197,6 +201,7 @@ Object.assign(FitnessApp.prototype, {
     let hap = true;
     try { hap = localStorage.getItem('tf_haptics') !== 'off'; } catch (e) {}
     $('set-haptics').checked = hap;
+    $('set-sound').checked = !window.Sound || window.Sound.on();
     $('rem-note').textContent = !this.hasNotifApi() ? '提醒只在安卓 App 里可用。' :
       (!granted && localStorage.getItem('tf_remind_asked') ? '通知权限没打开，提醒不会响。打开任意一个开关会请求权限。' : '');
   }

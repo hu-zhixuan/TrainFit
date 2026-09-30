@@ -180,6 +180,7 @@
       this.tapMode = false;
       this.state = 'recording';
       Haptics.fire('start');
+      root.Sound && root.Sound.play('start');
       this.recStart = Date.now();
       this.liveText = '';
       this._levels = [];
@@ -269,6 +270,7 @@
 
     failTalk(msg) {
       Haptics.fire('error');
+      root.Sound && root.Sound.play('error');
       this.state = 'idle';
       this.resetTalkUi();
       this.setStatus(msg, 'warn');
@@ -278,6 +280,7 @@
       if (this.state !== 'recording') return;
       this.state = 'transcribing';
       Haptics.fire('stop');
+      root.Sound && root.Sound.play('stop', 0.15); // 等麦克风关了再响，别录进去
       clearInterval(this._timer);
       this.panel.classList.add('hidden');
       this.composer.classList.remove('recording');

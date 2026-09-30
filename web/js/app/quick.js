@@ -159,6 +159,7 @@ Object.assign(FitnessApp.prototype, {
       this.diet.unshift(rec);
     }
     window.Haptics && window.Haptics.fire('success');
+    window.Sound && window.Sound.play('success');
     if (this._quickFromTyping && window.QuickLog && window.QuickLog.clearText) window.QuickLog.clearText();
     this._typing = '';
     this.saveData();

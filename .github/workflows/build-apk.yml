@@ -44,7 +44,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .asr-cache
-          key: asr-sherpa-1.13.8-paraformer-zh-small-2024-03-09
+          key: asr-sherpa-1.13.8-sense-voice-int8-2024-07-17
 
       - name: Fetch on-device ASR (sherpa-onnx libs + model)
         run: bash scripts/fetch-asr.sh
