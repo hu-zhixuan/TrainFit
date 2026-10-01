@@ -3,22 +3,27 @@ on:
   push:
     branches: [ claude/api-check ]
 jobs:
-  mirrors:
+  atria:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: 本机模型镜像
-        run: bash .github/mirror_probe.sh
-  atria-search:
-    runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: Atria 联网搜索
+      - name: 新用例（火锅、品牌、补充描述）×2
         env:
+          TZ: Asia/Shanghai
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
           LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
           LLM_MODEL: ${{ vars.LLM_MODEL }}
-        run: node .github/atria_search_probe.js
+          TAG: 新
+        run: ONLY="火锅：羊肉吃得多,火锅：只说一顿,火锅：清汤吃得少,汉堡王：吉士汉堡+薯条,麦当劳套餐,瑞幸生椰拿铁,补充：火锅是牛油的" ROUNDS=2 node .github/api_check.js
+      - name: 回归（原来的 30 句）×1
+        env:
+          TZ: Asia/Shanghai
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
+          LLM_MODEL: ${{ vars.LLM_MODEL }}
+          TAG: 回归
+        run: SKIP="火锅：羊肉吃得多,火锅：只说一顿,火锅：清汤吃得少,汉堡王：吉士汉堡+薯条,麦当劳套餐,瑞幸生椰拿铁,补充：火锅是牛油的" node .github/api_check.js

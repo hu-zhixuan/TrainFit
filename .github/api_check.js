@@ -14,14 +14,14 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
 const TIMES = [];
 const FAILED = [];
-async function call(label, text, hhmm, check, extra) {
+async function call(label, text, hhmm, check, ctxExtra) {
   const [h, mi] = hhmm.split(':').map(Number);
   const now = new Date(2026, 8, 29, h, mi); // 本地时间（workflow 里 TZ=Asia/Shanghai）
   // 像一个在健身的老用户：有最近成绩、记住的食物、体重（手机上的提示词比空白上下文长得多）
   const ctx = { now, history: [], dayRecords: [], dayLabel: '今天 2026-09-29', lastWeight: 61,
     recent: ['杠铃卧推 80kg 4×8（09-28）', '杠铃深蹲 100kg 5×5（09-27）', '引体向上 自重 4×8（09-27）', '哑铃推举 22kg 3×10（09-26）', '传统硬拉 120kg 3×5（09-25）', '跑步机 30分钟（09-24）'],
     myFoods: [{ name: '糯米鸡', amount: '1个', grams: 180, calories: 350, proteinG: 10, carbsG: 50, fatG: 11 }, { name: '乳清蛋白粉', amount: '1勺', grams: 30, calories: 120, proteinG: 24, carbsG: 3, fatG: 1.5 }] };
-  if (extra) Object.assign(ctx, extra);
+  if (ctxExtra) Object.assign(ctx, ctxExtra);
   const body = { model, messages: P.buildMessages(text, ctx), temperature: 0.2, stream: false, thinking: { type: 'disabled' } };
   const extra = JSON.parse(process.env.EXTRA || '{}'); // null = 去掉这个参数
   for (const k of Object.keys(extra)) { if (extra[k] === null) delete body[k]; else body[k] = extra[k]; }
