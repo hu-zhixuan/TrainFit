@@ -173,7 +173,9 @@
       return withN(Object.assign(base, { src: '包装' }, vals(ai.calories, ai.proteinG, ai.carbsG, ai.fatG)));
     }
     // 3. 单一食材查库。和大模型的估算差太多，多半是匹配错了（比如成分表里的「豆腐花」是干粉），保留估算：
-    //    热量差 2.5 倍以上；或者蛋白质差得多（相差 6g 以上、且不在 0.6～1.7 倍之间）——蛋白质用户最在意
+    //    热量差 2.5 倍以上；或者蛋白质差得多（相差 6g 以上、且不在 0.6～1.7 倍之间）——蛋白质用户最在意。
+    //    但热量对得上（0.8～1.25 倍）说明是同一样东西，蛋白质对不上是大模型写错了，用库里的
+    //    （实测大模型把「三个鸡蛋」的蛋白质写成 39g）
     const e = !supp && !base.whole && grams && grams > 0 ? FoodDB.find(name) : null;
     if (e) {
       const k = e.k * grams / 100;
@@ -181,7 +183,8 @@
       const ratio = ai.calories > 0 ? k / ai.calories : ai.calories === 0 ? (k <= 20 ? 1 : Infinity) : 1;
       const pr = ai.proteinG > 0 ? p / ai.proteinG : 1;
       const proteinOff = ai.proteinG != null && Math.abs(p - ai.proteinG) > 6 && (pr < 0.6 || pr > 1.7);
-      if (ratio >= 0.4 && ratio <= 2.5 && !proteinOff) {
+      const sameFood = ratio >= 0.8 && ratio <= 1.25;
+      if (ratio >= 0.4 && ratio <= 2.5 && (!proteinOff || sameFood)) {
         return Object.assign(base, { src: e.src === 'cfct' ? '成分表' : '菜品库', dbName: e.name },
           vals(k, p, e.c * grams / 100, e.f * grams / 100));
       }

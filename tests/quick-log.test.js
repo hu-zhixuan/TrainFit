@@ -267,6 +267,12 @@ test('大模型慢：过一会儿再发一份，谁先回来用谁；第一份�
   }
 });
 
+test('热量对得上、蛋白质对不上：是大模型写错了，用成分表的（三个鸡蛋不是 39g 蛋白）', () => {
+  const egg = groundItem({ name: '鸡蛋', amount: '3个', grams: 150, calories: 209, proteinG: 39 });
+  assert.strictEqual(egg.src, '成分表');
+  assert.ok(egg.proteinG > 17 && egg.proteinG < 22, String(egg.proteinG));
+});
+
 test('品牌的东西按大模型估的官方数，不被库里通用的「汉堡」「拿铁」改掉', () => {
   const bk = groundItem({ name: '吉士汉堡', amount: '1个', grams: 116, whole: false, calories: 300, proteinG: 15, carbsG: 30, fatG: 13 });
   assert.strictEqual(bk.src, '估算');
@@ -287,9 +293,9 @@ test('蛋白质：「蛋白粉」按乳清算、「虾仁」按鲜虾仁算，�
   assert.strictEqual(FoodDB.find('脱脂牛奶').f, 0.3);
 });
 
-test('蛋白质和大模型差太多：多半是库里匹配错了，用大模型的估算', () => {
-  // 假设大模型认为这 100g 有 25g 蛋白，而库里对上的条目只有 5g → 不用库
-  const it = groundItem({ name: '米饭', grams: 100, calories: 120, proteinG: 25 });
+test('蛋白质和热量都和大模型差得多：多半是库里匹配错了，用大模型的估算', () => {
+  // 假设大模型认为这 100g 有 200 千卡、25g 蛋白，而库里对上的条目只有 116 千卡、2.6g → 不像同一样东西，不用库
+  const it = groundItem({ name: '米饭', grams: 100, calories: 200, proteinG: 25 });
   assert.strictEqual(it.src, '估算');
   assert.strictEqual(it.proteinG, 25);
   // 差得不多：照常用库
