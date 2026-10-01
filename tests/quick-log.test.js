@@ -267,6 +267,17 @@ test('大模型慢：过一会儿再发一份，谁先回来用谁；第一份�
   }
 });
 
+test('品牌的东西按大模型估的官方数，不被库里通用的「汉堡」「拿铁」改掉', () => {
+  const bk = groundItem({ name: '吉士汉堡', amount: '1个', grams: 116, whole: false, calories: 300, proteinG: 15, carbsG: 30, fatG: 13 });
+  assert.strictEqual(bk.src, '估算');
+  assert.strictEqual(bk.calories, 300);
+  assert.strictEqual(bk.whole, true);
+  const latte = groundItem({ name: '瑞幸生椰拿铁', amount: '1杯', grams: 350, calories: 200, proteinG: 2 });
+  assert.strictEqual(latte.src, '估算');
+  // 没说牌子的照常查库
+  assert.notStrictEqual(groundItem({ name: '米饭', amount: '1碗', grams: 180, calories: 200, proteinG: 4 }).src, '估算');
+});
+
 test('蛋白质：「蛋白粉」按乳清算、「虾仁」按鲜虾仁算，脱脂奶单独一条', () => {
   const whey = groundItem({ name: '蛋白粉', amount: '2勺', grams: 60, calories: 230, proteinG: 46 });
   assert.strictEqual(whey.dbName, '乳清蛋白粉');

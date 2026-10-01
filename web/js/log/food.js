@@ -138,6 +138,9 @@
    * @param it  大模型给的一项：{name, amount, grams, whole, source, kind, calories, proteinG, carbsG, fatG, nutrients}
    * @param myFoods 用户记住的食物
    */
+  // 连锁店、品牌的东西按这家店官方的一份算（大模型估），不拿成分表、菜品库里通用的「汉堡」「拿铁」重算
+  const BRAND = /麦当劳|肯德基|KFC|汉堡王|必胜客|赛百味|德克士|华莱士|塔斯汀|星巴克|瑞幸|库迪|喜茶|奈雪|蜜雪|古茗|茶百道|霸王茶姬|沪上阿姨|书亦|一点点|CoCo|Manner|Tims|全家|罗森|7-?11|便利蜂|美宜佳|吉士汉堡|巨无霸|麦辣|板烧|麦乐鸡|麦旋风|皇堡|吮指原味鸡/i;
+
   function groundItem(it, myFoods) {
     const name = cleanText(it && it.name, 20);
     const grams = num(it && it.grams);
@@ -145,7 +148,7 @@
     const amount = cleanText(it.amount, 12);
     const base = { name, grams: grams > 0 ? Math.round(grams) : null };
     if (amount) base.amount = amount;
-    if (it.whole === true) base.whole = true;
+    if (it.whole === true || BRAND.test(name)) base.whole = true;
     // 补剂（维生素、鱼油、钙片、药…）：不查库，带上含的营养素
     const supp = it.kind === 'supplement' || it.supp === true;
     if (supp) base.supp = true;

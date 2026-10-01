@@ -9,6 +9,7 @@ import android.webkit.JavascriptInterface
 import androidx.activity.ComponentActivity
 import androidx.core.content.ContextCompat
 import com.trainfit.app.asr.LocalAsr
+import com.trainfit.app.asr.ModelDownloader
 import com.trainfit.app.asr.SystemSpeech
 import com.trainfit.app.asr.VoiceRecorder
 import com.trainfit.app.net.ApiConfig
@@ -97,8 +98,28 @@ class NativeBridge(
     //
     // 开始和结束都由用户控制（按住/松开，或点一下/再点一下），停顿不会结束录音。
 
-    // 本机识别：模型随 App 打包，启动后在后台加载
-    private val localAsr = LocalAsr(activity.assets).also { asr -> io.execute { asr.init() } }
+    // 本机识别：模型第一次打开时在后台下载（239MB，不打进安装包），下好后加载
+    private val localAsr = LocalAsr(activity.assets, ModelDownloader.dir(activity))
+    private val modelDl = ModelDownloader(activity) { io.execute { localAsr.init() } }
+
+    init {
+        io.execute {
+            localAsr.init()
+            if (localAsr.missing) {
+                modelDl.watchNetwork()
+                modelDl.start()
+            }
+        }
+    }
+
+    /** 回到前台：模型没下完就接着下（连着 Wi-Fi 的话） */
+    fun onAppResume() {
+        if (localAsr.missing) modelDl.start()
+    }
+
+    /** 设置里点「用流量下载」「重试」 */
+    @JavascriptInterface
+    fun downloadAsrModel() = modelDl.start(userAsked = true)
     @Volatile private var usingLocal = false
 
     private val recorder = VoiceRecorder(
@@ -113,8 +134,8 @@ class NativeBridge(
 
     @JavascriptInterface
     fun isAsrConfigured(overrideJson: String): Boolean {
-        if (!localAsr.failed) return true // 本机识别可用（或正在加载）
-        return asrConfig(overrideJson).isComplete
+        if (!localAsr.failed && !localAsr.missing) return true // 本机识别可用（或正在加载）
+        return asrConfig(overrideJson).isComplete // 本机用不了 / 模型还没下好：靠云端
     }
 
     @JavascriptInterface
@@ -124,7 +145,11 @@ class NativeBridge(
         put("baseUrl", if (qw) Qianwen.endpoint(def).substringBefore("/services/") else BuildConfig.ASR_BASE_URL)
         put("model", if (qw) Qianwen.model(def) else BuildConfig.ASR_MODEL)
         put("hasKey", BuildConfig.ASR_API_KEY.isNotBlank())
-        put("local", if (localAsr.ready) "ready" else if (localAsr.failed) "failed" else "loading")
+        put("local", if (localAsr.ready) "ready" else if (localAsr.failed) "failed" else if (localAsr.missing) "missing" else "loading")
+        put("dl", modelDl.state)
+        put("dlDone", modelDl.done())
+        put("dlTotal", ModelDownloader.TOTAL)
+        put("dlError", modelDl.error)
         put("cloud", cloudStatus)
     }.toString()
 
@@ -147,7 +172,7 @@ class NativeBridge(
 
     /** 联网就把刚才那段话交给云端大模型再认一遍，认出来就用它的；没联网、没余额、超时返回 null（用本机的） */
     private fun cloudFinal(local: String, overrideJson: String): String? {
-        if (local.isBlank()) return null
+        if (local.isBlank() && localAsr.ready) return null // 本机认过了、确实没说话
         val cfg = asrConfig(overrideJson)
         if (!cfg.isComplete || cloudPaused(cfg)) return null
         val wav = localAsr.lastWav() ?: return null
@@ -168,7 +193,9 @@ class NativeBridge(
         if (!cfg.isComplete || !Qianwen.matches(cfg) || cloudPaused(cfg)) return null
         val model = Qianwen.model(cfg)
         if (!Qianwen.isStreaming(model)) return null
-        return try { QianwenStream(cfg, model).also { it.open() } } catch (_: Exception) { null }
+        // 本机模型还没下好：边说边出的字用云端给的
+        val onText = { t: String -> if (!localAsr.ready) callJs("__tfRec", "partial", t) }
+        return try { QianwenStream(cfg, model, onText).also { it.open() } } catch (_: Exception) { null }
     }
 
     /** 松手后最多等到 deadline；拿不到返回 null（用本机的） */
@@ -249,7 +276,7 @@ class NativeBridge(
                 val cloud = if (cs != null) streamResult(cs, releasedAt + 5000, overrideJson) else cloudFinal(local, overrideJson)
                 val text = cloud?.takeIf { it.isNotBlank() } ?: local
                 if (text.isNotBlank()) callJs("__tfAsr", requestId, true, text)
-                else callJs("__tfAsr", requestId, false, if (localAsr.ready) "NO_SPEECH" else "LOCAL_NOT_READY")
+                else callJs("__tfAsr", requestId, false, if (localAsr.ready) "NO_SPEECH" else if (localAsr.missing) "MODEL_MISSING" else "LOCAL_NOT_READY")
                 return@execute
             }
             val audio = recorder.stop()

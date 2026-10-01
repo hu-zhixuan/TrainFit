@@ -5,6 +5,7 @@ import android.content.res.AssetManager
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
+import android.os.Build
 import com.k2fsa.sherpa.onnx.FeatureConfig
 import com.k2fsa.sherpa.onnx.OfflineModelConfig
 import com.k2fsa.sherpa.onnx.OfflineRecognizer
@@ -13,26 +14,25 @@ import com.k2fsa.sherpa.onnx.OfflineSenseVoiceModelConfig
 import com.k2fsa.sherpa.onnx.SileroVadModelConfig
 import com.k2fsa.sherpa.onnx.Vad
 import com.k2fsa.sherpa.onnx.VadModelConfig
+import java.io.File
 import kotlin.math.sqrt
 
 /**
  * 本机语音识别（不联网）。照搬 sherpa-onnx 官方 Android demo「SherpaOnnxSimulateStreamingAsr」的做法，
- * 模型也用它默认的 SenseVoice（int8，比以前的 Paraformer small 准，数字直接出阿拉伯数字、带标点）：
+ * 模型也用它默认的 SenseVoice（int8，比以前的 Paraformer small 准，数字直接出阿拉伯数字、带标点）。
+ * 模型 239MB 不打进安装包，第一次打开时由 ModelDownloader 下到 modelDir：
  *  - 录音线程只管收声音，不做别的——以前在录音线程里识别，一句话说长了识别一次要大半秒，
  *    录音缓冲只有 0.2 秒，中间的声音就丢了；
  *  - 识别线程用 Silero VAD 按停顿切句，当前这句隔一会儿重新识别一次 → 边说边出字；
  *  - 松手后把整段话（25 秒以内）连起来再识别一遍，上下文完整，比一句句拼起来准；太长就用切好的句子拼。
  * 开始和结束完全由用户控制，停顿不会结束录音。
  */
-class LocalAsr(private val assets: AssetManager) {
+class LocalAsr(private val assets: AssetManager, private val modelDir: File) {
     companion object {
         const val SAMPLE_RATE = 16000
         private const val WINDOW = 512
         private const val MAX_MS = 120_000L
-        private const val MODEL_DIR = "asr/sensevoice"
-        private const val MODEL = "$MODEL_DIR/model.int8.onnx"
-        private const val TOKENS = "$MODEL_DIR/tokens.txt"
-        private const val VAD_MODEL = "asr/silero_vad.onnx"
+        private const val VAD_MODEL = "asr/silero_vad.onnx" // VAD 很小，还在安装包里
         private const val FULL_PASS_MAX = SAMPLE_RATE * 25 // 松手后整段重新识别的上限
         private const val PAD = SAMPLE_RATE * 3 / 10       // 整段识别时前后多留 0.3 秒
     }
@@ -41,32 +41,43 @@ class LocalAsr(private val assets: AssetManager) {
         private set
     @Volatile var failed = false
         private set
+    /** 模型还没下载好（ModelDownloader 在后台下）：录音照常、只是本机不识别，靠云端 */
+    @Volatile var missing = false
+        private set
 
     private var recognizer: OfflineRecognizer? = null
     private var vad: Vad? = null
 
-    /** 加载模型（约 1~3 秒），在后台线程调用 */
+    /** 加载模型（约 1~3 秒），在后台线程调用；模型下载完以后会再调一次 */
+    @Synchronized
     fun init() {
         if (ready || failed) return
+        // 只带了 arm64 的 .so：32 位手机用不了本机识别，也就不用下模型
+        if (!Build.SUPPORTED_ABIS.contains("arm64-v8a")) {
+            failed = true
+            return
+        }
+        val model = File(modelDir, "model.int8.onnx")
+        val tokens = File(modelDir, "tokens.txt")
+        if (ModelDownloader.FILES.any { File(modelDir, it.name).length() != it.size }) {
+            missing = true
+            return
+        }
         try {
-            val files = assets.list(MODEL_DIR)?.toList().orEmpty()
-            if (!files.contains("model.int8.onnx") || !files.contains("tokens.txt")) {
-                failed = true
-                return
-            }
             recognizer = OfflineRecognizer(
-                assetManager = assets,
+                assetManager = null, // 模型在 App 自己的目录里，按文件路径加载
                 config = OfflineRecognizerConfig(
                     featConfig = FeatureConfig(sampleRate = SAMPLE_RATE, featureDim = 80),
                     modelConfig = OfflineModelConfig(
                         // 固定中文：自动判断语言时，纯噪声会被认成韩文、日文
-                        senseVoice = OfflineSenseVoiceModelConfig(model = MODEL, language = "zh", useInverseTextNormalization = true),
-                        tokens = TOKENS,
+                        senseVoice = OfflineSenseVoiceModelConfig(model = model.absolutePath, language = "zh", useInverseTextNormalization = true),
+                        tokens = tokens.absolutePath,
                         numThreads = 4,
                     ),
                 ),
             )
             vad = newVad()
+            missing = false
             ready = true
         } catch (t: Throwable) {
             // 比如 32 位手机没有对应的 .so、内存不够：退回云端识别
@@ -227,10 +238,15 @@ class LocalAsr(private val assets: AssetManager) {
         try { worker?.join(10_000) } catch (_: Exception) {}
         worker = null
 
-        // 模型还没加载完（刚打开 App 就按住）：等一下
+        // 模型还没加载完（刚打开 App 就按住）：等一下；还没下载的不用等
         val waitUntil = System.currentTimeMillis() + 10_000
-        while (!ready && !failed && System.currentTimeMillis() < waitUntil) Thread.sleep(50)
-        if (!ready) return ""
+        while (!ready && !failed && !missing && System.currentTimeMillis() < waitUntil) Thread.sleep(50)
+        if (!ready) {
+            // 本机认不了：整段（最多 60 秒）留给云端整段识别
+            val got = synchronized(lock) { total }
+            lastSpeech = if (got > SAMPLE_RATE / 2) synchronized(lock) { all.copyOfRange(0, minOf(got, SAMPLE_RATE * 60)) } else null
+            return ""
+        }
 
         feedAvailable()
         try { vad?.flush() } catch (_: Throwable) {}

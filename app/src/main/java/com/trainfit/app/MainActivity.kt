@@ -338,6 +338,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        if (::nativeBridge.isInitialized) nativeBridge.onAppResume()
         if (::webView.isInitialized) {
             webView.onResume()
             webView.resumeTimers()
