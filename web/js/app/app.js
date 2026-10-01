@@ -146,6 +146,55 @@ class FitnessApp {
     return { last, next, count: logs.length, best, isLatest: (id) => id === last.id };
   }
 
+  /**
+   * 刚记的这组和以前比：「杠铃卧推：比上次多 1 次 · 下次冲 9 次」「新纪录 85kg（以前最多 82.5kg）」。
+   * 有氧、数字是估的、第一次练的不说。
+   */
+  liftFeedback(rec) {
+    if (!rec || rec.durationMin || /估计/.test(rec.notes || '')) return '';
+    const t = recordTs(rec);
+    const earlier = this.workouts
+      .filter(w => w.id !== rec.id && w.exerciseName === rec.exerciseName && !w.durationMin && (w.date < rec.date || (w.date === rec.date && recordTs(w) < t)))
+      .sort((a, b) => (b.date === a.date ? recordTs(b) - recordTs(a) : (b.date > a.date ? 1 : -1)));
+    if (!earlier.length) return '';
+    const prev = earlier[0];
+    const best = earlier.reduce((m, w) => Math.max(m, w.weightKg || 0), 0);
+    const w = rec.weightKg || 0, pw = prev.weightKg || 0;
+    let how;
+    if (best > 0 && w > best) how = `新纪录 ${round1(w)}kg（以前最多 ${round1(best)}kg）`;
+    else if (w > pw) how = `比上次重 ${round1(w - pw)}kg`;
+    else if (w === pw && rec.reps > prev.reps) how = `比上次多 ${rec.reps - prev.reps} 次`;
+    else if (w === pw && rec.reps === prev.reps && rec.sets > prev.sets) how = `比上次多 ${rec.sets - prev.sets} 组`;
+    else if (w === pw && rec.reps === prev.reps && rec.sets === prev.sets) how = '和上次一样';
+    else how = `上次 ${pw > 0 ? round1(pw) + 'kg' : '自重'} ${prev.sets}×${prev.reps}`;
+    const p = this.exerciseProgress(rec.exerciseName);
+    const next = p && p.isLatest(rec.id) ? p.next.text : '';
+    return `${rec.exerciseName}：${how}${next ? ' · ' + next : ''}`;
+  }
+
+  /**
+   * 点小人时给一句训练建议：今天还没练，就挑最近三周里隔得最久没练的部位，
+   * 「今天可以练腿：上次是 4 天前，杠铃深蹲下次试 102.5kg」。今天练过了、都练得很近、从没记过训练的，不说。
+   */
+  trainingTip() {
+    const today = getTodayDateString();
+    const lifts = this.workouts.filter(w => !w.durationMin && w.muscleGroup && w.muscleGroup !== '有氧' && w.date <= today);
+    if (!lifts.length || lifts.some(w => w.date === today)) return '';
+    const since = shiftDateString(today, -21);
+    const last = {};
+    lifts.filter(w => w.date >= since).forEach(w => {
+      const cur = last[w.muscleGroup];
+      if (!cur || w.date > cur.date || (w.date === cur.date && recordTs(w) > recordTs(cur))) last[w.muscleGroup] = w;
+    });
+    const pick = Object.values(last).sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))[0];
+    if (!pick) return '';
+    const days = Math.round((new Date(today + 'T00:00:00') - new Date(pick.date + 'T00:00:00')) / 86400000);
+    if (days < 2) return '';
+    const p = this.exerciseProgress(pick.exerciseName);
+    const part = pick.muscleGroup.replace(/部$/, '');
+    return `今天可以练${part}：上次是 ${days} 天前${p && p.next.kind !== 'keep' ? `，${pick.exerciseName}${p.next.text}` : ''}`;
+  }
+
   bindEvents() {
     const $ = (id) => document.getElementById(id);
 

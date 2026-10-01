@@ -61,7 +61,8 @@ Object.assign(FitnessApp.prototype, {
       this.saveData();
       this.render();
     };
-    if (window.QuickLog && window.QuickLog.showUndo) window.QuickLog.showUndo('✓ 照计划记上了', [line], undo);
+    const fb = p.kind === 'workout' ? this.liftFeedback(rec) : '';
+    if (window.QuickLog && window.QuickLog.showUndo) window.QuickLog.showUndo('✓ 照计划记上了', fb ? [line, fb] : [line], undo);
   },
 
   dropPlan(id) {

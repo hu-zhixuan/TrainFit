@@ -4,7 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 
 const TF = require('../web/js/log/parser.js');
-const { quickWeight, findWeight, FoodDB, groundItem, sumItems, Parser } = TF;
+const { quickWeight, findWeight, FoodDB, groundItem, sizeOpts, sumItems, Parser } = TF;
 
 test('只报体重：斤 / 公斤 / 没单位时按上次体重判断', () => {
   assert.strictEqual(quickWeight('体重62.5'), 62.5);
@@ -455,4 +455,27 @@ test('计划：和记录一样整理（按库算热量），不存成记录；�
   // 「早餐照计划吃了」：只认这天真有的计划编号
   const d = Parser.normalize({ add: { meals: [] }, donePlans: ['p1', 'p9'] }, { plans: [{ ref: 'p1', text: 'x' }] });
   assert.deepStrictEqual(d.donePlans, ['p1']);
+});
+
+test('份量说得含糊：大模型给的几个大小整理好；记住的、包装上的、选哪个都差不多的不问', () => {
+  const milk = groundItem({ name: '甜牛奶', amount: '1瓶', grams: 250, whole: true, calories: 180, proteinG: 7.5 });
+  assert.deepStrictEqual(sizeOpts([['500ml', 500], ['250ml', 250], ['200ml', 200], ['1L', 1000]], milk),
+    [{ label: '200ml', grams: 200 }, { label: '250ml', grams: 250 }, { label: '500ml', grams: 500 }]);
+  assert.deepStrictEqual(sizeOpts([{ label: '小瓶', grams: 200 }, { label: '大瓶', grams: 500 }], milk).map(o => o.label), ['小瓶', '大瓶']);
+  assert.strictEqual(sizeOpts([['250ml', 250]], milk), null, '只有一个选项');
+  assert.strictEqual(sizeOpts([['一杯', 250], ['一大杯', 300]], groundItem({ name: '黑咖啡', amount: '1杯', grams: 250, whole: true, calories: 5 })), null, '热量差不多');
+  const mine = groundItem({ name: '甜牛奶', amount: '1瓶', grams: 250, calories: 180 }, [{ name: '甜牛奶', amount: '1瓶', grams: 250, calories: 173, proteinG: 7 }]);
+  assert.strictEqual(sizeOpts([['250ml', 250], ['500ml', 500]], mine), null, '记住的不问');
+});
+
+test('份量选项：一句话最多问 2 样，计划里的不问', () => {
+  const opts = [['小份', 100], ['大份', 300]];
+  const r = Parser.normalize({ add: { meals: [{ mealType: '晚餐', foodSummary: '烤串', items: [
+    { name: '烤羊肉串', amount: '1串', grams: 30, whole: true, calories: 80, proteinG: 6, opts: [['小串', 20], ['大串', 60]] },
+    { name: '炸鸡', amount: '2块', grams: 200, whole: true, calories: 520, proteinG: 30, opts },
+    { name: '烤馒头片', amount: '1串', grams: 100, whole: true, calories: 280, proteinG: 7, opts }] }] } }, { now: new Date(2026, 9, 1, 20, 0) });
+  const asked = r.meals[0].items.filter(i => i.opts).map(i => i.name);
+  assert.deepStrictEqual(asked, ['烤羊肉串', '炸鸡']);
+  const plan = Parser.normalize({ answer: '晚餐：炸鸡', plan: { dayOffset: 1, meals: [{ mealType: '晚餐', foodSummary: '炸鸡', items: [{ name: '炸鸡', amount: '2块', grams: 200, whole: true, calories: 520, proteinG: 30, opts }] }] } }, {});
+  assert.ok(!plan.plan.meals[0].items[0].opts);
 });

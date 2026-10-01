@@ -528,6 +528,14 @@ body.has-buddy .views { padding-bottom: calc(var(--cmp-h, 110px) + 52px + var(--
 .buddy-act.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .buddy-act:disabled { opacity: 0.6; cursor: default; }
 .buddy-tip { margin: 8px 0 0; font-size: 0.78rem; line-height: 1.5; color: var(--text-3); }
+/* 份量问一句：几个选项，当前按哪个记的高亮 */
+.buddy-q { margin: 6px 0 0; font-size: 0.95rem; font-weight: 650; line-height: 1.5; color: var(--text); }
+.portion-opts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.portion-opt { flex: 1 1 0; min-width: 64px; height: 36px; padding: 0 10px; border-radius: 18px; border: 1px solid var(--line); background: var(--surface-2); color: var(--text); font: inherit; font-size: 0.85rem; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.portion-opt.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.buddy-pop[data-mode="ask"] { width: min(300px, calc(100vw - 32px)); }
+/* 点小人：训练建议（今天可以练哪儿） */
+.buddy-train { margin: 6px 0 0; font-size: 0.82rem; line-height: 1.5; color: var(--accent-text); }
 .buddy-wait { display: flex; align-items: center; gap: 6px; margin: 10px 0 0; padding-top: 8px; border-top: 1px solid var(--line); font-size: 0.78rem; color: var(--text-3); }
 /* 气泡从小人头顶弹出来（带一点回弹） */
 @media (prefers-reduced-motion: no-preference) {
@@ -536,7 +544,7 @@ body.has-buddy .views { padding-bottom: calc(var(--cmp-h, 110px) + 52px + var(--
 @keyframes popSpring { from { opacity: 0; transform: scale(0.6) translateY(14px); } 60% { opacity: 1; } to { opacity: 1; transform: none; } }
 /* 回答来了：小人脑袋旁边冒「!」（头顶是气泡，会挡住），整个人跳一下 */
 .buddy.bang::after {
-  content: '!';
+  content: attr(data-bang);
   position: absolute; top: 2px; left: -6px;
   width: 18px; height: 18px; border-radius: 50%;
   background: var(--accent); color: var(--accent-ink);
