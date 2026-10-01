@@ -502,6 +502,23 @@ body.has-buddy .views { padding-bottom: calc(var(--cmp-h, 110px) + 52px + var(--
 .buddy-pop-head b { font-size: 1.05rem; color: var(--text); font-variant-numeric: tabular-nums; margin: 0 1px; }
 .buddy-say { margin: 6px 0 0; font-size: 0.95rem; font-weight: 700; line-height: 1.45; color: var(--th-text); }
 .buddy-foot { margin: 8px 0 0; padding-top: 8px; border-top: 1px solid var(--line); font-size: 0.72rem; line-height: 1.5; color: var(--text-3); }
+/* 小人回答问题：气泡宽一点，内容按行显示，太长在气泡里滚动 */
+.buddy-pop[data-mode="answer"] { width: min(330px, calc(100vw - 32px)); overflow-y: auto; overscroll-behavior: contain; }
+.buddy-answer { margin: 6px 0 0; white-space: pre-line; font-size: 0.92rem; line-height: 1.6; color: var(--text); }
+.buddy-more { display: block; width: 100%; margin: 9px 0 0; padding: 8px 0 0; border: 0; border-top: 1px solid var(--line); background: none; text-align: left; font: inherit; font-size: 0.75rem; color: var(--text-3); cursor: pointer; }
+/* 大模型还在整理：小人头上冒一个「…」 */
+.buddy.thinking::before {
+  content: '';
+  position: absolute; top: -12px; right: 2px;
+  width: 22px; height: 12px; border-radius: 7px;
+  background: radial-gradient(circle, var(--text-3) 1.6px, transparent 2px) 3px 50% / 6px 100% repeat-x, var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .buddy.thinking::before { animation: bdThink 1.2s ease-in-out infinite; }
+}
+@keyframes bdThink { 0%, 100% { opacity: 0.55; transform: translateY(0); } 50% { opacity: 1; transform: translateY(-2px); } }
 @keyframes buddyPopIn { from { opacity: 0; transform: scale(0.94) translateY(4px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .buddy-pop { animation: none; } }
 

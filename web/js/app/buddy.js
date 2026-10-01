@@ -480,7 +480,8 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     this._buddyGear = st.gear;
     btn.setAttribute('aria-label', `小人：${st.say}`);
     this.placeBuddy();
-    if (!document.getElementById('buddy-pop').classList.contains('hidden')) this.showBuddyPop();
+    const pop = document.getElementById('buddy-pop');
+    if (!pop.classList.contains('hidden') && pop.dataset.mode !== 'answer') this.showBuddyPop();
   },
 
   buddyState() {
@@ -532,6 +533,9 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     const y = Math.round(target.top - btn.offsetHeight + 1);
     btn.style.zIndex = z;
     btn.style.transform = `translate(${x}px, ${y}px)`;
+    this._buddyXY = { x, y };
+    // 气泡开着：小人跳到哪（提示条弹出来、收回去），气泡跟到哪，别盖住提示条
+    if (!document.getElementById('buddy-pop').classList.contains('hidden')) this.positionBuddyPop();
     // 第一次放好之后再打开过渡，别从左上角飞过来
     if (!btn.classList.contains('placed')) requestAnimationFrame(() => btn.classList.add('placed'));
   },
@@ -643,14 +647,63 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
   showBuddyPop() {
     const pop = document.getElementById('buddy-pop');
     const st = this.buddyState();
+    pop.dataset.mode = '';
     pop.dataset.level = st.level == null ? 'none' : String(st.level);
     const head = st.streak ? `连续记录 <b>${st.streak}</b> 天` : '今天开始记吧';
     const foot = [st.days ? `一共记了 ${st.days} 天` : '', st.next ? `再连续 ${st.next.days} 天拿${st.next.name}` : '头带、棒球帽、皇冠都拿到了'].filter(Boolean).join(' · ');
     pop.innerHTML = `<div class="buddy-pop-head">${head}</div><p class="buddy-say">${esc(st.say)}</p><p class="buddy-foot">${esc(foot)}</p>`;
-    const r = document.getElementById('buddy').getBoundingClientRect();
-    pop.style.bottom = Math.round(window.innerHeight - r.top + 4) + 'px';
-    pop.style.right = Math.max(12, Math.round(window.innerWidth - r.right)) + 'px';
+    this.positionBuddyPop();
     pop.classList.remove('hidden');
+  },
+
+  /** 气泡放在小人头顶（按小人要去的位置算，不按动画中途的位置） */
+  positionBuddyPop() {
+    const pop = document.getElementById('buddy-pop');
+    const btn = document.getElementById('buddy');
+    let top, right;
+    if (this._buddyXY) {
+      top = this._buddyXY.y;
+      right = window.innerWidth - (this._buddyXY.x + btn.offsetWidth);
+    } else {
+      const r = btn.getBoundingClientRect();
+      top = r.top;
+      right = window.innerWidth - r.right;
+    }
+    pop.style.bottom = Math.round(window.innerHeight - top + 4) + 'px';
+    pop.style.right = Math.max(12, Math.round(right)) + 'px';
+    pop.style.maxHeight = pop.dataset.mode === 'answer' ? Math.max(160, Math.round(top - 24)) + 'px' : '';
+  },
+
+  /**
+   * 用户问了问题（「明天吃什么」「还差多少蛋白」）：小人站起来，气泡里回答。点空白处收起；
+   * 半小时内点小人能再看一次。again：再看一次时不重复招手、不响
+   */
+  showBuddyAnswer(question, answer, again) {
+    const pop = document.getElementById('buddy-pop');
+    const btn = document.getElementById('buddy');
+    if (!pop || !btn || btn.classList.contains('hidden')) return;
+    this._lastAnswer = { question, answer, at: Date.now() };
+    const q = String(question || '').replace(/\s+/g, ' ').trim();
+    pop.dataset.mode = 'answer';
+    pop.dataset.level = 'none';
+    pop.innerHTML = `<div class="buddy-pop-head">${esc(q.length > 26 ? q.slice(0, 25) + '…' : q)}</div>` +
+      `<p class="buddy-answer">${esc(answer)}</p><button class="buddy-more" type="button">看看连续记录 ›</button>`;
+    pop.querySelector('.buddy-more').addEventListener('click', (e) => { e.stopPropagation(); this.showBuddyPop(); });
+    this.positionBuddyPop();
+    pop.scrollTop = 0;
+    pop.classList.remove('hidden');
+    document.getElementById('gauge-pop').classList.add('hidden');
+    if (!again) {
+      window.Haptics && window.Haptics.fire('tap');
+      window.Sound && window.Sound.play('blip');
+      if (!this._touring) this.buddyDo([['wave', 1200], ['stand', 600]]);
+    }
+  },
+
+  /** 有话在整理（大模型还没回来）：小人头上冒「…」 */
+  buddyThinking() {
+    const btn = document.getElementById('buddy');
+    if (btn) btn.classList.toggle('thinking', (this.pending || []).some(p => p.status === 'working'));
   },
 
   bindBuddy() {
@@ -664,12 +717,17 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       if (this._touring) { this.tourNext(); return; }
       this.buddyDo([['wave', 1800], ['stand', 400]]);
       document.getElementById('gauge-pop').classList.add('hidden');
-      if (pop.classList.contains('hidden')) this.showBuddyPop(); else close();
+      if (!pop.classList.contains('hidden')) { close(); return; }
+      // 半小时内问过问题：先给刚才的回答，里面能点去看连续记录
+      const a = this._lastAnswer;
+      if (a && Date.now() - a.at < 30 * 60 * 1000) this.showBuddyAnswer(a.question, a.answer, true);
+      else this.showBuddyPop();
     });
     // 温度计的弹窗和小人的气泡不同时开
     document.getElementById('thermo').addEventListener('click', close);
     document.addEventListener('click', (e) => { if (!pop.contains(e.target)) close(); });
-    window.addEventListener('scroll', close, { passive: true, capture: true });
+    // 页面滚动就收起（回答很长时在气泡里面滚动不算）
+    window.addEventListener('scroll', (e) => { if (!pop.contains(e.target)) close(); }, { passive: true, capture: true });
     // 下面那一层出现 / 消失 / 变高（提示条、录音、面板、键盘弹起）时跟着跳过去
     const place = () => {
       const c = document.getElementById('composer').classList;

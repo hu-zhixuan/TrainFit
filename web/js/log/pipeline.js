@@ -47,7 +47,14 @@
       const today = getTodayDateString();
       const dayLabel = date === today ? `今天 ${date}` : date;
       const lw = app.latestWeight ? app.latestWeight() : null;
-      return { now: new Date(p.ts || Date.now()), history: app.workouts, dayRecords, recent, dayLabel, lastWeight: lw ? lw.kg : null, myFoods: app.myFoods || [] };
+      // 问「还能吃什么」「明天吃啥」时要用：这天的预算、吃了多少、蛋白质目标
+      let day = null;
+      try {
+        const s = app.getDaySummary(date);
+        day = { goal: app.profile.goalType, budget: Math.round(s.budget), burn: Math.round(s.workoutBurn), intake: Math.round(s.intake),
+          protein: Math.round(s.protein), proteinTarget: Math.round(app.gaugeProteinTarget ? app.gaugeProteinTarget() : (app.profile.targetProteinG || 0)) };
+      } catch (e) {}
+      return { now: new Date(p.ts || Date.now()), history: app.workouts, dayRecords, recent, dayLabel, lastWeight: lw ? lw.kg : null, myFoods: app.myFoods || [], day };
     },
 
     async process(p) {
@@ -67,12 +74,20 @@
       if (!app.pending.some(x => x.id === p.id)) return; // 已被用户删掉
       const changes = result.workouts.length + result.meals.length + (result.updates || []).length + (result.deletes || []).length + (result.bodyWeight ? 1 : 0) + (result.remember || []).length;
       if (!changes) {
+        // 问问题（「明天吃什么」）：不记、不报错，小人回答
+        if (result.answer) {
+          app.finishPending(p.id);
+          app.render();
+          if (app.showBuddyAnswer) app.showBuddyAnswer(p.text, result.answer);
+          return;
+        }
         app.failPending(p.id, result.reply || '没认出吃了什么');
         return;
       }
       app.finishPending(p.id);
       const batch = this.save(Object.assign(result, { said: p.text }), p.date, ctx);
       this.showSnack(batch, result);
+      if (result.answer && app.showBuddyAnswer) app.showBuddyAnswer(p.text, result.answer); // 又记又问
     },
 
     save(result, baseDate, ctx) {

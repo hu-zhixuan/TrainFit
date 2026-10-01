@@ -359,3 +359,13 @@ test('回头补一句只改那一样：其他原样保留，名字对得上就�
   assert.deepStrictEqual(merged.map(i => i.name), ['甜牛奶', '乳清蛋白粉']);
   assert.strictEqual(TF.sumItems(merged).proteinG, 30.4);
 });
+
+test('问问题：回答单独放在 answer 里（去掉 markdown，最多 8 行），提示词里带上今天的预算和蛋白质', () => {
+  const r = Parser.normalize({ reply: '给了你明天的食谱', answer: '**早餐**：两个鸡蛋\n- 午餐：牛肉饭\n\n1. 晚餐：鸡胸\n## 加餐：酸奶', add: {} }, {});
+  assert.strictEqual(r.answer, '早餐：两个鸡蛋\n午餐：牛肉饭\n晚餐：鸡胸\n加餐：酸奶');
+  assert.strictEqual(r.meals.length, 0);
+  assert.strictEqual(Parser.normalize({ answer: Array(12).fill('一行').join('\n') }, {}).answer.split('\n').length, 8);
+  assert.strictEqual(Parser.normalize({ reply: 'x' }, {}).answer, '');
+  const msg = Parser.buildMessages('明天吃啥', { day: { goal: 'muscle_gain', budget: 2600, burn: 300, intake: 1500, protein: 80, proteinTarget: 140 } })[1].content;
+  assert.match(msg, /目标增肌；热量预算 2600 千卡（含训练消耗 300），已吃 1500，还能吃 1100；蛋白质目标 140g，已吃 80g/);
+});

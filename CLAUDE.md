@@ -17,7 +17,8 @@
 4. **蛋白质要准**：用户最在意蛋白质。食物库里名字对上但其实不是一回事的条目要处理（成分表的「蛋白粉」是 50% 的品牌货、「虾仁」是 10.4g 的红虾仁，都在 `scripts/build-food-db.js` 的 `CFCT_SKIP` 里跳过）；单独吃的肉按生重算。`groundItem` 查到库里同名条目时：热量差 2.5 倍以上、或蛋白质差很多且热量也对不上（不在 0.8～1.25 倍），才保留大模型的估算；热量对得上就按库算蛋白质（v3.7，大模型把三个鸡蛋写成 39g 蛋白）。改食物库只改 `scripts/build-food-db.js` 再重新生成（数据：`git clone --depth 1 https://github.com/Sanotsu/china-food-composition-data`）。
 5. **失败不要乱记**：大模型调用失败时不能用规则猜着写数据（v2.6.1 之前把「蛋白粉 700 毫升」记成 2838 千卡）。失败就留「没整理好」卡片，让用户重试或改字。
 6. **能用现成方案就用**：本机语音识别照搬 sherpa-onnx 官方 Android demo（模型也用它默认的 SenseVoice int8 2024-07-17；2025-09-09 那版是粤语微调的，别换；FunASR-Nano、Qwen3-ASR、FireRedASR 更准但 500～840MB，手机上装不下也不够快）；成分表数据来自 Sanotsu/china-food-composition-data。先查 GitHub 上有没有成熟做法。
-7. 用户的叫法：「口喷」（按住说一大段）、「热量赤字」（不要写「缺口」）。
+7. **问问题也走那一个按钮**（v4.0，第一个外部用户张口就问「给我定明天的食谱」）：提示词第 10 条，提问不记、不报错，回答放 `answer`（最多 8 行，`cleanAnswer` 去掉 markdown），`pipeline.process` 没有改动、有 answer 时不留失败卡片，交给 `showBuddyAnswer` 用小人的气泡回答（`#buddy-pop` 的 `data-mode="answer"`，跟着 `placeBuddy` 走，别盖住提示条）；上下文里有 `ctx.day`（预算、已吃、蛋白质目标）。别加聊天页、聊天记录、计划页，回答看完就收起。
+8. 用户的叫法：「口喷」（按住说一大段）、「热量赤字」（不要写「缺口」）。
 
 ## 工作流
 
