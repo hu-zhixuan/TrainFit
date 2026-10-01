@@ -3,26 +3,6 @@ on:
   push:
     branches: [ claude/api-check ]
 jobs:
-  asr:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-      - name: 千问语音识别四个模型（带上下文）
-        env:
-          ASR_API_KEY: ${{ secrets.QWEN_API }}
-          QW_FORCE: '1'
-        run: |
-          K=$(printf %s "$ASR_API_KEY" | tr -d '[:space:]')
-          echo "::notice title=key 格式::长度 ${#K}，开头 $(printf %s "$K" | head -c 6 | sed 's/[A-Za-z0-9]\{4,\}$/…/')"
-          node .github/asr_cloud_check.js
-      - name: qwen3-asr-flash 不带上下文
-        env:
-          ASR_API_KEY: ${{ secrets.QWEN_API }}
-          QW_FORCE: '1'
-        run: NO_CONTEXT=1 MODELS=qwen3-asr-flash node .github/asr_cloud_check.js
   qwen-speed:
     runs-on: ubuntu-latest
     steps:

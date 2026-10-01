@@ -22,7 +22,7 @@ const VARIANTS = process.env.VARIANTS ? JSON.parse(process.env.VARIANTS) : {
       await sleep(Number(process.env.GAP || 15000));
       const body = Object.assign({ model, messages: P.buildMessages('无糖奥利奥三块', ctx), temperature: 0.2, stream: false }, extra);
       const t0 = Date.now();
-      const r = await fetch(base + '/chat/completions', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key }, body: JSON.stringify(body), signal: AbortSignal.timeout(90000) }).catch(e => ({ ok: false, status: 0, text: async () => e.message }));
+      const r = await fetch(base + '/chat/completions', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key }, body: JSON.stringify(body), signal: AbortSignal.timeout(90000) }).catch(e => ({ ok: false, status: 0, text: async () => e.message + ' ' + (e.cause ? (e.cause.code || '') + ' ' + e.cause.message : '') }));
       const raw = await r.text();
       ts.push(((Date.now() - t0) / 1000).toFixed(1) + (r.ok ? '' : `(HTTP ${r.status})`));
       try { const j = JSON.parse(raw); usage = JSON.stringify(j.usage); out = (j.choices[0].message.content || '').length + '字' + (j.choices[0].message.reasoning_content ? ' 推理' + j.choices[0].message.reasoning_content.length + '字' : ''); } catch (e) { usage = raw.slice(0, 120); }
