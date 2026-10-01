@@ -651,7 +651,9 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     pop.dataset.level = st.level == null ? 'none' : String(st.level);
     const head = st.streak ? `连续记录 <b>${st.streak}</b> 天` : '今天开始记吧';
     const foot = [st.days ? `一共记了 ${st.days} 天` : '', st.next ? `再连续 ${st.next.days} 天拿${st.next.name}` : '头带、棒球帽、皇冠都拿到了'].filter(Boolean).join(' · ');
-    pop.innerHTML = `<div class="buddy-pop-head">${head}</div><p class="buddy-say">${esc(st.say)}</p><p class="buddy-foot">${esc(foot)}</p>`;
+    const tip = this.trainingTip ? this.trainingTip() : '';
+    pop.innerHTML = `<div class="buddy-pop-head">${head}</div><p class="buddy-say">${esc(st.say)}</p>` +
+      (tip ? `<p class="buddy-train">${esc(tip)}</p>` : '') + `<p class="buddy-foot">${esc(foot)}</p>`;
     this.positionBuddyPop();
     pop.classList.remove('hidden');
   },
@@ -714,9 +716,10 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
   },
 
   /** 回答来了：小人跳一下、头上冒「!」、招手 */
-  buddyBang() {
+  buddyBang(mark) {
     const btn = document.getElementById('buddy');
     if (!btn) return;
+    btn.dataset.bang = mark || '!';
     btn.classList.remove('bang');
     void btn.offsetWidth;
     btn.classList.add('bang');
@@ -799,6 +802,65 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     }
   },
 
+  /**
+   * 份量说得含糊（「一瓶甜牛奶」「一串烤白果」）：记录已经按最常见的大小记上了，小人冒「?」问一句，
+   * 点一个就按克数比例改那一样、并记住（下次说同样的东西就不问了）。不点也行，点空白处收起。
+   * @param asks [{id: 记录 id, index: 第几样, name, amount, grams, opts: [{label, grams}]}]，最多 2 个，一个一个问
+   */
+  askPortion(asks) {
+    const pop = document.getElementById('buddy-pop');
+    const list = (asks || []).filter(a => a && a.opts && a.opts.length > 1);
+    if (!pop || !list.length || this._touring) return;
+    const a = list[0];
+    const rec = this.diet.find(d => d.id === a.id);
+    const item = rec && rec.items && rec.items[a.index];
+    if (!item || item.name !== a.name) { this.askPortion(list.slice(1)); return; }
+    const near = a.opts.reduce((m, o) => (Math.abs(o.grams - item.grams) < Math.abs(m.grams - item.grams) ? o : m), a.opts[0]);
+    pop.dataset.mode = 'ask';
+    pop.dataset.level = 'none';
+    pop.innerHTML = `<div class="buddy-pop-head">选一下更准${list.length > 1 ? `（${list.length} 样）` : ''}</div>` +
+      `<p class="buddy-q">${esc(a.name)} ${esc(a.amount)}大概多少？</p>` +
+      `<div class="portion-opts">${a.opts.map((o, i) => `<button class="portion-opt${o === near ? ' on' : ''}" type="button" data-i="${i}">${esc(o.label)}</button>`).join('')}</div>` +
+      `<p class="buddy-foot">先按「${esc(near.label)}」记了 · 选了会记住，下次不问</p>`;
+    pop.querySelectorAll('.portion-opt').forEach(b => b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const o = a.opts[+b.dataset.i];
+      this.applyPortion(a, o);
+      pop.querySelectorAll('.portion-opt').forEach(x => x.classList.toggle('on', x === b));
+      window.Haptics && window.Haptics.fire('tick');
+      window.Sound && window.Sound.play('success');
+      clearTimeout(this._askT);
+      const rest = list.slice(1);
+      if (rest.length) { setTimeout(() => { if (pop.dataset.mode === 'ask') this.askPortion(rest); }, 450); return; }
+      pop.querySelector('.buddy-foot').textContent = `✓ 记住了：${a.name} ${a.amount}按${o.label}`;
+      if (!this._touring) this.buddyDo([['stand', 120], ['wave', 700], ['stand', 300]]);
+      this._askT = setTimeout(() => this.closeBuddyPop('ask'), 1400);
+    }));
+    this.positionBuddyPop();
+    this.popIn(pop);
+    document.getElementById('gauge-pop').classList.add('hidden');
+    this.buddyBang('?');
+    // 没理它：过一会儿自己收起来（已经按最常见的记上了）
+    clearTimeout(this._askT);
+    this._askT = setTimeout(() => this.closeBuddyPop('ask'), 30000);
+  },
+
+  /** 按选的大小改那一样：热量、蛋白质等按克数比例换算，合计重算，记住这个份量 */
+  applyPortion(a, o) {
+    const rec = this.diet.find(d => d.id === a.id);
+    const item = rec && rec.items && rec.items[a.index];
+    if (!item || item.name !== a.name || !(item.grams > 0) || !(o.grams > 0)) return; // 这期间被改过 / 删了
+    const f = o.grams / item.grams;
+    ['calories', 'proteinG', 'carbsG', 'fatG'].forEach(k => { item[k] = k === 'calories' ? Math.round((item[k] || 0) * f) : round1((item[k] || 0) * f); });
+    if (item.nutrients) Object.keys(item.nutrients).forEach(k => { item.nutrients[k] = round1(item.nutrients[k] * f); });
+    item.grams = o.grams;
+    item.amount = `${a.amount}（${o.label}）`;
+    Object.assign(rec, TF.sumItems(rec.items));
+    this.rememberFood({ name: item.name, amount: item.amount, grams: item.grams, calories: item.calories, proteinG: item.proteinG, carbsG: item.carbsG, fatG: item.fatG });
+    this.saveData();
+    this.render();
+  },
+
   /** 计划写成几行字（给大模型看「刚才给的计划」） */
   planText(plan) {
     return (plan.meals || []).map(m => `${m.mealType} ${m.foodSummary} ${m.calories}kcal 蛋白${m.proteinG || 0}`)
@@ -845,7 +907,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
   bindBuddy() {
     const btn = document.getElementById('buddy');
     const pop = document.getElementById('buddy-pop');
-    const close = () => { pop.classList.add('hidden'); clearInterval(this._thinkT); };
+    const close = () => { pop.classList.add('hidden'); clearInterval(this._thinkT); clearTimeout(this._askT); };
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       window.Haptics && window.Haptics.fire('tick');
