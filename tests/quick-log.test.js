@@ -489,3 +489,12 @@ test('小本本：大模型写的关于自己的事整理好；已经有的不�
   assert.ok(msgs[1].content.includes('小本本（用户说过的自己的事）：叫阿程；不吃辣'));
   assert.ok(!Parser.buildMessages('一碗面', {}).some(m => m.role === 'user' && m.content.includes('小本本')));
 });
+
+test('小本本：大模型只加了「能吃辣」忘了划掉「不吃辣」，自动划掉；不相干的不动', () => {
+  const ctx = { memo: ['叫阿程', '不吃辣', '膝盖有旧伤'] };
+  assert.deepStrictEqual(Parser.normalize({ memo: ['能吃辣'] }, ctx).forget, ['不吃辣']);
+  assert.deepStrictEqual(Parser.normalize({ memo: ['现在能吃辣了'] }, ctx).forget, ['不吃辣']);
+  assert.deepStrictEqual(Parser.normalize({ memo: ['能吃辣了'], forget: ['不吃辣'] }, ctx).forget, ['不吃辣']);
+  assert.deepStrictEqual(Parser.normalize({ memo: ['不吃香菜'] }, ctx).forget, []);
+  assert.deepStrictEqual(Parser.normalize({ memo: ['不吃牛肉'] }, { memo: ['吃牛肉'] }).forget, ['吃牛肉']);
+});
