@@ -267,6 +267,32 @@ test('大模型慢：过一会儿再发一份，谁先回来用谁；第一份�
   }
 });
 
+test('边想边出字：拿到的是到目前为止的全部文字；卡住重试时从头算，不和上一次的半截拼起来', async () => {
+  const origSend = Parser.send;
+  Parser.retryWaits = [0, 0];
+  Parser.hedgeMs = 0;
+  const full = JSON.stringify({ reply: '给了你明天的食谱', answer: '早餐：燕麦\n午餐：米饭' });
+  try {
+    let n = 0;
+    Parser.send = async (body, override, onDelta) => {
+      n += 1;
+      if (n === 1) { onDelta('{"reply":"x","answer":"早'); throw new Error('SocketTimeoutException: timeout'); }
+      for (let i = 0; i < full.length; i += 7) onDelta(full.slice(i, i + 7));
+      return JSON.stringify({ choices: [{ message: { content: full } }] });
+    };
+    const seen = [];
+    const r = await Parser.parse('给我定一下明天的食谱', {}, (soFar) => seen.push(TF.partialAnswer(soFar)));
+    assert.strictEqual(n, 2);
+    assert.strictEqual(r.answer, '早餐：燕麦\n午餐：米饭');
+    assert.strictEqual(seen[seen.length - 1], '早餐：燕麦\n午餐：米饭');
+    assert.ok(seen.every(a => !a.includes('{')), '没把两次的文字拼在一起：' + JSON.stringify(seen));
+  } finally {
+    Parser.send = origSend;
+    delete Parser.retryWaits;
+    delete Parser.hedgeMs;
+  }
+});
+
 test('热量对得上、蛋白质对不上：是大模型写错了，用成分表的（三个鸡蛋不是 39g 蛋白）', () => {
   const egg = groundItem({ name: '鸡蛋', amount: '3个', grams: 150, calories: 209, proteinG: 39 });
   assert.strictEqual(egg.src, '成分表');
@@ -394,4 +420,39 @@ test('问问题：回答单独放在 answer 里（去掉 markdown，最多 8 行
   assert.strictEqual(Parser.normalize({ reply: '记了早餐，晚上建议看answer', answer: 'y' }, {}).reply, '记了早餐，晚上建议看小人');
   const msg = Parser.buildMessages('明天吃啥', { day: { goal: 'muscle_gain', budget: 2600, burn: 300, intake: 1500, protein: 80, proteinTarget: 140 } })[1].content;
   assert.match(msg, /目标增肌；热量预算 2600 千卡（含训练消耗 300），已吃 1500，还能吃 1100；蛋白质目标 140g，已吃 80g/);
+});
+
+test('听着像提问就先让小人说「我想想」；记录不算', () => {
+  const { looksLikeQuestion } = require('../web/js/log/helpers.js');
+  for (const t of ['给我制定一下明天的食谱，我训练强度比较大，碳水可能要多一点', '今天还差多少蛋白质', '晚上能不能吃火锅', '明天练什么好', '晚上吃点啥', '这个奶茶热量高吗'])
+    assert.ok(looksLikeQuestion(t), t);
+  for (const t of ['中午吃了一碗牛肉面', '早上两个包子一杯豆浆', '卧推80公斤4组8个', '体重62.5', '我吃了什么', '给我记一下早餐两个鸡蛋'])
+    assert.ok(!looksLikeQuestion(t), t);
+});
+
+test('边想边出字：answer 还没写完也能先拿出已经出来的字', () => {
+  const { partialAnswer } = TF;
+  assert.strictEqual(partialAnswer('{"reply":"给了你'), '');
+  assert.strictEqual(partialAnswer('{"reply":"x","answer":"早餐：两个鸡蛋\\n午餐：米'), '早餐：两个鸡蛋\n午餐：米');
+  assert.strictEqual(partialAnswer('{"reply":"x","answer":"约\\u5343卡\\"'), '约千卡"');
+  assert.strictEqual(partialAnswer('{"reply":"x","answer":null,"add":{}}'), '');
+  assert.strictEqual(partialAnswer('{"answer":"全部写完了","plan":null}'), '全部写完了');
+});
+
+test('计划：和记录一样整理（按库算热量），不存成记录；回答写成数组也认', () => {
+  const r = Parser.normalize({ reply: '给了你明天的食谱', answer: ['早餐：鸡蛋2个＋牛奶', '午餐：米饭＋鸡胸'],
+    plan: { dayOffset: 1, meals: [{ mealType: '早餐', foodSummary: '鸡蛋2个、牛奶1杯', items: [{ name: '鸡蛋', amount: '2个', grams: 100, calories: 140, proteinG: 13 }, { name: '牛奶', amount: '1杯', grams: 250, calories: 160, proteinG: 8 }] }],
+      workouts: [{ exerciseName: '杠铃卧推', muscleGroup: '胸部', weightKg: 80, sets: 4, reps: 8 }] } }, {});
+  assert.strictEqual(r.answer, '早餐：鸡蛋2个＋牛奶\n午餐：米饭＋鸡胸');
+  assert.strictEqual(r.meals.length, 0);
+  assert.strictEqual(r.workouts.length, 0);
+  assert.strictEqual(r.plan.dayOffset, 1);
+  assert.strictEqual(r.plan.meals[0].mealType, '早餐');
+  assert.ok(r.plan.meals[0].calories > 250 && r.plan.meals[0].calories < 330);
+  assert.strictEqual(r.plan.workouts[0].weightKg, 80);
+  // 只是回答问题：没有 plan
+  assert.strictEqual(Parser.normalize({ answer: '还差60g蛋白' }, {}).plan, undefined);
+  // 「早餐照计划吃了」：只认这天真有的计划编号
+  const d = Parser.normalize({ add: { meals: [] }, donePlans: ['p1', 'p9'] }, { plans: [{ ref: 'p1', text: 'x' }] });
+  assert.deepStrictEqual(d.donePlans, ['p1']);
 });

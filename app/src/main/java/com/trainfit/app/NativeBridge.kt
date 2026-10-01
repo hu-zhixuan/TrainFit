@@ -306,6 +306,24 @@ class NativeBridge(
         put("hasKey", BuildConfig.LLM_API_KEY.isNotBlank())
     }.toString()
 
+    /** 流式：边出字边回调 window.__tfLlmDelta(id, 这段字)，最后和 llmChat 一样回调 __tfLlm */
+    @JavascriptInterface
+    fun llmChatStream(requestId: String, bodyJson: String, overrideJson: String) {
+        io.execute {
+            val cfg = ApiConfig.resolve(overrideJson, BuildConfig.LLM_BASE_URL, BuildConfig.LLM_API_KEY, BuildConfig.LLM_MODEL)
+            if (!cfg.isComplete) {
+                callJs("__tfLlm", requestId, false, "NO_KEY")
+                return@execute
+            }
+            val r = try {
+                OpenAiApi.chatStream(cfg, JSONObject(bodyJson)) { piece -> callJs("__tfLlmDelta", requestId, piece) }
+            } catch (e: Exception) {
+                ApiResult(false, "${e.javaClass.simpleName}: ${e.message.orEmpty()}")
+            }
+            callJs("__tfLlm", requestId, r.ok, r.body)
+        }
+    }
+
     /**
      * @param bodyJson  chat/completions 请求体（messages 等），model 为空时用默认模型
      * @param overrideJson 可选 {"baseUrl","apiKey","model"}，App 设置里填了就覆盖打包时的默认值

@@ -5,14 +5,17 @@
 (function (root) {
   'use strict';
   const TF = root.TF = root.TF || {};
-  const { MEAL_TYPES, quickWeight, Native, Haptics, Parser, QuickLog, mergeItems, sumItems } = TF;
+  const { MEAL_TYPES, quickWeight, Native, Haptics, Parser, QuickLog, mergeItems, sumItems, looksLikeQuestion, partialAnswer } = TF;
 
   Object.assign(QuickLog, {
     // ----- 解析 + 保存（后台进行，不用等） -----
     submit(text) {
       text = (text || '').trim();
       if (!text) return;
-      const p = root.app.addPending(text);
+      // 听着像提问：不出「正在整理」卡片，小人马上在气泡里说「我想想…」（Atria 要 10～25 秒才出第一个字）
+      const ask = !!(looksLikeQuestion && looksLikeQuestion(text));
+      const p = root.app.addPending(text, ask);
+      if (ask && root.app.showBuddyThinking) root.app.showBuddyThinking(text);
       this.process(p);
     },
 
@@ -54,40 +57,67 @@
         day = { goal: app.profile.goalType, budget: Math.round(s.budget), burn: Math.round(s.workoutBurn), intake: Math.round(s.intake),
           protein: Math.round(s.protein), proteinTarget: Math.round(app.gaugeProteinTarget ? app.gaugeProteinTarget() : (app.profile.targetProteinG || 0)) };
       } catch (e) {}
-      return { now: new Date(p.ts || Date.now()), history: app.workouts, dayRecords, recent, dayLabel, lastWeight: lw ? lw.kg : null, myFoods: app.myFoods || [], day };
+      // 这天的计划（「早餐照计划吃了」），刚才小人给的计划（「不要米饭换红薯」，15 分钟内）
+      const plans = app.planContext ? app.planContext(date) : [];
+      const offer = app._planOffer && Date.now() - app._planOffer.at < 15 * 60 * 1000 ? app._planOffer.text : '';
+      return { now: new Date(p.ts || Date.now()), history: app.workouts, dayRecords, recent, dayLabel, lastWeight: lw ? lw.kg : null, myFoods: app.myFoods || [], day, plans, lastPlan: offer };
     },
 
     async process(p) {
       const app = root.app;
       const ctx = this.buildContext(p);
       let result;
+      // 边想边出字：answer 一出来就往小人的气泡里写
+      // 回答写完了、后面在写计划（整份计划要 30～60 秒）：气泡里说「正在排成计划」，别让光标一直闪
+      let buf = '', shown = '', planning = false;
+      const onDelta = (soFar) => {
+        buf = soFar;
+        const a = partialAnswer ? partialAnswer(buf) : '';
+        const pl = !!a && /"answer"\s*:\s*"(?:[^"\\]|\\.)*"/.test(buf) && /"plan"\s*:\s*\{/.test(buf);
+        if (a && (a !== shown || pl !== planning) && app.showBuddyAnswer && app.pending.some(x => x.id === p.id)) {
+          shown = a;
+          planning = pl;
+          app.showBuddyAnswer(p.text, a, { streaming: true, planning: pl });
+        }
+      };
       try {
         // 只是报体重：不用等大模型
         const kg = quickWeight(p.text, ctx.lastWeight);
         result = kg ? { dayOffset: 0, workouts: [], meals: [], updates: [], deletes: [], bodyWeight: kg, reply: '', source: 'fast' }
-          : await Parser.parse(p.text, ctx);
+          : await Parser.parse(p.text, ctx, onDelta);
       } catch (e) {
         console.warn('[QuickLog] 大模型没整理出来：', e && e.message);
-        if (app.pending.some(x => x.id === p.id)) app.failPending(p.id, Parser.failReason(e));
+        if (app.pending.some(x => x.id === p.id)) {
+          app.failPending(p.id, Parser.failReason(e));
+          if ((p.ask || shown) && app.showBuddyFailed) app.showBuddyFailed(p, Parser.failReason(e));
+        }
         return;
       }
       if (!app.pending.some(x => x.id === p.id)) return; // 已被用户删掉
+      // 「早餐照计划吃了」：大模型记好了，把那几条计划划掉
+      if ((result.donePlans || []).length && app.dropPlan) {
+        const byRef = new Map((ctx.plans || []).map(x => [x.ref, x.id]));
+        result.donePlans.forEach(ref => { const id = byRef.get(ref); if (id) app.plans = app.plans.filter(x => x.id !== id); });
+      }
       const changes = result.workouts.length + result.meals.length + (result.updates || []).length + (result.deletes || []).length + (result.bodyWeight ? 1 : 0) + (result.remember || []).length;
+      const answerOpts = { plan: result.plan, baseDate: p.date };
       if (!changes) {
-        // 问问题（「明天吃什么」）：不记、不报错，小人回答
+        // 问问题（「明天吃什么」）：不记、不报错，小人回答；给了计划的话气泡里能「加到明天」
         if (result.answer) {
           app.finishPending(p.id);
           app.render();
-          if (app.showBuddyAnswer) app.showBuddyAnswer(p.text, result.answer);
+          if (app.showBuddyAnswer) app.showBuddyAnswer(p.text, result.answer, answerOpts);
           return;
         }
         app.failPending(p.id, result.reply || '没认出吃了什么');
+        if (p.ask && app.showBuddyFailed) app.showBuddyFailed(p, result.reply || '没听懂，换个说法试试');
         return;
       }
       app.finishPending(p.id);
       const batch = this.save(Object.assign(result, { said: p.text }), p.date, ctx);
       this.showSnack(batch, result);
-      if (result.answer && app.showBuddyAnswer) app.showBuddyAnswer(p.text, result.answer); // 又记又问
+      if (result.answer && app.showBuddyAnswer) app.showBuddyAnswer(p.text, result.answer, answerOpts); // 又记又问
+      else if (app.closeBuddyPop) app.closeBuddyPop('thinking'); // 猜成提问其实是记录：把「我想想」收起来
     },
 
     save(result, baseDate, ctx) {

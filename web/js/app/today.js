@@ -8,6 +8,7 @@ Object.assign(FitnessApp.prototype, {
     const md = `${d.getMonth() + 1}月${d.getDate()}日`;
     if (dateStr === today) return '今天 · ' + md;
     if (dateStr === shiftDateString(today, -1)) return '昨天 · ' + md;
+    if (dateStr === shiftDateString(today, 1)) return '明天 · ' + md;
     return `${md} 周${WEEKDAYS[d.getDay()]}`;
   },
 
@@ -96,7 +97,7 @@ Object.assign(FitnessApp.prototype, {
     const s = this.getDaySummary(date);
 
     $('date-label').textContent = this.dateLabel(date);
-    $('date-next').disabled = isToday;
+    $('date-next').disabled = date >= this.lastPlanDate();
 
     const over = s.remaining < 0;
     $('hero').classList.toggle('over', over);
@@ -138,14 +139,15 @@ Object.assign(FitnessApp.prototype, {
     // 有过记录后再问，别一打开就弹
     $('remind-banner').classList.toggle('hidden', asked || !this.hasNotifApi() || (this.workouts.length + this.diet.length) < 1);
 
-    // 记录：整理中的在最上面；饮食按 早→午→晚→加餐，训练按先后顺序
-    const pend = this.pending.filter(p => p.date === date).sort((a, b) => b.ts - a.ts);
+    // 记录：整理中的在最上面（提问的在小人气泡里等，不占卡片；没整理出来才显示）；然后是计划；饮食按 早→午→晚→加餐，训练按先后顺序
+    const pend = this.pending.filter(p => p.date === date && !(p.ask && p.status === 'working')).sort((a, b) => b.ts - a.ts);
     const meals = this.diet.filter(d => d.date === date)
       .sort((a, b) => (MEAL_TYPES.indexOf(a.mealType) - MEAL_TYPES.indexOf(b.mealType)) || (recordTs(a) - recordTs(b)));
     const lifts = this.workouts.filter(w => w.date === date).sort((a, b) => recordTs(a) - recordTs(b));
 
     const tl = $('timeline');
     let html = pend.map(p => this.renderRow({ kind: 'pending', ts: p.ts, rec: p })).join('');
+    html += this.renderPlanRows ? this.renderPlanRows(date) : '';
     if (meals.length) {
       html += `<div class="group-head"><span>饮食</span><b>${fmt(s.intake)} kcal · 蛋白 ${fmt(s.protein)}g</b></div>`;
       html += meals.map(d => this.renderRow({ kind: 'meal', ts: recordTs(d), rec: d })).join('');
@@ -229,8 +231,9 @@ Object.assign(FitnessApp.prototype, {
       </button>`;
   },
 
-  addPending(text) {
-    const p = { id: 'p_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6), text, date: this.selectedDate, ts: Date.now(), status: 'working' };
+  /** @param ask 听着像提问：整理时不出卡片，小人在气泡里说「我想想」 */
+  addPending(text, ask) {
+    const p = { id: 'p_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6), text, date: this.selectedDate, ts: Date.now(), status: 'working', ask: !!ask };
     this.pending.unshift(p);
     this.savePending();
     this.buddyThinking && this.buddyThinking();
@@ -262,6 +265,7 @@ Object.assign(FitnessApp.prototype, {
     p.status = 'working';
     p.error = null;
     p.startedAt = Date.now();
+    if (p.ask && this.showBuddyThinking) this.showBuddyThinking(p.text);
     this.buddyThinking && this.buddyThinking();
     this.render();
     window.QuickLog.process(p);

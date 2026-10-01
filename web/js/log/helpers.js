@@ -150,7 +150,17 @@
     return '胸部';
   }
 
-  Object.assign(TF, { MUSCLES, MEAL_TYPES, num, cleanText, round1, mealTypeByHour, normMealType, mealTimes, mealSegments, NUTRIENTS, cleanNutrients, nutrientsText, toKg, quickWeight, findWeight, guessMuscle });
+  /**
+   * 听着像在提问 / 要建议（「给我定一下明天的食谱」「今天还差多少蛋白」「能不能吃火锅」）：
+   * 小人马上说「我想想…」，不用等大模型回来才知道。只是猜，猜错了也没关系（大模型回来照常处理）
+   */
+  function looksLikeQuestion(text) {
+    const t = String(text || '');
+    if (/[？?]\s*$/.test(t)) return true;
+    return /给我(定|制定|安排|推荐|出|做|列|想)|帮我(定|制定|安排|推荐|想|规划|看看)|(制定|安排|规划|推荐)(一下)?(明天|后天|今晚|晚上|下周|一周|一天)|(吃|练)点?(什么|啥)|该(吃|练)|(还)?(差|剩)多少|还能吃|能不能|可不可以|要不要|怎么(吃|练|办|样)|有什么(建议|推荐)|食谱|菜谱|训练计划|健身计划|吗[。！!]?\s*$/.test(t);
+  }
+
+  Object.assign(TF, { MUSCLES, MEAL_TYPES, num, cleanText, round1, mealTypeByHour, normMealType, mealTimes, mealSegments, NUTRIENTS, cleanNutrients, nutrientsText, toKg, quickWeight, findWeight, guessMuscle, looksLikeQuestion });
 
   if (typeof module !== 'undefined' && module.exports) module.exports = TF;
 })(typeof window !== 'undefined' ? window : globalThis);
