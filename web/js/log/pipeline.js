@@ -166,9 +166,16 @@
       });
 
       // 新增
+      // 新手练了个没练过的动作、整句话都没说重量：记好后小人问一句「用了多重？」
+      const said = String(result.said || '');
+      const saidWeight = /(\d+(\.\d+)?|[一二两三四五六七八九十百半]+)\s*(公斤|kg|千克|斤|磅|lb)|自重|空杆|徒手/i.test(said);
       result.workouts.forEach((w, i) => {
         const id = 'w_' + stamp + '_' + i;
         batch.workoutIds.push(id);
+        if (w.estimated && !w.durationMin && w.weightKg > 0 && !saidWeight && !batch.asks.some(a => a.kind === 'lift') &&
+            !app.workouts.some(x => x.exerciseName === w.exerciseName && !x.durationMin)) {
+          batch.asks.push({ kind: 'lift', id, name: w.exerciseName, saidReps: /组|个|次|下/.test(said) });
+        }
         app.workouts.unshift({
           id,
           ts: stamp + i,
@@ -190,7 +197,7 @@
         // 份量说得含糊的那几样：选项不存进记录，记好后小人问一句（「一瓶甜牛奶多大？」）
         const items = (m.items || []).map((it, k) => {
           if (!it.opts) return it;
-          batch.asks.push({ id, index: k, name: it.name, amount: it.amount || '', grams: it.grams, opts: it.opts });
+          batch.asks.push({ kind: 'food', id, index: k, name: it.name, amount: it.amount || '', grams: it.grams, opts: it.opts });
           const rest = Object.assign({}, it);
           delete rest.opts;
           return rest;

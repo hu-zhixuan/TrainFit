@@ -274,6 +274,16 @@ class FitnessApp {
       this.trendDays = Number(b.dataset.range);
       this.renderTrend();
     });
+    // 点趋势页上的小人：招招手
+    $('trend-buddy').addEventListener('click', (e) => {
+      if (!e.target.closest('.coach-buddy')) return;
+      window.Haptics && window.Haptics.fire('tap');
+      window.Sound && window.Sound.play('blip');
+      this._coachWave = true;
+      this.renderTrendBuddy();
+      clearTimeout(this._coachT);
+      this._coachT = setTimeout(() => { this._coachWave = false; if (this.view === 'trend') this.renderTrendBuddy(); }, 1500);
+    });
 
     // 设置
     this.bindSettings();

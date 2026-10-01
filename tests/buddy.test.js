@@ -105,3 +105,10 @@ test('站起来的几个姿势：高度一样、鞋在最底下一行，走路�
     assert.ok(Buddy.svg({ char, pose: 'stand', mood: 'great', gear: ['crown'] }).includes('pose-stand'));
   }
 });
+
+test('没说重量时的几个选项：估的那个，轻一档、重一档，整 2.5 / 5 公斤', () => {
+  assert.deepStrictEqual(Buddy.liftOpts(30), [20, 30, 40]);
+  assert.deepStrictEqual(Buddy.liftOpts(40), [25, 40, 55]);
+  assert.deepStrictEqual(Buddy.liftOpts(10), [7.5, 10, 12.5]);
+  assert.deepStrictEqual(Buddy.liftOpts(2.5), [2.5, 5]);
+});

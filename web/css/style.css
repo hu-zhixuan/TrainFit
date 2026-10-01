@@ -528,11 +528,33 @@ body.has-buddy .views { padding-bottom: calc(var(--cmp-h, 110px) + 52px + var(--
 .buddy-act.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .buddy-act:disabled { opacity: 0.6; cursor: default; }
 .buddy-tip { margin: 8px 0 0; font-size: 0.78rem; line-height: 1.5; color: var(--text-3); }
+/* 趋势页：小人站在左边，右边一个对话框，几句大白话点评这段时间 */
+.coach-card { padding: 14px 14px 14px 10px; }
+.coach { display: flex; align-items: flex-end; gap: 10px; }
+.coach-buddy { flex: none; padding: 0; border: 0; background: none; line-height: 0; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.coach-buddy .buddy-svg { width: 52px; height: auto; }
+.coach-bubble { position: relative; flex: 1; min-width: 0; padding: 10px 12px; border-radius: var(--r-md); background: var(--surface-2); }
+.coach-bubble::before { content: ''; position: absolute; left: -6px; bottom: 14px; width: 12px; height: 12px; background: inherit; transform: rotate(45deg); border-radius: 2px; }
+.coach-bubble p { position: relative; margin: 0; font-size: 0.86rem; line-height: 1.55; color: var(--text-2); }
+.coach-bubble p + p { margin-top: 3px; }
+.coach-bubble .coach-head { font-size: 0.92rem; font-weight: 700; color: var(--text); }
+@media (prefers-reduced-motion: no-preference) {
+  .coach-buddy .bd-fa { animation: bdSwayA 4.4s steps(1, end) infinite; }
+  .coach-buddy .bd-fb { animation: bdSwayB 4.4s steps(1, end) infinite; }
+  .coach-buddy .bd-blink { animation: bdBlink 5.7s steps(1, end) infinite 1.3s; }
+  .coach-buddy .bd-fx-note { animation: bdBob 1.2s steps(1, end) infinite; }
+  .coach-buddy .bd-fx-sparkle { animation: bdTwinkle 1.8s steps(1, end) infinite; }
+  .coach-buddy .pose-wave .bd-fa { animation: bdAltA 0.34s steps(1, end) infinite; }
+  .coach-buddy .pose-wave .bd-fb { animation: bdAltB 0.34s steps(1, end) infinite; }
+  .coach-buddy .pose-wave { animation: bdUp 0.24s steps(2, end); }
+}
 /* 份量问一句：几个选项，当前按哪个记的高亮 */
 .buddy-q { margin: 6px 0 0; font-size: 0.95rem; font-weight: 650; line-height: 1.5; color: var(--text); }
 .portion-opts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
-.portion-opt { flex: 1 1 0; min-width: 64px; height: 36px; padding: 0 10px; border-radius: 18px; border: 1px solid var(--line); background: var(--surface-2); color: var(--text); font: inherit; font-size: 0.85rem; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.portion-opt { flex: 1 1 0; min-width: 56px; height: 36px; padding: 0 10px; border-radius: 18px; border: 1px solid var(--line); background: var(--surface-2); color: var(--text); font: inherit; font-size: 0.85rem; font-weight: 600; cursor: pointer; white-space: nowrap; }
 .portion-opt.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.portion-opt.skip { flex: 0 0 auto; min-width: 0; padding: 0 6px; border-color: transparent; background: none; color: var(--text-3); font-weight: 500; }
+.portion-opt.skip.on { background: var(--surface-2); color: var(--text-2); border-color: var(--line); }
 .buddy-pop[data-mode="ask"] { width: min(300px, calc(100vw - 32px)); }
 /* 点小人：训练建议（今天可以练哪儿） */
 .buddy-obs { margin: 6px 0 0; font-size: 0.82rem; line-height: 1.5; color: var(--text-2); }
