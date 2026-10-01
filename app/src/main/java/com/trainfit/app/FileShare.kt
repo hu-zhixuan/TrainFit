@@ -19,7 +19,7 @@ import java.io.File
  *  - 存到手机公共目录（下载 / 相册）：卸载 App 后文件还在。
  *    用 MediaStore，只支持 Android 10 及以上；更老的系统返回空字符串，网页那边会提示用分享
  *  - 重装后一键找回（照 Mihon 的做法）：系统的文件夹授权页一打开就停在「下载/练食AI」，
- *    用户点「使用此文件夹」→「允许」，我们在里面找最新的备份读出来。授权会记住，
+ *    用户点「使用此文件夹」→「允许」，我们在里面挑记录最多的那份备份读出来。授权会记住，
  *    之后的自动备份也写进这个文件夹的同一个文件（重装后 MediaStore 认不出以前的文件，会另起一个「(1)」）
  *  - 读用户选的文件 / 从微信「用其他应用打开」过来的文件
  */
@@ -150,14 +150,36 @@ object FileShare {
         return out
     }
 
-    /** 在用户给的文件夹里找最新的备份（练食AI备份*.json，没有就任意 .json），读出来；没有返回 null */
-    fun readNewestBackup(context: Context, tree: Uri): String? {
+    /**
+     * 在用户给的文件夹里挑记录最多的那份备份读出来（一样多就挑最新的）；没有返回 null。
+     * 不能只看最新：重装后新装的 App 认不出以前的文件，一记东西就另存一份「练食AI备份 (1).json」，
+     * 里面只有重装后的几条，最新的反而是最小的（v3.7 用户踩到：恢复了个寂寞，提示「记录这里都有了」）。
+     */
+    fun readBestBackup(context: Context, tree: Uri): String? {
         val json = children(context, tree).filter { it.name.endsWith(".json", ignoreCase = true) }
-        val best = json.filter { it.name.startsWith(BACKUP_PREFIX) }.maxByOrNull { it.modified }
-            ?: json.maxByOrNull { it.modified }
-            ?: return null
-        return readText(context, best.uri)
+        val mine = json.filter { it.name.startsWith(BACKUP_PREFIX) }.ifEmpty { json }
+        var best: String? = null
+        var bestCount = -1
+        var bestTime = -1L
+        for (doc in mine.sortedByDescending { it.modified }.take(30)) {
+            val text = readText(context, doc.uri) ?: continue
+            val n = recordCount(text)
+            if (n < 0) continue // 不是我们的备份
+            if (n > bestCount || (n == bestCount && doc.modified > bestTime)) {
+                best = text
+                bestCount = n
+                bestTime = doc.modified
+            }
+        }
+        return best
     }
+
+    /** 备份里有几条记录（饮食 + 训练 + 体重）；不是练食AI的备份返回 -1 */
+    private fun recordCount(text: String): Int = try {
+        val data = org.json.JSONObject(text).optJSONObject("data")
+        if (data == null) -1
+        else listOf("fit_diet", "fit_workouts", "fit_weights").sumOf { data.optJSONArray(it)?.length() ?: 0 }
+    } catch (_: Exception) { -1 }
 
     /** 写进用户给的文件夹，同名的覆盖。返回给用户看的位置 */
     private fun saveToTree(context: Context, tree: Uri, name: String, mime: String, text: String): String {

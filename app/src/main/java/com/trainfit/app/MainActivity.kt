@@ -57,7 +57,7 @@ class MainActivity : ComponentActivity() {
         cb?.invoke(uri)
     }
 
-    // 一键找回：让用户授权「下载/练食AI」这个文件夹，我们自己在里面找最新的备份
+    // 一键找回：让用户授权「下载/练食AI」这个文件夹，我们自己在里面找记录最多的那份备份
     private val openTreeLauncher = registerForActivityResult(
         ActivityResultContracts.OpenDocumentTree()
     ) { uri ->

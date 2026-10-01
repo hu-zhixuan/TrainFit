@@ -449,7 +449,7 @@ class NativeBridge(
         }
     }
 
-    /** 一键找回：用户授权「下载/练食AI」文件夹后，找最新的备份交给 window.__tfFile(ok, text) */
+    /** 一键找回：用户授权「下载/练食AI」文件夹后，找记录最多的那份备份交给 window.__tfFile(ok, text) */
     @JavascriptInterface
     fun restoreFromFolder() {
         main.post {
@@ -460,7 +460,7 @@ class NativeBridge(
                     io.execute {
                         try {
                             FileShare.rememberTree(activity, tree)
-                            val text = FileShare.readNewestBackup(activity, tree)
+                            val text = FileShare.readBestBackup(activity, tree)
                             if (text == null) callJs("__tfFile", false, "NO_BACKUP") else callJs("__tfFile", true, text)
                         } catch (e: Exception) {
                             callJs("__tfFile", false, "READ_FAILED")
