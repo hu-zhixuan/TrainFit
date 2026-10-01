@@ -11,13 +11,13 @@ import java.net.URL
  * 它不走 OpenAI 的 /audio/transcriptions，要把录音转成 base64 放进 JSON（照 BiBi-Keyboard 的做法）。
  * key 以 sk-ws- 开头，或者接口地址是它家的，就走这里；设置里只填 key、地址和模型留空也行。
  *
- * 默认 Qwen-Audio-3.1-ASR-Flash-Message：实时版，按住说话时边说边传（QianwenStream），松手很快出结果。
- * 它的整段版 qwen-audio-3.1-asr-flash 在这里用（本机识别用不了、或者设置里填了别的整段模型时）：
- * 2026-10 用 60 句录音（一半带噪音）实测错字 1.8% / 2.3%，本机 SenseVoice 是 5.8% / 11.1%。
+ * 只用 Qwen-Audio-3.1-ASR-Flash-Message（平台上标着免费试用；用户说了别调别的模型扣钱）：
+ * 按住说话时边说边传（QianwenStream），松手很快出结果；录好的一整段（本机识别用不了的手机）也走它，
+ * 把录音按块推过去。只有设置里自己填了别的整段模型，才走下面的 multimodal-generation。
+ * 同一代模型 2026-10 用 60 句录音（一半带噪音）实测错字 1.8% / 2.3%，本机 SenseVoice 是 5.8% / 11.1%。
  */
 object Qianwen {
     const val MODEL = "qwen-audio-3.1-asr-flash-message"
-    const val BATCH_MODEL = "qwen-audio-3.1-asr-flash"
     private const val DEFAULT_ROOT = "https://maas.qianwenaiapi.com"
     private val HOSTS = listOf("qianwenaiapi.com", "qwencloudapi.com", "dashscope.aliyuncs.com", "dashscope-intl.aliyuncs.com")
 
@@ -42,8 +42,6 @@ object Qianwen {
     /** 实时（边说边传）的模型：走 inference WebSocket（qwen3-asr-flash-realtime 是另一套协议，不在这里） */
     fun isStreaming(model: String) = model.endsWith("-message") || model.endsWith("-streaming") || model == "fun-asr-realtime"
 
-    /** 整段识别用的模型：实时模型换成同一代的整段版 */
-    private fun batchModel(cfg: ApiConfig): String = model(cfg).let { if (isStreaming(it)) BATCH_MODEL else it }
 
     fun wsUrl(cfg: ApiConfig): String {
         val host = hostOf(cfg.baseUrl)
@@ -52,7 +50,9 @@ object Qianwen {
     }
 
     fun transcribe(cfg: ApiConfig, wav: ByteArray, quick: Boolean): ApiResult {
-        val body = requestBody(batchModel(cfg), "data:audio/wav;base64," + Base64.encodeToString(wav, Base64.NO_WRAP))
+        val model = model(cfg)
+        if (isStreaming(model)) return streamWhole(cfg, model, wav, quick)
+        val body = requestBody(model, "data:audio/wav;base64," + Base64.encodeToString(wav, Base64.NO_WRAP))
             .toString().toByteArray(Charsets.UTF_8)
 
         var lastError = ""
@@ -79,6 +79,22 @@ object Qianwen {
             }
         }
         return ApiResult(false, lastError)
+    }
+
+    /** 录好的一整段交给实时模型：WAV 去掉 44 字节的头，100ms 一块推过去（比说话快 5 倍），说完了等结果 */
+    private fun streamWhole(cfg: ApiConfig, model: String, wav: ByteArray, quick: Boolean): ApiResult {
+        val s = QianwenStream(cfg, model)
+        s.open()
+        val pcm = if (wav.size > 44) wav.copyOfRange(44, wav.size) else ByteArray(0)
+        var i = 0
+        while (i < pcm.size) {
+            s.feedBytes(pcm.copyOfRange(i, minOf(i + 3200, pcm.size)))
+            i += 3200
+            try { Thread.sleep(20) } catch (_: InterruptedException) {}
+        }
+        s.finish()
+        val text = s.await(System.currentTimeMillis() + if (quick) 6000 else 15000)
+        return if (text != null) ApiResult(true, text) else ApiResult(false, s.error ?: "EMPTY")
     }
 
     /**

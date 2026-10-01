@@ -54,6 +54,12 @@ class QianwenStream(
             b[2 * i] = (v and 0xff).toByte()
             b[2 * i + 1] = ((v shr 8) and 0xff).toByte()
         }
+        feedBytes(b)
+    }
+
+    /** 16k 16bit 小端 PCM */
+    fun feedBytes(b: ByteArray) {
+        if (done.count == 0L || b.isEmpty()) return
         val bs = b.toByteString()
         synchronized(lock) {
             if (!started) {
