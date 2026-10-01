@@ -336,6 +336,7 @@
       const msg = String(text || '');
       if (msg === 'TOO_SHORT' || msg === 'NO_SPEECH') this.setStatus('没听到说话，按住再说一次', 'warn');
       else if (msg === 'LOCAL_NOT_READY') this.setStatus('识别模型还在加载，稍等一两秒再说', 'warn');
+      else if (msg === 'MODEL_MISSING') this.setStatus('没认出来：本机识别模型还没下好，联网再说一次', 'warn');
       else if (msg === 'NO_KEY') this.setStatus('还没有语音识别 key，去设置里填', 'warn');
       else if (/^HTTP 401|^HTTP 403/.test(msg)) this.setStatus('语音识别 key 不对，去设置里检查', 'warn');
       else this.setStatus('识别失败（网络不好？）再说一次，或点左边改成打字', 'warn');

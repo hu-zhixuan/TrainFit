@@ -20,7 +20,11 @@ import java.util.concurrent.TimeUnit
  * 收 result-generated…task-finished / task-failed。参数照 BiBi-Keyboard 的 buildDashRecognitionParam。
  * 连不上、出错、超时都只是拿不到结果（await 返回 null），由调用方退回本机识别。
  */
-class QianwenStream(private val cfg: ApiConfig, private val model: String) {
+class QianwenStream(
+    private val cfg: ApiConfig,
+    private val model: String,
+    private val onText: ((String) -> Unit)? = null // 边说边出的字（本机模型还没下好时显示云端的）
+) {
     private val taskId = UUID.randomUUID().toString().replace("-", "")
     private val lock = Any()
     private val early = ArrayList<ByteString>() // 连上之前说的话先攒着（最多 60 秒）
@@ -140,6 +144,10 @@ class QianwenStream(private val cfg: ApiConfig, private val model: String) {
                         partial = ""
                     } else if (t.isNotEmpty()) {
                         partial = t
+                    }
+                    onText?.let { cb ->
+                        val now = synchronized(finals) { finals.values.joinToString("") } + partial
+                        if (now.isNotBlank()) cb(now.trim())
                     }
                 }
                 "task-finished" -> done.countDown()

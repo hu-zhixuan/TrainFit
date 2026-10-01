@@ -138,6 +138,9 @@
    * @param it  大模型给的一项：{name, amount, grams, whole, source, kind, calories, proteinG, carbsG, fatG, nutrients}
    * @param myFoods 用户记住的食物
    */
+  // 连锁店、品牌的东西按这家店官方的一份算（大模型估），不拿成分表、菜品库里通用的「汉堡」「拿铁」重算
+  const BRAND = /麦当劳|肯德基|KFC|汉堡王|必胜客|赛百味|德克士|华莱士|塔斯汀|星巴克|瑞幸|库迪|喜茶|奈雪|蜜雪|古茗|茶百道|霸王茶姬|沪上阿姨|书亦|一点点|CoCo|Manner|Tims|全家|罗森|7-?11|便利蜂|美宜佳|吉士汉堡|巨无霸|麦辣|板烧|麦乐鸡|麦旋风|皇堡|吮指原味鸡/i;
+
   function groundItem(it, myFoods) {
     const name = cleanText(it && it.name, 20);
     const grams = num(it && it.grams);
@@ -145,7 +148,7 @@
     const amount = cleanText(it.amount, 12);
     const base = { name, grams: grams > 0 ? Math.round(grams) : null };
     if (amount) base.amount = amount;
-    if (it.whole === true) base.whole = true;
+    if (it.whole === true || BRAND.test(name)) base.whole = true;
     // 补剂（维生素、鱼油、钙片、药…）：不查库，带上含的营养素
     const supp = it.kind === 'supplement' || it.supp === true;
     if (supp) base.supp = true;
@@ -170,7 +173,9 @@
       return withN(Object.assign(base, { src: '包装' }, vals(ai.calories, ai.proteinG, ai.carbsG, ai.fatG)));
     }
     // 3. 单一食材查库。和大模型的估算差太多，多半是匹配错了（比如成分表里的「豆腐花」是干粉），保留估算：
-    //    热量差 2.5 倍以上；或者蛋白质差得多（相差 6g 以上、且不在 0.6～1.7 倍之间）——蛋白质用户最在意
+    //    热量差 2.5 倍以上；或者蛋白质差得多（相差 6g 以上、且不在 0.6～1.7 倍之间）——蛋白质用户最在意。
+    //    但热量对得上（0.8～1.25 倍）说明是同一样东西，蛋白质对不上是大模型写错了，用库里的
+    //    （实测大模型把「三个鸡蛋」的蛋白质写成 39g）
     const e = !supp && !base.whole && grams && grams > 0 ? FoodDB.find(name) : null;
     if (e) {
       const k = e.k * grams / 100;
@@ -178,7 +183,8 @@
       const ratio = ai.calories > 0 ? k / ai.calories : ai.calories === 0 ? (k <= 20 ? 1 : Infinity) : 1;
       const pr = ai.proteinG > 0 ? p / ai.proteinG : 1;
       const proteinOff = ai.proteinG != null && Math.abs(p - ai.proteinG) > 6 && (pr < 0.6 || pr > 1.7);
-      if (ratio >= 0.4 && ratio <= 2.5 && !proteinOff) {
+      const sameFood = ratio >= 0.8 && ratio <= 1.25;
+      if (ratio >= 0.4 && ratio <= 2.5 && (!proteinOff || sameFood)) {
         return Object.assign(base, { src: e.src === 'cfct' ? '成分表' : '菜品库', dbName: e.name },
           vals(k, p, e.c * grams / 100, e.f * grams / 100));
       }
