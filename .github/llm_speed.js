@@ -7,13 +7,11 @@ const base = (process.env.LLM_BASE_URL || 'https://api.atria-asi.ai/v1').replace
 const model = process.env.LLM_MODEL || 'Atria-Dawn-Preview';
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 const ctx = { now: new Date(2026, 9, 1, 7, 20), history: [], dayRecords: [], dayLabel: '今天 2026-10-01', lastWeight: 61, recent: ['杠铃卧推 80kg 4×8（09-28）'], myFoods: [] };
-const VARIANTS = {
+const VARIANTS = process.env.VARIANTS ? JSON.parse(process.env.VARIANTS) : {
   'thinking disabled（现在）': { thinking: { type: 'disabled' } },
   '什么都不加': {},
-  'reasoning_effort none': { reasoning_effort: 'none' },
-  'reasoning_effort minimal': { reasoning_effort: 'minimal' },
   'enable_thinking false': { enable_thinking: false },
-  'thinking disabled + max_tokens 600': { thinking: { type: 'disabled' }, max_tokens: 600 },
+  'thinking disabled + enable_thinking false': { thinking: { type: 'disabled' }, enable_thinking: false },
 };
 (async () => {
   const lines = [];
@@ -21,7 +19,7 @@ const VARIANTS = {
     const ts = [];
     let usage = '', out = '';
     for (let k = 0; k < 3; k++) {
-      await sleep(15000);
+      await sleep(Number(process.env.GAP || 15000));
       const body = Object.assign({ model, messages: P.buildMessages('无糖奥利奥三块', ctx), temperature: 0.2, stream: false }, extra);
       const t0 = Date.now();
       const r = await fetch(base + '/chat/completions', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key }, body: JSON.stringify(body), signal: AbortSignal.timeout(90000) }).catch(e => ({ ok: false, status: 0, text: async () => e.message }));
@@ -32,6 +30,6 @@ const VARIANTS = {
     lines.push(`${name}: ${ts.join('s / ')}s · 输出 ${out} · usage ${usage}`);
     console.log(lines[lines.length - 1]);
   }
-  console.log(`::notice title=大模型耗时::${lines.join('%0A').slice(0, 3000)}`);
+  console.log(`::notice title=${process.env.TAG || ''} 大模型耗时::${lines.join('%0A').slice(0, 3000)}`);
   console.log(`::notice title=提示词长度::${JSON.stringify(P.buildMessages('无糖奥利奥三块', ctx)).length} 字符`);
 })();

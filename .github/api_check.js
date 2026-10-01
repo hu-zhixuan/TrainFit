@@ -2,7 +2,7 @@
 global.window = global;
 const OLD = process.env.PARSER === 'old';
 const TF = require(OLD ? './old/web/js/log/parser.js' : '../web/js/log/parser.js');
-const TAG = OLD ? '旧' : '新';
+const TAG = process.env.TAG || (OLD ? '旧' : '新');
 const P = TF.Parser;
 const key = (process.env.LLM_API_KEY || '').split(/\r?\n/).map(s => s.trim()).find(Boolean) || '';
 const base = (process.env.LLM_BASE_URL || 'https://api.atria-asi.ai/v1').replace(/\/+$/, '');
@@ -12,6 +12,8 @@ const note = (t, m) => console.log(`::notice title=${t}::${esc(t + '\n' + m)}`);
 const err = (t, m) => console.log(`::error title=${t}::${esc(t + '\n' + m)}`);
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
+const TIMES = [];
+const FAILED = [];
 async function call(label, text, hhmm, check) {
   const [h, mi] = hhmm.split(':').map(Number);
   const now = new Date(2026, 8, 29, h, mi); // 本地时间（workflow 里 TZ=Asia/Shanghai）
@@ -20,6 +22,8 @@ async function call(label, text, hhmm, check) {
     recent: ['杠铃卧推 80kg 4×8（09-28）', '杠铃深蹲 100kg 5×5（09-27）', '引体向上 自重 4×8（09-27）', '哑铃推举 22kg 3×10（09-26）', '传统硬拉 120kg 3×5（09-25）', '跑步机 30分钟（09-24）'],
     myFoods: [{ name: '糯米鸡', amount: '1个', grams: 180, calories: 350, proteinG: 10, carbsG: 50, fatG: 11 }, { name: '乳清蛋白粉', amount: '1勺', grams: 30, calories: 120, proteinG: 24, carbsG: 3, fatG: 1.5 }] };
   const body = { model, messages: P.buildMessages(text, ctx), temperature: 0.2, stream: false, thinking: { type: 'disabled' } };
+  const extra = JSON.parse(process.env.EXTRA || '{}'); // null = 去掉这个参数
+  for (const k of Object.keys(extra)) { if (extra[k] === null) delete body[k]; else body[k] = extra[k]; }
   let res, t0, tries = 0;
   for (;;) {
     t0 = Date.now();
@@ -29,6 +33,7 @@ async function call(label, text, hhmm, check) {
   }
   const raw = await res.text();
   const ms = Date.now() - t0;
+  TIMES.push(ms);
   if (!res.ok) { err(`${label} HTTP ${res.status}`, raw.slice(0, 400)); return false; }
   let r;
   let fallback = '';
@@ -108,6 +113,35 @@ const CASES = [
     const bench = r.workouts.find(w => /卧推/.test(w.exerciseName));
     return (bench && bench.weightKg === 80 && bench.sets === 4 && bench.reps === 8) || '卧推不对';
   }]
+  // ---- 分餐、改口、口头禅（v2.6.2 那批） ----
+  ['无标点：早+晚', '早上吃了两个包子然后喝了杯豆浆中午没吃晚上吃了一碗牛肉面加个蛋', '21:30', r => {
+    const b = r.meals.filter(m => m.mealType === '早餐');
+    const d = r.meals.filter(m => m.mealType !== '早餐');
+    if (!b.length || !d.length) return '没分开：' + types(r);
+    if (b.some(m => /牛肉面/.test(itemNames(m)))) return '牛肉面记到早餐了';
+    return true;
+  }],
+  ['早中晚', '早上两个包子一杯豆浆，中午黄焖鸡米饭，晚上没吃', '21:00', r => types(r) === '早餐,午餐' || '餐次是 ' + types(r)],
+  ['中午和晚上都', '中午和晚上都吃的黄焖鸡米饭', '21:00', r => (r.meals.length === 2 && /午餐/.test(types(r)) && /晚餐/.test(types(r))) || '餐次是 ' + types(r)],
+  ['昨晚', '昨晚吃了火锅，还喝了两瓶啤酒', '09:10', r => r.dayOffset !== -1 ? 'dayOffset=' + r.dayOffset : (r.meals.length && r.meals.every(m => m.mealType === '晚餐')) || '餐次是 ' + types(r)],
+  ['改口', '中午吃了两碗米饭，不对，是一碗，还有一份红烧肉', '12:40', r => {
+    const rice = r.meals.flatMap(m => m.items || []).find(i => /米饭/.test(i.name));
+    if (!rice) return '没有米饭';
+    return (rice.grams && rice.grams <= 260) || `米饭 ${rice.amount} ${rice.grams}g，没按改口后的一碗算`;
+  }],
+  ['口头禅', '呃那个中午就是吃了个嗯麻辣烫然后还有一瓶可乐', '13:00', r => (types(r) === '午餐' && /麻辣烫/.test(itemNames(r.meals[0])) && /可乐/.test(itemNames(r.meals[0]))) || '结果：' + types(r)],
+  ['练完+睡前', '练完喝了一勺蛋白粉，睡前又喝了一杯牛奶', '22:30', r => (r.meals.length && r.meals.every(m => m.mealType === '加餐/补剂')) || '餐次是 ' + types(r)],
+  ['错字+补份量', '中午吃了一个肉夹馍嗯然后是大份的然后一瓶冰红叉', '12:50', r => {
+    const items = r.meals.flatMap(m => m.items || []);
+    const names = items.map(i => i.name + i.amount).join('、');
+    return (items.length === 2 && items.some(i => /肉夹馍/.test(i.name)) && items.some(i => /冰红茶/.test(i.name))) || '记成了 ' + names;
+  }],
+  ['只说距离', '早上跑了五公里', '08:30', r => {
+    const run = r.workouts[0];
+    return (run && run.durationMin >= 15 && run.durationMin <= 60 && !r.meals.length) || '结果：' + JSON.stringify(r.workouts);
+  }],
+  ['刚吃', '刚吃了一份猪脚饭', '12:40', r => types(r) === '午餐' || '餐次是 ' + types(r)],
+  ['下午茶', '下午喝了杯奶茶吃了块蛋糕', '17:30', r => (r.meals.length && r.meals.every(m => m.mealType === '加餐/补剂')) || '餐次是 ' + types(r)]
 ];
 const sumN = (items) => { const n = {}; items.forEach(i => Object.keys(i.nutrients || {}).forEach(k => { n[k] = (n[k] || 0) + i.nutrients[k]; })); return n; };
 const allItems = (r) => r.meals.map(m => `【${m.mealType}】` + m.items.map(i => i.name + (i.amount || '')).join('、')).join(' ');
@@ -124,10 +158,14 @@ const inR = (what, v, a, b) => (v >= a && v <= b) || `${what} ${v} 不在 ${a}�
     for (const [label, text, hhmm, check] of CASES) {
       if (only.length && !only.includes(label)) continue;
       if (skip.includes(label)) continue;
-      await sleep(15000);
-      rs.push(await call(rounds > 1 ? `${label} #${k + 1}` : label, text, hhmm, check));
+      await sleep(Number(process.env.GAP || 15000));
+      const ok = await call(rounds > 1 ? `${label} #${k + 1}` : label, text, hhmm, check);
+      rs.push(ok);
+      if (!ok) FAILED.push(label);
     }
   }
-  note(`[${TAG}] ${process.env.ONLY ? '分餐' : '其他'} 通过`, `${rs.filter(Boolean).length}/${rs.length}`);
+  const t = TIMES.slice().sort((a, b) => a - b);
+  const q = (f) => t.length ? (t[Math.min(t.length - 1, Math.floor(t.length * f))] / 1000).toFixed(1) + 's' : '-';
+  note(`[${TAG}] 汇总`, `通过 ${rs.filter(Boolean).length}/${rs.length} · 耗时中位 ${q(0.5)} · 九成以内 ${q(0.9)} · 最慢 ${q(0.999)}%0A没过：${FAILED.join('、') || '无'}`);
   process.exit(0);
 })();

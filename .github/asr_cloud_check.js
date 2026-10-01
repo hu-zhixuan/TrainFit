@@ -5,7 +5,7 @@ const path = require('path');
 const BASE = (process.env.ASR_BASE_URL || 'https://api.siliconflow.cn/v1').replace(/\/+$/, '');
 const KEY = (process.env.ASR_API_KEY || '').split(/\r?\n/).map(s => s.trim()).find(Boolean) || '';
 // 千问 AI 平台（sk-ws- 开头的 key）：和 App 一样走 multimodal-generation，录音 base64 放进 JSON
-const QW = KEY.startsWith('sk-ws-');
+const QW = KEY.startsWith('sk-ws-') || !!process.env.QW_FORCE;
 const QW_CONTEXT = '健身和饮食记录。常见词：卧推、深蹲、硬拉、引体向上、划船、推举、飞鸟、弯举、组、个、公斤、跑步机、椭圆机、蛋白粉、乳清蛋白、鸡胸肉、茶叶蛋、豆浆、燕麦、米饭、牛肉面、千卡、大卡、毫升、克。';
 const MODELS = (process.env.MODELS || (QW ? 'qwen3-asr-flash,qwen-audio-3.1-asr-flash,qwen-audio-3.0-asr-flash,fun-asr-flash-2026-06-15' : '') || 'FunAudioLLM/SenseVoiceSmall,Qwen/Qwen3-ASR-1.7B,XingChenAGI/XingChenASR-V3.2,XingChenAGI/XingChenASR-V3.2-Ultra,TeleAI/TeleSpeechASR').split(',');
 const DIR = path.join(__dirname, 'asr_wavs');
