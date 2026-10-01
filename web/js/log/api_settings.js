@@ -25,13 +25,15 @@
         const loc = now && now.local;
         const cloud = now && now.cloud;
         const cloudNote = !cloud ? '' : cloud === 'ok' ? '上次云端识别正常。'
-          : /HTTP 402/.test(cloud) ? '上次云端识别没成功：账户余额不足，充一点钱就能用。'
-          : /HTTP 40[13]/.test(cloud) ? '上次云端识别没成功：key 不对或没有权限。'
-          : '上次云端识别没成功（网络不好或超时），用的是本机的结果。';
+          : /HTTP 402|Arrearage|FreeTierOnly|insufficient/i.test(cloud) ? '上次云端没认成：免费额度用完了或余额不足，用的是本机的结果。'
+          : /HTTP 40[13]|InvalidApiKey|AccessDenied/.test(cloud) ? '上次云端没认成：key 不对或没有权限，用的是本机的结果。'
+          : '上次云端没认成（网络不好或超时），用的是本机的结果。';
+        const keyBad = /HTTP 40[123]|Arrearage|FreeTierOnly|insufficient|InvalidApiKey|AccessDenied/i.test(cloud || '') || !(now && now.hasKey);
+        const howFree = !keyBad ? '' : '想让云端也免费用：去「千问 AI 平台」用手机号或支付宝登录（新用户送免费额度），在 API Key 页创建一个 sk-ws- 开头的 key，填到下面，地址和模型留空就行。';
         hint.textContent = Native.has()
           ? (loc === 'failed'
               ? '这台手机用不了本机识别（可能是 32 位系统），改用下面的云端接口。'
-              : '说话时在手机本机识别，边说边出字；松手后联网就把这段话交给下面的云端大模型（默认 Qwen3-ASR）再认一遍，更准，没联网或者用不了就用本机的结果。' + cloudNote)
+              : '说话时在手机本机识别（免费、不用联网），边说边出字；联网时同时交给云端语音大模型（千问 Qwen-Audio-3.1）认，松手就用它的结果，更准，用不了就用本机的。' + cloudNote + howFree)
           : '浏览器里用的是浏览器自带的语音识别。';
       };
       refresh();

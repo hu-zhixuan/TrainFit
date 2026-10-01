@@ -189,23 +189,4 @@ const protein = (r) => Math.round(r.meals.reduce((a, m) => a + (m.proteinG || 0)
 const inR = (what, v, a, b) => (v >= a && v <= b) || `${what} ${v} 不在 ${a}–${b}`;
 
 
-(async () => {
-  const only = (process.env.ONLY || '').split(',').filter(Boolean);
-  const skip = (process.env.SKIP || '').split(',').filter(Boolean);
-  const rounds = Number(process.env.ROUNDS || 1);
-  const rs = [];
-  for (let k = 0; k < rounds; k++) {
-    for (const [label, text, hhmm, check, extra] of CASES) {
-      if (only.length && !only.includes(label)) continue;
-      if (skip.includes(label)) continue;
-      await sleep(Number(process.env.GAP || 15000));
-      const ok = await call(rounds > 1 ? `${label} #${k + 1}` : label, text, hhmm, check, extra);
-      rs.push(ok);
-      if (!ok) FAILED.push(label);
-    }
-  }
-  const t = TIMES.slice().sort((a, b) => a - b);
-  const q = (f) => t.length ? (t[Math.min(t.length - 1, Math.floor(t.length * f))] / 1000).toFixed(1) + 's' : '-';
-  note(`[${TAG}] 汇总`, `通过 ${rs.filter(Boolean).length}/${rs.length} · 耗时中位 ${q(0.5)} · 九成以内 ${q(0.9)} · 最慢 ${q(0.999)}%0A没过：${FAILED.join('、') || '无'}`);
-  process.exit(0);
-})();
+module.exports=CASES;
