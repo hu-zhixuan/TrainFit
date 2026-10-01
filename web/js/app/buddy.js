@@ -444,7 +444,17 @@
     return { mood, say: tip || (pLeft > 0 ? `蛋白质还差 ${pLeft}g` : '还行，再均衡一点') };
   }
 
-  const Buddy = { CHARS, ART, HAIR, OUTFITS, DEFAULT_LOOK, MOODS, LEVEL_MOOD, GEAR_STEPS, POSES, W: GW, H: GH, heightOf, look, gearFor, compose, paths, svg, streakOf, nextGear, moodOf };
+  /** 没说重量时给的几个选项：估的那个，轻一档、重一档（整 2.5 / 5 公斤） */
+  function liftOpts(w) {
+    const step = w < 20 ? 2.5 : 5;
+    const r = (x) => Math.max(step, Math.round(x / step) * step);
+    let out = [...new Set([r(w * 0.65), r(w), r(w * 1.35)])];
+    if (out.length < 3) out = [...new Set([Math.max(step, r(w) - step), r(w), r(w) + step])];
+    return out.sort((x, y) => x - y);
+  }
+  TF.liftOpts = liftOpts;
+
+  const Buddy = { CHARS, ART, HAIR, OUTFITS, DEFAULT_LOOK, MOODS, LEVEL_MOOD, GEAR_STEPS, POSES, W: GW, H: GH, heightOf, look, gearFor, compose, paths, svg, streakOf, nextGear, moodOf, liftOpts };
   TF.Buddy = Buddy;
   if (typeof module !== 'undefined' && module.exports) module.exports = Buddy;
 })(typeof window !== 'undefined' ? window : globalThis);
@@ -807,38 +817,64 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
   },
 
   /**
-   * 份量说得含糊（「一瓶甜牛奶」「一串烤白果」）：记录已经按最常见的大小记上了，小人冒「?」问一句，
-   * 点一个就按克数比例改那一样、并记住（下次说同样的东西就不问了）。不点也行，点空白处收起。
-   * @param asks [{id: 记录 id, index: 第几样, name, amount, grams, opts: [{label, grams}]}]，最多 2 个，一个一个问
+   * 记好之后小人问一句（不拦着用户、不再调大模型），一个一个问，最多 3 个：
+   *  - 份量说得含糊（「一瓶甜牛奶」「一串烤白果」）：已经按最常见的大小记上了，点一个按克数比例改、并记住，下次不问；
+   *  - 新手练了个没练过的动作、没说重量：已经按常见的估了，点一个差不多的重量，或者「记不清」。
+   * 不点也行，点空白处收起，半分钟后自己收起。
+   * @param asks [{kind: 'food', id: 记录 id, index: 第几样, name, amount, grams, opts: [{label, grams}]}
+   *              | {kind: 'lift', id, name, saidReps}]
    */
   askPortion(asks) {
     const pop = document.getElementById('buddy-pop');
-    const list = (asks || []).filter(a => a && a.opts && a.opts.length > 1);
-    if (!pop || !list.length || this._touring) return;
+    if (!pop || this._touring) return;
+    const list = (asks || []).filter(Boolean);
+    if (!list.length) return;
     const a = list[0];
-    const rec = this.diet.find(d => d.id === a.id);
-    const item = rec && rec.items && rec.items[a.index];
-    if (!item || item.name !== a.name) { this.askPortion(list.slice(1)); return; }
-    const near = a.opts.reduce((m, o) => (Math.abs(o.grams - item.grams) < Math.abs(m.grams - item.grams) ? o : m), a.opts[0]);
+    const next = () => this.askPortion(list.slice(1));
+    let q, opts, near, foot, apply, done;
+    if (a.kind === 'lift') {
+      const rec = this.workouts.find(w => w.id === a.id);
+      if (!rec || !(rec.weightKg > 0)) { next(); return; }
+      opts = TF.liftOpts(rec.weightKg).map(kg => ({ label: `${kg}kg`, kg }));
+      near = opts.find(o => o.kg === rec.weightKg) || opts[1] || opts[0];
+      q = `${a.name}用了多重？`;
+      foot = `先按 ${round1(rec.weightKg)}kg 记了，差不多就行`;
+      apply = (o) => this.applyLiftWeight(a, o.kg);
+      done = (o) => `✓ 好，下次就从 ${o.kg}kg 往上加`;
+    } else {
+      const rec = this.diet.find(d => d.id === a.id);
+      const item = rec && rec.items && rec.items[a.index];
+      if (!item || item.name !== a.name || !a.opts || a.opts.length < 2) { next(); return; }
+      opts = a.opts;
+      near = opts.reduce((m, o) => (Math.abs(o.grams - item.grams) < Math.abs(m.grams - item.grams) ? o : m), opts[0]);
+      q = `${a.name}${a.amount ? ' ' + a.amount : ''}，大概多少？`;
+      foot = `先按「${near.label}」记了 · 选了我就记住，下次不问`;
+      apply = (o) => this.applyPortion(a, o);
+      done = (o) => `✓ 记住了，下次${a.name}${a.amount || ''}就按${o.label}`;
+    }
     pop.dataset.mode = 'ask';
     pop.dataset.level = 'none';
-    pop.innerHTML = `<div class="buddy-pop-head">选一下更准${list.length > 1 ? `（${list.length} 样）` : ''}</div>` +
-      `<p class="buddy-q">${esc(a.name)} ${esc(a.amount)}大概多少？</p>` +
-      `<div class="portion-opts">${a.opts.map((o, i) => `<button class="portion-opt${o === near ? ' on' : ''}" type="button" data-i="${i}">${esc(o.label)}</button>`).join('')}</div>` +
-      `<p class="buddy-foot">先按「${esc(near.label)}」记了 · 选了会记住，下次不问</p>`;
+    pop.innerHTML = `<div class="buddy-pop-head">问一句${list.length > 1 ? `（还有 ${list.length - 1} 个）` : ''}</div>` +
+      `<p class="buddy-q">${esc(q)}</p>` +
+      `<div class="portion-opts">${opts.map((o, i) => `<button class="portion-opt${o === near ? ' on' : ''}" type="button" data-i="${i}">${esc(o.label)}</button>`).join('')}` +
+      (a.kind === 'lift' ? '<button class="portion-opt skip" type="button" data-skip="1">记不清</button>' : '') + '</div>' +
+      `<p class="buddy-foot">${esc(foot)}</p>`;
+    const finish = (text) => {
+      clearTimeout(this._askT);
+      if (list.length > 1) { setTimeout(() => { if (pop.dataset.mode === 'ask') next(); }, 450); return; }
+      pop.querySelector('.buddy-foot').textContent = text;
+      if (!this._touring) this.buddyDo([['stand', 120], ['wave', 700], ['stand', 300]]);
+      this._askT = setTimeout(() => this.closeBuddyPop('ask'), 1600);
+    };
     pop.querySelectorAll('.portion-opt').forEach(b => b.addEventListener('click', (e) => {
       e.stopPropagation();
-      const o = a.opts[+b.dataset.i];
-      this.applyPortion(a, o);
-      pop.querySelectorAll('.portion-opt').forEach(x => x.classList.toggle('on', x === b));
       window.Haptics && window.Haptics.fire('tick');
+      pop.querySelectorAll('.portion-opt').forEach(x => x.classList.toggle('on', x === b));
+      if (b.dataset.skip) { finish('没事，先这么记着，想起来点开那条改'); return; }
+      const o = opts[+b.dataset.i];
+      apply(o);
       window.Sound && window.Sound.play('success');
-      clearTimeout(this._askT);
-      const rest = list.slice(1);
-      if (rest.length) { setTimeout(() => { if (pop.dataset.mode === 'ask') this.askPortion(rest); }, 450); return; }
-      pop.querySelector('.buddy-foot').textContent = `✓ 记住了：${a.name} ${a.amount}按${o.label}`;
-      if (!this._touring) this.buddyDo([['stand', 120], ['wave', 700], ['stand', 300]]);
-      this._askT = setTimeout(() => this.closeBuddyPop('ask'), 1400);
+      finish(done(o));
     }));
     this.positionBuddyPop();
     this.popIn(pop);
@@ -847,6 +883,22 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     // 没理它：过一会儿自己收起来（已经按最常见的记上了）
     clearTimeout(this._askT);
     this._askT = setTimeout(() => this.closeBuddyPop('ask'), 30000);
+  },
+
+  /** 选了重量：改那条训练，消耗按新重量重算；组数次数也说了的，就不再标「估的」 */
+  applyLiftWeight(a, kg) {
+    const rec = this.workouts.find(w => w.id === a.id);
+    if (!rec || !(kg > 0)) return;
+    const was = `${rec.exerciseName} ${round1(rec.weightKg)}kg`;
+    rec.weightKg = kg;
+    // 提示条还在的话，那一行也跟着改
+    document.querySelectorAll('#ql-snack-list .ql-snack-line').forEach(el => {
+      if (el.textContent.includes(was)) el.textContent = el.textContent.replace(was, `${rec.exerciseName} ${kg}kg`).replace('（估）', '');
+    });
+    rec.burnedCalories = Math.round((rec.sets || 3) * (rec.reps || 10) * (kg * 0.05 + 1.2));
+    if (a.saidReps && /估计/.test(rec.notes || '')) rec.notes = '一键记录';
+    this.saveData();
+    this.render();
   },
 
   /** 按选的大小改那一样：热量、蛋白质等按克数比例换算，合计重算，记住这个份量 */
@@ -893,7 +945,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     const name = this.userName();
     pop.dataset.mode = 'tip';
     pop.dataset.level = 'none';
-    pop.innerHTML = `<div class="buddy-pop-head">小提示</div><p class="buddy-say">${esc((name ? name + '，' : '') + pick[2])}</p>`;
+    pop.innerHTML = `<p class="buddy-say">${esc((name ? name + '，' : '') + pick[2])}</p>`;
     this.positionBuddyPop();
     this.popIn(pop);
     document.getElementById('gauge-pop').classList.add('hidden');
