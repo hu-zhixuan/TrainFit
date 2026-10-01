@@ -3,52 +3,14 @@ on:
   push:
     branches: [ claude/api-check ]
 jobs:
-  qwen-speed:
+  probe:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: Qwen3.8-Flash 关推理的参数和耗时
+      - name: 千问 key 现在能用哪些模型
         env:
-          TZ: Asia/Shanghai
-          LLM_API_KEY: ${{ secrets.QWEN_API }}
-          LLM_BASE_URL: https://maas.qianwenaiapi.com/compatible-mode/v1
-          LLM_MODEL: qwen3.8-flash
-          GAP: '3000'
-          TAG: Qwen3.8-Flash
-        run: node .github/llm_speed.js
-  qwen-acc:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-      - name: Qwen3.8-Flash 整理准确度（30 句 ×2）
-        env:
-          TZ: Asia/Shanghai
-          LLM_API_KEY: ${{ secrets.QWEN_API }}
-          LLM_BASE_URL: https://maas.qianwenaiapi.com/compatible-mode/v1
-          LLM_MODEL: qwen3.8-flash
-          GAP: '3000'
-          TAG: Qwen3.8-Flash
-          EXTRA: '{"enable_thinking":false}'
-        run: ROUNDS=2 node .github/api_check.js
-  atria-acc:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-      - name: Atria 整理准确度（同样 30 句 ×2，对照）
-        env:
-          TZ: Asia/Shanghai
-          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
-          LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
-          LLM_MODEL: ${{ vars.LLM_MODEL }}
-          GAP: '15000'
-          TAG: Atria
-        run: ROUNDS=2 node .github/api_check.js
+          K: ${{ secrets.QWEN_API }}
+        run: node .github/qw_probe.js
