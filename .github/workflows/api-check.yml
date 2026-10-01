@@ -3,19 +3,17 @@ on:
   push:
     branches: [ claude/api-check ]
 jobs:
-  atria:
+  stream:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: 口喷（记 + 练 + 删 + 问）×3，水煮蛋 ×2（只用 Atria）
+      - name: Atria 流式输出（只用 Atria，一次）
         env:
           TZ: Asia/Shanghai
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
           LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
           LLM_MODEL: ${{ vars.LLM_MODEL }}
-          TAG: 口喷
-        run: ONLY="口喷：记+练+删+问,糯米鸡+水煮蛋" ROUNDS=3 node .github/api_check.js
+        run: node .github/stream_probe.js

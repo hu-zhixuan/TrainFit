@@ -155,7 +155,7 @@
         '9. 听不懂：add 为空，reply 说明原因。',
         '10. 用户在问问题、要建议（「明天吃什么」「给我定个明天的食谱」「今天还差多少蛋白」「练完吃啥好」「明天练什么」「晚上还能吃点啥」「能不能吃火锅」），不是在报自己吃了练了什么：不要记（add 为空；同一句里也说了已经吃过、练过的，那部分照常记），在 answer 里回答。',
         '   回答要用下面「今天的情况」「最近成绩」「记住的食物」，按这个人的目标和还剩的热量、还差的蛋白质来定，具体到吃什么、多少，大概多少千卡和蛋白质（训练就写动作、重量、组数）。用户说了要求（「训练强度大，碳水多点」「不想吃米饭」）就照着调。',
-        '   写成几行短句，每行一件事（「早餐：两个鸡蛋＋一杯牛奶＋一个馒头，约450千卡、蛋白25g」），最多 8 行，不要 markdown 符号、不要客套话。reply 写一句「给了你明天的食谱」这样的话。',
+        '   写成几行短句，每行一件事（「早餐：两个鸡蛋＋一杯牛奶＋一个馒头，约450千卡、蛋白25g」），最多 8 行，不要 markdown 符号、不要客套话。reply 写一句「给了你明天的食谱」这样的话（又记又问就写「记了…，晚上吃啥看小人」），不要出现 answer 这个词。',
         '   和吃、练、体重都无关的问题（天气、聊天）：answer 写一句「我只管吃和练，这个帮不上～」。',
         '输出前核对一遍：原话里说到的每样吃的、喝的、补剂（包括听错字的，比如"茶叶大"）都记上了，没多记、没漏记。'
       ].join('\n');
@@ -219,7 +219,7 @@
           meals: [].concat(parsed.meals || [], parsed.add.meals || [])
         });
       }
-      out.reply = cleanText(parsed && parsed.reply, 40);
+      out.reply = cleanText(parsed && parsed.reply, 40).replace(/(看)?\s*answer/gi, '看小人');
       out.answer = cleanAnswer(parsed && parsed.answer);
       const refs = new Set((ctx.dayRecords || []).map(r => r.ref));
       (Array.isArray(parsed && parsed.update) ? parsed.update : []).forEach(u => {
