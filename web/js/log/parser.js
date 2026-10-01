@@ -189,7 +189,7 @@
       const a = s.indexOf('{');
       const b = s.lastIndexOf('}');
       if (a === -1 || b <= a) throw new Error('NO_JSON');
-      return JSON.parse(s.slice(a, b + 1));
+      try { return JSON.parse(s.slice(a, b + 1)); } catch (e) { throw new Error('BAD_JSON ' + e.message); }
     },
 
     /** 从 chat/completions 的原始响应里拿出 message.content */
@@ -373,7 +373,8 @@
           lastErr = e;
           const msg = (e && e.message) || '';
           if (msg === 'NO_KEY') break;
-          if (Parser.isTransient(msg) && retries < waits.length) {
+          // 实测 Atria 偶尔回到一半就断了（JSON 不完整）：和超时一样，再发一次
+          if ((Parser.isTransient(msg) || /^(NO_JSON|BAD_JSON)/.test(msg)) && retries < waits.length) {
             await new Promise(r => setTimeout(r, waits[retries++]));
             i -= 1; // 同一种请求再试
             continue;
