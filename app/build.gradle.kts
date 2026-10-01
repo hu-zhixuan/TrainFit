@@ -32,8 +32,8 @@ android {
         applicationId = "com.trainfit.ai"
         minSdk = 24
         targetSdk = 34
-        versionCode = 31
-        versionName = "3.5"
+        versionCode = 32
+        versionName = "3.6"
 
         buildConfigField("String", "LLM_BASE_URL", llmConfig("LLM_BASE_URL", "https://api.atria-asi.ai/v1"))
         buildConfigField("String", "LLM_MODEL", llmConfig("LLM_MODEL", "Atria-Dawn-Preview"))
@@ -97,4 +97,5 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.ktx)
     implementation(libs.androidx.webkit)
+    implementation(libs.okhttp) // 千问实时语音识别的 WebSocket
 }

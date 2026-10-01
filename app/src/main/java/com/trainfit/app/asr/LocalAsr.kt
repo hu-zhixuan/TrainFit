@@ -109,7 +109,13 @@ class LocalAsr(private val assets: AssetManager) {
     val isRecording: Boolean get() = running
 
     @SuppressLint("MissingPermission") // 调用前已检查 RECORD_AUDIO
-    fun start(onLevel: (Float) -> Unit, onPartial: (String) -> Unit, onMax: () -> Unit): Boolean {
+    /** onAudio：录音线程每收到 100ms 声音就给一份（云端实时识别用），别在里面做耗时的事 */
+    fun start(
+        onLevel: (Float) -> Unit,
+        onPartial: (String) -> Unit,
+        onMax: () -> Unit,
+        onAudio: ((ShortArray, Int) -> Unit)? = null
+    ): Boolean {
         if (running) return true
         val minBuf = AudioRecord.getMinBufferSize(SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
         if (minBuf <= 0) return false
@@ -147,6 +153,7 @@ class LocalAsr(private val assets: AssetManager) {
             while (running) {
                 val n = try { r.read(chunk, 0, chunk.size) } catch (e: Exception) { -1 }
                 if (n <= 0) continue
+                try { onAudio?.invoke(chunk, n) } catch (_: Exception) {}
                 var sum = 0.0
                 synchronized(lock) {
                     ensureCapacity(total + n)
@@ -200,15 +207,22 @@ class LocalAsr(private val assets: AssetManager) {
         return true
     }
 
-    /** 停止并返回最终文字（在后台线程调用） */
-    fun stop(): String {
-        if (!running && record == null) return ""
+    /**
+     * 停止并返回最终文字（在后台线程调用）。
+     * afterCapture：录音一停（最后一块声音已经交给 onAudio）就调用，比如告诉云端说完了；之后本机再整段认一遍
+     */
+    fun stop(afterCapture: () -> Unit = {}): String {
+        if (!running && record == null) {
+            try { afterCapture() } catch (_: Exception) {}
+            return ""
+        }
         running = false
         try { capture?.join(1500) } catch (_: Exception) {}
         try { record?.stop() } catch (_: Exception) {}
         try { record?.release() } catch (_: Exception) {}
         record = null
         capture = null
+        try { afterCapture() } catch (_: Exception) {}
         // 识别线程手上那一次识别做完就退出
         try { worker?.join(10_000) } catch (_: Exception) {}
         worker = null

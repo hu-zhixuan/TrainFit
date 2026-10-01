@@ -11,11 +11,13 @@ import java.net.URL
  * 它不走 OpenAI 的 /audio/transcriptions，要把录音转成 base64 放进 JSON（照 BiBi-Keyboard 的做法）。
  * key 以 sk-ws- 开头，或者接口地址是它家的，就走这里；设置里只填 key、地址和模型留空也行。
  *
- * 默认 Qwen-Audio-3.1-ASR-Flash：2026-10 用 60 句录音（一半带噪音）实测错字 1.8% / 2.3%，
- * 本机 SenseVoice 是 5.8% / 11.1%，qwen3-asr-flash 是 5.5% / 8.3%；还会去掉「呃、那个、就是」。
+ * 默认 Qwen-Audio-3.1-ASR-Flash-Message：实时版，按住说话时边说边传（QianwenStream），松手很快出结果。
+ * 它的整段版 qwen-audio-3.1-asr-flash 在这里用（本机识别用不了、或者设置里填了别的整段模型时）：
+ * 2026-10 用 60 句录音（一半带噪音）实测错字 1.8% / 2.3%，本机 SenseVoice 是 5.8% / 11.1%。
  */
 object Qianwen {
-    const val MODEL = "qwen-audio-3.1-asr-flash"
+    const val MODEL = "qwen-audio-3.1-asr-flash-message"
+    const val BATCH_MODEL = "qwen-audio-3.1-asr-flash"
     private const val DEFAULT_ROOT = "https://maas.qianwenaiapi.com"
     private val HOSTS = listOf("qianwenaiapi.com", "qwencloudapi.com", "dashscope.aliyuncs.com", "dashscope-intl.aliyuncs.com")
 
@@ -37,8 +39,20 @@ object Qianwen {
 
     fun model(cfg: ApiConfig): String = cfg.model.takeIf { it.isNotBlank() && !it.contains('/') } ?: MODEL
 
+    /** 实时（边说边传）的模型：走 inference WebSocket（qwen3-asr-flash-realtime 是另一套协议，不在这里） */
+    fun isStreaming(model: String) = model.endsWith("-message") || model.endsWith("-streaming") || model == "fun-asr-realtime"
+
+    /** 整段识别用的模型：实时模型换成同一代的整段版 */
+    private fun batchModel(cfg: ApiConfig): String = model(cfg).let { if (isStreaming(it)) BATCH_MODEL else it }
+
+    fun wsUrl(cfg: ApiConfig): String {
+        val host = hostOf(cfg.baseUrl)
+        val h = if (HOSTS.any { host.endsWith(it) }) host else hostOf(DEFAULT_ROOT)
+        return "wss://$h/api-ws/v1/inference"
+    }
+
     fun transcribe(cfg: ApiConfig, wav: ByteArray, quick: Boolean): ApiResult {
-        val body = requestBody(model(cfg), "data:audio/wav;base64," + Base64.encodeToString(wav, Base64.NO_WRAP))
+        val body = requestBody(batchModel(cfg), "data:audio/wav;base64," + Base64.encodeToString(wav, Base64.NO_WRAP))
             .toString().toByteArray(Charsets.UTF_8)
 
         var lastError = ""

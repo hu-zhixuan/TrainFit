@@ -15,6 +15,7 @@ import com.trainfit.app.net.ApiConfig
 import com.trainfit.app.net.ApiResult
 import com.trainfit.app.net.OpenAiApi
 import com.trainfit.app.net.Qianwen
+import com.trainfit.app.net.QianwenStream
 import org.json.JSONObject
 import java.util.Locale
 import java.util.concurrent.Executors
@@ -132,43 +133,85 @@ class NativeBridge(
     @Volatile private var cloudPausedUntil = 0L
     @Volatile private var cloudPausedFor = "" // 哪个接口 + key 在歇着：设置里换了 key 就马上再试
 
+    private fun cloudWho(cfg: ApiConfig) = cfg.baseUrl + " " + cfg.apiKey
+    private fun cloudPaused(cfg: ApiConfig) = cloudWho(cfg) == cloudPausedFor && System.currentTimeMillis() < cloudPausedUntil
+
+    /** 余额不足 / 免费额度用完、key 不对：半小时内别再试，免得每次都白等；其它（没网、超时）下次照试 */
+    private fun noteCloudFailure(cfg: ApiConfig, err: String) {
+        cloudStatus = err
+        if (Regex("^HTTP 4(01|02|03)|Arrearage|FreeTierOnly|InvalidApiKey|AccessDenied").containsMatchIn(err)) {
+            cloudPausedFor = cloudWho(cfg)
+            cloudPausedUntil = System.currentTimeMillis() + 30 * 60_000L
+        }
+    }
+
     /** 联网就把刚才那段话交给云端大模型再认一遍，认出来就用它的；没联网、没余额、超时返回 null（用本机的） */
     private fun cloudFinal(local: String, overrideJson: String): String? {
         if (local.isBlank()) return null
         val cfg = asrConfig(overrideJson)
-        if (!cfg.isComplete) return null
-        val who = cfg.baseUrl + " " + cfg.apiKey
-        if (who == cloudPausedFor && System.currentTimeMillis() < cloudPausedUntil) return null
+        if (!cfg.isComplete || cloudPaused(cfg)) return null
         val wav = localAsr.lastWav() ?: return null
         val r = OpenAiApi.transcribe(cfg, wav, quick = true)
         if (r.ok && r.body.isNotBlank()) {
             cloudStatus = "ok"
             return r.body
         }
-        cloudStatus = r.body
-        // 余额不足 / 免费额度用完、key 不对：半小时内别再试，免得每次都白等；其它（没网、超时）下次照试
-        if (Regex("^HTTP 4(01|02|03)|Arrearage|FreeTierOnly").containsMatchIn(r.body)) {
-            cloudPausedFor = who
-            cloudPausedUntil = System.currentTimeMillis() + 30 * 60_000L
+        noteCloudFailure(cfg, r.body)
+        return null
+    }
+
+    // 千问的实时识别（Qwen-Audio-3.1-ASR-Message）：按住时开始边说边传，松手后等它的结果
+    @Volatile private var cloudStream: QianwenStream? = null
+
+    private fun openCloudStream(overrideJson: String): QianwenStream? {
+        val cfg = asrConfig(overrideJson)
+        if (!cfg.isComplete || !Qianwen.matches(cfg) || cloudPaused(cfg)) return null
+        val model = Qianwen.model(cfg)
+        if (!Qianwen.isStreaming(model)) return null
+        return try { QianwenStream(cfg, model).also { it.open() } } catch (_: Exception) { null }
+    }
+
+    /** 松手后最多等到 deadline；拿不到返回 null（用本机的） */
+    private fun streamResult(cs: QianwenStream, deadline: Long, overrideJson: String): String? {
+        val r = cs.await(deadline)
+        val err = cs.error
+        if (err == null) {
+            cloudStatus = "ok"
+            return r
         }
+        noteCloudFailure(asrConfig(overrideJson), err)
         return null
     }
 
     @JavascriptInterface
     fun startRecording() {
+        startRecording("{}")
+    }
+
+    /** overrideJson：设置里填的语音识别接口（实时识别按住时就要连上） */
+    @JavascriptInterface
+    fun startRecording(overrideJson: String) {
         main.post {
             systemSpeech.cancel() // 别和系统语音抢麦克风
             if (hasMicPermission()) {
                 io.execute {
                     usingLocal = !localAsr.failed
+                    cloudStream?.cancel()
+                    val cs = if (usingLocal) openCloudStream(overrideJson) else null
+                    cloudStream = cs
                     val ok = if (usingLocal) {
                         localAsr.start(
                             onLevel = { lv -> callJs("__tfRec", "level", formatLevel(lv)) },
                             onPartial = { text -> callJs("__tfRec", "partial", text) },
-                            onMax = { callJs("__tfRec", "max", "") }
+                            onMax = { callJs("__tfRec", "max", "") },
+                            onAudio = cs?.let { s -> { buf: ShortArray, n: Int -> s.feed(buf, n) } }
                         )
                     } else {
                         recorder.start()
+                    }
+                    if (!ok) {
+                        cs?.cancel()
+                        cloudStream = null
                     }
                     if (ok) callJs("__tfRec", "start", if (usingLocal) "local" else "cloud")
                     else callJs("__tfRec", "error", "RECORD_FAILED")
@@ -184,7 +227,11 @@ class NativeBridge(
 
     @JavascriptInterface
     fun cancelRecording() {
-        io.execute { if (usingLocal) localAsr.cancel() else recorder.cancel() }
+        io.execute {
+            cloudStream?.cancel()
+            cloudStream = null
+            if (usingLocal) localAsr.cancel() else recorder.cancel()
+        }
     }
 
     /** 停止录音并转文字，结果通过 __tfAsr 回调 */
@@ -192,9 +239,15 @@ class NativeBridge(
     fun stopRecording(requestId: String, overrideJson: String) {
         io.execute {
             if (usingLocal) {
-                // 本机识别：松手后把整段话再识别一遍（几百毫秒到一两秒）；联网再交给云端大模型认一遍
-                val local = localAsr.stop()
-                val text = cloudFinal(local, overrideJson) ?: local
+                // 本机识别：松手后把整段话再识别一遍（几百毫秒到一两秒）。
+                // 千问实时识别：录音一停就告诉它说完了，本机整段再认的同时等它，5 秒内回来就用它的；
+                // 别的云端接口：本机认完再把这段话交给它认一遍
+                val releasedAt = System.currentTimeMillis()
+                val cs = cloudStream
+                cloudStream = null
+                val local = localAsr.stop { cs?.finish() }
+                val cloud = if (cs != null) streamResult(cs, releasedAt + 5000, overrideJson) else cloudFinal(local, overrideJson)
+                val text = cloud?.takeIf { it.isNotBlank() } ?: local
                 if (text.isNotBlank()) callJs("__tfAsr", requestId, true, text)
                 else callJs("__tfAsr", requestId, false, if (localAsr.ready) "NO_SPEECH" else "LOCAL_NOT_READY")
                 return@execute
