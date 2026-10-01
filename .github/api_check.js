@@ -58,6 +58,17 @@ const types = (r) => r.meals.map(m => m.mealType.replace('/补剂', '')).join(',
 const itemNames = (m) => (m.items || []).map(i => i.name).join(',') + ',' + m.foodSummary;
 
 const CASES = [
+  // ---- 口喷：一句话里又记吃的、又记训练、又删一条、又提问 ----
+  ['口喷：记+练+删+问', '早上两个包子一杯豆浆，中午黄焖鸡米饭，下午卧推八十公斤四组八个，然后刚才那杯奶茶删掉吧其实没喝，晚上吃点啥能把蛋白补够', '17:30', r => {
+    const t = types(r);
+    if (!/早餐/.test(t) || !/午餐/.test(t)) return '餐次：' + allItems(r);
+    const b = r.workouts.find(w => /卧推/.test(w.exerciseName));
+    if (!b || b.weightKg !== 80 || b.sets !== 4 || b.reps !== 8) return '卧推不对';
+    if (!r.deletes.includes('r1')) return '奶茶没删：' + JSON.stringify(r.deletes);
+    if (/奶茶/.test(allItems(r))) return '奶茶又记了';
+    return (r.answer || '').length > 8 || '没回答：' + r.answer;
+  }, { dayRecords: [{ ref: 'r1', kind: 'meal', id: 'd1', text: '加餐 珍珠奶茶1杯 340kcal 蛋白3 碳水60 脂肪10（珍珠奶茶 1杯 500g 340kcal 蛋白3）' }] }],
+
   // ---- 问问题（v4.0）：不记、answer 里回答 ----
   ['问：明天食谱', '给我制定一下明天的食谱，我训练强度比较大，碳水可能要多一点', '21:00', r => {
     if (r.meals.length || r.workouts.length) return '不该记：' + allItems(r);

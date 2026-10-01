@@ -11,19 +11,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: 提问（只用 Atria）×3
+      - name: 口喷（记 + 练 + 删 + 问）×3，水煮蛋 ×2（只用 Atria）
         env:
           TZ: Asia/Shanghai
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
           LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
           LLM_MODEL: ${{ vars.LLM_MODEL }}
-          TAG: 提问
-        run: ONLY="问：明天食谱,问：还差多少蛋白,问：又记又问,问：明天练什么,问：能不能吃火锅,问：无关" ROUNDS=3 node .github/api_check.js
-      - name: 回归（记录的那些句子）×1
-        env:
-          TZ: Asia/Shanghai
-          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
-          LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
-          LLM_MODEL: ${{ vars.LLM_MODEL }}
-          TAG: 回归
-        run: SKIP="问：明天食谱,问：还差多少蛋白,问：又记又问,问：明天练什么,问：能不能吃火锅,问：无关" node .github/api_check.js
+          TAG: 口喷
+        run: ONLY="口喷：记+练+删+问,糯米鸡+水煮蛋" ROUNDS=3 node .github/api_check.js
