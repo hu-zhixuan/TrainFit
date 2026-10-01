@@ -60,7 +60,8 @@
       // 这天的计划（「早餐照计划吃了」），刚才小人给的计划（「不要米饭换红薯」，15 分钟内）
       const plans = app.planContext ? app.planContext(date) : [];
       const offer = app._planOffer && Date.now() - app._planOffer.at < 15 * 60 * 1000 ? app._planOffer.text : '';
-      return { now: new Date(p.ts || Date.now()), history: app.workouts, dayRecords, recent, dayLabel, lastWeight: lw ? lw.kg : null, myFoods: app.myFoods || [], day, plans, lastPlan: offer };
+      return { now: new Date(p.ts || Date.now()), history: app.workouts, dayRecords, recent, dayLabel, lastWeight: lw ? lw.kg : null, myFoods: app.myFoods || [], day, plans, lastPlan: offer,
+        memo: app.memoList ? app.memoList() : [] };
     },
 
     async process(p) {
@@ -99,7 +100,7 @@
         const byRef = new Map((ctx.plans || []).map(x => [x.ref, x.id]));
         result.donePlans.forEach(ref => { const id = byRef.get(ref); if (id) app.plans = app.plans.filter(x => x.id !== id); });
       }
-      const changes = result.workouts.length + result.meals.length + (result.updates || []).length + (result.deletes || []).length + (result.bodyWeight ? 1 : 0) + (result.remember || []).length;
+      const changes = result.workouts.length + result.meals.length + (result.updates || []).length + (result.deletes || []).length + (result.bodyWeight ? 1 : 0) + (result.remember || []).length + (result.memo || []).length + (result.forget || []).length;
       const answerOpts = { plan: result.plan, baseDate: p.date };
       if (!changes) {
         // 问问题（「明天吃什么」）：不记、不报错，小人回答；给了计划的话气泡里能「加到明天」
@@ -118,6 +119,7 @@
       this.showSnack(batch, result);
       if (result.answer && app.showBuddyAnswer) app.showBuddyAnswer(p.text, result.answer, answerOpts); // 又记又问
       else if (batch.asks.length && app.askPortion) app.askPortion(batch.asks); // 份量含糊：小人问一句，点一下就改
+      else if (app.newbieTip && app.newbieTip(result)) { /* 新手第一周：小人说一句小提示 */ }
       else if (app.closeBuddyPop) app.closeBuddyPop('thinking'); // 猜成提问其实是记录：把「我想想」收起来
     },
 
@@ -215,6 +217,8 @@
 
       // 记住的食物（「记住，糯米鸡一个350大卡」、包装上的营养数）
       batch.remembered = (result.remember || []).map(f => ({ name: f.name, prev: app.rememberFood(f) }));
+      // 小本本（「我叫阿程」「我不吃辣」）
+      if (((result.memo || []).length || (result.forget || []).length) && app.updateMemo) batch.memoPrev = app.updateMemo(result.memo, result.forget);
 
       app.saveData();
       app.render();
@@ -233,6 +237,8 @@
       });
       if (result.bodyWeight) lines.push(`体重 · ${result.bodyWeight} kg`);
       (result.remember || []).forEach(f => lines.push(`记住 · ${f.name} ${f.amount || '1份'} ${f.calories} kcal`));
+      (result.memo || []).forEach(m => lines.push(`记在小本本上 · ${m}`));
+      (result.forget || []).forEach(m => lines.push(`从小本本上划掉 · ${m}`));
       return lines;
     },
 
@@ -244,6 +250,7 @@
         : result.bodyWeight && n === 1 ? `✓ 记下体重 ${result.bodyWeight} kg`
         : n ? `✓ 已记下 ${n} 条`
         : kept ? `✓ 记住了 ${result.remember.map(f => f.name).join('、')}`
+        : (result.memo || []).length ? '✓ 记住了'
         : '✓ 已更新';
       if (n && batch.date !== getTodayDateString()) t += `（${batch.date.slice(5).replace('-', '月')}日）`;
       const lines = this.describe(result).concat(batch.changed || []);
@@ -251,6 +258,13 @@
       (batch.workoutIds || []).forEach(id => {
         const fb = app.liftFeedback && app.liftFeedback(app.workouts.find(w => w.id === id));
         if (fb) lines.push(fb);
+      });
+      // 十分钟内记了一模一样的一餐（说了两遍）：提醒一下，重复了点撤销
+      (batch.dietIds || []).forEach(id => {
+        const d = app.diet.find(x => x.id === id);
+        const twin = d && app.diet.find(x => x.id !== id && !batch.dietIds.includes(x.id) && x.date === d.date && x.foodSummary === d.foodSummary &&
+          x.calories === d.calories && Math.abs(recordTs(d) - recordTs(x)) < 10 * 60 * 1000);
+        if (twin) lines.unshift(`「${d.foodSummary}」和刚才那条一样，重复了就点撤销`);
       });
       const kcal = result.meals.reduce((a, m) => a + (m.calories || 0), 0);
       const eq = kcal > 0 && app.equivText ? app.equivText(kcal) : '';
@@ -272,6 +286,7 @@
         (batch.removed || []).forEach(r => (r.kind === 'meal' ? app.diet : app.workouts).unshift(r.rec));
         if (batch.weight && app.restoreWeight) app.restoreWeight(batch.weight.date, batch.weight.prev);
         (batch.remembered || []).slice().reverse().forEach(r => app.restoreFood(r.name, r.prev));
+        if (batch.memoPrev) app.profile.memo = batch.memoPrev;
         app.saveData();
         app.render();
       });

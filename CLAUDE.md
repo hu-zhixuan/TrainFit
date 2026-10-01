@@ -19,7 +19,8 @@
 6. **能用现成方案就用**：本机语音识别照搬 sherpa-onnx 官方 Android demo（模型也用它默认的 SenseVoice int8 2024-07-17；2025-09-09 那版是粤语微调的，别换；FunASR-Nano、Qwen3-ASR、FireRedASR 更准但 500～840MB，手机上装不下也不够快）；成分表数据来自 Sanotsu/china-food-composition-data。先查 GitHub 上有没有成熟做法。
 7. **问问题也走那一个按钮**（v4.0，第一个外部用户张口就问「给我定明天的食谱」）：提示词第 10 条，提问不记、不报错，回答放 `answer`（最多 8 行，`cleanAnswer` 去掉 markdown），`pipeline.process` 没有改动、有 answer 时不留失败卡片，交给 `showBuddyAnswer` 用小人的气泡回答（`#buddy-pop` 的 `data-mode="answer"`，跟着 `placeBuddy` 走，别盖住提示条）；上下文里有 `ctx.day`（预算、已吃、蛋白质目标）。别加聊天页、聊天记录、计划页，回答看完就收起。v4.1：用户嫌「问了没反应」——`looksLikeQuestion` 像提问时不出待整理卡片，小人马上进「想」的气泡（`showBuddyThinking`，轮换几句在干嘛），大模型用流式（`NativeBridge.llmChatStream` → `__tfLlmDelta`，`partialAnswer` 从没写完的 JSON 里抠出 answer 边出边显示），回答出来 `buddyBang`（蹦一下 + 头旁边冒「!」，头顶是气泡会挡住）。2026-10 真实 Atria 实测：回答 4～11 秒开始出字，但整份计划（answer + plan 带 items）要 45～63 秒才出完，偶尔卡住（原生读超时 60 秒后重试，`deltaFor` 让重试从头算）；所以 answer 写完、plan 还在出时气泡显示「正在排成计划」（`buddy-wait`）。回答是某天的安排时大模型同时给 `plan`（`dayOffset` + meals / workouts，按记录的规则估），气泡下面「改一改」「加到明天」：加了变成那天的虚线计划行（`plans.js`，存 `fit_plans`，跟着备份），点 ✓ 变成记录；「改一改」靠上下文里「刚才给的计划」（15 分钟内）；「早餐照计划吃了」→ `donePlans`。计划只是今天页里的几行，别做成单独的页面。
 8. **份量含糊就问一句，但别拖慢大模型**（v4.2，用户：「AI 反应时间已经是我能接受的极限」）：提示词让大模型在说得含糊、大小热量差得多的那一项上加 `opts`（2～3 个 [文字, 克数]，一句最多 2 样；说了具体量的、记住的、低热量的不加），只多几十个 token。`sizeOpts` 整理，`save` 时不存进记录、放进 `batch.asks`，记好后 `askPortion` 让小人冒「?」问，点了 `applyPortion` 按克数比例改并 `rememberFood`，下次就不问。不要为了问份量再调一次大模型、也不要在记好之前拦着用户先选。训练建议全在本机算（`liftFeedback` 进提示条、`trainingTip` 进点小人的气泡），不走大模型。
-9. 用户的叫法：「口喷」（按住说一大段）、「热量赤字」（不要写「缺口」）。
+9. **门槛要低、跟用户有连接，但别搞复杂**（v4.3，用户的朋友是健身小白：以为必须一口气说完、不知道吃了多少、叫不出器械名字）：文案别写「一口气说完」；提示词让大模型认描述（「坐着往前推的那个机器」→ 坐姿推胸，reply 告诉他名字）；份量选项写「小碗 / 拳头大 / 一盘」不写克数。小本本 `profile.memo`（最多 12 条短句，大模型输出 `memo` / `forget`，上下文里带「小本本」，`userName()` 从「叫阿程」取名字，设置里「小人记住的」能删，`mergeBackupData` 合并两边）——只放关于这个人、以后一直有用的事，别把聊天记录、每天的事塞进去，上下文要短。新手第一周记完 `newbieTip` 最多说一句（`tf_tips` 记说过哪句），点小人的 `observation()` 和 `trainingTip()` 都是本机算的。
+10. 用户的叫法：「口喷」（按住说一大段）、「热量赤字」（不要写「缺口」）。
 
 ## 工作流
 

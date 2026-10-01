@@ -53,6 +53,34 @@ Object.assign(FitnessApp.prototype, {
     this._backupDirty = true;
   },
 
+  // ===== 小本本：用户说过的关于自己的事（「叫阿程」「不吃辣」「膝盖有旧伤」），每次整理都带给大模型，最多 12 条 =====
+  memoList() { return Array.isArray(this.profile.memo) ? this.profile.memo : []; },
+
+  /** 加几条、去掉几条，返回原来的（撤销用） */
+  updateMemo(add, forget) {
+    const prev = this.memoList().slice();
+    const drop = new Set(forget || []);
+    const next = prev.filter(x => !drop.has(x));
+    (add || []).forEach(x => { if (x && !next.includes(x)) next.push(x); });
+    this.profile.memo = next.slice(-12);
+    return prev;
+  },
+
+  /** 小本本里的名字：「叫阿程」→ 阿程 */
+  userName() {
+    const m = this.memoList().map(x => /^我?(?:叫|名字是?|昵称是?)\s*([^\s，,。；;、]{1,8})$/.exec(x)).find(Boolean);
+    return m ? m[1] : '';
+  },
+
+  renderMemo() {
+    const el = document.getElementById('memo-list');
+    if (!el) return;
+    const list = this.memoList();
+    el.innerHTML = list.length
+      ? list.map((x, i) => `<div class="myfood-row"><div class="myfood-main"><b>${esc(x)}</b></div><button type="button" class="chip" data-memo-del="${i}">删除</button></div>`).join('')
+      : '<p class="field-note">跟小人说说你自己，比如「我叫阿程，健身新手，不吃辣」，会记在这里，以后回答、估热量、排计划都照顾到。</p>';
+  },
+
   renderMyFoods() {
     const el = document.getElementById('my-foods');
     if (!el) return;

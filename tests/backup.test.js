@@ -64,3 +64,12 @@ test('小人给的计划也跟着备份：恢复时导进来，同一条不记�
   assert.strictEqual(r.data.fit_plans[0].foodSummary, '鸡蛋2个、牛奶1杯');
   assert.strictEqual(mergeBackupData(r.data, bak).added.plans, 0);
 });
+
+test('小本本跟着备份：已经在用的手机上恢复，身体数据不动，但两边记的事合在一起', () => {
+  const bak = parseBackup(JSON.stringify({ app: '练食AI', format: 1, data: { fit_profile: { customized: true, weightKg: 61, memo: ['叫阿程', '不吃辣'] }, fit_diet: [] } }));
+  const r = mergeBackupData({ fit_profile: { customized: true, weightKg: 70, memo: ['不吃辣', '膝盖有旧伤'] }, fit_diet: [{ id: 'd1', date: '2026-10-01' }], fit_workouts: [], fit_weights: [], fit_my_foods: [] }, bak);
+  assert.strictEqual(r.data.fit_profile.weightKg, 70);
+  assert.deepStrictEqual(r.data.fit_profile.memo, ['不吃辣', '膝盖有旧伤', '叫阿程']);
+  const same = mergeBackupData(r.data, bak);
+  assert.deepStrictEqual(same.data.fit_profile.memo, ['不吃辣', '膝盖有旧伤', '叫阿程']);
+});
