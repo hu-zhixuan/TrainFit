@@ -744,7 +744,13 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     // 还在出字、气泡已经在显示这一问：只换文字，不重画、不重复跳
     if (opts.streaming && !fresh) {
       const el = pop.querySelector('.buddy-answer');
-      if (el) { el.textContent = answer; return; }
+      if (el) {
+        el.textContent = answer;
+        el.classList.toggle('typing', !opts.planning);
+        const wait = pop.querySelector('.buddy-wait');
+        if (wait && wait.classList.contains('hidden') === !!opts.planning) { wait.classList.toggle('hidden', !opts.planning); this.positionBuddyPop(); }
+        return;
+      }
     }
     if (!opts.streaming) this._lastAnswer = { question, answer, at: Date.now(), plan: opts.plan, baseDate: opts.baseDate };
     const plan = !opts.streaming && opts.plan;
@@ -760,7 +766,8 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     const dayWord = (d) => (d === getTodayDateString() ? '今天' : d === shiftDateString(getTodayDateString(), 1) ? '明天' : `${+d.slice(5, 7)}月${+d.slice(8)}日`);
     const added = plan && (this.plans || []).some(x => x.date === planDate && x.from === this._lastAnswer.at);
     pop.innerHTML = `<div class="buddy-pop-head">${esc(q.length > 26 ? q.slice(0, 25) + '…' : q)}</div>` +
-      `<p class="buddy-answer${opts.streaming ? ' typing' : ''}">${esc(answer)}</p>` +
+      `<p class="buddy-answer${opts.streaming && !opts.planning ? ' typing' : ''}">${esc(answer)}</p>` +
+      (opts.streaming ? `<p class="buddy-wait${opts.planning ? '' : ' hidden'}">正在排成计划，好了能一键加上<span class="think-dots"><i></i><i></i><i></i></span></p>` : '') +
       (plan ? `<div class="buddy-acts"><button class="buddy-act" type="button" data-pa="edit">改一改</button>` +
         `<button class="buddy-act primary" type="button" data-pa="add"${added ? ' disabled' : ''}>${added ? '✓ 已加到' : '加到'}${dayWord(planDate)}</button></div>` +
         `<p class="buddy-tip hidden">按住下面的按钮说要改的地方，比如「不要米饭，换成红薯」「蛋白再多一点」</p>` : '') +

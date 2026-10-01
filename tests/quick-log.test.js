@@ -267,6 +267,32 @@ test('大模型慢：过一会儿再发一份，谁先回来用谁；第一份�
   }
 });
 
+test('边想边出字：拿到的是到目前为止的全部文字；卡住重试时从头算，不和上一次的半截拼起来', async () => {
+  const origSend = Parser.send;
+  Parser.retryWaits = [0, 0];
+  Parser.hedgeMs = 0;
+  const full = JSON.stringify({ reply: '给了你明天的食谱', answer: '早餐：燕麦\n午餐：米饭' });
+  try {
+    let n = 0;
+    Parser.send = async (body, override, onDelta) => {
+      n += 1;
+      if (n === 1) { onDelta('{"reply":"x","answer":"早'); throw new Error('SocketTimeoutException: timeout'); }
+      for (let i = 0; i < full.length; i += 7) onDelta(full.slice(i, i + 7));
+      return JSON.stringify({ choices: [{ message: { content: full } }] });
+    };
+    const seen = [];
+    const r = await Parser.parse('给我定一下明天的食谱', {}, (soFar) => seen.push(TF.partialAnswer(soFar)));
+    assert.strictEqual(n, 2);
+    assert.strictEqual(r.answer, '早餐：燕麦\n午餐：米饭');
+    assert.strictEqual(seen[seen.length - 1], '早餐：燕麦\n午餐：米饭');
+    assert.ok(seen.every(a => !a.includes('{')), '没把两次的文字拼在一起：' + JSON.stringify(seen));
+  } finally {
+    Parser.send = origSend;
+    delete Parser.retryWaits;
+    delete Parser.hedgeMs;
+  }
+});
+
 test('热量对得上、蛋白质对不上：是大模型写错了，用成分表的（三个鸡蛋不是 39g 蛋白）', () => {
   const egg = groundItem({ name: '鸡蛋', amount: '3个', grams: 150, calories: 209, proteinG: 39 });
   assert.strictEqual(egg.src, '成分表');

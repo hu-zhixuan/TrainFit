@@ -68,13 +68,16 @@
       const ctx = this.buildContext(p);
       let result;
       // 边想边出字：answer 一出来就往小人的气泡里写
-      let buf = '', shown = '';
-      const onDelta = (chunk) => {
-        buf += chunk;
+      // 回答写完了、后面在写计划（整份计划要 30～60 秒）：气泡里说「正在排成计划」，别让光标一直闪
+      let buf = '', shown = '', planning = false;
+      const onDelta = (soFar) => {
+        buf = soFar;
         const a = partialAnswer ? partialAnswer(buf) : '';
-        if (a && a !== shown && app.showBuddyAnswer && app.pending.some(x => x.id === p.id)) {
+        const pl = !!a && /"answer"\s*:\s*"(?:[^"\\]|\\.)*"/.test(buf) && /"plan"\s*:\s*\{/.test(buf);
+        if (a && (a !== shown || pl !== planning) && app.showBuddyAnswer && app.pending.some(x => x.id === p.id)) {
           shown = a;
-          app.showBuddyAnswer(p.text, a, { streaming: true });
+          planning = pl;
+          app.showBuddyAnswer(p.text, a, { streaming: true, planning: pl });
         }
       };
       try {

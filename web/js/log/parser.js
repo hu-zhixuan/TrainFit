@@ -401,9 +401,11 @@
       const waits = this.retryWaits || [3000, 8000]; // 限流 / 超时 / 网络断了：等一等再试，最多两次
       let lastErr;
       let retries = 0;
+      // 边想边出字：onDelta 拿到的是这一次请求到目前为止的全部文字（卡住重试时从头算，不和上一次的半截拼在一起）
+      const deltaFor = () => { if (!onDelta) return null; let soFar = ''; return (chunk) => { soFar += chunk; onDelta(soFar); }; };
       for (let i = 0; i < attempts.length; i++) {
         try {
-          const raw = await this.sendHedged(attempts[i], override, onDelta);
+          const raw = await this.sendHedged(attempts[i], override, deltaFor());
           const parsed = this.extractJson(this.contentFromResponse(raw));
           return this.normalize(parsed, Object.assign({ said: text }, ctx));
         } catch (e) {

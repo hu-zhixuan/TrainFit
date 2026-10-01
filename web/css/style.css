@@ -528,6 +528,7 @@ body.has-buddy .views { padding-bottom: calc(var(--cmp-h, 110px) + 52px + var(--
 .buddy-act.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .buddy-act:disabled { opacity: 0.6; cursor: default; }
 .buddy-tip { margin: 8px 0 0; font-size: 0.78rem; line-height: 1.5; color: var(--text-3); }
+.buddy-wait { display: flex; align-items: center; gap: 6px; margin: 10px 0 0; padding-top: 8px; border-top: 1px solid var(--line); font-size: 0.78rem; color: var(--text-3); }
 /* 气泡从小人头顶弹出来（带一点回弹） */
 @media (prefers-reduced-motion: no-preference) {
   .buddy-pop.pop-spring { animation: popSpring 0.42s cubic-bezier(0.2, 1.5, 0.4, 1); }
