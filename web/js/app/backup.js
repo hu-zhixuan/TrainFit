@@ -4,7 +4,7 @@
  * 备份文件是 JSON：{ app: '练食AI', format: 1, exportedAt, range: {from, to}, counts, data: { fit_diet: [...], … } }
  * 只放记录和个人资料；AI 接口 / 语音识别的 key 不放进去，发给别人也不会漏。
  * 自动备份的文件在卸载 App 后还在。重装后点「从备份恢复」：系统的文件夹授权页直接停在「下载/练食AI」，
- * 点「使用此文件夹」→「允许」，我们自己找最新的一份恢复（照 Mihon 的做法，不用自己翻文件）。
+ * 点「使用此文件夹」→「允许」，我们自己挑记录最多的那份恢复（照 Mihon 的做法，不用自己翻文件）。
  * 换手机：旧手机「发送备份文件」到微信，新手机在微信里点开 →「用其他应用打开」→ 练食AI，直接恢复。
  */
 const BACKUP_KEYS = ['fit_profile', 'fit_workouts', 'fit_diet', 'fit_weights', 'fit_my_foods'];
@@ -95,7 +95,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
 
   /**
    * 从备份恢复 → 合并进来 → 底部提示可以撤销。
-   * 安卓：先一键找回（授权「下载/练食AI」文件夹，自动找最新的备份）；那里没有就让选文件。
+   * 安卓：先一键找回（授权「下载/练食AI」文件夹，自动挑记录最多的那份）；那里没有、或者那份的记录这里都有了，就让选文件。
    */
   importBackup() {
     const api = window.TrainFitNative;
@@ -105,8 +105,14 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     };
     if (api && api.restoreFromFolder) {
       window.__tfFile = (ok, text) => {
-        if (ok) { this.applyBackup(text); return; }
+        if (ok && this.applyBackup(text, true) !== 'same') return;
         if (text === 'CANCEL') return;
+        if (ok) { // 文件夹里那份的记录这里都有了：可能要的是别处的备份，让选文件
+          this.showToast(this._sameMsg + '，可以选别的备份文件');
+          window.__tfFile = picked;
+          api.pickFile();
+          return;
+        }
         // 文件夹里没有：备份可能在微信、网盘里，让选文件
         this.showToast(text === 'NO_BACKUP' ? '这里没找到备份，选一下备份文件' : '没读出备份，选一下备份文件');
         window.__tfFile = picked;
@@ -129,14 +135,22 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     }
   },
 
-  applyBackup(text) {
+  /** @param quiet 记录都有了时不弹提示（调用方自己说）；返回 'bad' | 'same' | 'ok' */
+  applyBackup(text, quiet) {
     const bak = parseBackup(text);
-    if (!bak) { this.showToast('这不是练食AI的备份文件'); return; }
+    if (!bak) { this.showToast('这不是练食AI的备份文件'); return 'bad'; }
     const before = { fit_profile: this.profile, fit_diet: this.diet, fit_workouts: this.workouts, fit_weights: this.weights, fit_my_foods: this.myFoods };
     const snapshot = JSON.parse(JSON.stringify(before));
     const r = mergeBackupData(before, bak);
     const total = r.added.diet + r.added.workouts + r.added.weights;
-    if (!total && !r.added.myFoods && !r.profileRestored) { this.showToast('备份里的记录这里都有了'); return; }
+    if (!total && !r.added.myFoods && !r.profileRestored) {
+      // 说清楚是哪一份，分得清是不是选错了文件
+      const d = bak.exportedAt ? new Date(bak.exportedAt) : null;
+      const n = bak.fit_diet.length + bak.fit_workouts.length + bak.fit_weights.length;
+      this._sameMsg = `这份备份（${d ? `${d.getMonth() + 1}月${d.getDate()}日存的，` : ''}${n} 条记录）这里都有了`;
+      if (!quiet) this.showToast(this._sameMsg);
+      return 'same';
+    }
     this.loadData(r.data);
     const lines = [`饮食 ${r.added.diet} 条、训练 ${r.added.workouts} 条、体重 ${r.added.weights} 次`];
     if (r.added.myFoods) lines.push(`记住的食物 ${r.added.myFoods} 样`);
@@ -145,6 +159,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     window.Sound && window.Sound.play('success');
     if (window.QuickLog) window.QuickLog.showUndo('✓ 从备份恢复了', lines, () => this.loadData(snapshot));
     else this.showToast('已从备份恢复');
+    return 'ok';
   },
 
   /** 换一整套数据（恢复 / 撤销恢复），存下来并刷新界面 */
