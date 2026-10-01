@@ -273,6 +273,31 @@ test('热量对得上、蛋白质对不上：是大模型写错了，用成分�
   assert.ok(egg.proteinG > 17 && egg.proteinG < 22, String(egg.proteinG));
 });
 
+test('热量和蛋白质都差一倍：是大模型算错了量，用成分表的（两个水煮蛋不是 286 千卡）', () => {
+  const egg = groundItem({ name: '鸡蛋', amount: '2个', grams: 100, calories: 286, proteinG: 26 });
+  assert.strictEqual(egg.src, '成分表');
+  assert.ok(egg.calories < 160 && egg.proteinG < 15, `${egg.calories} ${egg.proteinG}`);
+});
+
+test('大模型回到一半就断了（JSON 不完整）：再发一次', async () => {
+  const origSend = Parser.send;
+  Parser.retryWaits = [0, 0];
+  let n = 0;
+  try {
+    Parser.send = async () => {
+      n += 1;
+      if (n === 1) return JSON.stringify({ choices: [{ message: { content: '{"reply":"这个问题我帮你算算","answer":"今天还差60g。\\n建议：乳清蛋白粉1勺（约120千卡' } }] });
+      return JSON.stringify({ choices: [{ message: { content: '{"reply":"ok","answer":"今天还差60g。"}' } }] });
+    };
+    const r = await Parser.parse('今天还差多少蛋白', {});
+    assert.strictEqual(n, 2);
+    assert.strictEqual(r.answer, '今天还差60g。');
+  } finally {
+    Parser.send = origSend;
+    delete Parser.retryWaits;
+  }
+});
+
 test('品牌的东西按大模型估的官方数，不被库里通用的「汉堡」「拿铁」改掉', () => {
   const bk = groundItem({ name: '吉士汉堡', amount: '1个', grams: 116, whole: false, calories: 300, proteinG: 15, carbsG: 30, fatG: 13 });
   assert.strictEqual(bk.src, '估算');
@@ -358,4 +383,15 @@ test('回头补一句只改那一样：其他原样保留，名字对得上就�
   const merged = TF.mergeItems(old, set.items, set.removeItems);
   assert.deepStrictEqual(merged.map(i => i.name), ['甜牛奶', '乳清蛋白粉']);
   assert.strictEqual(TF.sumItems(merged).proteinG, 30.4);
+});
+
+test('问问题：回答单独放在 answer 里（去掉 markdown，最多 8 行），提示词里带上今天的预算和蛋白质', () => {
+  const r = Parser.normalize({ reply: '给了你明天的食谱', answer: '**早餐**：两个鸡蛋\n- 午餐：牛肉饭\n\n1. 晚餐：鸡胸\n## 加餐：酸奶', add: {} }, {});
+  assert.strictEqual(r.answer, '早餐：两个鸡蛋\n午餐：牛肉饭\n晚餐：鸡胸\n加餐：酸奶');
+  assert.strictEqual(r.meals.length, 0);
+  assert.strictEqual(Parser.normalize({ answer: Array(12).fill('一行').join('\n') }, {}).answer.split('\n').length, 8);
+  assert.strictEqual(Parser.normalize({ reply: 'x' }, {}).answer, '');
+  assert.strictEqual(Parser.normalize({ reply: '记了早餐，晚上建议看answer', answer: 'y' }, {}).reply, '记了早餐，晚上建议看小人');
+  const msg = Parser.buildMessages('明天吃啥', { day: { goal: 'muscle_gain', budget: 2600, burn: 300, intake: 1500, protein: 80, proteinTarget: 140 } })[1].content;
+  assert.match(msg, /目标增肌；热量预算 2600 千卡（含训练消耗 300），已吃 1500，还能吃 1100；蛋白质目标 140g，已吃 80g/);
 });

@@ -98,6 +98,17 @@
   // ---------------------------------------------------------------------------
   // 大模型解析
   // ---------------------------------------------------------------------------
+  const GOALS = { fat_loss: '减脂', maintain: '保持体重', muscle_gain: '增肌' };
+
+  /** 问问题时的回答：去掉 markdown 符号，最多 8 行、600 字 */
+  function cleanAnswer(a) {
+    if (typeof a !== 'string') return '';
+    const lines = a.replace(/\r/g, '').split('\n')
+      .map(l => l.replace(/\*\*/g, '').replace(/^\s*(#+|[-*•]|\d+[.、)])\s*/, '').trim())
+      .filter(Boolean);
+    return lines.slice(0, 8).join('\n').slice(0, 600);
+  }
+
   const Parser = {
     buildMessages(text, ctx) {
       ctx = ctx || {};
@@ -111,7 +122,7 @@
       const system = [
         '你是「练食AI」的记录助手。用户用口语说吃了什么（吃进嘴的都算：饭菜、零食、饮料、水、补剂、药）、训练或体重，文字来自语音识别，可能有同音错字（"卧腿"=卧推，"四组八哥"=4组8个，"划川"=划船，"茶叶大"=茶叶蛋）、没有标点、夹着「呃、嗯、那个、然后、就是」这类口头禅，按意思理解，说到的每样吃的都要记上，听着像错字的按最像的食物记，不要漏。说了又改口（「两碗，不对，一碗」「哦应该是…」）以后说的为准。紧跟在一样东西后面、只补了份量的话（「一个包子，呃大的」「一份炒饭然后是小份」）是那样东西的份量，不要单独记成一项。',
         '由你决定怎么改数据：新增、修改或删除。只输出一个 JSON 对象，不要 markdown，不要解释：',
-        '{"reply":"一句话告诉用户你做了什么，20字以内（估得比较粗的，30字以内说按什么估的）","dayOffset":0,"bodyWeight":null,"remember":[],',
+        '{"reply":"一句话告诉用户你做了什么，20字以内（估得比较粗的，30字以内说按什么估的）","answer":null,"dayOffset":0,"bodyWeight":null,"remember":[],',
         ' "add":{"workouts":[{"exerciseName":"杠铃卧推","muscleGroup":"胸部","weightKg":80,"sets":4,"reps":8,"durationMin":null,"burnedCalories":110,"estimated":false}],',
         '        "meals":[{"mealType":"早餐","foodSummary":"肉包2个","items":[{"name":"肉包","amount":"2个","grams":200,"whole":true,"calories":460,"proteinG":16,"carbsG":60,"fatG":16}]},',
         '                 {"mealType":"午餐","foodSummary":"番茄炒蛋盖饭1份","items":[{"name":"米饭","amount":"1碗","grams":200,"whole":false,"calories":232,"proteinG":5,"carbsG":52,"fatG":0.6},{"name":"番茄炒蛋","amount":"1份","grams":200,"whole":true,"calories":260,"proteinG":11,"carbsG":10,"fatG":19}]}]},',
@@ -141,7 +152,11 @@
         '6. 说「昨天」「昨晚」dayOffset=-1，「前天」=-2，否则 0；修改和删除只针对下面列出的这天记录。',
         '7. 用户报自己的体重（「体重62.5」「今天称了124斤」「早上61公斤」）：bodyWeight 填公斤数（斤÷2；没说单位就参考下面的最近体重判断是斤还是公斤）。没说体重就填 null。训练用的重量不是体重。',
         '8. 用户让你记住某样东西的热量（「记住，糯米鸡一个350大卡」），或念了包装上的营养数：在 remember 里写一份的量 {"name","amount","grams","calories","proteinG","carbsG","fatG"}，补剂再加 "kind":"supplement" 和 nutrients。只是让你记住、没说吃了，就不要加进 meals。',
-        '9. 听不懂或和饮食、训练、体重都无关：add 为空，reply 说明原因。',
+        '9. 听不懂：add 为空，reply 说明原因。',
+        '10. 用户在问问题、要建议（「明天吃什么」「给我定个明天的食谱」「今天还差多少蛋白」「练完吃啥好」「明天练什么」「晚上还能吃点啥」「能不能吃火锅」），不是在报自己吃了练了什么：不要记（add 为空；同一句里也说了已经吃过、练过的，那部分照常记），在 answer 里回答。',
+        '   回答要用下面「今天的情况」「最近成绩」「记住的食物」，按这个人的目标和还剩的热量、还差的蛋白质来定，具体到吃什么、多少，大概多少千卡和蛋白质（训练就写动作、重量、组数）。用户说了要求（「训练强度大，碳水多点」「不想吃米饭」）就照着调。',
+        '   写成几行短句，每行一件事（「早餐：两个鸡蛋＋一杯牛奶＋一个馒头，约450千卡、蛋白25g」），最多 8 行，不要 markdown 符号、不要客套话。reply 写一句「给了你明天的食谱」这样的话（又记又问就写「记了…，晚上吃啥看小人」），不要出现 answer 这个词。',
+        '   和吃、练、体重都无关的问题（天气、聊天）：answer 写一句「我只管吃和练，这个帮不上～」。',
         '输出前核对一遍：原话里说到的每样吃的、喝的、补剂（包括听错字的，比如"茶叶大"）都记上了，没多记、没漏记。'
       ].join('\n');
 
@@ -150,6 +165,8 @@
       lines.push(records.length ? '这天已有记录：\n' + records.map(r => `${r.ref} ${r.text}`).join('\n') : '这天还没有记录。');
       if (recent.length) lines.push('最近成绩：' + recent.join('；'));
       if (ctx.lastWeight) lines.push(`最近体重：${ctx.lastWeight}kg`);
+      const d = ctx.day;
+      if (d) lines.push(`今天的情况：目标${GOALS[d.goal] || '减脂'}；热量预算 ${d.budget} 千卡（含训练消耗 ${d.burn}），已吃 ${d.intake}，还能吃 ${d.budget - d.intake}；蛋白质目标 ${d.proteinTarget}g，已吃 ${d.protein}g。`);
       const mine = (ctx.myFoods || []).slice(0, 40);
       if (mine.length) lines.push('记住的食物（用户确认过，优先用）：\n' + mine.map(f => MyFoods.line(f)).join('\n'));
       const cands = FoodDB.candidates(text, 18);
@@ -172,7 +189,7 @@
       const a = s.indexOf('{');
       const b = s.lastIndexOf('}');
       if (a === -1 || b <= a) throw new Error('NO_JSON');
-      return JSON.parse(s.slice(a, b + 1));
+      try { return JSON.parse(s.slice(a, b + 1)); } catch (e) { throw new Error('BAD_JSON ' + e.message); }
     },
 
     /** 从 chat/completions 的原始响应里拿出 message.content */
@@ -202,7 +219,8 @@
           meals: [].concat(parsed.meals || [], parsed.add.meals || [])
         });
       }
-      out.reply = cleanText(parsed && parsed.reply, 40);
+      out.reply = cleanText(parsed && parsed.reply, 40).replace(/(看)?\s*answer/gi, '看小人');
+      out.answer = cleanAnswer(parsed && parsed.answer);
       const refs = new Set((ctx.dayRecords || []).map(r => r.ref));
       (Array.isArray(parsed && parsed.update) ? parsed.update : []).forEach(u => {
         if (!u || !refs.has(u.ref) || !u.set || typeof u.set !== 'object') return;
@@ -355,7 +373,8 @@
           lastErr = e;
           const msg = (e && e.message) || '';
           if (msg === 'NO_KEY') break;
-          if (Parser.isTransient(msg) && retries < waits.length) {
+          // 实测 Atria 偶尔回到一半就断了（JSON 不完整）：和超时一样，再发一次
+          if ((Parser.isTransient(msg) || /^(NO_JSON|BAD_JSON)/.test(msg)) && retries < waits.length) {
             await new Promise(r => setTimeout(r, waits[retries++]));
             i -= 1; // 同一种请求再试
             continue;

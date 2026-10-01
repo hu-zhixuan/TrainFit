@@ -233,6 +233,7 @@ Object.assign(FitnessApp.prototype, {
     const p = { id: 'p_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6), text, date: this.selectedDate, ts: Date.now(), status: 'working' };
     this.pending.unshift(p);
     this.savePending();
+    this.buddyThinking && this.buddyThinking();
     if (this.view !== 'today') this.switchView('today'); else this.render();
     return p;
   },
@@ -240,6 +241,7 @@ Object.assign(FitnessApp.prototype, {
   finishPending(id) {
     this.pending = this.pending.filter(p => p.id !== id);
     this.savePending();
+    this.buddyThinking && this.buddyThinking();
   },
 
   failPending(id, message) {
@@ -250,6 +252,7 @@ Object.assign(FitnessApp.prototype, {
     p.status = 'failed';
     p.error = message || '没整理出来';
     this.savePending();
+    this.buddyThinking && this.buddyThinking();
     this.render();
   },
 
@@ -259,6 +262,7 @@ Object.assign(FitnessApp.prototype, {
     p.status = 'working';
     p.error = null;
     p.startedAt = Date.now();
+    this.buddyThinking && this.buddyThinking();
     this.render();
     window.QuickLog.process(p);
   },
