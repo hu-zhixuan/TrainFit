@@ -3,24 +3,72 @@ on:
   push:
     branches: [ claude/api-check ]
 jobs:
-  where:
+  asr:
     runs-on: ubuntu-latest
     steps:
-      - name: 千问的 key 放在哪了（只看长度和开头，不打印）
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: 千问语音识别四个模型（带上下文）
         env:
-          A: ${{ secrets.QWENAPI }}
-          B: ${{ vars.QWENAPI }}
-          C: ${{ secrets.QWEN_API }}
-          D: ${{ secrets.QWEN_API_KEY }}
-          E: ${{ secrets.DASHSCOPE_API_KEY }}
-          F: ${{ secrets.ASR_API_KEY }}
-          G: ${{ vars.QWEN_API }}
-          H: ${{ vars.QWEN_API_KEY }}
+          ASR_API_KEY: ${{ secrets.QWEN_API }}
+          QW_FORCE: '1'
         run: |
-          out=""
-          for n in A B C D E F G H; do
-            v=$(printf %s "${!n}" | tr -d '[:space:]')
-            p=$(printf %s "$v" | head -c 6); case "$p" in sk-ws-) t="sk-ws-";; sk-*) t="sk-";; "") t="空";; *) t="其他";; esac
-            out="$out $n=${#v}/$t"
-          done
-          echo "::notice title=key 在哪::A secrets.QWENAPI B vars.QWENAPI C secrets.QWEN_API D secrets.QWEN_API_KEY E secrets.DASHSCOPE_API_KEY F secrets.ASR_API_KEY G vars.QWEN_API H vars.QWEN_API_KEY →$out"
+          K=$(printf %s "$ASR_API_KEY" | tr -d '[:space:]')
+          echo "::notice title=key 格式::长度 ${#K}，开头 $(printf %s "$K" | head -c 6 | sed 's/[A-Za-z0-9]\{4,\}$/…/')"
+          node .github/asr_cloud_check.js
+      - name: qwen3-asr-flash 不带上下文
+        env:
+          ASR_API_KEY: ${{ secrets.QWEN_API }}
+          QW_FORCE: '1'
+        run: NO_CONTEXT=1 MODELS=qwen3-asr-flash node .github/asr_cloud_check.js
+  qwen-speed:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Qwen3.8-Flash 关推理的参数和耗时
+        env:
+          TZ: Asia/Shanghai
+          LLM_API_KEY: ${{ secrets.QWEN_API }}
+          LLM_BASE_URL: https://maas.qianwenaiapi.com/compatible-mode/v1
+          LLM_MODEL: qwen3.8-flash
+          GAP: '3000'
+          TAG: Qwen3.8-Flash
+        run: node .github/llm_speed.js
+  qwen-acc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Qwen3.8-Flash 整理准确度（30 句 ×2）
+        env:
+          TZ: Asia/Shanghai
+          LLM_API_KEY: ${{ secrets.QWEN_API }}
+          LLM_BASE_URL: https://maas.qianwenaiapi.com/compatible-mode/v1
+          LLM_MODEL: qwen3.8-flash
+          GAP: '3000'
+          TAG: Qwen3.8-Flash
+          EXTRA: '{"enable_thinking":false}'
+        run: ROUNDS=2 node .github/api_check.js
+  atria-acc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Atria 整理准确度（同样 30 句 ×2，对照）
+        env:
+          TZ: Asia/Shanghai
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
+          LLM_MODEL: ${{ vars.LLM_MODEL }}
+          GAP: '15000'
+          TAG: Atria
+        run: ROUNDS=2 node .github/api_check.js
