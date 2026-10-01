@@ -10,6 +10,15 @@ const REMINDER_DEFAULTS = [
 Object.assign(FitnessApp.prototype, {
   bindSettings() {
     const $ = (id) => document.getElementById(id);
+    $('memo-list').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-memo-del]');
+      if (!b) return;
+      const line = this.memoList()[+b.dataset.memoDel];
+      const prev = this.updateMemo([], [line]);
+      this.saveData();
+      this.renderMemo();
+      if (window.QuickLog) window.QuickLog.showUndo(`已删除「${line}」`, [], () => { this.profile.memo = prev; this.saveData(); this.renderMemo(); });
+    });
     $('my-foods').addEventListener('click', (e) => {
       const b = e.target.closest('[data-forget]');
       if (!b) return;
@@ -108,6 +117,7 @@ Object.assign(FitnessApp.prototype, {
     const budget = p.tdee - (p.targetDeficitKcal || 0);
     $('set-tdee-note').textContent = `每天日常消耗约 ${fmt(p.tdee)} kcal（不含训练）。按目标，不训练的日子大约吃 ${fmt(budget)} kcal。`;
     this.renderReminders();
+    this.renderMemo();
     this.renderMyFoods();
     const ql = window.QuickLog;
     const days = new Set([...this.workouts, ...this.diet].map(r => r.date)).size;

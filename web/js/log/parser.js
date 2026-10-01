@@ -143,7 +143,7 @@
       const system = [
         '你是「练食AI」的记录助手。用户用口语说吃了什么（吃进嘴的都算：饭菜、零食、饮料、水、补剂、药）、训练或体重，文字来自语音识别，可能有同音错字（"卧腿"=卧推，"四组八哥"=4组8个，"划川"=划船，"茶叶大"=茶叶蛋）、没有标点、夹着「呃、嗯、那个、然后、就是」这类口头禅，按意思理解，说到的每样吃的都要记上，听着像错字的按最像的食物记，不要漏。说了又改口（「两碗，不对，一碗」「哦应该是…」）以后说的为准。紧跟在一样东西后面、只补了份量的话（「一个包子，呃大的」「一份炒饭然后是小份」）是那样东西的份量，不要单独记成一项。',
         '由你决定怎么改数据：新增、修改或删除。只输出一个 JSON 对象，不要 markdown，不要解释：',
-        '{"reply":"一句话告诉用户你做了什么，20字以内（估得比较粗的，30字以内说按什么估的）","answer":null,"plan":null,"donePlans":[],"dayOffset":0,"bodyWeight":null,"remember":[],',
+        '{"reply":"一句话告诉用户你做了什么，20字以内（估得比较粗的，30字以内说按什么估的）","answer":null,"plan":null,"donePlans":[],"dayOffset":0,"bodyWeight":null,"remember":[],"memo":[],"forget":[],',
         ' "add":{"workouts":[{"exerciseName":"杠铃卧推","muscleGroup":"胸部","weightKg":80,"sets":4,"reps":8,"durationMin":null,"burnedCalories":110,"estimated":false}],',
         '        "meals":[{"mealType":"早餐","foodSummary":"肉包2个","items":[{"name":"肉包","amount":"2个","grams":200,"whole":true,"calories":460,"proteinG":16,"carbsG":60,"fatG":16}]},',
         '                 {"mealType":"午餐","foodSummary":"番茄炒蛋盖饭1份","items":[{"name":"米饭","amount":"1碗","grams":200,"whole":false,"calories":232,"proteinG":5,"carbsG":52,"fatG":0.6},{"name":"番茄炒蛋","amount":"1份","grams":200,"whole":true,"calories":260,"proteinG":11,"carbsG":10,"fatG":19}]}]},',
@@ -152,7 +152,8 @@
         '规则：',
         '1. muscleGroup 只能是：' + MUSCLES.join('、') + '；mealType 只能是：' + MEAL_TYPES.join('、') + '（怎么判断见第 4 条）。',
         '2. 重量换算成公斤（磅×0.45，斤×0.5），自重 weightKg=0。跑步、单车、跳绳、平板支撑等按时间算的填 durationMin（分钟），sets、reps 为 null；只说了距离（「跑了5公里」）就按常见配速估分钟数。',
-        '3. 用户没说的重量/组数/次数：优先用下面「最近成绩」里同一动作的数；没有就按常见训练估一个，并设 "estimated":true。同一动作请沿用最近成绩里的名字。',
+        '3. 用户没说的重量/组数/次数：优先用下面「最近成绩」里同一动作的数；没有就按常见训练估一个（别拿别的动作的重量套），并设 "estimated":true。同一动作请沿用最近成绩里的名字。',
+        '   新手常常叫不出动作、器械的名字，只会描述（「坐着往前推的那个机器」「拉下来的那个」「夹胸的」「坐着蹬腿的」「躺着推杠铃」）：按描述记成最像的标准名字（坐姿推胸、高位下拉、蝴蝶机夹胸、腿举、杠铃卧推），reply 里顺便告诉他叫什么（「这个叫高位下拉，记上了」）。只说了「练了一个小时器械」「练了会儿」：记一项「力量训练」，填 durationMin。',
         '4. 饮食按餐分：用户说的时间决定是哪一餐——早上/早饭 → 早餐，中午/午饭 → 午餐，晚上/晚饭 → 晚餐，下午茶、练前练后、睡前、夜宵、零食 → 加餐/补剂；没说时间（「刚吃了」）按现在时间和食物判断。',
         '   一句话说了几个时间就拆成几条 meal（「早上A和B，晚上C」= 早餐 A+B 一条、晚餐 C 一条，不能都记到一餐里）；同一餐的东西合并成一条。foodSummary 写给用户看的菜名和份量。items 列出吃了的东西，每项写 name、amount（份量原话，如「1个」「1碗」「半份」）、grams（吃下去的熟重，可食部分）、whole，以及你估的 calories/proteinG/carbsG/fatG。',
         '   先把一样东西当整体估，不要随便拆成原料：成品、包装、门店和早餐店的东西（糯米鸡、饭团、粽子、包子、烧卖、三明治、汉堡、面包蛋糕、奶茶饮料、零食），一碗面、一份麻辣烫、一份炒菜，都作为一项，whole=true，按一个/一份的常见大小估热量，油已经算在里面，不要再单独加烹调油。',
@@ -160,7 +161,7 @@
         '   一顿说不清具体吃了哪些的（火锅、烧烤、烤肉、自助餐、麻辣烫、冒菜、串串、干锅、日料、聚餐、吃席）：按用户的描述拆成几项估——主要的肉（羊肉、肥牛、毛肚…，大概几盘或多少克）、蔬菜和豆制品、主食、蘸料（麻酱、香油碟热量很高）、锅底或汤里吸的油（牛油、红油锅比清汤、番茄锅多不少）；没说的按一个成年人一顿的中等量估。说了「吃了很多 / 吃撑了」按 1.5 倍左右，「没吃多少 / 吃了一点」按 0.6 倍左右。这种估得粗的，reply 用一句话说清楚按什么估的（如「按牛油锅、羊肉约300克估的，可以再补一句」）。',
         '   只有明显是几样东西拼起来的才分开写（盖饭 = 米饭 + 菜，套餐 = 主食 + 菜 + 饮料）。单独的米饭、馒头、鸡蛋、牛奶、水果这类单一食材 whole=false，name 尽量用下面「参考营养数据」里的名字，数值会按库重算。参考数据里的成品菜数值可以参考，但要按用户说的做法和份量自己判断。',
         '   克数都按熟的、吃下去的算：米饭一碗约 180g，盖饭和外卖套餐里的米饭约 250–300g，馒头一个约 100g，鸡蛋一个约 50g，牛奶一杯约 250g，糯米鸡一个约 150–200g，一份外卖约 400–600g。按「一个 / 一串 / 一块」的真实大小估，不要当成 100g：烤串一串的肉约 25–40g，烤白果一串约 6–8 颗、25g 左右，炸鸡一块（带骨）能吃的约 80–100g，一瓶牛奶 / 甜牛奶常见 200–250ml，一瓶饮料约 500ml，一罐可乐 330ml。',
-        '   份量说得含糊、不同大小热量差得多的（「一瓶甜牛奶」不知道 250ml 还是 500ml，「一串烤白果」不知道几颗，「一块炸鸡」不知道是鸡腿还是鸡翅）：grams 按最常见的估，这一项再加 "opts":[["250ml",250],["500ml",500]]——2～3 个最常见的大小，每个是 [给用户看的几个字, 这一项的总克数]，其中一个就是你估的。说了具体量的（克数、毫升、几颗）、「记住的食物」里有的、热量低的（蔬菜、水、茶）不要加；一句话最多 2 样加 opts。',
+        '   份量说得含糊、不同大小热量差得多的（「一瓶甜牛奶」不知道 250ml 还是 500ml，「一串烤白果」不知道几颗，「一块炸鸡」不知道是鸡腿还是鸡翅）：grams 按最常见的估，这一项再加 "opts":[["250ml",250],["500ml",500]]——2～3 个最常见的大小，每个是 [给用户看的几个字, 这一项的总克数]，几个字要说成谁都能想象出来的样子（「小碗」「大碗」「拳头大」「巴掌大一块」「一盘」「6颗」「500ml」），不要写克数，其中一个就是你估的。「一份炒菜」「一碗饭」这种也可以问。说了具体量的（克数、毫升、几颗）、「记住的食物」里有的、热量低的（蔬菜、水、茶）不要加；一句话最多 2 样加 opts。',
         '   例外：单独吃的肉、鱼、虾（鸡胸肉、牛肉、猪瘦肉、鱼肉、虾仁）grams 写生重，参考数据里这些是生肉的数——用户说的克数一般就是生重，直接用；没说就估这块肉生的时候多重（熟肉约为生重的七成）。即食鸡胸肉按包装克数。',
         '   蛋白质用户最在意，要估准：肉、蛋、奶、豆制品、蛋白粉按实际份量算（乳清蛋白粉一勺约 30g、含蛋白约 24g）；整份的菜里有多少肉就按多少肉估蛋白质，不要只按菜名套平均值。',
         '   补剂和药（维生素、钙、镁、锌、铁、鱼油、益生菌、肌酸、药片…，蛋白粉不算补剂）：每样一项，加 "kind":"supplement"，不管什么时间都放进 mealType 为 加餐/补剂 的那条 meal，和饭菜分开。calories 按实际（普通片剂、胶囊是 0，鱼油一粒约 9，软糖一粒约 10）。含这些营养素就写 nutrients（这一项的总量，只用这些名字和单位）：' + Object.keys(NUTRIENTS).map(k => `${k}(${NUTRIENTS[k].unit})`).join('、') + '。用户没说剂量就按常见的一片 / 一粒估（维生素D 1μg = 40IU）；复合维生素也按常见一粒写出主要几种（维生素C、维生素D、维生素A、锌、钙、镁…）。药和说不清成分的补剂可以不写 nutrients。例：{"mealType":"加餐/补剂","foodSummary":"鱼油2粒、维生素D1粒","items":[{"name":"鱼油","amount":"2粒","kind":"supplement","calories":18,"fatG":2,"nutrients":{"EPA+DHA":600}},{"name":"维生素D","amount":"1粒","kind":"supplement","calories":0,"nutrients":{"维生素D":10}}]}',
@@ -182,6 +183,7 @@
         '   answer 是某一天的具体安排（明天的食谱、今晚吃什么、明天练什么）时，同时写 plan：{"dayOffset":1,"meals":[和 add.meals 一样的格式],"workouts":[和 add.workouts 一样的格式]}，dayOffset 相对正在看的日期（明天 1，今天 0），内容和 answer 一致；只是回答问题（还差多少蛋白、能不能吃）就 plan 为 null。',
         '   下面有「刚才给的计划」，用户说要改（「不要米饭换红薯」「蛋白再多点」「晚上少吃点」），就按要求改好，重新给完整的 answer 和 plan，不要记录。',
         '   下面有「这天的计划」，用户说照着吃了 / 练了（「早餐照计划吃了」「计划里的都练完了」）：把那几项 add 进来（份量照计划），donePlans 写它们的编号。',
+        '11. 用户说了关于自己、以后一直有用的事（名字、在增肌还是减脂、健身新手、在练什么、不吃 / 过敏的东西、伤病、作息、口味）：写进 memo，每条一句话、12 字以内（「叫阿程」「健身新手」「不吃辣」「膝盖有旧伤」），下面「小本本」里已经有的不要重复；说要忘掉或者变了的（「现在能吃辣了」「膝盖好了」），一定把小本本里原来那句原样写进 forget。吃了什么、练了什么、今天的事不算。回答、估算、出计划时照顾到小本本里的事（不吃辣就别推荐辣的，膝盖有伤就别排深蹲跳）。',
         '输出前核对一遍：原话里说到的每样吃的、喝的、补剂（包括听错字的，比如"茶叶大"）都记上了，没多记、没漏记。'
       ].join('\n');
 
@@ -190,6 +192,8 @@
       lines.push(records.length ? '这天已有记录：\n' + records.map(r => `${r.ref} ${r.text}`).join('\n') : '这天还没有记录。');
       if (recent.length) lines.push('最近成绩：' + recent.join('；'));
       if (ctx.lastWeight) lines.push(`最近体重：${ctx.lastWeight}kg`);
+      const memo = (ctx.memo || []).slice(0, 12);
+      if (memo.length) lines.push('小本本（用户说过的自己的事）：' + memo.join('；'));
       const plans = ctx.plans || [];
       if (plans.length) lines.push('这天的计划（还没做）：\n' + plans.map(p => `${p.ref} ${p.text}`).join('\n'));
       if (ctx.lastPlan) lines.push('刚才给的计划（用户可能要改）：\n' + ctx.lastPlan);
@@ -237,7 +241,7 @@
       ctx = ctx || {};
       const history = ctx.history || [];
       const now = ctx.now || new Date();
-      const out = { dayOffset: 0, workouts: [], meals: [], updates: [], deletes: [], remember: [], reply: '' };
+      const out = { dayOffset: 0, workouts: [], meals: [], updates: [], deletes: [], remember: [], memo: [], forget: [], reply: '' };
       const myFoods = ctx.myFoods || [];
       const ground = (it) => groundItem(it, myFoods);
       // 兼容两种格式：{add:{workouts,meals}} 或顶层 workouts/meals
@@ -288,6 +292,17 @@
       });
       (Array.isArray(parsed && parsed.delete) ? parsed.delete : []).forEach(ref => { if (refs.has(ref)) out.deletes.push(ref); });
 
+      // 小本本：用户说的关于自己的事（名字、忌口、伤病…），一句一条
+      const listOf = (k) => (Array.isArray(parsed && parsed[k]) ? parsed[k] : []).map(x => cleanText(x, 24)).filter(Boolean).slice(0, 5);
+      out.memo = listOf('memo').filter(x => !(ctx.memo || []).includes(x));
+      out.forget = listOf('forget').filter(x => (ctx.memo || []).includes(x));
+      // 「现在能吃辣了」：大模型偶尔只加「能吃辣」、忘了划掉「不吃辣」，两句打架。只差一个「不」的，旧的划掉
+      const core = (x) => x.replace(/^(我)?(现在|已经|又|也)?(能|可以|会|开始|爱)?/, '').replace(/了$/, '');
+      const negCore = (x) => (/^(我)?(不|不能|不会|不爱|没法|别)/.test(x) ? x.replace(/^(我)?(不能|不会|不爱|没法|不|别)/, '').replace(/了$/, '') : null);
+      out.memo.forEach(m => (ctx.memo || []).forEach(e => {
+        if (out.forget.includes(e)) return;
+        if ((negCore(e) && negCore(e) === core(m)) || (negCore(m) && negCore(m) === core(e))) out.forget.push(e);
+      }));
       (Array.isArray(parsed && parsed.remember) ? parsed.remember : []).slice(0, 5).forEach(r => {
         const f = MyFoods.clean(r);
         if (f) out.remember.push(f);

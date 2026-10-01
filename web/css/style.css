@@ -535,6 +535,7 @@ body.has-buddy .views { padding-bottom: calc(var(--cmp-h, 110px) + 52px + var(--
 .portion-opt.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .buddy-pop[data-mode="ask"] { width: min(300px, calc(100vw - 32px)); }
 /* 点小人：训练建议（今天可以练哪儿） */
+.buddy-obs { margin: 6px 0 0; font-size: 0.82rem; line-height: 1.5; color: var(--text-2); }
 .buddy-train { margin: 6px 0 0; font-size: 0.82rem; line-height: 1.5; color: var(--accent-text); }
 .buddy-wait { display: flex; align-items: center; gap: 6px; margin: 10px 0 0; padding-top: 8px; border-top: 1px solid var(--line); font-size: 0.78rem; color: var(--text-3); }
 /* 气泡从小人头顶弹出来（带一点回弹） */
@@ -1184,6 +1185,8 @@ body.no-composer .snackbar { bottom: calc(20px + var(--sab)); }
 .bd-input { -moz-appearance: textfield; appearance: textfield; }
 .bd-input::-webkit-inner-spin-button, .bd-input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 .my-foods { display: flex; flex-direction: column; gap: 8px; }
+.form-card .sub-title { margin: 4px 0 8px; font-size: 0.78rem; font-weight: 650; color: var(--text-3); }
+.form-card .my-foods + .sub-title { margin-top: 16px; }
 .myfood-row { display: flex; align-items: center; gap: 10px; }
 .myfood-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .myfood-main small { font-size: 0.74rem; color: var(--text-3); }

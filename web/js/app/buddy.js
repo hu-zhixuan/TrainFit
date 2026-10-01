@@ -649,10 +649,14 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     const st = this.buddyState();
     pop.dataset.mode = '';
     pop.dataset.level = st.level == null ? 'none' : String(st.level);
-    const head = st.streak ? `连续记录 <b>${st.streak}</b> 天` : '今天开始记吧';
+    const name = this.userName ? this.userName() : '';
+    const head = (name ? `${esc(name)}，` : '') + (st.streak ? `连续记录 <b>${st.streak}</b> 天` : '今天开始记吧');
     const foot = [st.days ? `一共记了 ${st.days} 天` : '', st.next ? `再连续 ${st.next.days} 天拿${st.next.name}` : '头带、棒球帽、皇冠都拿到了'].filter(Boolean).join(' · ');
+    // 一句观察（最近一周蛋白够不够、吃没吃超）和一句训练建议，都是本机算的
+    const obs = this.observation ? this.observation() : '';
     const tip = this.trainingTip ? this.trainingTip() : '';
     pop.innerHTML = `<div class="buddy-pop-head">${head}</div><p class="buddy-say">${esc(st.say)}</p>` +
+      (obs ? `<p class="buddy-obs">${esc(obs)}</p>` : '') +
       (tip ? `<p class="buddy-train">${esc(tip)}</p>` : '') + `<p class="buddy-foot">${esc(foot)}</p>`;
     this.positionBuddyPop();
     pop.classList.remove('hidden');
@@ -861,6 +865,44 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     this.render();
   },
 
+  /**
+   * 新手第一周：每次记完，小人最多说一句和刚才相关的话，每句只说一次（存在 tf_tips）。
+   * 不加按钮、不加页面，点空白处或过几秒自己收起。说了返回 true。
+   */
+  newbieTip(result) {
+    const pop = document.getElementById('buddy-pop');
+    if (!pop || this._touring || !result) return false;
+    const today = getTodayDateString();
+    const first = this.diet.concat(this.workouts).reduce((m, r) => (r.date < m ? r.date : m), today);
+    if (first < shiftDateString(today, -6)) return false; // 用了一周以上
+    let seen;
+    try { seen = JSON.parse(localStorage.getItem('tf_tips') || '[]'); } catch (e) { seen = []; }
+    if (!Array.isArray(seen)) seen = [];
+    const n = this.diet.length + this.workouts.length;
+    const simple = this.isSimple();
+    const tips = [
+      ['lift', (result.workouts || []).some(w => w.estimated && !w.durationMin), '下次带上几公斤、几组几个，我帮你算下次练多少。叫不出名字就描述一下，比如「坐着往前推的那个机器」。'],
+      ['oneby', n <= 3, '吃完一顿说一句就行，不用攒到晚上一口气说完。说不准多少也没事，我会猜，猜不准会问你。'],
+      ['ask', n >= 4, simple ? '也可以问我，比如「晚上吃点啥」「今天还能吃多少」。' : '也可以问我，比如「晚上吃点啥」「明天练什么」。'],
+      ['memo', n >= 6 && !this.memoList().length, '跟我说说你自己吧，比如「我叫阿程，健身新手，不吃辣」，我会记住，以后都照着来。']
+    ];
+    const pick = tips.find(t => t[1] && !seen.includes(t[0]));
+    if (!pick) return false;
+    seen.push(pick[0]);
+    try { localStorage.setItem('tf_tips', JSON.stringify(seen)); } catch (e) {}
+    const name = this.userName();
+    pop.dataset.mode = 'tip';
+    pop.dataset.level = 'none';
+    pop.innerHTML = `<div class="buddy-pop-head">小提示</div><p class="buddy-say">${esc((name ? name + '，' : '') + pick[2])}</p>`;
+    this.positionBuddyPop();
+    this.popIn(pop);
+    document.getElementById('gauge-pop').classList.add('hidden');
+    if (!this.reducedMotion()) this.buddyDo([['stand', 120], ['wave', 900], ['stand', 400]]);
+    clearTimeout(this._askT);
+    this._askT = setTimeout(() => this.closeBuddyPop('tip'), 9000);
+    return true;
+  },
+
   /** 计划写成几行字（给大模型看「刚才给的计划」） */
   planText(plan) {
     return (plan.meals || []).map(m => `${m.mealType} ${m.foodSummary} ${m.calories}kcal 蛋白${m.proteinG || 0}`)
@@ -955,7 +997,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     const simple = this.isSimple();
     return [
       { pose: 'wave', target: () => document.querySelector('#voice-row:not(.hidden) .talk-btn') || document.querySelector('#text-row:not(.hidden) .cmp-text'),
-        text: simple ? '嗨，我陪你记。按住下面这个按钮，说说今天吃了啥，松手就记好了。' : '嗨，我陪你记。按住下面这个按钮，一口气说完今天练了啥、吃了啥，松手就记好了。',
+        text: simple ? '嗨，我陪你记。按住下面这个按钮，说说今天吃了啥，松手就记好了。' : '嗨，我陪你记。按住下面这个按钮，说说练了啥、吃了啥，一句一句说、一大段一起说都行，松手就记好了。',
         eg: simple ? '「早上包子豆浆，中午黄焖鸡」' : '「卧推80公斤4组8个，中午黄焖鸡」' },
       { pose: 'stand', target: () => document.getElementById('timeline'),
         text: '说错了不用改字，再说一句「改成一碗」「删掉奶茶」就行。点开一条也能改。' },

@@ -80,7 +80,7 @@ class FitnessApp {
     const t = document.getElementById('cmp-text');
     if (t) t.placeholder = simple ? '今天吃了啥？' : '今天练了啥、吃了啥？';
     const tip = document.getElementById('cmp-tip');
-    if (tip) tip.textContent = simple ? '按住说今天吃了啥，松手自动算好热量' : '按住把练了啥、吃了啥一口气说完，松手自动记好';
+    if (tip) tip.textContent = simple ? '按住说今天吃了啥，松手自动算好热量' : '按住说练了啥、吃了啥，一句一大段都行，松手自动记好';
   }
 
   recalculateMetabolism() {
@@ -193,6 +193,32 @@ class FitnessApp {
     const p = this.exerciseProgress(pick.exerciseName);
     const part = pick.muscleGroup.replace(/部$/, '');
     return `今天可以练${part}：上次是 ${days} 天前${p && p.next.kind !== 'keep' ? `，${pick.exerciseName}${p.next.text}` : ''}`;
+  }
+
+  /**
+   * 点小人时的一句观察（本机算）：最近 7 天（不算今天）里蛋白质没吃够的天数、早餐蛋白太少；
+   * 只记吃的模式看吃没吃超。记的天数少于 3 天不说。
+   */
+  observation() {
+    const today = getTodayDateString();
+    const days = [1, 2, 3, 4, 5, 6, 7].map(i => shiftDateString(today, -i)).filter(d => this.diet.some(x => x.date === d));
+    if (days.length < 3) return '';
+    const half = Math.max(2, Math.ceil(days.length / 2));
+    const target = this.gaugeProteinTarget ? this.gaugeProteinTarget() : (this.profile.targetProteinG || 0);
+    if (!this.isSimple() && target > 0) {
+      const sums = days.map(d => this.getDaySummary(d));
+      const low = sums.filter(s => s.protein < target * 0.8);
+      if (low.length >= half) {
+        const bfDays = days.map(d => this.diet.filter(x => x.date === d && x.mealType === '早餐')).filter(l => l.length);
+        const bf = bfDays.length ? bfDays.reduce((a, l) => a + l.reduce((s, x) => s + (x.proteinG || 0), 0), 0) / bfDays.length : null;
+        const gap = Math.round(low.reduce((a, s) => a + (target - s.protein), 0) / low.length);
+        return (low.length === days.length ? `最近 ${days.length} 天蛋白都没吃够` : `最近 ${days.length} 天有 ${low.length} 天蛋白没吃够`) +
+          (bf !== null && bf < 12 ? `，早餐平均才 ${Math.round(bf)}g，加个鸡蛋、一杯牛奶就好很多` : `，平均差 ${gap}g`);
+      }
+    }
+    const over = days.filter(d => { const s = this.getDaySummary(d); return s.intake > s.budget + 200; });
+    if (over.length >= half) return over.length === days.length ? `最近 ${days.length} 天都吃超了预算` : `最近 ${days.length} 天有 ${over.length} 天吃超了预算`;
+    return '';
   }
 
   bindEvents() {

@@ -162,8 +162,8 @@ Object.assign(FitnessApp.prototype, {
         : usual.length
           ? `<div class="empty"><b>还是老样子？</b>点一下就记好<br>吃了别的，按住下面的按钮说一句<br><button type="button" class="empty-quick" data-quick-key="${esc(usual[0].key)}"><span class="qplus">+</span>${esc(usual[0].label)} · ${fmt(usual[0].kcal)} kcal</button></div>`
         : simple
-          ? `<div class="empty"><div class="empty-icon">${ICONS.mic}</div><b>按住下面的按钮</b>，说说今天吃了啥<br>松手自动算好热量、记下来<br>说错了再说一句「改成…」「删掉…」<br><span class="empty-example">「早上包子豆浆，中午黄焖鸡，体重61.5」</span></div>`
-          : `<div class="empty"><div class="empty-icon">${ICONS.mic}</div><b>按住下面的按钮</b>，一口气说完今天练了啥、吃了啥<br>松手就自动整理、记好<br>说错了再说一句「改成…」「删掉…」<br><span class="empty-example">「卧推80公斤4组8个，中午吃了黄焖鸡米饭」</span></div>`;
+          ? `<div class="empty"><div class="empty-icon">${ICONS.mic}</div><b>按住下面的按钮</b>，说说今天吃了啥<br>吃一顿说一句就行，松手自动算好热量<br>说不准多少也没事，我会问你<br><span class="empty-example">「早上包子豆浆，中午黄焖鸡，体重61.5」</span></div>`
+          : `<div class="empty"><div class="empty-icon">${ICONS.mic}</div><b>按住下面的按钮</b>，说说练了啥、吃了啥<br>想到一句说一句，一大段一起说也行<br>说不准多少、叫不出名字也没事，我会问你<br><span class="empty-example">「中午一碗牛肉面」「坐着推胸的那个机器，三组」</span></div>`;
     }
     tl.innerHTML = html;
 

@@ -479,3 +479,22 @@ test('份量选项：一句话最多问 2 样，计划里的不问', () => {
   const plan = Parser.normalize({ answer: '晚餐：炸鸡', plan: { dayOffset: 1, meals: [{ mealType: '晚餐', foodSummary: '炸鸡', items: [{ name: '炸鸡', amount: '2块', grams: 200, whole: true, calories: 520, proteinG: 30, opts }] }] } }, {});
   assert.ok(!plan.plan.meals[0].items[0].opts);
 });
+
+test('小本本：大模型写的关于自己的事整理好；已经有的不重复，要忘掉的只认小本本里原来的句子', () => {
+  const ctx = { memo: ['叫阿程', '不吃辣'] };
+  const r = Parser.normalize({ reply: '记住了', memo: ['叫阿程', '健身新手', '  ', 123, '膝盖有旧伤，别排深蹲跳这种动作好不好啊谢谢你'], forget: ['不吃辣', '不吃香菜'] }, ctx);
+  assert.deepStrictEqual(r.memo, ['健身新手', '123', '膝盖有旧伤，别排深蹲跳这种动作好不好啊谢谢你'.slice(0, 24)]);
+  assert.deepStrictEqual(r.forget, ['不吃辣']);
+  const msgs = Parser.buildMessages('我叫阿程', ctx);
+  assert.ok(msgs[1].content.includes('小本本（用户说过的自己的事）：叫阿程；不吃辣'));
+  assert.ok(!Parser.buildMessages('一碗面', {}).some(m => m.role === 'user' && m.content.includes('小本本')));
+});
+
+test('小本本：大模型只加了「能吃辣」忘了划掉「不吃辣」，自动划掉；不相干的不动', () => {
+  const ctx = { memo: ['叫阿程', '不吃辣', '膝盖有旧伤'] };
+  assert.deepStrictEqual(Parser.normalize({ memo: ['能吃辣'] }, ctx).forget, ['不吃辣']);
+  assert.deepStrictEqual(Parser.normalize({ memo: ['现在能吃辣了'] }, ctx).forget, ['不吃辣']);
+  assert.deepStrictEqual(Parser.normalize({ memo: ['能吃辣了'], forget: ['不吃辣'] }, ctx).forget, ['不吃辣']);
+  assert.deepStrictEqual(Parser.normalize({ memo: ['不吃香菜'] }, ctx).forget, []);
+  assert.deepStrictEqual(Parser.normalize({ memo: ['不吃牛肉'] }, { memo: ['吃牛肉'] }).forget, ['吃牛肉']);
+});
