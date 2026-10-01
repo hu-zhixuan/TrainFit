@@ -3,17 +3,24 @@ on:
   push:
     branches: [ claude/api-check ]
 jobs:
-  names:
+  where:
     runs-on: ubuntu-latest
     steps:
-      - name: 只列出 Secrets / Variables 的名字（不打印值）
+      - name: 千问的 key 放在哪了（只看长度和开头，不打印）
         env:
-          S: ${{ toJSON(secrets) }}
-          V: ${{ toJSON(vars) }}
+          A: ${{ secrets.QWENAPI }}
+          B: ${{ vars.QWENAPI }}
+          C: ${{ secrets.QWEN_API }}
+          D: ${{ secrets.QWEN_API_KEY }}
+          E: ${{ secrets.DASHSCOPE_API_KEY }}
+          F: ${{ secrets.ASR_API_KEY }}
+          G: ${{ vars.QWEN_API }}
+          H: ${{ vars.QWEN_API_KEY }}
         run: |
-          node -e '
-            const s = JSON.parse(process.env.S || "{}"), v = JSON.parse(process.env.V || "{}");
-            const len = (x) => String(x || "").trim().length;
-            console.log("::notice title=Secrets 名字::" + Object.keys(s).map(k => k + "（长度 " + len(s[k]) + "）").join("、"));
-            console.log("::notice title=Variables 名字::" + (Object.keys(v).join("、") || "无"));
-          '
+          out=""
+          for n in A B C D E F G H; do
+            v=$(printf %s "${!n}" | tr -d '[:space:]')
+            p=$(printf %s "$v" | head -c 6); case "$p" in sk-ws-) t="sk-ws-";; sk-*) t="sk-";; "") t="空";; *) t="其他";; esac
+            out="$out $n=${#v}/$t"
+          done
+          echo "::notice title=key 在哪::A secrets.QWENAPI B vars.QWENAPI C secrets.QWEN_API D secrets.QWEN_API_KEY E secrets.DASHSCOPE_API_KEY F secrets.ASR_API_KEY G vars.QWEN_API H vars.QWEN_API_KEY →$out"
