@@ -55,7 +55,7 @@ jobs:
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
           LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
           LLM_MODEL: ${{ vars.LLM_MODEL }}
-          ASR_API_KEY: ${{ secrets.ASR_API_KEY }}
+          ASR_API_KEY: ${{ secrets.QWEN_API || secrets.ASR_API_KEY }}   # 千问 AI 平台的 key（sk-ws-）优先
           ASR_BASE_URL: ${{ vars.ASR_BASE_URL }}
           ASR_MODEL: ${{ vars.ASR_MODEL }}
         run: |

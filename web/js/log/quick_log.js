@@ -194,7 +194,7 @@
       this._timer = setInterval(() => this.tick(), 250);
       this.tick();
       if (engine === 'asr') {
-        try { root.TrainFitNative.startRecording(); } catch (e) { this.failTalk('录音启动失败'); }
+        try { root.TrainFitNative.startRecording(JSON.stringify(readAsrOverride())); } catch (e) { this.failTalk('录音启动失败'); }
       } else {
         this.startSystem();
       }
