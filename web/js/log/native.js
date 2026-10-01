@@ -74,22 +74,36 @@
       try { return this.has() ? JSON.parse(root.TrainFitNative.getLlmInfo()) : null; } catch (e) { return null; }
     },
 
-    chat(body, override, timeoutMs) {
+    /**
+     * onDelta：有的话走流式（原生 llmChatStream，边出字边回调 window.__tfLlmDelta），最后照样回调完整结果。
+     * Atria 实测要等 10～25 秒才出第一个字：流式时只要还在出字就不算超时
+     */
+    chat(body, override, timeoutMs, onDelta) {
+      const stream = !!(onDelta && root.TrainFitNative.llmChatStream);
       return new Promise((resolve, reject) => {
         const id = 'r' + (++this._seq) + '_' + Date.now();
-        const timer = setTimeout(() => {
+        const expire = () => {
           delete this._pending[id];
           reject(new Error('TIMEOUT'));
-        }, timeoutMs || 75000); // 原生那边连接 15 秒 + 读取 60 秒
-        this._pending[id] = { resolve, reject, timer };
+        };
+        const limit = timeoutMs || 75000; // 原生那边连接 15 秒 + 读取 60 秒
+        const p = { resolve, reject, timer: setTimeout(expire, limit) };
+        if (stream) p.onDelta = (chunk) => { clearTimeout(p.timer); p.timer = setTimeout(expire, limit); onDelta(chunk); };
+        this._pending[id] = p;
         try {
-          root.TrainFitNative.llmChat(id, JSON.stringify(body), JSON.stringify(override || {}));
+          if (stream) root.TrainFitNative.llmChatStream(id, JSON.stringify(Object.assign({}, body, { stream: true })), JSON.stringify(override || {}));
+          else root.TrainFitNative.llmChat(id, JSON.stringify(body), JSON.stringify(override || {}));
         } catch (e) {
-          clearTimeout(timer);
+          clearTimeout(p.timer);
           delete this._pending[id];
           reject(e);
         }
       });
+    },
+
+    _onDelta(id, chunk) {
+      const p = this._pending[id];
+      if (p && p.onDelta) { try { p.onDelta(chunk); } catch (e) {} }
     },
 
     _onLlm(id, ok, payload) {
@@ -102,6 +116,7 @@
   };
 
   root.__tfLlm = function (id, ok, payload) { Native._onLlm(id, ok, payload); };
+  root.__tfLlmDelta = function (id, chunk) { Native._onDelta(id, chunk); };
 
   /** 震动反馈：tick 轻 / tap 点击 / start 重击 / stop 点击 / success 双击 / error 三连 */
   const Haptics = {

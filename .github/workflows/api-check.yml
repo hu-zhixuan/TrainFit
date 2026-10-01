@@ -3,17 +3,20 @@ on:
   push:
     branches: [ claude/api-check ]
 jobs:
-  stream:
+  atria:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: Atria 流式输出（只用 Atria，一次）
+      - name: 计划：定食谱 / 改 / 照计划吃了 ×4，其他 ×1（只用 Atria，流式）
         env:
           TZ: Asia/Shanghai
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
           LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
           LLM_MODEL: ${{ vars.LLM_MODEL }}
-        run: node .github/stream_probe.js
+        run: |
+          ONLY="定明天食谱,改计划：不要米饭换红薯,照计划吃了早餐" ROUNDS=4 node .github/api_plan.js
+          ONLY="明天练什么,还差多少蛋白（不给 plan）,照常记录（不给 plan）" ROUNDS=1 node .github/api_plan.js
