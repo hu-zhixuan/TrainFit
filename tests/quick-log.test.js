@@ -391,6 +391,7 @@ test('问问题：回答单独放在 answer 里（去掉 markdown，最多 8 行
   assert.strictEqual(r.meals.length, 0);
   assert.strictEqual(Parser.normalize({ answer: Array(12).fill('一行').join('\n') }, {}).answer.split('\n').length, 8);
   assert.strictEqual(Parser.normalize({ reply: 'x' }, {}).answer, '');
+  assert.strictEqual(Parser.normalize({ reply: '记了早餐，晚上建议看answer', answer: 'y' }, {}).reply, '记了早餐，晚上建议看小人');
   const msg = Parser.buildMessages('明天吃啥', { day: { goal: 'muscle_gain', budget: 2600, burn: 300, intake: 1500, protein: 80, proteinTarget: 140 } })[1].content;
   assert.match(msg, /目标增肌；热量预算 2600 千卡（含训练消耗 300），已吃 1500，还能吃 1100；蛋白质目标 140g，已吃 80g/);
 });
