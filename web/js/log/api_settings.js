@@ -28,7 +28,8 @@
           : /HTTP 402|Arrearage|FreeTierOnly|insufficient/i.test(cloud) ? '上次云端没认成：免费额度用完了或余额不足，用的是本机的结果。'
           : /HTTP 40[13]/.test(cloud) ? '上次云端没认成：key 不对或没有权限，用的是本机的结果。'
           : '上次云端没认成（网络不好或超时），用的是本机的结果。';
-        const howFree = cloud === 'ok' ? '' : '想让云端也免费用：去「千问 AI 平台」用手机号或支付宝登录（新用户送免费额度），在 API Key 页创建一个 sk-ws- 开头的 key，填到下面，地址和模型留空就行。';
+        const keyBad = /HTTP 40[123]|Arrearage|FreeTierOnly|insufficient/i.test(cloud || '') || !(now && now.hasKey);
+        const howFree = !keyBad ? '' : '想让云端也免费用：去「千问 AI 平台」用手机号或支付宝登录（新用户送免费额度），在 API Key 页创建一个 sk-ws- 开头的 key，填到下面，地址和模型留空就行。';
         hint.textContent = Native.has()
           ? (loc === 'failed'
               ? '这台手机用不了本机识别（可能是 32 位系统），改用下面的云端接口。'
