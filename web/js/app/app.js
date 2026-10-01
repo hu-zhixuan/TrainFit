@@ -26,6 +26,7 @@ class FitnessApp {
     this.diet = load('fit_diet', []);
     this.weights = load('fit_weights', []);   // [{date, kg, ts}]，一天一条
     this.myFoods = load('fit_my_foods', []);  // 记住的食物，见 foods.js
+    this.plans = load('fit_plans', []);       // 小人给的计划（明天的食谱、训练），做完点 ✓ 变成记录，见 plans.js
     // 模式：eat = 只记吃的（想瘦 / 随便记记），fit = 吃和练都记（健身）
     // 老用户（已经有记录或改过身体数据）默认 fit，不打扰；新用户第一次打开先问
     this.needsOnboarding = false;
@@ -63,6 +64,7 @@ class FitnessApp {
     store('fit_workouts', this.workouts);
     store('fit_diet', this.diet);
     store('fit_weights', this.weights);
+    store('fit_plans', this.plans);
   }
 
   savePending() {
@@ -180,6 +182,8 @@ class FitnessApp {
         if (act.dataset.act === 'retry') this.retryPending(id);
         else if (act.dataset.act === 'drop') this.dropPending(id);
         else if (act.dataset.act === 'edit-text') this.editPendingText(id);
+        else if (act.dataset.act === 'plan-done') this.donePlan(id);
+        else if (act.dataset.act === 'plan-drop') this.dropPlan(id);
         return;
       }
       const quick = e.target.closest('[data-quick-key]');
@@ -241,10 +245,16 @@ class FitnessApp {
 
   shiftDate(delta) {
     const next = shiftDateString(this.selectedDate, delta);
-    if (next > getTodayDateString()) return;
+    if (next > this.lastPlanDate()) return; // 以后的日子只有排了计划才能翻过去看
     window.Haptics && window.Haptics.fire('tick');
     this.selectedDate = next;
     this.render();
+  }
+
+  /** 最远能翻到哪天：今天，或者计划排到的那天 */
+  lastPlanDate() {
+    const today = getTodayDateString();
+    return (this.plans || []).reduce((m, p) => (p.date > m ? p.date : m), today);
   }
 
   /** 把今天的状态告诉安卓，提醒时用（午饭记了就不提醒午饭；晚间小结写还能吃多少） */

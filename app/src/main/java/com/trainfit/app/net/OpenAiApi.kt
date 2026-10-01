@@ -52,6 +52,60 @@ object OpenAiApi {
     }
 
     /**
+     * 流式（stream: true，SSE）：每来一段字就 onDelta(这段字)，最后拼成和非流式一样的
+     * {"choices":[{"message":{"content":"…"}}]} 返回，网页那边解析不用改。
+     * 服务商不认 stream、直接回整段 JSON 的，原样返回。读超时按「两段字之间」算。
+     */
+    fun chatStream(cfg: ApiConfig, body: JSONObject, onDelta: (String) -> Unit): ApiResult {
+        return try {
+            if (body.optString("model").isBlank()) body.put("model", cfg.model)
+            body.put("stream", true)
+            val conn = (URL("${cfg.baseUrl}/chat/completions").openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                connectTimeout = 15000
+                readTimeout = 60000
+                doOutput = true
+                setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                setRequestProperty("Accept", "text/event-stream")
+                setRequestProperty("Authorization", "Bearer ${cfg.apiKey}")
+            }
+            conn.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
+            val code = conn.responseCode
+            if (code !in 200..299) {
+                val (_, text) = readResponse(conn)
+                return ApiResult(false, "HTTP $code ${text.take(300)}")
+            }
+            val type = conn.contentType.orEmpty()
+            if (!type.contains("event-stream")) {
+                val (_, text) = readResponse(conn)
+                return ApiResult(true, text)
+            }
+            val content = StringBuilder()
+            conn.inputStream.bufferedReader(Charsets.UTF_8).use { reader ->
+                while (true) {
+                    val line = reader.readLine() ?: break
+                    if (!line.startsWith("data:")) continue
+                    val data = line.substring(5).trim()
+                    if (data == "[DONE]") break
+                    val piece = try {
+                        JSONObject(data).optJSONArray("choices")?.optJSONObject(0)
+                            ?.optJSONObject("delta")?.optString("content").orEmpty()
+                    } catch (_: Exception) { "" }
+                    if (piece.isNotEmpty() && piece != "null") {
+                        content.append(piece)
+                        onDelta(piece)
+                    }
+                }
+            }
+            conn.disconnect()
+            val msg = JSONObject().put("role", "assistant").put("content", content.toString())
+            ApiResult(true, JSONObject().put("choices", org.json.JSONArray().put(JSONObject().put("message", msg))).toString())
+        } catch (e: Exception) {
+            ApiResult(false, describe(e))
+        }
+    }
+
+    /**
      * 上传一段 WAV 转文字；网络抖动或限流时再试一次。成功时 body 是识别出的文字。
      * quick：松手后「再认一遍」用，等不起——连接 3 秒、读 6 秒，只试一次，不行就用本机的结果
      */

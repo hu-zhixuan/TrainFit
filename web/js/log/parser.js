@@ -102,11 +102,32 @@
 
   /** 问问题时的回答：去掉 markdown 符号，最多 8 行、600 字 */
   function cleanAnswer(a) {
+    // 大模型偶尔写成一行一项的数组，或者 {"早餐": "..."} 这样的对象（v4.0 用户问食谱「没反应」可能就是这个）
+    if (Array.isArray(a)) a = a.map(x => (typeof x === 'string' ? x : x && typeof x === 'object' ? Object.values(x).join('：') : '')).join('\n');
+    else if (a && typeof a === 'object') a = Object.entries(a).map(([k, v]) => `${k}：${typeof v === 'string' ? v : JSON.stringify(v)}`).join('\n');
     if (typeof a !== 'string') return '';
     const lines = a.replace(/\r/g, '').split('\n')
       .map(l => l.replace(/\*\*/g, '').replace(/^\s*(#+|[-*•]|\d+[.、)])\s*/, '').trim())
       .filter(Boolean);
     return lines.slice(0, 8).join('\n').slice(0, 600);
+  }
+
+  /** 流式输出还没写完时，先把 "answer":"…" 里已经出来的字拿出来（边想边显示）；还没到 / 是 null 返回 '' */
+  function partialAnswer(buf) {
+    const m = /"answer"\s*:\s*"/.exec(buf || '');
+    if (!m) return '';
+    let out = '';
+    for (let i = m.index + m[0].length; i < buf.length; i++) {
+      const c = buf[i];
+      if (c === '"') break;
+      if (c !== '\\') { out += c; continue; }
+      const n = buf[i + 1];
+      if (n === undefined) break;
+      if (n === 'u') { const h = buf.slice(i + 2, i + 6); if (h.length < 4) break; out += String.fromCharCode(parseInt(h, 16)); i += 5; continue; }
+      out += n === 'n' ? '\n' : n === 't' ? ' ' : n;
+      i += 1;
+    }
+    return out.replace(/\*\*/g, '').trim();
   }
 
   const Parser = {
@@ -122,7 +143,7 @@
       const system = [
         '你是「练食AI」的记录助手。用户用口语说吃了什么（吃进嘴的都算：饭菜、零食、饮料、水、补剂、药）、训练或体重，文字来自语音识别，可能有同音错字（"卧腿"=卧推，"四组八哥"=4组8个，"划川"=划船，"茶叶大"=茶叶蛋）、没有标点、夹着「呃、嗯、那个、然后、就是」这类口头禅，按意思理解，说到的每样吃的都要记上，听着像错字的按最像的食物记，不要漏。说了又改口（「两碗，不对，一碗」「哦应该是…」）以后说的为准。紧跟在一样东西后面、只补了份量的话（「一个包子，呃大的」「一份炒饭然后是小份」）是那样东西的份量，不要单独记成一项。',
         '由你决定怎么改数据：新增、修改或删除。只输出一个 JSON 对象，不要 markdown，不要解释：',
-        '{"reply":"一句话告诉用户你做了什么，20字以内（估得比较粗的，30字以内说按什么估的）","answer":null,"dayOffset":0,"bodyWeight":null,"remember":[],',
+        '{"reply":"一句话告诉用户你做了什么，20字以内（估得比较粗的，30字以内说按什么估的）","answer":null,"plan":null,"donePlans":[],"dayOffset":0,"bodyWeight":null,"remember":[],',
         ' "add":{"workouts":[{"exerciseName":"杠铃卧推","muscleGroup":"胸部","weightKg":80,"sets":4,"reps":8,"durationMin":null,"burnedCalories":110,"estimated":false}],',
         '        "meals":[{"mealType":"早餐","foodSummary":"肉包2个","items":[{"name":"肉包","amount":"2个","grams":200,"whole":true,"calories":460,"proteinG":16,"carbsG":60,"fatG":16}]},',
         '                 {"mealType":"午餐","foodSummary":"番茄炒蛋盖饭1份","items":[{"name":"米饭","amount":"1碗","grams":200,"whole":false,"calories":232,"proteinG":5,"carbsG":52,"fatG":0.6},{"name":"番茄炒蛋","amount":"1份","grams":200,"whole":true,"calories":260,"proteinG":11,"carbsG":10,"fatG":19}]}]},',
@@ -157,6 +178,9 @@
         '   回答要用下面「今天的情况」「最近成绩」「记住的食物」，按这个人的目标和还剩的热量、还差的蛋白质来定，具体到吃什么、多少，大概多少千卡和蛋白质（训练就写动作、重量、组数）。用户说了要求（「训练强度大，碳水多点」「不想吃米饭」）就照着调。',
         '   写成几行短句，每行一件事（「早餐：两个鸡蛋＋一杯牛奶＋一个馒头，约450千卡、蛋白25g」），最多 8 行，不要 markdown 符号、不要客套话。reply 写一句「给了你明天的食谱」这样的话（又记又问就写「记了…，晚上吃啥看小人」），不要出现 answer 这个词。',
         '   和吃、练、体重都无关的问题（天气、聊天）：answer 写一句「我只管吃和练，这个帮不上～」。',
+        '   answer 是某一天的具体安排（明天的食谱、今晚吃什么、明天练什么）时，同时写 plan：{"dayOffset":1,"meals":[和 add.meals 一样的格式],"workouts":[和 add.workouts 一样的格式]}，dayOffset 相对正在看的日期（明天 1，今天 0），内容和 answer 一致；只是回答问题（还差多少蛋白、能不能吃）就 plan 为 null。',
+        '   下面有「刚才给的计划」，用户说要改（「不要米饭换红薯」「蛋白再多点」「晚上少吃点」），就按要求改好，重新给完整的 answer 和 plan，不要记录。',
+        '   下面有「这天的计划」，用户说照着吃了 / 练了（「早餐照计划吃了」「计划里的都练完了」）：把那几项 add 进来（份量照计划），donePlans 写它们的编号。',
         '输出前核对一遍：原话里说到的每样吃的、喝的、补剂（包括听错字的，比如"茶叶大"）都记上了，没多记、没漏记。'
       ].join('\n');
 
@@ -165,6 +189,9 @@
       lines.push(records.length ? '这天已有记录：\n' + records.map(r => `${r.ref} ${r.text}`).join('\n') : '这天还没有记录。');
       if (recent.length) lines.push('最近成绩：' + recent.join('；'));
       if (ctx.lastWeight) lines.push(`最近体重：${ctx.lastWeight}kg`);
+      const plans = ctx.plans || [];
+      if (plans.length) lines.push('这天的计划（还没做）：\n' + plans.map(p => `${p.ref} ${p.text}`).join('\n'));
+      if (ctx.lastPlan) lines.push('刚才给的计划（用户可能要改）：\n' + ctx.lastPlan);
       const d = ctx.day;
       if (d) lines.push(`今天的情况：目标${GOALS[d.goal] || '减脂'}；热量预算 ${d.budget} 千卡（含训练消耗 ${d.burn}），已吃 ${d.intake}，还能吃 ${d.budget - d.intake}；蛋白质目标 ${d.proteinTarget}g，已吃 ${d.protein}g。`);
       const mine = (ctx.myFoods || []).slice(0, 40);
@@ -221,6 +248,16 @@
       }
       out.reply = cleanText(parsed && parsed.reply, 40).replace(/(看)?\s*answer/gi, '看小人');
       out.answer = cleanAnswer(parsed && parsed.answer);
+      // 计划（明天的食谱 / 训练）：和记录一样整理、按库算热量，但不存成记录
+      const pl = parsed && parsed.plan;
+      if (out.answer && pl && typeof pl === 'object' && !ctx._inPlan) {
+        const r = this.normalize({ add: { meals: Array.isArray(pl.meals) ? pl.meals : [], workouts: Array.isArray(pl.workouts) ? pl.workouts : [] } },
+          Object.assign({}, ctx, { said: '', _inPlan: true }));
+        const off = Math.max(-7, Math.min(7, Math.round(num(pl.dayOffset) || 0)));
+        if (r.meals.length || r.workouts.length) out.plan = { dayOffset: off, meals: r.meals, workouts: r.workouts };
+      }
+      const known = new Set((ctx.plans || []).map(p => p.ref));
+      out.donePlans = Array.isArray(parsed && parsed.donePlans) ? parsed.donePlans.filter(x => known.has(x)) : [];
       const refs = new Set((ctx.dayRecords || []).map(r => r.ref));
       (Array.isArray(parsed && parsed.update) ? parsed.update : []).forEach(u => {
         if (!u || !refs.has(u.ref) || !u.set || typeof u.set !== 'object') return;
@@ -349,7 +386,7 @@
       return out;
     },
 
-    async viaLlm(text, ctx) {
+    async viaLlm(text, ctx, onDelta) {
       const override = readOverride();
       const base = {
         messages: this.buildMessages(text, ctx),
@@ -366,7 +403,7 @@
       let retries = 0;
       for (let i = 0; i < attempts.length; i++) {
         try {
-          const raw = await this.sendHedged(attempts[i], override);
+          const raw = await this.sendHedged(attempts[i], override, onDelta);
           const parsed = this.extractJson(this.contentFromResponse(raw));
           return this.normalize(parsed, Object.assign({ said: text }, ctx));
         } catch (e) {
@@ -389,22 +426,28 @@
      * 大模型偶尔特别慢（平时 10～18 秒，慢的时候 40 秒以上）：20 秒还没回来就再发一份一样的，
      * 谁先回来用谁（整理是只读的，多发一份只多花一点 token）。第一份很快就失败的不补发，照原来的重试。
      */
-    sendHedged(body, override) {
+    sendHedged(body, override, onDelta) {
       const wait = this.hedgeMs == null ? 20000 : this.hedgeMs;
       return new Promise((resolve, reject) => {
-        let done = false, running = 0, timer = null;
+        let done = false, running = 0, timer = null, leader = null;
         const finish = (fn, v) => { if (done) return; done = true; clearTimeout(timer); fn(v); };
         const go = () => {
           running += 1;
-          this.send(body, override).then(r => finish(resolve, r), e => { running -= 1; if (!running) finish(reject, e); });
+          const me = running + Math.random();
+          // 边想边出字：只转发先出字的那一份；出了字就不再补发
+          const delta = onDelta ? (chunk) => {
+            if (leader === null) { leader = me; clearTimeout(timer); }
+            if (leader === me && !done) onDelta(chunk);
+          } : null;
+          this.send(body, override, delta).then(r => finish(resolve, r), e => { running -= 1; if (!running) finish(reject, e); });
         };
         go();
         if (wait > 0) timer = setTimeout(() => { if (!done) go(); }, wait);
       });
     },
 
-    async send(body, override) {
-      if (Native.has()) return Native.chat(body, override);
+    async send(body, override, onDelta) {
+      if (Native.has()) return Native.chat(body, override, null, onDelta);
       if (override.apiKey && override.baseUrl) {
         // 浏览器里调试：直接请求（部分服务商不允许跨域，会失败）
         const b = Object.assign({ model: 'gpt-4o-mini' }, body);
@@ -447,13 +490,13 @@
      * 只用大模型。以前失败时会退回本地规则，但规则会把「蛋白粉 700 毫升」这种话算得离谱还直接存，
      * 现在失败就留一张「没整理好」的卡片，让用户重试或改字。
      */
-    async parse(text, ctx) {
-      const r = await this.viaLlm(text, ctx);
+    async parse(text, ctx, onDelta) {
+      const r = await this.viaLlm(text, ctx, onDelta);
       return Object.assign(r, { source: 'llm' });
     }
   };
 
-  Object.assign(TF, { Parser, mergeItems });
+  Object.assign(TF, { partialAnswer, Parser, mergeItems });
 
   if (typeof module !== 'undefined' && module.exports) module.exports = TF;
 })(typeof window !== 'undefined' ? window : globalThis);

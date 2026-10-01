@@ -502,8 +502,55 @@ body.has-buddy .views { padding-bottom: calc(var(--cmp-h, 110px) + 52px + var(--
 .buddy-pop-head b { font-size: 1.05rem; color: var(--text); font-variant-numeric: tabular-nums; margin: 0 1px; }
 .buddy-say { margin: 6px 0 0; font-size: 0.95rem; font-weight: 700; line-height: 1.45; color: var(--th-text); }
 .buddy-foot { margin: 8px 0 0; padding-top: 8px; border-top: 1px solid var(--line); font-size: 0.72rem; line-height: 1.5; color: var(--text-3); }
+/* 小人给的计划：虚线框，右边 × 不要了、✓ 做到了（变成记录） */
+.item.plan { border-style: dashed; box-shadow: none; background: transparent; grid-template-columns: 36px 1fr auto; cursor: default; }
+.item.plan:active { transform: none; background: transparent; }
+.item.plan .item-icon { opacity: 0.75; }
+.plan-acts { display: flex; align-items: center; gap: 6px; }
+.plan-acts button { width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); color: var(--text-3); font-size: 1rem; line-height: 1; cursor: pointer; }
+.plan-acts .plan-done { border-color: var(--accent); color: var(--accent-text); font-weight: 700; }
+.plan-acts .plan-done:active { background: var(--accent-soft); }
+/* 小人「我想想…」：三个点一跳一跳，下面那句隔几秒换 */
+.buddy-think { display: flex; align-items: center; gap: 8px; margin: 8px 0 2px; font-size: 0.9rem; color: var(--text-2); }
+.think-dots { display: inline-flex; gap: 3px; }
+.think-dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); opacity: 0.4; }
+@media (prefers-reduced-motion: no-preference) {
+  .think-dots i { animation: thinkDot 1.1s ease-in-out infinite; }
+  .think-dots i:nth-child(2) { animation-delay: 0.15s; }
+  .think-dots i:nth-child(3) { animation-delay: 0.3s; }
+  .buddy-answer.typing::after { content: '▍'; margin-left: 1px; color: var(--accent-text); animation: caret 0.9s steps(1, end) infinite; }
+}
+@keyframes thinkDot { 0%, 60%, 100% { transform: translateY(0); opacity: 0.4; } 30% { transform: translateY(-4px); opacity: 1; } }
+@keyframes caret { 50% { opacity: 0; } }
+/* 回答下面：改一改 / 加到明天 */
+.buddy-acts { display: flex; gap: 8px; margin-top: 10px; }
+.buddy-act { flex: 1; height: 36px; border-radius: 18px; border: 1px solid var(--line); background: var(--surface-2); color: var(--text); font: inherit; font-size: 0.85rem; font-weight: 600; cursor: pointer; }
+.buddy-act.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.buddy-act:disabled { opacity: 0.6; cursor: default; }
+.buddy-tip { margin: 8px 0 0; font-size: 0.78rem; line-height: 1.5; color: var(--text-3); }
+/* 气泡从小人头顶弹出来（带一点回弹） */
+@media (prefers-reduced-motion: no-preference) {
+  .buddy-pop.pop-spring { animation: popSpring 0.42s cubic-bezier(0.2, 1.5, 0.4, 1); }
+}
+@keyframes popSpring { from { opacity: 0; transform: scale(0.6) translateY(14px); } 60% { opacity: 1; } to { opacity: 1; transform: none; } }
+/* 回答来了：小人脑袋旁边冒「!」（头顶是气泡，会挡住），整个人跳一下 */
+.buddy.bang::after {
+  content: '!';
+  position: absolute; top: 2px; left: -6px;
+  width: 18px; height: 18px; border-radius: 50%;
+  background: var(--accent); color: var(--accent-ink);
+  font: 700 12px/18px system-ui, sans-serif; text-align: center;
+  box-shadow: var(--shadow);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .buddy.bang::after { animation: bangPop 1.2s ease-out both; }
+  .buddy.bang .bd-move { animation: bdHop 0.45s ease-out; }
+}
+@keyframes bangPop { 0% { transform: scale(0) translateY(6px); opacity: 0; } 18% { transform: scale(1.25) translateY(-2px); opacity: 1; } 30% { transform: scale(1); } 85% { opacity: 1; } 100% { opacity: 0; transform: translateY(-4px); } }
+@keyframes bdHop { 0%, 100% { transform: translateY(0); } 40% { transform: translateY(-10px); } 70% { transform: translateY(1px); } }
+.buddy.bang.thinking::before { display: none; }
 /* 小人回答问题：气泡宽一点，内容按行显示，太长在气泡里滚动 */
-.buddy-pop[data-mode="answer"] { width: min(330px, calc(100vw - 32px)); overflow-y: auto; overscroll-behavior: contain; }
+.buddy-pop[data-mode="answer"], .buddy-pop[data-mode="thinking"] { width: min(330px, calc(100vw - 32px)); overflow-y: auto; overscroll-behavior: contain; }
 .buddy-answer { margin: 6px 0 0; white-space: pre-line; font-size: 0.92rem; line-height: 1.6; color: var(--text); }
 .buddy-more { display: block; width: 100%; margin: 9px 0 0; padding: 8px 0 0; border: 0; border-top: 1px solid var(--line); background: none; text-align: left; font: inherit; font-size: 0.75rem; color: var(--text-3); cursor: pointer; }
 /* 大模型还在整理：小人头上冒一个「…」 */

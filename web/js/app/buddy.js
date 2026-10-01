@@ -481,7 +481,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     btn.setAttribute('aria-label', `小人：${st.say}`);
     this.placeBuddy();
     const pop = document.getElementById('buddy-pop');
-    if (!pop.classList.contains('hidden') && pop.dataset.mode !== 'answer') this.showBuddyPop();
+    if (!pop.classList.contains('hidden') && !pop.dataset.mode) this.showBuddyPop();
   },
 
   buddyState() {
@@ -661,7 +661,11 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     const pop = document.getElementById('buddy-pop');
     const btn = document.getElementById('buddy');
     let top, right;
-    if (this._buddyXY) {
+    if (btn.classList.contains('hidden') || btn.style.visibility === 'hidden') {
+      const c = document.getElementById('composer').getBoundingClientRect();
+      top = c.top - 4;
+      right = 16;
+    } else if (this._buddyXY) {
       top = this._buddyXY.y;
       right = window.innerWidth - (this._buddyXY.x + btn.offsetWidth);
     } else {
@@ -671,33 +675,158 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     }
     pop.style.bottom = Math.round(window.innerHeight - top + 4) + 'px';
     pop.style.right = Math.max(12, Math.round(right)) + 'px';
-    pop.style.maxHeight = pop.dataset.mode === 'answer' ? Math.max(160, Math.round(top - 24)) + 'px' : '';
+    pop.style.maxHeight = pop.dataset.mode === 'answer' || pop.dataset.mode === 'thinking' ? Math.max(160, Math.round(top - 24)) + 'px' : '';
   },
 
   /**
-   * 用户问了问题（「明天吃什么」「还差多少蛋白」）：小人站起来，气泡里回答。点空白处收起；
-   * 半小时内点小人能再看一次。again：再看一次时不重复招手、不响
+   * 听着像提问：一松手小人就站起来，气泡里「我想想…」，下面一行隔几秒换一句，让人知道它在干活
+   * （Atria 要 10～25 秒才出第一个字）
    */
-  showBuddyAnswer(question, answer, again) {
+  showBuddyThinking(question) {
     const pop = document.getElementById('buddy-pop');
-    const btn = document.getElementById('buddy');
-    if (!pop || !btn || btn.classList.contains('hidden')) return;
-    this._lastAnswer = { question, answer, at: Date.now() };
+    if (!pop) return;
+    clearInterval(this._thinkT);
     const q = String(question || '').replace(/\s+/g, ' ').trim();
-    pop.dataset.mode = 'answer';
+    const eat = /吃|食谱|菜谱|蛋白|热量|碳水|饿/.test(q), lift = /练|训练|健身|动作/.test(q);
+    const steps = ['我想想…', '先看看你今天吃了多少…', eat ? '算算还差多少蛋白、还能吃多少…' : '翻翻你最近的训练…',
+      eat && lift ? '把吃和练一起排一排…' : eat ? '在排吃什么、吃多少…' : lift ? '在排动作、重量和组数…' : '快好了…', '快好了，再等一下下…'];
+    pop.dataset.mode = 'thinking';
     pop.dataset.level = 'none';
     pop.innerHTML = `<div class="buddy-pop-head">${esc(q.length > 26 ? q.slice(0, 25) + '…' : q)}</div>` +
-      `<p class="buddy-answer">${esc(answer)}</p><button class="buddy-more" type="button">看看连续记录 ›</button>`;
-    pop.querySelector('.buddy-more').addEventListener('click', (e) => { e.stopPropagation(); this.showBuddyPop(); });
+      `<p class="buddy-think"><span class="think-dots"><i></i><i></i><i></i></span><span class="think-line">${steps[0]}</span></p>`;
     this.positionBuddyPop();
-    pop.scrollTop = 0;
-    pop.classList.remove('hidden');
-    document.getElementById('gauge-pop').classList.add('hidden');
-    if (!again) {
-      window.Haptics && window.Haptics.fire('tap');
-      window.Sound && window.Sound.play('blip');
-      if (!this._touring) this.buddyDo([['wave', 1200], ['stand', 600]]);
+    this.popIn(pop);
+    let i = 0;
+    this._thinkT = setInterval(() => {
+      const line = pop.querySelector('.think-line');
+      if (pop.dataset.mode !== 'thinking' || !line) { clearInterval(this._thinkT); return; }
+      i = Math.min(i + 1, steps.length - 1);
+      line.textContent = steps[i];
+    }, 3500);
+    if (!this._touring) { this.buddyStop(); this.buddyPose('stand'); }
+  },
+
+  /** 气泡弹出来的动画（每次重新弹） */
+  popIn(pop) {
+    pop.classList.remove('hidden', 'pop-spring');
+    void pop.offsetWidth;
+    pop.classList.add('pop-spring');
+  },
+
+  /** 回答来了：小人跳一下、头上冒「!」、招手 */
+  buddyBang() {
+    const btn = document.getElementById('buddy');
+    if (!btn) return;
+    btn.classList.remove('bang');
+    void btn.offsetWidth;
+    btn.classList.add('bang');
+    clearTimeout(this._bangT);
+    this._bangT = setTimeout(() => btn.classList.remove('bang'), 1300);
+    window.Haptics && window.Haptics.fire('tap');
+    window.Sound && window.Sound.play('blip');
+    if (!this._touring) this.buddyDo([['stand', 120], ['wave', 1100], ['stand', 600]]);
+  },
+
+  /**
+   * 小人回答问题（「明天吃什么」「还差多少蛋白」）。opts：
+   *  streaming —— 大模型还在出字，只更新文字；
+   *  plan / baseDate —— 回答是一份计划：下面「加到明天」「改一改」；
+   *  again —— 点小人再看一次，不跳不响。
+   * 点空白处收起；半小时内点小人能再看一次
+   */
+  showBuddyAnswer(question, answer, opts) {
+    opts = opts || {};
+    const pop = document.getElementById('buddy-pop');
+    if (!pop) return;
+    const q = String(question || '').replace(/\s+/g, ' ').trim();
+    const fresh = pop.dataset.mode !== 'answer' || pop.dataset.q !== q || pop.classList.contains('hidden');
+    clearInterval(this._thinkT);
+    // 还在出字、气泡已经在显示这一问：只换文字，不重画、不重复跳
+    if (opts.streaming && !fresh) {
+      const el = pop.querySelector('.buddy-answer');
+      if (el) { el.textContent = answer; return; }
     }
+    if (!opts.streaming) this._lastAnswer = { question, answer, at: Date.now(), plan: opts.plan, baseDate: opts.baseDate };
+    const plan = !opts.streaming && opts.plan;
+    let planDate = '';
+    if (plan) {
+      planDate = shiftDateString(opts.baseDate || getTodayDateString(), plan.dayOffset || 0);
+      // 15 分钟内说「不要米饭换红薯」，大模型知道改的是哪份计划
+      this._planOffer = { at: Date.now(), text: this.planText(plan) };
+    }
+    pop.dataset.mode = 'answer';
+    pop.dataset.q = q;
+    pop.dataset.level = 'none';
+    const dayWord = (d) => (d === getTodayDateString() ? '今天' : d === shiftDateString(getTodayDateString(), 1) ? '明天' : `${+d.slice(5, 7)}月${+d.slice(8)}日`);
+    const added = plan && (this.plans || []).some(x => x.date === planDate && x.from === this._lastAnswer.at);
+    pop.innerHTML = `<div class="buddy-pop-head">${esc(q.length > 26 ? q.slice(0, 25) + '…' : q)}</div>` +
+      `<p class="buddy-answer${opts.streaming ? ' typing' : ''}">${esc(answer)}</p>` +
+      (plan ? `<div class="buddy-acts"><button class="buddy-act" type="button" data-pa="edit">改一改</button>` +
+        `<button class="buddy-act primary" type="button" data-pa="add"${added ? ' disabled' : ''}>${added ? '✓ 已加到' : '加到'}${dayWord(planDate)}</button></div>` +
+        `<p class="buddy-tip hidden">按住下面的按钮说要改的地方，比如「不要米饭，换成红薯」「蛋白再多一点」</p>` : '') +
+      (opts.streaming ? '' : '<button class="buddy-more" type="button">看看连续记录 ›</button>');
+    const more = pop.querySelector('.buddy-more');
+    if (more) more.addEventListener('click', (e) => { e.stopPropagation(); this.showBuddyPop(); });
+    pop.querySelectorAll('[data-pa]').forEach(b => b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (b.dataset.pa === 'add') {
+        const n = this.addPlans(planDate, Object.assign({}, plan, { from: this._lastAnswer.at }));
+        b.disabled = true;
+        b.textContent = `✓ 已加到${dayWord(planDate)}`;
+        window.Haptics && window.Haptics.fire('success');
+        window.Sound && window.Sound.play('success');
+        this.showToast(`加了 ${n} 条计划，到时候做完点 ✓ 就记上`);
+      } else {
+        pop.querySelector('.buddy-tip').classList.remove('hidden');
+        const talk = document.querySelector('#voice-row:not(.hidden) .talk-btn') || document.querySelector('#text-row:not(.hidden) .cmp-text');
+        if (talk) { talk.classList.add('tour-glow'); setTimeout(() => talk.classList.remove('tour-glow'), 2600); }
+        this.positionBuddyPop();
+      }
+    }));
+    this.positionBuddyPop();
+    if (fresh) {
+      pop.scrollTop = 0;
+      this.popIn(pop);
+      document.getElementById('gauge-pop').classList.add('hidden');
+      if (!opts.again) this.buddyBang();
+    }
+  },
+
+  /** 计划写成几行字（给大模型看「刚才给的计划」） */
+  planText(plan) {
+    return (plan.meals || []).map(m => `${m.mealType} ${m.foodSummary} ${m.calories}kcal 蛋白${m.proteinG || 0}`)
+      .concat((plan.workouts || []).map(w => `训练 ${w.exerciseName} ${w.durationMin ? w.durationMin + '分钟' : (w.weightKg > 0 ? w.weightKg + 'kg' : '自重') + ` ${w.sets}×${w.reps}`}`))
+      .join('\n');
+  },
+
+  /** 提问没整理出来：气泡里说清楚，能重试（卡片也留着） */
+  showBuddyFailed(p, reason) {
+    const pop = document.getElementById('buddy-pop');
+    if (!pop) return;
+    clearInterval(this._thinkT);
+    pop.dataset.mode = 'answer';
+    pop.dataset.q = '';
+    pop.dataset.level = 'none';
+    pop.innerHTML = `<div class="buddy-pop-head">${esc(String(p.text || '').slice(0, 25))}</div>` +
+      `<p class="buddy-answer">没想出来：${esc(reason || '网络不好')}</p>` +
+      `<div class="buddy-acts"><button class="buddy-act primary" type="button" data-pa="retry">再试一次</button></div>`;
+    pop.querySelector('[data-pa="retry"]').addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.showBuddyThinking(p.text);
+      this.retryPending(p.id);
+    });
+    this.positionBuddyPop();
+    this.popIn(pop);
+    if (!this._touring) this.buddyPose('lie');
+  },
+
+  /** 收起某一种气泡（比如猜成提问其实是记录：把「我想想」收起来） */
+  closeBuddyPop(mode) {
+    const pop = document.getElementById('buddy-pop');
+    if (!pop || (mode && pop.dataset.mode !== mode)) return;
+    clearInterval(this._thinkT);
+    pop.classList.add('hidden');
+    if (!this._touring && !this._acting) this.buddyPose('lie');
   },
 
   /** 有话在整理（大模型还没回来）：小人头上冒「…」 */
@@ -709,7 +838,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
   bindBuddy() {
     const btn = document.getElementById('buddy');
     const pop = document.getElementById('buddy-pop');
-    const close = () => pop.classList.add('hidden');
+    const close = () => { pop.classList.add('hidden'); clearInterval(this._thinkT); };
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       window.Haptics && window.Haptics.fire('tick');
@@ -720,7 +849,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       if (!pop.classList.contains('hidden')) { close(); return; }
       // 半小时内问过问题：先给刚才的回答，里面能点去看连续记录
       const a = this._lastAnswer;
-      if (a && Date.now() - a.at < 30 * 60 * 1000) this.showBuddyAnswer(a.question, a.answer, true);
+      if (a && Date.now() - a.at < 30 * 60 * 1000) this.showBuddyAnswer(a.question, a.answer, { again: true, plan: a.plan, baseDate: a.baseDate });
       else this.showBuddyPop();
     });
     // 温度计的弹窗和小人的气泡不同时开

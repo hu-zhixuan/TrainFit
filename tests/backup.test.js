@@ -30,7 +30,7 @@ test('读备份：不是练食AI的文件返回 null，坏数据丢掉', () => {
 
 test('重装后恢复：新装的 App 什么都没有，全部导进来，身体数据也恢复', () => {
   const r = mergeBackupData({ fit_profile: { mode: undefined }, fit_diet: [], fit_workouts: [], fit_weights: [], fit_my_foods: [] }, parseBackup(backupFile));
-  assert.deepStrictEqual(r.added, { diet: 2, workouts: 1, weights: 2, myFoods: 1 });
+  assert.deepStrictEqual(r.added, { diet: 2, workouts: 1, weights: 2, myFoods: 1, plans: 0 });
   assert.strictEqual(r.profileRestored, true);
   assert.strictEqual(r.data.fit_profile.weightKg, 61);
   assert.deepStrictEqual(r.data.fit_diet.map(d => d.id), ['d2', 'd1']); // 新的在前
@@ -45,12 +45,22 @@ test('已经在用的手机上恢复：同一条不记两遍，同一天体重�
     fit_my_foods: [{ name: '甜牛奶', amount: '250毫升', calories: 150 }]
   };
   const r = mergeBackupData(cur, parseBackup(backupFile));
-  assert.deepStrictEqual(r.added, { diet: 1, workouts: 1, weights: 1, myFoods: 0 });
+  assert.deepStrictEqual(r.added, { diet: 1, workouts: 1, weights: 1, myFoods: 0, plans: 0 });
   assert.strictEqual(r.profileRestored, false);
   assert.strictEqual(r.data.fit_profile.weightKg, 70);
   assert.strictEqual(r.data.fit_weights.find(w => w.date === '2026-09-30').kg, 60.5);
   assert.strictEqual(r.data.fit_my_foods[0].calories, 150);
   // 同一个备份再导一次：什么都不加
   const again = mergeBackupData(r.data, parseBackup(backupFile));
-  assert.deepStrictEqual(again.added, { diet: 0, workouts: 0, weights: 0, myFoods: 0 });
+  assert.deepStrictEqual(again.added, { diet: 0, workouts: 0, weights: 0, myFoods: 0, plans: 0 });
+});
+
+test('小人给的计划也跟着备份：恢复时导进来，同一条不记两遍', () => {
+  const plan = { id: 'pl_1_m0', date: '2026-10-02', kind: 'meal', ts: 1, mealType: '早餐', foodSummary: '鸡蛋2个、牛奶1杯', calories: 300, proteinG: 21 };
+  const bak = parseBackup(JSON.stringify({ app: '练食AI', format: 1, data: { fit_diet: [], fit_plans: [plan, { id: 'bad' }] } }));
+  assert.strictEqual(bak.fit_plans.length, 1);
+  const r = mergeBackupData({ fit_diet: [], fit_workouts: [], fit_weights: [], fit_my_foods: [], fit_plans: [] }, bak);
+  assert.strictEqual(r.added.plans, 1);
+  assert.strictEqual(r.data.fit_plans[0].foodSummary, '鸡蛋2个、牛奶1杯');
+  assert.strictEqual(mergeBackupData(r.data, bak).added.plans, 0);
 });

@@ -1,13 +1,13 @@
 /**
  * 数据备份：导出、从备份恢复（合并进现有数据）、每天自动备份到手机的「下载/练食AI/」。
  *
- * 备份文件是 JSON：{ app: '练食AI', format: 1, exportedAt, range: {from, to}, counts, data: { fit_diet: [...], … } }
+ * 备份文件是 JSON：{ app: '练食AI', format: 1, exportedAt, range: {from, to}, counts, data: { fit_diet: [...], …, fit_plans: [...] } }
  * 只放记录和个人资料；AI 接口 / 语音识别的 key 不放进去，发给别人也不会漏。
  * 自动备份的文件在卸载 App 后还在。重装后点「从备份恢复」：系统的文件夹授权页直接停在「下载/练食AI」，
  * 点「使用此文件夹」→「允许」，我们自己挑记录最多的那份恢复（照 Mihon 的做法，不用自己翻文件）。
  * 换手机：旧手机「发送备份文件」到微信，新手机在微信里点开 →「用其他应用打开」→ 练食AI，直接恢复。
  */
-const BACKUP_KEYS = ['fit_profile', 'fit_workouts', 'fit_diet', 'fit_weights', 'fit_my_foods'];
+const BACKUP_KEYS = ['fit_profile', 'fit_workouts', 'fit_diet', 'fit_weights', 'fit_my_foods', 'fit_plans'];
 const BACKUP_FORMAT = 1;
 const AUTO_BACKUP_NAME = '练食AI备份.json';
 const AUTO_BACKUP_KEY = 'tf_autobackup'; // { at, where }
@@ -25,7 +25,8 @@ function parseBackup(text) {
     fit_workouts: arr(d.fit_workouts).filter(r => r.id && r.date),
     fit_diet: arr(d.fit_diet).filter(r => r.id && r.date),
     fit_weights: arr(d.fit_weights).filter(r => r.date && r.kg > 0),
-    fit_my_foods: arr(d.fit_my_foods).filter(r => r.name)
+    fit_my_foods: arr(d.fit_my_foods).filter(r => r.name),
+    fit_plans: arr(d.fit_plans).filter(r => r.id && r.date && r.kind)
   };
 }
 
@@ -46,6 +47,8 @@ function mergeBackupData(cur, bak) {
   const newWo = bak.fit_workouts.filter(r => !woIds.has(r.id));
   const newW = bak.fit_weights.filter(w => !wDates.has(w.date));
   const newFoods = bak.fit_my_foods.filter(f => !foodNames.has(norm(f.name)));
+  const planIds = byId(cur.fit_plans || []);
+  const newPlans = (bak.fit_plans || []).filter(p => !planIds.has(p.id));
 
   const fresh = !(cur.fit_diet || []).length && !(cur.fit_workouts || []).length && !(cur.fit_profile && cur.fit_profile.customized);
   const profileRestored = fresh && !!bak.fit_profile;
@@ -56,9 +59,10 @@ function mergeBackupData(cur, bak) {
       fit_diet: (cur.fit_diet || []).concat(newDiet).sort(byTime),
       fit_workouts: (cur.fit_workouts || []).concat(newWo).sort(byTime),
       fit_weights: (cur.fit_weights || []).concat(newW).sort((a, b) => (a.date > b.date ? 1 : -1)),
-      fit_my_foods: (cur.fit_my_foods || []).concat(newFoods)
+      fit_my_foods: (cur.fit_my_foods || []).concat(newFoods),
+      fit_plans: (cur.fit_plans || []).concat(newPlans)
     },
-    added: { diet: newDiet.length, workouts: newWo.length, weights: newW.length, myFoods: newFoods.length },
+    added: { diet: newDiet.length, workouts: newWo.length, weights: newW.length, myFoods: newFoods.length, plans: newPlans.length },
     profileRestored
   };
 }
@@ -75,7 +79,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       exportedAt: new Date().toISOString(),
       range: dates.length ? { from: dates[0], to: dates[dates.length - 1] } : null,
       counts: { diet: this.diet.length, workouts: this.workouts.length, weights: this.weights.length, myFoods: this.myFoods.length },
-      data: { fit_profile: this.profile, fit_workouts: this.workouts, fit_diet: this.diet, fit_weights: this.weights, fit_my_foods: this.myFoods }
+      data: { fit_profile: this.profile, fit_workouts: this.workouts, fit_diet: this.diet, fit_weights: this.weights, fit_my_foods: this.myFoods, fit_plans: this.plans || [] }
     });
   },
 
@@ -139,11 +143,11 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
   applyBackup(text, quiet) {
     const bak = parseBackup(text);
     if (!bak) { this.showToast('这不是练食AI的备份文件'); return 'bad'; }
-    const before = { fit_profile: this.profile, fit_diet: this.diet, fit_workouts: this.workouts, fit_weights: this.weights, fit_my_foods: this.myFoods };
+    const before = { fit_profile: this.profile, fit_diet: this.diet, fit_workouts: this.workouts, fit_weights: this.weights, fit_my_foods: this.myFoods, fit_plans: this.plans || [] };
     const snapshot = JSON.parse(JSON.stringify(before));
     const r = mergeBackupData(before, bak);
     const total = r.added.diet + r.added.workouts + r.added.weights;
-    if (!total && !r.added.myFoods && !r.profileRestored) {
+    if (!total && !r.added.myFoods && !r.added.plans && !r.profileRestored) {
       // 说清楚是哪一份，分得清是不是选错了文件
       const d = bak.exportedAt ? new Date(bak.exportedAt) : null;
       const n = bak.fit_diet.length + bak.fit_workouts.length + bak.fit_weights.length;
@@ -169,6 +173,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     this.workouts = d.fit_workouts || [];
     this.weights = d.fit_weights || [];
     this.myFoods = d.fit_my_foods || [];
+    this.plans = d.fit_plans || [];
     store(MY_FOODS_KEY, this.myFoods);
     this.recalculateMetabolism();
     this.saveData();
