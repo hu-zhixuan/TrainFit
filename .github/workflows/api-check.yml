@@ -3,14 +3,22 @@ on:
   push:
     branches: [ claude/api-check ]
 jobs:
-  probe:
+  mirrors:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 本机模型镜像
+        run: bash .github/mirror_probe.sh
+  atria-search:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: 千问 key 现在能用哪些模型
+      - name: Atria 联网搜索
         env:
-          K: ${{ secrets.QWEN_API }}
-        run: node .github/qw_probe.js
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
+          LLM_MODEL: ${{ vars.LLM_MODEL }}
+        run: node .github/atria_search_probe.js
