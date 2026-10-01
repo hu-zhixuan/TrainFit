@@ -68,13 +68,16 @@
       const ctx = this.buildContext(p);
       let result;
       // 边想边出字：answer 一出来就往小人的气泡里写
-      let buf = '', shown = '';
-      const onDelta = (chunk) => {
-        buf += chunk;
+      // 回答写完了、后面在写计划（整份计划要 30～60 秒）：气泡里说「正在排成计划」，别让光标一直闪
+      let buf = '', shown = '', planning = false;
+      const onDelta = (soFar) => {
+        buf = soFar;
         const a = partialAnswer ? partialAnswer(buf) : '';
-        if (a && a !== shown && app.showBuddyAnswer && app.pending.some(x => x.id === p.id)) {
+        const pl = !!a && /"answer"\s*:\s*"(?:[^"\\]|\\.)*"/.test(buf) && /"plan"\s*:\s*\{/.test(buf);
+        if (a && (a !== shown || pl !== planning) && app.showBuddyAnswer && app.pending.some(x => x.id === p.id)) {
           shown = a;
-          app.showBuddyAnswer(p.text, a, { streaming: true });
+          planning = pl;
+          app.showBuddyAnswer(p.text, a, { streaming: true, planning: pl });
         }
       };
       try {
@@ -114,6 +117,7 @@
       const batch = this.save(Object.assign(result, { said: p.text }), p.date, ctx);
       this.showSnack(batch, result);
       if (result.answer && app.showBuddyAnswer) app.showBuddyAnswer(p.text, result.answer, answerOpts); // 又记又问
+      else if (batch.asks.length && app.askPortion) app.askPortion(batch.asks); // 份量含糊：小人问一句，点一下就改
       else if (app.closeBuddyPop) app.closeBuddyPop('thinking'); // 猜成提问其实是记录：把「我想想」收起来
     },
 
@@ -122,7 +126,7 @@
       const base = baseDate || app.selectedDate || getTodayDateString();
       const date = result.dayOffset ? shiftDateString(base, result.dayOffset) : base;
       const stamp = Date.now();
-      const batch = { workoutIds: [], dietIds: [], date, before: [], removed: [], changed: [] };
+      const batch = { workoutIds: [], dietIds: [], date, before: [], removed: [], changed: [], asks: [] };
       const refMap = new Map(((ctx && ctx.dayRecords) || []).map(r => [r.ref, r]));
       const find = (r) => (r.kind === 'meal' ? app.diet : app.workouts).find(x => x.id === r.id);
 
@@ -181,6 +185,14 @@
       result.meals.forEach((m, i) => {
         const id = 'd_' + stamp + '_' + i;
         batch.dietIds.push(id);
+        // 份量说得含糊的那几样：选项不存进记录，记好后小人问一句（「一瓶甜牛奶多大？」）
+        const items = (m.items || []).map((it, k) => {
+          if (!it.opts) return it;
+          batch.asks.push({ id, index: k, name: it.name, amount: it.amount || '', grams: it.grams, opts: it.opts });
+          const rest = Object.assign({}, it);
+          delete rest.opts;
+          return rest;
+        });
         app.diet.unshift({
           id,
           ts: stamp + 50 + Math.max(0, MEAL_TYPES.indexOf(m.mealType)) * 2 + i,
@@ -191,7 +203,7 @@
           proteinG: m.proteinG,
           carbsG: m.carbsG,
           fatG: m.fatG,
-          items: m.items && m.items.length ? m.items : undefined,
+          items: items.length ? items : undefined,
           said: result.said ? String(result.said).slice(0, 200) : undefined // 原话：分得清是没听清还是理解错
         });
       });
@@ -235,6 +247,11 @@
         : '✓ 已更新';
       if (n && batch.date !== getTodayDateString()) t += `（${batch.date.slice(5).replace('-', '月')}日）`;
       const lines = this.describe(result).concat(batch.changed || []);
+      // 练了的动作：和上次比怎么样、下次练多少（本机算，不用等大模型）
+      (batch.workoutIds || []).forEach(id => {
+        const fb = app.liftFeedback && app.liftFeedback(app.workouts.find(w => w.id === id));
+        if (fb) lines.push(fb);
+      });
       const kcal = result.meals.reduce((a, m) => a + (m.calories || 0), 0);
       const eq = kcal > 0 && app.equivText ? app.equivText(kcal) : '';
       if (eq) lines.push(eq);

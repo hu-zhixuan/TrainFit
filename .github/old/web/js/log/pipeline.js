@@ -5,14 +5,17 @@
 (function (root) {
   'use strict';
   const TF = root.TF = root.TF || {};
-  const { MEAL_TYPES, quickWeight, Native, Haptics, Parser, QuickLog } = TF;
+  const { MEAL_TYPES, quickWeight, Native, Haptics, Parser, QuickLog, mergeItems, sumItems, looksLikeQuestion, partialAnswer } = TF;
 
   Object.assign(QuickLog, {
     // ----- 解析 + 保存（后台进行，不用等） -----
     submit(text) {
       text = (text || '').trim();
       if (!text) return;
-      const p = root.app.addPending(text);
+      // 听着像提问：不出「正在整理」卡片，小人马上在气泡里说「我想想…」（Atria 要 10～25 秒才出第一个字）
+      const ask = !!(looksLikeQuestion && looksLikeQuestion(text));
+      const p = root.app.addPending(text, ask);
+      if (ask && root.app.showBuddyThinking) root.app.showBuddyThinking(text);
       this.process(p);
     },
 
@@ -24,7 +27,7 @@
       app.diet.filter(d => d.date === date).forEach(d => dayRecords.push({
         kind: 'meal', id: d.id,
         text: `${(d.mealType || '').replace('/补剂', '')} ${d.foodSummary} ${d.calories}kcal 蛋白${d.proteinG || 0} 碳水${d.carbsG || 0} 脂肪${d.fatG || 0}` +
-          (Array.isArray(d.items) && d.items.length ? `（${d.items.map(i => `${i.name}${i.grams ? i.grams + 'g' : ''}`).join('、')}）` : '')
+          (Array.isArray(d.items) && d.items.length ? `（${d.items.map(i => `${i.name}${i.amount ? ' ' + i.amount : ''}${i.grams ? ' ' + i.grams + 'g' : ''} ${i.calories}kcal 蛋白${i.proteinG || 0}`).join('、')}）` : '')
       }));
       app.workouts.filter(w => w.date === date).forEach(w => dayRecords.push({
         kind: 'workout', id: w.id,
@@ -47,32 +50,74 @@
       const today = getTodayDateString();
       const dayLabel = date === today ? `今天 ${date}` : date;
       const lw = app.latestWeight ? app.latestWeight() : null;
-      return { now: new Date(p.ts || Date.now()), history: app.workouts, dayRecords, recent, dayLabel, lastWeight: lw ? lw.kg : null, myFoods: app.myFoods || [] };
+      // 问「还能吃什么」「明天吃啥」时要用：这天的预算、吃了多少、蛋白质目标
+      let day = null;
+      try {
+        const s = app.getDaySummary(date);
+        day = { goal: app.profile.goalType, budget: Math.round(s.budget), burn: Math.round(s.workoutBurn), intake: Math.round(s.intake),
+          protein: Math.round(s.protein), proteinTarget: Math.round(app.gaugeProteinTarget ? app.gaugeProteinTarget() : (app.profile.targetProteinG || 0)) };
+      } catch (e) {}
+      // 这天的计划（「早餐照计划吃了」），刚才小人给的计划（「不要米饭换红薯」，15 分钟内）
+      const plans = app.planContext ? app.planContext(date) : [];
+      const offer = app._planOffer && Date.now() - app._planOffer.at < 15 * 60 * 1000 ? app._planOffer.text : '';
+      return { now: new Date(p.ts || Date.now()), history: app.workouts, dayRecords, recent, dayLabel, lastWeight: lw ? lw.kg : null, myFoods: app.myFoods || [], day, plans, lastPlan: offer };
     },
 
     async process(p) {
       const app = root.app;
       const ctx = this.buildContext(p);
       let result;
+      // 边想边出字：answer 一出来就往小人的气泡里写
+      // 回答写完了、后面在写计划（整份计划要 30～60 秒）：气泡里说「正在排成计划」，别让光标一直闪
+      let buf = '', shown = '', planning = false;
+      const onDelta = (soFar) => {
+        buf = soFar;
+        const a = partialAnswer ? partialAnswer(buf) : '';
+        const pl = !!a && /"answer"\s*:\s*"(?:[^"\\]|\\.)*"/.test(buf) && /"plan"\s*:\s*\{/.test(buf);
+        if (a && (a !== shown || pl !== planning) && app.showBuddyAnswer && app.pending.some(x => x.id === p.id)) {
+          shown = a;
+          planning = pl;
+          app.showBuddyAnswer(p.text, a, { streaming: true, planning: pl });
+        }
+      };
       try {
         // 只是报体重：不用等大模型
         const kg = quickWeight(p.text, ctx.lastWeight);
         result = kg ? { dayOffset: 0, workouts: [], meals: [], updates: [], deletes: [], bodyWeight: kg, reply: '', source: 'fast' }
-          : await Parser.parse(p.text, ctx);
+          : await Parser.parse(p.text, ctx, onDelta);
       } catch (e) {
         console.warn('[QuickLog] 大模型没整理出来：', e && e.message);
-        if (app.pending.some(x => x.id === p.id)) app.failPending(p.id, Parser.failReason(e));
+        if (app.pending.some(x => x.id === p.id)) {
+          app.failPending(p.id, Parser.failReason(e));
+          if ((p.ask || shown) && app.showBuddyFailed) app.showBuddyFailed(p, Parser.failReason(e));
+        }
         return;
       }
       if (!app.pending.some(x => x.id === p.id)) return; // 已被用户删掉
+      // 「早餐照计划吃了」：大模型记好了，把那几条计划划掉
+      if ((result.donePlans || []).length && app.dropPlan) {
+        const byRef = new Map((ctx.plans || []).map(x => [x.ref, x.id]));
+        result.donePlans.forEach(ref => { const id = byRef.get(ref); if (id) app.plans = app.plans.filter(x => x.id !== id); });
+      }
       const changes = result.workouts.length + result.meals.length + (result.updates || []).length + (result.deletes || []).length + (result.bodyWeight ? 1 : 0) + (result.remember || []).length;
+      const answerOpts = { plan: result.plan, baseDate: p.date };
       if (!changes) {
+        // 问问题（「明天吃什么」）：不记、不报错，小人回答；给了计划的话气泡里能「加到明天」
+        if (result.answer) {
+          app.finishPending(p.id);
+          app.render();
+          if (app.showBuddyAnswer) app.showBuddyAnswer(p.text, result.answer, answerOpts);
+          return;
+        }
         app.failPending(p.id, result.reply || '没认出吃了什么');
+        if (p.ask && app.showBuddyFailed) app.showBuddyFailed(p, result.reply || '没听懂，换个说法试试');
         return;
       }
       app.finishPending(p.id);
       const batch = this.save(Object.assign(result, { said: p.text }), p.date, ctx);
       this.showSnack(batch, result);
+      if (result.answer && app.showBuddyAnswer) app.showBuddyAnswer(p.text, result.answer, answerOpts); // 又记又问
+      else if (app.closeBuddyPop) app.closeBuddyPop('thinking'); // 猜成提问其实是记录：把「我想想」收起来
     },
 
     save(result, baseDate, ctx) {
@@ -91,9 +136,16 @@
         if (!rec) return;
         batch.before.push({ kind: r.kind, snapshot: JSON.parse(JSON.stringify(rec)) });
         Object.keys(u.set).forEach(k => {
-          if (r.kind === 'meal' && ['mealType', 'foodSummary', 'calories', 'proteinG', 'carbsG', 'fatG', 'items'].includes(k)) rec[k] = u.set[k];
+          if (r.kind === 'meal' && ['mealType', 'foodSummary', 'calories', 'proteinG', 'carbsG', 'fatG'].includes(k)) rec[k] = u.set[k];
           if (r.kind === 'workout' && ['exerciseName', 'muscleGroup', 'weightKg', 'sets', 'reps', 'durationMin', 'burnedCalories'].includes(k)) rec[k] = u.set[k];
         });
+        // 改了其中几样：按名字换掉 / 去掉，其他原样保留，合计重算
+        if (r.kind === 'meal' && (u.set.items || u.set.removeItems)) {
+          const items = mergeItems(rec.items, u.set.items, u.set.removeItems);
+          rec.items = items.length ? items : undefined;
+          Object.assign(rec, sumItems(items));
+          if (!u.set.foodSummary && items.length) rec.foodSummary = items.map(it => it.name + (it.amount || '')).join('、').slice(0, 60);
+        }
         batch.changed.push(r.kind === 'meal' ? `改 · ${rec.foodSummary} ${rec.calories} kcal` :
           `改 · ${rec.exerciseName} ${rec.durationMin ? rec.durationMin + ' 分钟' : (rec.weightKg > 0 ? rec.weightKg + 'kg' : '自重') + ' ' + rec.sets + '×' + rec.reps}`);
       });
@@ -166,7 +218,10 @@
         if (w.durationMin) lines.push(`有氧 · ${w.exerciseName} ${w.durationMin} 分钟`);
         else lines.push(`训练 · ${w.exerciseName} ${w.weightKg > 0 ? w.weightKg + 'kg' : '自重'} ${w.sets}×${w.reps}${w.estimated ? '（估）' : ''}`);
       });
-      result.meals.forEach(m => lines.push(`${m.mealType.replace('/补剂', '')} · ${m.foodSummary} ${m.calories} kcal`));
+      result.meals.forEach(m => {
+        const supp = m.items && m.items.length && m.items.every(i => i.supp);
+        lines.push(supp ? `补剂 · ${m.foodSummary}` : `${m.mealType.replace('/补剂', '')} · ${m.foodSummary} ${m.calories} kcal`);
+      });
       if (result.bodyWeight) lines.push(`体重 · ${result.bodyWeight} kg`);
       (result.remember || []).forEach(f => lines.push(`记住 · ${f.name} ${f.amount || '1份'} ${f.calories} kcal`));
       return lines;
@@ -187,6 +242,7 @@
       const eq = kcal > 0 && app.equivText ? app.equivText(kcal) : '';
       if (eq) lines.push(eq);
       Haptics.fire('success');
+      root.Sound && root.Sound.play('success');
       // App 在后台（比如说完就锁屏了）：发一条通知
       if (typeof document !== 'undefined' && document.hidden && Native.has() && root.TrainFitNative.showNotification) {
         try { root.TrainFitNative.showNotification(t.replace(/^✓\s*/, ''), lines.join('\n')); } catch (e) {}
@@ -226,6 +282,7 @@
 
     undo() {
       Haptics.fire('tap');
+      root.Sound && root.Sound.play('undo');
       const fn = this._undoFn;
       this._undoFn = null;
       this.hideSnack();

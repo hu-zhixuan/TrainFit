@@ -10,7 +10,7 @@
     require('./food.js');
   }
   const TF = root.TF = root.TF || {};
-  const { MUSCLES, MEAL_TYPES, NUTRIENTS, num, cleanText, round1, mealTypeByHour, normMealType, mealTimes, mealSegments, findWeight, guessMuscle, readOverride, Native, FoodDB, MyFoods, groundItem, sumItems } = TF;
+  const { MUSCLES, MEAL_TYPES, NUTRIENTS, num, cleanText, round1, mealTypeByHour, normMealType, mealTimes, mealSegments, findWeight, guessMuscle, readOverride, Native, FoodDB, MyFoods, groundItem, sizeOpts, sumItems } = TF;
 
   const summaryOf = (items) => cleanText(items.map(it => it.name + (it.amount || '')).join('、'), 60);
 
@@ -159,7 +159,8 @@
         '   连锁店、品牌的东西（麦当劳、肯德基、汉堡王、必胜客、赛百味、星巴克、瑞幸、喜茶、蜜雪冰城、便利店、包装零食饮料…）：name 带上品牌（「汉堡王吉士汉堡」「瑞幸生椰拿铁」），按这家店官方公布的一份（一个、一杯、中份）的热量和蛋白质估，whole=true；套餐拆成每一样（汉堡、薯条、饮料）。不知道具体是哪一款，就按这家店同类的常见款估。',
         '   一顿说不清具体吃了哪些的（火锅、烧烤、烤肉、自助餐、麻辣烫、冒菜、串串、干锅、日料、聚餐、吃席）：按用户的描述拆成几项估——主要的肉（羊肉、肥牛、毛肚…，大概几盘或多少克）、蔬菜和豆制品、主食、蘸料（麻酱、香油碟热量很高）、锅底或汤里吸的油（牛油、红油锅比清汤、番茄锅多不少）；没说的按一个成年人一顿的中等量估。说了「吃了很多 / 吃撑了」按 1.5 倍左右，「没吃多少 / 吃了一点」按 0.6 倍左右。这种估得粗的，reply 用一句话说清楚按什么估的（如「按牛油锅、羊肉约300克估的，可以再补一句」）。',
         '   只有明显是几样东西拼起来的才分开写（盖饭 = 米饭 + 菜，套餐 = 主食 + 菜 + 饮料）。单独的米饭、馒头、鸡蛋、牛奶、水果这类单一食材 whole=false，name 尽量用下面「参考营养数据」里的名字，数值会按库重算。参考数据里的成品菜数值可以参考，但要按用户说的做法和份量自己判断。',
-        '   克数都按熟的、吃下去的算：米饭一碗约 180g，盖饭和外卖套餐里的米饭约 250–300g，馒头一个约 100g，鸡蛋一个约 50g，牛奶一杯约 250g，糯米鸡一个约 150–200g，一份外卖约 400–600g。',
+        '   克数都按熟的、吃下去的算：米饭一碗约 180g，盖饭和外卖套餐里的米饭约 250–300g，馒头一个约 100g，鸡蛋一个约 50g，牛奶一杯约 250g，糯米鸡一个约 150–200g，一份外卖约 400–600g。按「一个 / 一串 / 一块」的真实大小估，不要当成 100g：烤串一串的肉约 25–40g，烤白果一串约 6–8 颗、25g 左右，炸鸡一块（带骨）能吃的约 80–100g，一瓶牛奶 / 甜牛奶常见 200–250ml，一瓶饮料约 500ml，一罐可乐 330ml。',
+        '   份量说得含糊、不同大小热量差得多的（「一瓶甜牛奶」不知道 250ml 还是 500ml，「一串烤白果」不知道几颗，「一块炸鸡」不知道是鸡腿还是鸡翅）：grams 按最常见的估，这一项再加 "opts":[["250ml",250],["500ml",500]]——2～3 个最常见的大小，每个是 [给用户看的几个字, 这一项的总克数]，其中一个就是你估的。说了具体量的（克数、毫升、几颗）、「记住的食物」里有的、热量低的（蔬菜、水、茶）不要加；一句话最多 2 样加 opts。',
         '   例外：单独吃的肉、鱼、虾（鸡胸肉、牛肉、猪瘦肉、鱼肉、虾仁）grams 写生重，参考数据里这些是生肉的数——用户说的克数一般就是生重，直接用；没说就估这块肉生的时候多重（熟肉约为生重的七成）。即食鸡胸肉按包装克数。',
         '   蛋白质用户最在意，要估准：肉、蛋、奶、豆制品、蛋白粉按实际份量算（乳清蛋白粉一勺约 30g、含蛋白约 24g）；整份的菜里有多少肉就按多少肉估蛋白质，不要只按菜名套平均值。',
         '   补剂和药（维生素、钙、镁、锌、铁、鱼油、益生菌、肌酸、药片…，蛋白粉不算补剂）：每样一项，加 "kind":"supplement"，不管什么时间都放进 mealType 为 加餐/补剂 的那条 meal，和饭菜分开。calories 按实际（普通片剂、胶囊是 0，鱼油一粒约 9，软糖一粒约 10）。含这些营养素就写 nutrients（这一项的总量，只用这些名字和单位）：' + Object.keys(NUTRIENTS).map(k => `${k}(${NUTRIENTS[k].unit})`).join('、') + '。用户没说剂量就按常见的一片 / 一粒估（维生素D 1μg = 40IU）；复合维生素也按常见一粒写出主要几种（维生素C、维生素D、维生素A、锌、钙、镁…）。药和说不清成分的补剂可以不写 nutrients。例：{"mealType":"加餐/补剂","foodSummary":"鱼油2粒、维生素D1粒","items":[{"name":"鱼油","amount":"2粒","kind":"supplement","calories":18,"fatG":2,"nutrients":{"EPA+DHA":600}},{"name":"维生素D","amount":"1粒","kind":"supplement","calories":0,"nutrients":{"维生素D":10}}]}',
@@ -357,8 +358,14 @@
         });
       });
 
+      let asks = 0; // 一句话最多问 2 样的份量
       (Array.isArray(parsed && parsed.meals) ? parsed.meals : []).forEach(m => {
-        const items = (Array.isArray(m.items) ? m.items : []).map(ground).filter(Boolean);
+        const items = (Array.isArray(m.items) ? m.items : []).map(raw => {
+          const g = ground(raw);
+          const opts = g && !ctx._inPlan && asks < 2 ? sizeOpts(raw.opts, g) : null;
+          if (opts) { g.opts = opts; asks += 1; }
+          return g;
+        }).filter(Boolean);
         if (items.length) {
           const t = sumItems(items);
           m = Object.assign({}, m, t);
@@ -401,9 +408,11 @@
       const waits = this.retryWaits || [3000, 8000]; // 限流 / 超时 / 网络断了：等一等再试，最多两次
       let lastErr;
       let retries = 0;
+      // 边想边出字：onDelta 拿到的是这一次请求到目前为止的全部文字（卡住重试时从头算，不和上一次的半截拼在一起）
+      const deltaFor = () => { if (!onDelta) return null; let soFar = ''; return (chunk) => { soFar += chunk; onDelta(soFar); }; };
       for (let i = 0; i < attempts.length; i++) {
         try {
-          const raw = await this.sendHedged(attempts[i], override, onDelta);
+          const raw = await this.sendHedged(attempts[i], override, deltaFor());
           const parsed = this.extractJson(this.contentFromResponse(raw));
           return this.normalize(parsed, Object.assign({ said: text }, ctx));
         } catch (e) {

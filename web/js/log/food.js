@@ -196,6 +196,26 @@
     return withN(Object.assign(base, { src: supp ? '补剂' : '估算' }, vals(ai.calories, ai.proteinG, ai.carbsG, ai.fatG)));
   }
 
+  /**
+   * 份量说得含糊（「一瓶甜牛奶」「一串烤白果」）：大模型给 2～3 个常见大小 [[「250ml」, 250], [「500ml」, 500]]，
+   * 记好后小人问一句，点哪个就按克数比例改。记住的、包装上的、补剂、选哪个热量都差不多的，不问。
+   * @param raw 大模型给的 opts；@param g groundItem 整理好的这一项
+   * @returns [{label, grams}] 或 null
+   */
+  function sizeOpts(raw, g) {
+    if (!Array.isArray(raw) || !g || !(g.grams > 0) || ['我的', '包装', '补剂'].includes(g.src)) return null;
+    const seen = new Set();
+    const opts = raw.map(o => {
+      const label = cleanText(Array.isArray(o) ? o[0] : o && (o.label || o.name), 10);
+      const grams = Math.round(num(Array.isArray(o) ? o[1] : o && o.grams) || 0);
+      return label && grams > 0 && grams <= 3000 ? { label, grams } : null;
+    }).filter(o => o && !seen.has(o.grams) && seen.add(o.grams)).slice(0, 3);
+    if (opts.length < 2) return null;
+    const gs = opts.map(o => o.grams);
+    const spread = (Math.max(...gs) - Math.min(...gs)) * g.calories / g.grams;
+    return spread >= 60 ? opts.sort((a, b) => a.grams - b.grams) : null;
+  }
+
   function sumItems(items) {
     return items.reduce((t, x) => ({
       calories: t.calories + x.calories, proteinG: round1(t.proteinG + x.proteinG),
@@ -203,7 +223,7 @@
     }), { calories: 0, proteinG: 0, carbsG: 0, fatG: 0 });
   }
 
-  Object.assign(TF, { FoodDB, MyFoods, countOf, groundItem, sumItems });
+  Object.assign(TF, { FoodDB, MyFoods, countOf, groundItem, sizeOpts, sumItems });
 
   if (typeof module !== 'undefined' && module.exports) module.exports = TF;
 })(typeof window !== 'undefined' ? window : globalThis);

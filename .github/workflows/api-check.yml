@@ -11,12 +11,19 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: 计划：定食谱 / 改 / 照计划吃了 ×4，其他 ×1（只用 Atria，流式）
+      - name: 新：份量选项 ×4（只用 Atria）
         env:
           TZ: Asia/Shanghai
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
           LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
           LLM_MODEL: ${{ vars.LLM_MODEL }}
-        run: |
-          ONLY="定明天食谱,改计划：不要米饭换红薯,照计划吃了早餐" ROUNDS=4 node .github/api_plan.js
-          ONLY="明天练什么,还差多少蛋白（不给 plan）,照常记录（不给 plan）" ROUNDS=1 node .github/api_plan.js
+          TAG: 新
+        run: ROUNDS=4 node .github/api_portion.js
+      - name: 旧（main）：同样两句 ×4，比耗时
+        env:
+          TZ: Asia/Shanghai
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
+          LLM_MODEL: ${{ vars.LLM_MODEL }}
+          PARSER: old
+        run: ONLY="一瓶甜牛奶（该问）,烧烤（截图那句）" ROUNDS=4 node .github/api_portion.js

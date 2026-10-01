@@ -180,6 +180,7 @@
       this.tapMode = false;
       this.state = 'recording';
       Haptics.fire('start');
+      root.Sound && root.Sound.play('start');
       this.recStart = Date.now();
       this.liveText = '';
       this._levels = [];
@@ -193,7 +194,7 @@
       this._timer = setInterval(() => this.tick(), 250);
       this.tick();
       if (engine === 'asr') {
-        try { root.TrainFitNative.startRecording(); } catch (e) { this.failTalk('录音启动失败'); }
+        try { root.TrainFitNative.startRecording(JSON.stringify(readAsrOverride())); } catch (e) { this.failTalk('录音启动失败'); }
       } else {
         this.startSystem();
       }
@@ -269,6 +270,7 @@
 
     failTalk(msg) {
       Haptics.fire('error');
+      root.Sound && root.Sound.play('error');
       this.state = 'idle';
       this.resetTalkUi();
       this.setStatus(msg, 'warn');
@@ -278,6 +280,7 @@
       if (this.state !== 'recording') return;
       this.state = 'transcribing';
       Haptics.fire('stop');
+      root.Sound && root.Sound.play('stop', 0.15); // 等麦克风关了再响，别录进去
       clearInterval(this._timer);
       this.panel.classList.add('hidden');
       this.composer.classList.remove('recording');
@@ -333,6 +336,7 @@
       const msg = String(text || '');
       if (msg === 'TOO_SHORT' || msg === 'NO_SPEECH') this.setStatus('没听到说话，按住再说一次', 'warn');
       else if (msg === 'LOCAL_NOT_READY') this.setStatus('识别模型还在加载，稍等一两秒再说', 'warn');
+      else if (msg === 'MODEL_MISSING') this.setStatus('没认出来：本机识别模型还没下好，联网再说一次', 'warn');
       else if (msg === 'NO_KEY') this.setStatus('还没有语音识别 key，去设置里填', 'warn');
       else if (/^HTTP 401|^HTTP 403/.test(msg)) this.setStatus('语音识别 key 不对，去设置里检查', 'warn');
       else this.setStatus('识别失败（网络不好？）再说一次，或点左边改成打字', 'warn');
