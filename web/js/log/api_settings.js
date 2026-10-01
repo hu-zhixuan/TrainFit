@@ -24,20 +24,42 @@
         const now = Native.asrInfo() || info; // 云端上次成没成功会变，每次重新问
         const loc = now && now.local;
         const cloud = now && now.cloud;
-        const cloudNote = !cloud ? '' : cloud === 'ok' ? '上次云端识别正常。'
-          : /HTTP 402|Arrearage|FreeTierOnly|insufficient/i.test(cloud) ? '上次云端没认成：免费额度用完了或余额不足，用的是本机的结果。'
-          : /HTTP 40[13]|InvalidApiKey|AccessDenied/.test(cloud) ? '上次云端没认成：key 不对或没有权限，用的是本机的结果。'
-          : '上次云端没认成（网络不好或超时），用的是本机的结果。';
-        const keyBad = /HTTP 40[123]|Arrearage|FreeTierOnly|insufficient|InvalidApiKey|AccessDenied/i.test(cloud || '') || !(now && now.hasKey);
-        const howFree = !keyBad ? '' : '想让云端也免费用：去「千问 AI 平台」用手机号或支付宝登录（新用户送免费额度），在 API Key 页创建一个 sk-ws- 开头的 key，填到下面，地址和模型留空就行。';
+        // 说明只写一句：内置了什么；云端的 key / 额度出问题才多说半句
+        const keyBad = /HTTP 40[123]|Arrearage|FreeTierOnly|insufficient|InvalidApiKey|AccessDenied/i.test(cloud || '');
         hint.textContent = Native.has()
-          ? (loc === 'failed'
-              ? '这台手机用不了本机识别（可能是 32 位系统），改用下面的云端接口。'
-              : '说话时在手机本机识别（免费、不用联网），边说边出字；联网时同时交给云端语音大模型（千问 Qwen-Audio-3.1）认，松手就用它的结果，更准，用不了就用本机的。' + cloudNote + howFree)
+          ? '内置千问 Qwen-Audio-3.1 语音识别，按住说就行' + (loc === 'failed' ? '。' : '，没网时用手机本机识别。') + (keyBad ? '（云端暂时用不了：key 或额度有问题）' : '')
           : '浏览器里用的是浏览器自带的语音识别。';
       };
+      // 本机识别模型（第一次打开时在后台下载）：进度、等 Wi-Fi、失败重试
+      const mNote = document.getElementById('asr-model-note');
+      const mRow = document.getElementById('asr-model-row');
+      const mBtn = document.getElementById('asr-model-dl');
+      let poll = null;
+      const refreshModel = () => {
+        const now = Native.asrInfo();
+        const loc = now && now.local;
+        const mb = now && now.dlTotal ? Math.round(now.dlTotal / 1e6) : 240;
+        let text = '', btn = '';
+        if (loc === 'missing') {
+          const pct = now.dlTotal ? Math.floor(now.dlDone * 100 / now.dlTotal) : 0;
+          if (now.dl === 'downloading') text = `离线识别模型下载中 ${pct}%`;
+          else if (now.dl === 'failed') { text = '离线识别模型没下好'; btn = '重试'; }
+          else { text = `离线识别模型（${mb}MB）连上 Wi-Fi 自动下载`; btn = '用流量下载'; }
+        }
+        mNote.textContent = text;
+        mNote.classList.toggle('hidden', !text);
+        mRow.classList.toggle('hidden', !btn);
+        if (btn) mBtn.textContent = btn;
+        clearTimeout(poll);
+        if ((loc === 'missing' || loc === 'loading') && mNote.offsetParent !== null) poll = setTimeout(refreshModel, 1000);
+      };
+      mBtn.addEventListener('click', () => {
+        try { root.TrainFitNative.downloadAsrModel(); } catch (e) {}
+        setTimeout(refreshModel, 300);
+      });
       refresh();
-      this.refreshAsrHint = refresh;
+      refreshModel();
+      this.refreshAsrHint = () => { refresh(); refreshModel(); };
       document.getElementById('asr-cfg-save').addEventListener('click', () => {
         writeAsrOverride({ baseUrl: baseEl.value, model: modelEl.value, apiKey: keyEl.value });
         refresh();

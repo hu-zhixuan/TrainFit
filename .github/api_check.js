@@ -20,6 +20,7 @@ async function call(label, text, hhmm, check, ctxExtra) {
   // 像一个在健身的老用户：有最近成绩、记住的食物、体重（手机上的提示词比空白上下文长得多）
   const ctx = { now, history: [], dayRecords: [], dayLabel: '今天 2026-09-29', lastWeight: 61,
     recent: ['杠铃卧推 80kg 4×8（09-28）', '杠铃深蹲 100kg 5×5（09-27）', '引体向上 自重 4×8（09-27）', '哑铃推举 22kg 3×10（09-26）', '传统硬拉 120kg 3×5（09-25）', '跑步机 30分钟（09-24）'],
+    day: { goal: 'fat_loss', budget: 2031, burn: 0, intake: 1200, protein: 80, proteinTarget: 140 },
     myFoods: [{ name: '糯米鸡', amount: '1个', grams: 180, calories: 350, proteinG: 10, carbsG: 50, fatG: 11 }, { name: '乳清蛋白粉', amount: '1勺', grams: 30, calories: 120, proteinG: 24, carbsG: 3, fatG: 1.5 }] };
   if (ctxExtra) Object.assign(ctx, ctxExtra);
   const body = { model, messages: P.buildMessages(text, ctx), temperature: 0.2, stream: false, thinking: { type: 'disabled' } };
@@ -49,7 +50,7 @@ async function call(label, text, hhmm, check, ctxExtra) {
   let why;
   try { why = check(r); } catch (e) { why = '检查出错 ' + e.message; }
   (why === true ? note : err)(`[${TAG}] ${label} ${why === true ? 'OK' : 'CHECK: ' + why} (${(ms / 1000).toFixed(1)}s)`,
-    `${hhmm} 说：${text}${fallback}%0AdayOffset=${r.dayOffset}%0A${meals.concat(wos).join('%0A')}%0Aupdates：${JSON.stringify(r.updates).slice(0, 400)}%0A记住：${JSON.stringify(r.remember)}%0Areply：${r.reply}`);
+    `${hhmm} 说：${text}${fallback}%0AdayOffset=${r.dayOffset}%0A${meals.concat(wos).join('%0A')}%0Aanswer：${String(r.answer || '').replace(/\n/g, ' ｜ ')}%0Aupdates：${JSON.stringify(r.updates).slice(0, 400)}%0A记住：${JSON.stringify(r.remember)}%0Areply：${r.reply}`);
   return why === true;
 }
 
@@ -57,6 +58,33 @@ const types = (r) => r.meals.map(m => m.mealType.replace('/补剂', '')).join(',
 const itemNames = (m) => (m.items || []).map(i => i.name).join(',') + ',' + m.foodSummary;
 
 const CASES = [
+  // ---- 问问题（v4.0）：不记、answer 里回答 ----
+  ['问：明天食谱', '给我制定一下明天的食谱，我训练强度比较大，碳水可能要多一点', '21:00', r => {
+    if (r.meals.length || r.workouts.length) return '不该记：' + allItems(r);
+    const a = r.answer || '';
+    return (a.split('\n').length >= 3 && /早/.test(a) && /午/.test(a) && /晚/.test(a)) || '回答：' + a;
+  }],
+  ['问：还差多少蛋白', '今天还差多少蛋白质', '19:00', r => {
+    if (r.meals.length) return '不该记：' + allItems(r);
+    return /60/.test(r.answer || '') || '回答：' + r.answer;
+  }],
+  ['问：又记又问', '中午吃了一碗牛肉面，晚上吃点啥好', '13:00', r => {
+    if (r.meals.length !== 1 || !/牛肉面/.test(itemNames(r.meals[0]))) return '牛肉面没记对：' + allItems(r);
+    return (r.answer || '').length > 8 || '没回答：' + r.answer;
+  }],
+  ['问：明天练什么', '明天练什么好', '21:00', r => {
+    if (r.workouts.length || r.meals.length) return '不该记：' + allItems(r);
+    return /组|kg|公斤/.test(r.answer || '') || '回答：' + r.answer;
+  }],
+  ['问：能不能吃火锅', '晚上能不能吃火锅', '17:00', r => {
+    if (r.meals.length) return '不该记：' + allItems(r);
+    return (r.answer || '').length > 8 || '回答：' + r.answer;
+  }],
+  ['问：无关', '今天天气怎么样', '10:00', r => {
+    if (r.meals.length || r.workouts.length) return '不该记';
+    return /只管|帮不上/.test(r.answer || '') || '回答：' + r.answer;
+  }],
+
   // ---- 说不清的一顿、品牌的东西（v3.7） ----
   ['火锅：羊肉吃得多', '晚上吃了一顿火锅，羊肉火锅，吃得挺多', '21:00', r => {
     const m = r.meals[0], kc = r.meals.reduce((a, x) => a + x.calories, 0), p = r.meals.reduce((a, x) => a + x.proteinG, 0);
