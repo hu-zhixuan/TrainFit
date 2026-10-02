@@ -11,11 +11,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: 复测：划掉、器械重量 ×4（只用 Atria）
+      - name: 复现（main 的提示词）×4（只用 Atria）
         env:
           TZ: Asia/Shanghai
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
           LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
           LLM_MODEL: ${{ vars.LLM_MODEL }}
-          TAG: 复测
-        run: ONLY="小本本：变了要划掉,描述器械：坐着往前推" ROUNDS=4 node .github/api_v43.js
+          TAG: main
+        run: ROUNDS=4 node .github/api_v45.js
