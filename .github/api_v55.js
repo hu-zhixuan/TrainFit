@@ -25,27 +25,24 @@ const PLAN = ['早餐 燕麦50g、鸡蛋2个、牛奶1杯 490kcal 蛋白28', '�
 const lastPlan = '10月3日的：\n' + PLAN.join('\n'); // 和 App 的 planText 一样
 const names = (ms) => ms.map(m => m.foodSummary + ',' + (m.items || []).map(i => i.name).join(',')).join('；');
 const sum = (ms, k) => Math.round(ms.reduce((a, m) => a + (m[k] || 0), 0));
-const CASES0 = [
-  ['没点按钮（提醒一句）：不要米饭换红薯', '不要米饭，换成红薯', 1, {}, (r) => {
-    const ms = (r.plan && r.plan.meals) || [];
-    if (ms.length < 3) return '没给新的 plan';
-    if (r.plan.dayOffset !== 1) return 'dayOffset=' + r.plan.dayOffset;
-    return (!/米饭/.test(names(ms)) && /红薯/.test(names(ms))) || names(ms);
-  }],
-  ['没点按钮（提醒一句）：蛋白再多一点', '蛋白再多一点', 1, {}, (r) => {
-    const ms = (r.plan && r.plan.meals) || [];
-    if (ms.length < 3) return '没给新的 plan';
-    return sum(ms, 'proteinG') >= 160 || '蛋白 ' + sum(ms, 'proteinG') + '（原来 152）';
-  }],
-  ['改记录别带偏：早上的鸡蛋改成三个', '早上的鸡蛋改成三个', 3, { dayRecords: [{ ref: 'r1', kind: 'meal', id: 'd1', text: '早餐 鸡蛋2个、牛奶1杯 303kcal 蛋白20.6 碳水13 脂肪17（鸡蛋 2个 100g 143kcal 蛋白12.6、牛奶 1杯 250g 160kcal 蛋白8）' }] }, (r) => {
+const REC = { dayRecords: [{ ref: 'r1', kind: 'meal', id: 'd1', text: '早餐 鸡蛋2个、牛奶1杯 303kcal 蛋白20.6 碳水13 脂肪17（鸡蛋 2个 100g 143kcal 蛋白12.6、牛奶 1杯 250g 160kcal 蛋白8）' }] };
+const swap = (r) => {
+  const ms = (r.plan && r.plan.meals) || [];
+  if (ms.length < 3) return '没给新的 plan';
+  if (r.plan.dayOffset !== 1) return 'dayOffset=' + r.plan.dayOffset;
+  return (!/米饭/.test(names(ms)) && /红薯/.test(names(ms))) || names(ms);
+};
+const CASES = [
+  ['这天有记录（不提醒）：早上的鸡蛋改成三个', '早上的鸡蛋改成三个', 3, REC, (r) => {
     if (r.plan) return '改成计划了';
     const u = r.updates.find(x => x.ref === 'r1');
     if (!u) return '没改 r1：' + JSON.stringify(r.updates) + ' 新增 ' + r.meals.length;
     const egg = (u.set.items || []).find(i => /蛋/.test(i.name));
     return (egg && egg.grams >= 140 && egg.grams <= 160) || '鸡蛋：' + JSON.stringify(egg);
-  }]
+  }],
+  ['这天有记录（不提醒）：不要米饭换红薯', '不要米饭，换成红薯', 2, REC, swap],
+  ['这天没记录（提醒）：不要米饭换红薯', '不要米饭，换成红薯', 1, {}, swap]
 ];
-const CASES = CASES0.slice(2).concat(CASES0.slice(0, 2));
 (async () => {
   const lines = [];
   let pass = 0, n = 0;
