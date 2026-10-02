@@ -571,3 +571,36 @@ test('兜底：说「挪到前一天」大模型却只删了，不删，改成�
   assert.ok(/没听清/.test(unsure.reply));
   assert.deepStrictEqual(Parser.normalize({ delete: ['r1'] }, Object.assign({}, ctx, { said: '瑜伽删掉' })).deletes, ['r1']);
 });
+
+test('手机自己就能答的问题：整句都是这个意思才认，又记又问、问建议的交给大模型', () => {
+  const N = ['杠铃卧推', '杠铃深蹲', '高位下拉'];
+  const k = (t) => { const r = TF.quickIntent(t, N); return r ? r.kind + (r.name ? ':' + r.name : '') : null; };
+  assert.strictEqual(k('今天还差多少蛋白？'), 'protein');
+  assert.strictEqual(k('蛋白够了吗'), 'protein');
+  assert.strictEqual(k('嗯那个我还能吃多少啊'), 'kcal');
+  assert.strictEqual(k('今天吃超了吗'), 'kcal');
+  assert.strictEqual(k('热量赤字多少'), 'deficit');
+  assert.strictEqual(k('这个月瘦了多少斤'), 'weight');
+  assert.strictEqual(TF.quickIntent('这个月瘦了多少斤', N).span, 30);
+  assert.strictEqual(k('我连续记了几天'), 'streak');
+  assert.strictEqual(k('这周练了几次'), 'trains');
+  assert.strictEqual(k('卧推最好多少'), 'lift:杠铃卧推');
+  assert.strictEqual(k('上次深蹲练了多少'), 'lift:杠铃深蹲');
+  assert.strictEqual(k('卧推下次练多少'), 'lift:杠铃卧推');
+  for (const t of ['中午吃了牛肉面还能吃多少', '晚上吃点啥能补蛋白', '我还能吃多少，晚上吃啥', '给我定一下明天的食谱', '上周练了几次', '吃了几个李子', '卧推80公斤4组8个', '硬拉最好多少']) {
+    assert.strictEqual(k(t), null, t);
+  }
+});
+
+test('提问时带最近两周（问以前的事才答得上）；没有就不带', () => {
+  const past = ['09-27周六 吃1850 蛋白92 练:杠铃卧推80kg', '09-28周日 吃2100 蛋白130 体重61.2'];
+  const m = Parser.buildMessages('上周练了几次', { past })[1].content;
+  assert.ok(m.includes('最近两周（日期 吃了多少千卡 蛋白g 练了什么 体重kg）：\n09-27周六 吃1850'));
+  assert.ok(!Parser.buildMessages('一碗面', {})[1].content.includes('最近两周'));
+});
+
+test('「接着问」：回答了问题才留，最多两句、去掉句号和太短的', () => {
+  const r = Parser.normalize({ answer: '还差 60g 蛋白', next: ['晚上吃点啥能补蛋白。', '好', '给我定明天的食谱', '第三句不要'] }, {});
+  assert.deepStrictEqual(r.next, ['晚上吃点啥能补蛋白', '给我定明天的食谱']);
+  assert.deepStrictEqual(Parser.normalize({ add: { meals: [] }, next: ['晚上吃啥'] }, {}).next, []);
+});

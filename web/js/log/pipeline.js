@@ -12,6 +12,12 @@
     submit(text) {
       text = (text || '').trim();
       if (!text) return;
+      // 手机自己就能答的（「还差多少蛋白」「卧推最好多少」）：马上答，不问大模型
+      const quick = root.app.quickAnswer ? root.app.quickAnswer(text) : null;
+      if (quick && root.app.showBuddyAnswer) {
+        root.app.showBuddyAnswer(text, quick.text, { next: quick.next });
+        return;
+      }
       // 听着像提问：不出「正在整理」卡片，小人马上在气泡里说「我想想…」（Atria 要 10～25 秒才出第一个字）
       const ask = !!(looksLikeQuestion && looksLikeQuestion(text));
       const p = root.app.addPending(text, ask);
@@ -61,7 +67,32 @@
       const plans = app.planContext ? app.planContext(date) : [];
       const offer = app._planOffer && Date.now() - app._planOffer.at < 15 * 60 * 1000 ? app._planOffer.text : '';
       return { now: new Date(p.ts || Date.now()), history: app.workouts, dayRecords, recent, dayLabel, lastWeight: lw ? lw.kg : null, myFoods: app.myFoods || [], day, plans, lastPlan: offer,
-        memo: app.memoList ? app.memoList() : [], date, ask: !!p.ask };
+        memo: app.memoList ? app.memoList() : [], date, ask: !!p.ask, past: p.ask ? this.pastDays(date) : [] };
+    },
+
+    /**
+     * 提问时给大模型看的最近两周，一天一行（「09-28周日 吃1850 蛋白92 练:杠铃卧推80kg、杠铃深蹲100kg 体重61.2」），
+     * 问「上周练了几次」「这个月瘦了多少」「哪天吃得最多」才答得上来。只在提问时带，记录时不带，不拖慢记录。
+     */
+    pastDays(date) {
+      const app = root.app;
+      const WK = '日一二三四五六';
+      const out = [];
+      for (let i = 13; i >= 0; i--) {
+        const d = shiftDateString(date, -i);
+        const s = app.getDaySummary(d);
+        const ws = app.workouts.filter(w => w.date === d);
+        const wt = app.weightOn ? app.weightOn(d) : null;
+        if (!s.hasDiet && !ws.length && !wt) continue;
+        const lifts = [];
+        ws.forEach(w => {
+          const t = w.durationMin ? `${w.exerciseName}${w.durationMin}分钟` : `${w.exerciseName}${w.weightKg > 0 ? round1(w.weightKg) + 'kg' : ''}`;
+          if (!lifts.includes(t)) lifts.push(t);
+        });
+        out.push(`${d.slice(5)}周${WK[new Date(d + 'T00:00:00').getDay()]}` + (s.hasDiet ? ` 吃${Math.round(s.intake)} 蛋白${Math.round(s.protein)}` : ' 没记吃的') +
+          (lifts.length ? ` 练:${lifts.slice(0, 5).join('、')}` : '') + (wt ? ` 体重${round1(wt.kg)}` : ''));
+      }
+      return out;
     },
 
     async process(p) {
@@ -101,7 +132,7 @@
         app.markPlansDone(result.donePlans.map(ref => byRef.get(ref)).filter(Boolean));
       }
       const changes = result.workouts.length + result.meals.length + (result.updates || []).length + (result.deletes || []).length + (result.bodyWeight ? 1 : 0) + (result.remember || []).length + (result.memo || []).length + (result.forget || []).length;
-      const answerOpts = { plan: result.plan, baseDate: p.date };
+      const answerOpts = { plan: result.plan, baseDate: p.date, next: result.next };
       if (!changes) {
         // 问问题（「明天吃什么」）：不记、不报错，小人回答；给了计划的话气泡里能「加到明天」
         if (result.answer) {
@@ -120,6 +151,7 @@
       if (result.answer && app.showBuddyAnswer) app.showBuddyAnswer(p.text, result.answer, answerOpts); // 又记又问
       else if (batch.asks.length && app.askPortion) app.askPortion(batch.asks); // 份量含糊：小人问一句，点一下就改
       else if (app.newbieTip && app.newbieTip(result)) { /* 新手第一周：小人说一句小提示 */ }
+      else if (app.coachTip && app.coachTip(result, batch)) { /* 该提醒的时候说一句：破纪录、晚上蛋白还差很多、吃超了 */ }
       else if (app.closeBuddyPop) app.closeBuddyPop('thinking'); // 猜成提问其实是记录：把「我想想」收起来
     },
 
