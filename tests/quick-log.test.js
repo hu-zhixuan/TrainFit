@@ -909,7 +909,10 @@ test('聊天的提示词：小人是谁、多熟、刚才聊的都带上；回�
   assert.ok(m[0].content.includes('不拿「你不来我会难过」'));
   const u = m[1].content;
   assert.ok(u.includes('你叫他「阿程」') && u.includes('刚才在聊') && u.includes('他：今天好累') && u.endsWith('他说：还行吧'), u);
-  assert.ok(!u.includes('（黄焖鸡'), '今天记的只要一句，不带明细');
+  assert.ok(!u.includes('（黄焖鸡') && !u.includes('700kcal'), '今天记的只要一句，不带明细和热量');
+  assert.ok(!u.includes('预算'), '没聊到吃：不给今天的热量数');
+  const m2 = TF.Parser.chatMessages('好饿啊', { day: { goal: 'fat_loss', budget: 1955, intake: 1200, protein: 80, proteinTarget: 144 } });
+  assert.ok(m2[1].content.includes('预算 1955'), '聊到饿了：给数');
   const r = TF.Parser.normalizeChat({ answer: '**累就早点睡**', next: ['嗯，有点累。', '还好啦', '第三句'], face: '担心', memo: ['在上夜班', '叫阿程'] }, { memo: ['叫阿程'] });
   assert.strictEqual(r.answer, '累就早点睡');
   assert.deepStrictEqual(r.next, ['嗯，有点累', '还好啦']);
