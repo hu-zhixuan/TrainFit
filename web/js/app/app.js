@@ -135,8 +135,13 @@ class FitnessApp {
     const cap = compound ? 8 : 12;
     const step = compound ? 2.5 : 1;
     let next;
-    if (last.weightKg > 0 && last.reps >= cap && last.sets >= 3) {
-      next = { kind: 'weight', text: `下次试 ${round1(last.weightKg + step)}kg`, weightKg: round1(last.weightKg + step), reps: Math.max(6, last.reps - 2) };
+    // 练完说的感受（小人问的）：很吃力就先保持，还能加就多加一档
+    const easy = last.rpe && last.rpe <= 7, hard = last.rpe && last.rpe >= 9.5;
+    if (hard) {
+      next = { kind: 'keep', text: `保持 ${last.weightKg > 0 ? round1(last.weightKg) + 'kg' : '这个'}，练扎实了再加`, weightKg: last.weightKg, reps: last.reps };
+    } else if (last.weightKg > 0 && (last.reps >= cap || (easy && last.reps >= cap - 2)) && last.sets >= 3) {
+      const up = easy ? step * 2 : step;
+      next = { kind: 'weight', text: `下次${easy ? '直接' : ''}试 ${round1(last.weightKg + up)}kg`, weightKg: round1(last.weightKg + up), reps: Math.max(6, last.reps - 2) };
     } else if (last.reps < cap) {
       next = { kind: 'reps', text: `下次冲 ${last.reps + 1} 次`, weightKg: last.weightKg, reps: last.reps + 1 };
     } else {

@@ -604,3 +604,8 @@ test('「接着问」：回答了问题才留，最多两句、去掉句号和�
   assert.deepStrictEqual(r.next, ['晚上吃点啥能补蛋白', '给我定明天的食谱']);
   assert.deepStrictEqual(Parser.normalize({ add: { meals: [] }, next: ['晚上吃啥'] }, {}).next, []);
 });
+
+test('今天的状态（小人早上问的睡得怎么样）进上下文；没有就不带', () => {
+  assert.ok(Parser.buildMessages('今天练什么', { state: '没睡好' })[1].content.includes('今天的状态：昨晚没睡好'));
+  assert.ok(!Parser.buildMessages('今天练什么', {})[1].content.includes('今天的状态'));
+});
