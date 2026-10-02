@@ -150,6 +150,12 @@
     return out.replace(new RegExp(`"next"\\s*:\\s*(${STR}(?:\\s*,\\s*${STR}(?!\\s*:))+)`, 'g'), '"next":[$1]');
   }
 
+  /** 「记上了，一碗牛肉面加蛋，约750千卡、蛋白35g」→「记上了，一碗牛肉面加蛋」 */
+  function dropNumberClauses(reply) {
+    const parts = String(reply || '').match(/[^，,；;。]+[，,；;。]?|[，,；;。]/g) || [];
+    return parts.filter(p => !/\d+(\.\d+)?\s*(千卡|大卡|kcal|卡)|蛋白(质)?\s*(约|大约)?\s*\d/i.test(p)).join('').replace(/[，,；;、\s]+$/, '');
+  }
+
   // 说的是吃、练、身体的事（用来判断「帮不上」是不是答错了）
   const ABOUT_FIT = /练|训练|健身|动作|器械|深蹲|卧推|硬拉|腿|胸|背|肩|手臂|腹|核心|有氧|跑步|减脂|减肥|增肌|瘦|胖|体重|吃|喝|饭|餐|食|蛋白|热量|卡|碳水|脂肪|饿|饱|睡|酸|累|恢复/;
 
@@ -482,6 +488,9 @@
         if (to) moved.forEach(ref => { if (!out.updates.some(u => u.ref === ref)) out.updates.push({ ref, set: { date: to } }); });
         else out.reply = '没听清挪到哪天，再说一次，比如「挪到昨天」';
       }
+      // 提示条第一行别带热量数：大模型写的是它自己估的，和下面按成分表校准后的对不上（实测「约750千卡」，校准后 696）。
+      // 记了吃的、改了吃的时，带热量 / 蛋白数的那半句去掉，热量看下面那行
+      if (out.meals.length || out.updates.length) out.reply = dropNumberClauses(out.reply);
       const n = out.meals.length;
       out.meals = separateSupps(splitByTime(out.meals, ctx.said));
       // 拆开了：大模型那句「已记早餐…」就不对了
@@ -619,7 +628,7 @@
     }
   };
 
-  Object.assign(TF, { partialAnswer, Parser, mergeItems, repairJson });
+  Object.assign(TF, { partialAnswer, Parser, mergeItems, repairJson, dropNumberClauses });
 
   if (typeof module !== 'undefined' && module.exports) module.exports = TF;
 })(typeof window !== 'undefined' ? window : globalThis);

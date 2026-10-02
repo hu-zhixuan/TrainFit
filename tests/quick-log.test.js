@@ -398,6 +398,16 @@ test('热量和蛋白质都差一倍：是大模型算错了量，用成分表�
   assert.ok(egg.calories < 160 && egg.proteinG < 15, `${egg.calories} ${egg.proteinG}`);
 });
 
+test('提示条第一行不带大模型自己估的热量数（和按库校准后的对不上），热量看下面那行', () => {
+  const meal = { mealType: '午餐', foodSummary: '牛肉面1碗、鸡蛋1个', items: [{ name: '牛肉面', amount: '1碗', grams: 650, whole: true, calories: 618, proteinG: 25, carbsG: 90, fatG: 15 }, { name: '鸡蛋', amount: '1个', grams: 50, calories: 72, proteinG: 6.5 }] };
+  assert.strictEqual(Parser.normalize({ reply: '记上了，一碗牛肉面加蛋，约750千卡、蛋白35g', add: { meals: [meal] } }, {}).reply, '记上了，一碗牛肉面加蛋');
+  assert.strictEqual(Parser.normalize({ reply: '下午的奶茶记上了，一杯约300大卡', add: { meals: [meal] } }, {}).reply, '下午的奶茶记上了');
+  assert.strictEqual(Parser.normalize({ reply: '猪脚饭记上了，按常见份量约480g估的', add: { meals: [meal] } }, {}).reply, '猪脚饭记上了，按常见份量约480g估的');
+  // 只记了训练、只回答问题：不动
+  assert.strictEqual(Parser.normalize({ reply: '跑步机30分钟记上了，消耗约300千卡', add: { workouts: [{ exerciseName: '跑步机', muscleGroup: '有氧', durationMin: 30, burnedCalories: 300 }] } }, {}).reply, '跑步机30分钟记上了，消耗约300千卡');
+  assert.strictEqual(Parser.normalize({ reply: '还差40g蛋白，看小人', answer: '还差 40g' }, {}).reply, '还差40g蛋白，看小人');
+});
+
 test('JSON 的小毛病本机修好，不用整份重发（v5.4 实测的写法）', () => {
   // "next" 写成几个散的字符串；字符串里的中文标点不动
   let r = Parser.extractJson('{"reply":"x","answer":"早餐：鸡蛋，牛奶","next":"鸡腿饭能换成牛肉吗","练后只喝粉够不够","plan":{"dayOffset":1}}');
