@@ -170,10 +170,12 @@
         if (p.status !== 'working') return; // 3 分钟时已经算失败了，别再震一次
         app.failPending(p.id, result.reply || '没认出吃了什么');
         if (p.ask && app.showBuddyFailed) app.showBuddyFailed(p, result.reply || '没听懂，换个说法试试');
+        else if (!p.ask && app.coachFail) app.coachFail(p); // 卡住了：小人教一句怎么说好认
         if (p.ask && TF.pureQuestion && TF.pureQuestion(p.text)) app.finishPending(p.id);
         return;
       }
       app.finishPending(p.id);
+      if ((result.updates || []).length || (result.deletes || []).length) { try { localStorage.setItem('tf_used_fix', '1'); } catch (e) {} }
       const batch = this.save(Object.assign(result, { said: p.text }), p.date, ctx);
       this.showSnack(batch, result);
       if (result.answer && app.showBuddyAnswer) app.showBuddyAnswer(p.text, result.answer, answerOpts); // 又记又问

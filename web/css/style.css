@@ -564,6 +564,8 @@ body.has-buddy .views { padding-bottom: calc(var(--cmp-h, 110px) + 52px + var(--
 .portion-opt.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .portion-opt.skip { flex: 0 0 auto; min-width: 0; padding: 0 6px; border-color: transparent; background: none; color: var(--text-3); font-weight: 500; }
 .portion-opt.skip.on { background: var(--surface-2); color: var(--text-2); border-color: var(--line); }
+/* 小人问的话：按字数撑开，放不下就换一行，字别被截掉 */
+.chat-opts .portion-opt { flex: 1 1 auto; }
 .buddy-pop[data-mode="ask"] { width: min(300px, calc(100vw - 32px)); }
 /* 点小人：训练建议（今天可以练哪儿） */
 /* 计划：「完成 2/5」+ 进度条；点 ✓ 先打勾划掉滑走；加进来时一行行落下 */

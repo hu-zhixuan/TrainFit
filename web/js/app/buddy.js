@@ -947,22 +947,32 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     if (!pop || this._touring || !result) return false;
     const today = getTodayDateString();
     const first = this.diet.concat(this.workouts).reduce((m, r) => (r.date < m ? r.date : m), today);
-    if (first < shiftDateString(today, -6)) return false; // 用了一周以上
+    if (first < shiftDateString(today, -13)) return false; // 用了两周以上
     let seen;
     try { seen = JSON.parse(localStorage.getItem('tf_tips') || '[]'); } catch (e) { seen = []; }
     if (!Array.isArray(seen)) seen = [];
+    // 头两句趁热说，后面的一天最多教一样，别一下子塞太多
+    let day = '';
+    try { day = localStorage.getItem('tf_tips_day') || ''; } catch (e) {}
+    if (seen.length >= 2 && day === today) return false;
     const n = this.diet.length + this.workouts.length;
     const simple = this.isSimple();
+    let usedFix = false;
+    try { usedFix = localStorage.getItem('tf_used_fix') === '1'; } catch (e) {}
+    // 一样一样教，用过的就不教了
     const tips = [
       ['lift', (result.workouts || []).some(w => w.estimated && !w.durationMin), '下次带上几公斤、几组几个，我帮你算下次练多少。叫不出名字就描述一下，比如「坐着往前推的那个机器」。'],
       ['oneby', n <= 3, '吃完一顿说一句就行，不用攒到晚上一口气说完。说不准多少也没事，我会猜，猜不准会问你。'],
+      ['fix', n >= 3 && !usedFix, '说错了不用点开改，再说一句「改成两碗」「删掉奶茶」就行。'],
       ['ask', n >= 4, simple ? '也可以问我，比如「晚上吃点啥」「今天还能吃多少」。' : '也可以问我，比如「晚上吃点啥」「明天练什么」。'],
-      ['memo', n >= 6 && !this.memoList().length, '跟我说说你自己吧，比如「我叫阿程，健身新手，不吃辣」，我会记住，以后都照着来。']
+      ['weight', n >= 5 && !this.weights.length, '称了体重也说一句「体重 62」，趋势图就有了。'],
+      ['memo', n >= 6 && !this.memoList().length, '跟我说说你自己吧，比如「我叫阿程，健身新手，不吃辣」，我会记住，以后都照着来。'],
+      ['plan', n >= 8 && !(this.plans || []).length, simple ? '想不好吃啥，说「给我排明天吃啥」，我按你的预算排。' : '想不好吃啥练啥，说「给我排明天的」，我按你的记录排。']
     ];
     const pick = tips.find(t => t[1] && !seen.includes(t[0]));
     if (!pick) return false;
     seen.push(pick[0]);
-    try { localStorage.setItem('tf_tips', JSON.stringify(seen)); } catch (e) {}
+    try { localStorage.setItem('tf_tips', JSON.stringify(seen)); localStorage.setItem('tf_tips_day', today); } catch (e) {}
     const name = this.userName();
     this.sayTip((name ? name + '，' : '') + pick[2]);
     return true;
@@ -1170,11 +1180,11 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       if (document.hidden) { this.buddyStop(); return; }
       this.renderBuddy();
       clearTimeout(this._greetT);
-      this._greetT = setTimeout(() => this.greetToday && this.greetToday(), 1500);
+      this._greetT = setTimeout(() => this.greetOrGuide(), 1500);
     });
     // 打开 App：小人打个招呼（每天第一次）
     clearTimeout(this._greetT);
-    this._greetT = setTimeout(() => this.greetToday && this.greetToday(), 2200);
+    this._greetT = setTimeout(() => this.greetOrGuide(), 2200);
     // 逛的时候（发呆、翻以前的日子、翻记录、看趋势）有时凑过来说一句
     this.watchBrowse && this.watchBrowse();
     this.buddyIdle();
@@ -1244,6 +1254,8 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     this._pose = 'lie';
     this.renderBuddy();
     this.buddyDraw();
+    // 看完教程还一条没记：接着带你记第一条
+    setTimeout(() => this.firstGuide && this.firstGuide(true), 1200);
   },
 
   /** 第一次用（新装的走完引导、老用户升级后）自动带一遍；设置里能再看 */

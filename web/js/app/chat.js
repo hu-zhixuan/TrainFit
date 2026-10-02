@@ -199,6 +199,11 @@ Object.assign(FitnessApp.prototype, {
     return true;
   },
 
+  /** 打开 App / 切回来：每天第一次打招呼；还没记过的带你记第一条；饭点空着问一句 */
+  greetOrGuide() {
+    return this.greetToday() || this.firstGuide() || this.mealGapNudge();
+  },
+
   /** 每天第一次打开：打个招呼 + 接一句昨天的事 + 问一句 */
   greetToday() {
     if (!this.canChat()) return false;
@@ -213,6 +218,15 @@ Object.assign(FitnessApp.prototype, {
     const yest = this.yesterdayLine();
     const done = () => { try { localStorage.setItem('tf_greet', today); } catch (e) {} this.chatBudget(true); return true; };
     const st = this.profile.dayState && this.profile.dayState.date === today ? this.profile.dayState : null;
+    // 好几天没记了：别让人有负担，从今天接着来；想补的话带你翻到昨天
+    const lastDay = this.recordDates().reduce((m, d) => (d < today && d > m ? d : m), '');
+    const gap = lastDay ? Math.round((new Date(today + 'T00:00:00') - new Date(lastDay + 'T00:00:00')) / 86400000) : 0;
+    if (gap >= 3 && !this.recordDates().includes(today)) {
+      this.askUser(`${hi}有 ${gap - 1} 天没记了，没关系，从今天接着来就行。`, [
+        { label: '先补一下昨天', pick: () => { this.selectedDate = shiftDateString(today, -1); this.render(); }, reply: '在这页按住说，就记在昨天。记不清的说个大概就行。', talk: true },
+        { label: '从今天开始', reply: '好，吃了啥说一句就行。' }]);
+      return done();
+    }
     const setSleep = (v) => () => { this.profile.dayState = { date: today, sleep: v }; this.saveData(); };
     const sleepOptions = [
       { label: '睡得不错', pick: setSleep('睡得好'), reply: '那今天可以练重一点。' },
@@ -240,6 +254,7 @@ Object.assign(FitnessApp.prototype, {
       return done();
     }
     if (hour >= 19 && !this.diet.some(d => d.date === today && d.mealType === '晚餐')) {
+      this.nudgeMark('meal:晚餐');
       this.askUser(`${hi}${yest}\n晚饭吃了吗？`, [
         { label: '吃了，我说一下', talk: true },
         { label: '还没', ask: '晚上吃点啥好' },
@@ -282,6 +297,96 @@ Object.assign(FitnessApp.prototype, {
   /** 记完东西接着问（不看「在今天页、没别的气泡」，因为刚记完气泡肯定是空的） */
   canChatNow() {
     return this.chatty() && !this._touring && this.chatBudget(false);
+  },
+
+  // ================= 手把手带你用（v5.1）：第一条、饭点空着、卡住了 =================
+
+  /** 让「按住说话」（或打字框）亮一下 */
+  glowTalk() {
+    const talk = document.querySelector('#voice-row:not(.hidden) .talk-btn') || document.querySelector('#text-row:not(.hidden) .cmp-text');
+    if (!talk) return;
+    talk.classList.add('tour-glow');
+    setTimeout(() => talk.classList.remove('tour-glow'), 3000);
+  },
+
+  /** 现在这顿饭：早餐 / 午餐 / 晚餐，和举例 */
+  mealNow(hour) {
+    if (hour >= 5 && hour < 10) return { meal: '早餐', word: '早上', eg: '两个包子一杯豆浆' };
+    if (hour >= 10 && hour < 15) return { meal: '午餐', word: '中午', eg: '一份黄焖鸡米饭' };
+    if (hour >= 17 && hour < 23) return { meal: '晚餐', word: '晚上', eg: '一碗牛肉面加个蛋' };
+    return { meal: '', word: '今天', eg: '一碗米饭一个鸡蛋' };
+  },
+
+  /** 不知道吃了多少、不想出声、还没吃：几个现成的回答 */
+  firstOptions(m) {
+    return [
+      { label: '我说一下', talk: true, reply: `按住下面的按钮，说「${m.eg}」这样就行，说完松手。` },
+      { label: '不知道吃了多少', talk: true, reply: '说个大概就行，「一碗」「一盘」「一个拳头大」都行，我按常见的份量算，算不准会问你。' },
+      { label: '打字行吗', pick: () => window.QuickLog && window.QuickLog.setMode('text', true), reply: '行，在下面打字，打完点发送。' },
+      { label: '还没吃', reply: `那吃完说一句。想吃啥也能问我，比如「${m.word === '今天' ? '' : m.word}吃点啥好」。` }];
+  },
+
+  /** 还一条都没记过：别光放个空页面，小人直接问「早上吃了啥？」，带你记第一条（每天一次，教程刚走完也来一次） */
+  firstGuide(force) {
+    if (!this.chatty() || this._touring || this.needsOnboarding || this.view !== 'today' || this.selectedDate !== getTodayDateString()) return false;
+    if (this.diet.length + this.workouts.length > 0 || (this.pending || []).length) return false; // 只记过体重的也带一下
+    const pop = document.getElementById('buddy-pop');
+    if (!pop || !pop.classList.contains('hidden')) return false;
+    const today = getTodayDateString();
+    let d = '';
+    try { d = localStorage.getItem('tf_first') || ''; } catch (e) {}
+    if (d === today && !force) return false;
+    try { localStorage.setItem('tf_first', today); } catch (e) {}
+    const m = this.mealNow(new Date().getHours());
+    const name = this.userName();
+    this.askUser(`${name ? name + '，' : ''}${this.weights.length ? '' : '来记第一条吧。'}${m.word}吃了啥？`, this.firstOptions(m));
+    return true;
+  },
+
+  /** 饭点过了这顿还空着：问一句吃了没（每顿一天一次，算在「逛的时候」那 4 句里） */
+  mealGapNudge() {
+    if (!this.canChat() || !this.nudgeBudget(false) || Date.now() - (this._popAt || 0) < 60000) return false;
+    const today = getTodayDateString();
+    const now = new Date();
+    const t = now.getHours() + now.getMinutes() / 60;
+    const slot = t >= 9.5 && t < 11 ? ['早餐', '早饭'] : t >= 13 && t < 16 ? ['午餐', '午饭'] : t >= 19.5 && t < 23 ? ['晚餐', '晚饭'] : null;
+    if (!slot || this.diet.some(x => x.date === today && x.mealType === slot[0])) return false;
+    const key = 'meal:' + slot[0];
+    if (this.nudgeSaid(key)) return false;
+    this.askUser(`${slot[1]}吃了吗？`, [
+      { label: '吃了，我说一下', talk: true },
+      { label: '记不清吃了啥', talk: true, reply: '说个大概就行，比如「一份盖浇饭」，量我按常见的算，不准再改。' },
+      { label: '还没', reply: '吃完说一声。' },
+      { label: '不吃了', reply: '行，别饿过头就好。' }]);
+    this.nudgeBudget(true, key);
+    return true;
+  },
+
+  /** 卡住了教一句：说了两次都没听清，告诉你可以打字（一天一次） */
+  coachVoice() {
+    if (!this.chatty() || this._touring || this.tipToday('voice')) return false;
+    this.sayTip('没听清。离手机近一点、正常说话就行；不方便出声就点左边的键盘打字，一样能记。');
+    return true;
+  },
+
+  /** 卡住了教一句：大模型没认出吃了啥，告诉你怎么说好认（一天一次） */
+  coachFail(p) {
+    if (!this.chatty() || this._touring || this.tipToday('fail')) return false;
+    return this.askUser('这句没认出来吃了啥。说成「什么 + 大概多少」最好认，比如「中午一碗牛肉面」。', [
+      { label: '改一下字', pick: () => this.editPendingText(p.id) },
+      { label: '再说一次', talk: true, pick: () => this.dropPending(p.id) }]);
+  },
+
+  /** 这种提示今天说过没有；没说过就记上 */
+  tipToday(kind) {
+    const today = getTodayDateString();
+    let c;
+    try { c = JSON.parse(localStorage.getItem('tf_coach') || '{}'); } catch (e) { c = {}; }
+    if (c.date !== today || !Array.isArray(c.kinds)) c = { date: today, kinds: [] }; // 和 coachTip 共用 tf_coach
+    if (c.kinds.includes('g:' + kind)) return true;
+    c.kinds.push('g:' + kind);
+    try { localStorage.setItem('tf_coach', JSON.stringify(c)); } catch (e) {}
+    return false;
   },
 
   // ================= 逛的时候凑过来说一句（v5.0） =================
@@ -340,6 +445,16 @@ Object.assign(FitnessApp.prototype, {
     if (key) c.said.push(key);
     try { localStorage.setItem('tf_nudge', JSON.stringify(c)); } catch (e) {}
     return true;
+  },
+
+  /** 记一下今天问过了（不占次数） */
+  nudgeMark(key) {
+    const today = getTodayDateString();
+    let c;
+    try { c = JSON.parse(localStorage.getItem('tf_nudge') || '{}'); } catch (e) { c = {}; }
+    if (c.date !== today) c = { date: today, n: 0, at: 0, said: [] };
+    c.said.push(key);
+    try { localStorage.setItem('tf_nudge', JSON.stringify(c)); } catch (e) {}
   },
 
   nudgeSaid(key) {
