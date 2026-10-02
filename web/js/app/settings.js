@@ -2,6 +2,7 @@
  * 设置页：身体数据、用途和目标、外观，以及提醒与震动（提醒由安卓端排闹钟，见 Reminders.kt）。
  */
 const REMINDER_DEFAULTS = [
+  { id: 'weigh', enabled: true, time: '07:30' },
   { id: 'lunch', enabled: true, time: '12:40' },
   { id: 'dinner', enabled: true, time: '19:30' },
   { id: 'night', enabled: true, time: '21:30' }
@@ -168,7 +169,7 @@ Object.assign(FitnessApp.prototype, {
       this.render();
     });
 
-    ['lunch', 'dinner', 'night'].forEach(id => {
+    ['weigh', 'lunch', 'dinner', 'night'].forEach(id => {
       const box = $('rem-' + id), time = $('rem-' + id + '-time');
       const save = (enabled, granted) => {
         const list = this.loadReminders().map(r => r.id === id ? Object.assign(r, { enabled, time: time.value || r.time }) : r);

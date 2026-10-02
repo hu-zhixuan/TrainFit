@@ -609,3 +609,10 @@ test('今天的状态（小人早上问的睡得怎么样）进上下文；没�
   assert.ok(Parser.buildMessages('今天练什么', { state: '没睡好' })[1].content.includes('今天的状态：昨晚没睡好'));
   assert.ok(!Parser.buildMessages('今天练什么', {})[1].content.includes('今天的状态'));
 });
+
+test('贝贝南瓜不是普通南瓜：大模型按普通南瓜估低了 4 倍，按库里的贝贝南瓜算', () => {
+  const it = groundItem({ name: '贝贝南瓜', amount: '230g', grams: 230, calories: 53, proteinG: 1.6 });
+  assert.strictEqual(it.src, '菜品库');
+  assert.ok(it.calories > 200 && it.calories < 230, String(it.calories));
+  assert.strictEqual(groundItem({ name: '南瓜', grams: 200, calories: 46, proteinG: 1.4 }).calories, 46);
+});

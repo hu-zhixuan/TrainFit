@@ -125,6 +125,80 @@ Object.assign(FitnessApp.prototype, {
     return q;
   },
 
+  /** 连续几天称了体重（到今天） */
+  weighStreak() {
+    let n = 0, d = getTodayDateString();
+    while (this.weightOn(d)) { n += 1; d = shiftDateString(d, -1); }
+    return n;
+  },
+
+  /**
+   * 早上打卡：称体重了吗？数字先填上次的，− / + 一下、或者点数字直接改，点「记上」就好。
+   * 记上以后接着问睡得怎么样（同一个气泡里，不算又打扰一次）。
+   */
+  askWeight(lead, then) {
+    const pop = document.getElementById('buddy-pop');
+    if (!pop || this._touring) return false;
+    const today = getTodayDateString();
+    const before = this.weights.filter(w => w.date < today).sort((a, b) => (a.date > b.date ? 1 : -1)).pop();
+    let kg = round1(before ? before.kg : (this.profile.weightKg || 60));
+    pop.dataset.mode = 'chat';
+    pop.dataset.level = 'none';
+    pop.innerHTML = `<p class="buddy-say">${esc(lead + '称体重了吗？空腹称最准。')}</p>` +
+      `<div class="weigh-row"><button class="weigh-step" type="button" data-d="-0.1" aria-label="减 0.1">−</button>` +
+      `<input class="weigh-num" type="number" inputmode="decimal" step="0.1" min="25" max="300" value="${kg}" aria-label="体重"><span class="weigh-unit">kg</span>` +
+      `<button class="weigh-step" type="button" data-d="0.1" aria-label="加 0.1">+</button></div>` +
+      `<div class="portion-opts chat-opts"><button class="portion-opt on" type="button" data-a="save">记上</button><button class="portion-opt" type="button" data-a="skip">今天不称</button></div>`;
+    const input = pop.querySelector('.weigh-num');
+    pop.querySelectorAll('.weigh-step').forEach(b => b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const v = parseFloat(input.value) || kg;
+      input.value = round1(v + parseFloat(b.dataset.d));
+      window.Haptics && window.Haptics.fire('tick');
+    }));
+    input.addEventListener('click', (e) => e.stopPropagation());
+    pop.querySelectorAll('[data-a]').forEach(b => b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      clearTimeout(this._askT);
+      window.Haptics && window.Haptics.fire('tick');
+      if (b.dataset.a === 'skip') {
+        const say = pop.querySelector('.buddy-say');
+        say.textContent = '好，明天早上再称。';
+        say.classList.add('reply');
+        pop.querySelectorAll('.weigh-row, .chat-opts').forEach(x => x.remove());
+        this.positionBuddyPop();
+        this._askT = setTimeout(() => this.closeBuddyPop('chat'), 2000);
+        return;
+      }
+      const v = round1(parseFloat(input.value));
+      if (!(v >= 25 && v <= 300)) { input.focus(); return; }
+      this.setWeight(today, v);
+      this.render();
+      window.Sound && window.Sound.play('success');
+      const diff = before ? round1(v - before.kg) : 0;
+      const days = before ? Math.round((new Date(today) - new Date(before.date)) / 86400000) : 0;
+      const when = days === 1 ? '昨天' : `${+before?.date.slice(5, 7)}月${+before?.date.slice(8)}日`;
+      const cmp = !before ? '' : diff < 0 ? `，比${when}轻 ${-diff}kg` : diff > 0 ? `，比${when}重 ${diff}kg` : `，和${when}一样`;
+      const streak = this.weighStreak();
+      const reply = `记上了，${v}kg${cmp}。${streak >= 2 ? `连续称了 ${streak} 天。` : ''}`;
+      if (then) { then(reply); return; }
+      const say = pop.querySelector('.buddy-say');
+      say.textContent = reply;
+      say.classList.add('reply');
+      pop.querySelectorAll('.weigh-row, .chat-opts').forEach(x => x.remove());
+      this.positionBuddyPop();
+      if (!this._touring) this.buddyDo([['stand', 100], ['wave', 700], ['stand', 300]]);
+      this._askT = setTimeout(() => this.closeBuddyPop('chat'), 2600);
+    }));
+    this.positionBuddyPop();
+    this.popIn(pop);
+    document.getElementById('gauge-pop').classList.add('hidden');
+    this.buddyBang('?');
+    clearTimeout(this._askT);
+    this._askT = setTimeout(() => this.closeBuddyPop('chat'), 45000);
+    return true;
+  },
+
   /** 每天第一次打开：打个招呼 + 接一句昨天的事 + 问一句 */
   greetToday() {
     if (!this.canChat()) return false;
@@ -138,16 +212,22 @@ Object.assign(FitnessApp.prototype, {
     const hi = hour < 11 ? `早${name ? '，' + name : ''}。` : hour < 18 ? `${name ? name + '，' : ''}下午好。` : `${name ? name + '，' : ''}晚上好。`;
     const yest = this.yesterdayLine();
     const done = () => { try { localStorage.setItem('tf_greet', today); } catch (e) {} this.chatBudget(true); return true; };
-    // 头两周：认识你的问题优先
-    const know = this.knowQuestion();
-    if (know) { this.askUser(`${hi}${yest ? yest + '\n' : ''}${know.text}`, know.options); return done(); }
     const st = this.profile.dayState && this.profile.dayState.date === today ? this.profile.dayState : null;
     const setSleep = (v) => () => { this.profile.dayState = { date: today, sleep: v }; this.saveData(); };
+    const sleepOptions = [
+      { label: '睡得不错', pick: setSleep('睡得好'), reply: '那今天可以练重一点。' },
+      { label: '一般', pick: setSleep('睡得一般'), reply: '行，照常来。' },
+      { label: '没睡好', pick: setSleep('没睡好'), reply: '那今天练轻点，或者歇一天也行。' }];
+    // 早上打卡：先称体重（趋势图要靠它），记上了接着问睡得怎么样
+    if (hour < 11 && !this.weightOn(today)) {
+      this.askWeight(`${hi}${yest ? yest + '\n' : ''}`, st ? null : (reply) => this.askUser(`${reply}\n昨晚睡得怎么样？`, sleepOptions));
+      return done();
+    }
+    // 头两周：认识你的问题
+    const know = this.knowQuestion();
+    if (know) { this.askUser(`${hi}${yest ? yest + '\n' : ''}${know.text}`, know.options); return done(); }
     if (hour < 11 && !st) {
-      this.askUser(`${hi}${yest}\n昨晚睡得怎么样？`, [
-        { label: '睡得不错', pick: setSleep('睡得好'), reply: '那今天可以练重一点。' },
-        { label: '一般', pick: setSleep('睡得一般'), reply: '行，照常来。' },
-        { label: '没睡好', pick: setSleep('没睡好'), reply: '那今天练轻点，或者歇一天也行。' }]);
+      this.askUser(`${hi}${yest}\n昨晚睡得怎么样？`, sleepOptions);
       return done();
     }
     const trainedToday = this.workouts.some(w => w.date === today);

@@ -450,7 +450,7 @@ class FitnessApp {
       const meals = [...new Set(this.diet.filter(d => d.date === today).map(d => d.mealType))];
       const count = this.diet.filter(d => d.date === today).length + this.workouts.filter(w => w.date === today).length;
       window.TrainFitNative.updateDayState(JSON.stringify({
-        date: today, meals, count,
+        date: today, meals, count, weighed: !!this.weightOn(today),
         remaining: Math.round(s.remaining),
         showProtein: true,
         proteinLeft: Math.max(0, Math.round(this.gaugeProteinTarget() - s.protein))
