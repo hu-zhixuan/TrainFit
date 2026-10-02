@@ -266,6 +266,76 @@
       ];
     },
 
+    /**
+     * 跟小人聊天（v5.8）：用户在说心情、跟小人搭话（「今天好累」「你在干嘛」），不是在记录。
+     * 小人用自己的性格接话：先接住情绪、说具体的（记得你的事）、有自己的想法，不拿「你不来我会难过」压人。
+     * 每次还是一个新的短 prompt，只多带「刚才在聊」最多 3 轮（15 分钟内），不存聊天记录。
+     * 回得短（40 字左右）：Atria 一秒只出 17～20 个字，短了才快；流式一边出一边显示。
+     */
+    chatMessages(text, ctx) {
+      ctx = ctx || {};
+      const b = ctx.buddy || {};
+      const now = ctx.now || new Date();
+      const WK = '日一二三四五六';
+      const name = b.name || '小练';
+      const system = [
+        `你是「${name}」，住在「练食AI」里的像素小人${b.look ? `（${b.look}）` : ''}，每天陪用户记吃的、记练的。现在他在跟你聊天，不是在记录。`,
+        b.facts && b.facts.length ? '你是谁（前后一致，别乱编新的大设定）：' + b.facts.join('；') + '。' : '',
+        b.level ? `你们的关系：${b.level}（第 ${b.lv} 级，共 5 级）。${b.tone || ''}` : '',
+        '怎么说话：',
+        '1. 先接住他的情绪，再说事。听出没说出口的：「还行」「随便」「没事」可能是累了、不开心，可以轻轻问一句。',
+        '2. 说具体的：用下面你知道的他的事（小本本、今天吃了练了啥、最近成绩、刚才聊的），像真的记得；别空泛地夸。',
+        '3. 有自己的想法和一点小脾气：他要饿着减肥、熬夜、带伤硬练、贬低自己，你会直说不同意，嘴上可以硬，但语气是在乎他。',
+        '4. 不拿「你不来我会难过」「你不…我就…」压他；鼓励他好好吃饭、睡觉、过自己的生活。',
+        '5. 像朋友发消息：口语、短，一次 1～3 句、40 个字左右，最多 70 个字；最多问一个问题；不说教、不列清单，emoji 最多一个。',
+        '6. 他说身体很不舒服、情绪很低落（不想活了、撑不住了），认真温和地接住，别开玩笑，劝他找信任的人聊聊，需要时去看医生或打心理援助热线。',
+        '7. 他顺口问吃和练的事，简单答一两句；要具体计划就让他说「给我排…」。不知道的别编。',
+        '只输出一个 JSON：{"answer":"你说的话","next":["他可能回的话","…"],"face":"开心"}',
+        '- next：他接下来最可能回你的两句（用他的口吻，10 个字以内）。',
+        '- face：你说这句时的表情，开心 / 害羞 / 担心 / 不服 / 得意 / 平静 选一个。',
+        '- 他说了关于自己、以后一直有用的事（名字、作息、职业、伤病、忌口），再加 "memo":["…"]（每条 12 字以内，小本本里有的不重复）。'
+      ].filter(Boolean).join('\n');
+      const lines = [];
+      lines.push(`现在 ${now.getMonth() + 1}月${now.getDate()}日 周${WK[now.getDay()]} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}。`);
+      if (b.call) lines.push(`你叫他「${b.call}」。`);
+      const memo = (ctx.memo || []).slice(0, 12);
+      if (memo.length) lines.push('小本本（他说过的自己的事）：' + memo.join('；'));
+      const portrait = (ctx.portrait || []).slice(0, 7);
+      if (portrait.length) lines.push('画像（按最近 4 周的记录算的）：' + portrait.join('；'));
+      const d = ctx.day;
+      if (d) lines.push(`今天：吃了 ${d.intake} 千卡（预算 ${d.budget}），蛋白 ${d.protein}g / 目标 ${d.proteinTarget}g；目标${GOALS[d.goal] || '减脂'}。`);
+      const today = (ctx.dayRecords || []).map(r => r.text.replace(/（.*$/, '')).slice(0, 8);
+      lines.push(today.length ? '今天记了：' + today.join('；') : '今天还没记东西。');
+      if (ctx.state) lines.push(`今天的状态：昨晚${ctx.state}。`);
+      const recent = (ctx.recent || []).slice(0, 4);
+      if (recent.length) lines.push('最近成绩：' + recent.join('；'));
+      const past = (ctx.past || []).slice(-14);
+      if (past.length) lines.push('最近两周（日期 吃了多少千卡 蛋白g 练了什么 体重kg）：\n' + past.join('\n'));
+      const talk = (ctx.talk || []).slice(-3);
+      if (talk.length) lines.push('刚才在聊：\n' + talk.map(x => `他：${x.q}\n你：${x.a}`).join('\n'));
+      lines.push('他说：' + text);
+      return [
+        { role: 'system', content: system },
+        { role: 'user', content: lines.join('\n') }
+      ];
+    },
+
+    /** 聊天的回答：一段话、两句他可能回的、表情、小本本 */
+    normalizeChat(parsed, ctx) {
+      ctx = ctx || {};
+      const answer = cleanAnswer(parsed && parsed.answer).slice(0, 160);
+      const list = (k, n) => (Array.isArray(parsed && parsed[k]) ? parsed[k] : []).map(x => cleanText(x, n)).filter(Boolean);
+      const FACES = ['开心', '害羞', '担心', '不服', '得意', '平静'];
+      return {
+        dayOffset: 0, workouts: [], meals: [], updates: [], deletes: [], bodyWeight: null, reply: '', remember: [],
+        answer, chat: true,
+        next: answer ? list('next', 16).map(x => x.replace(/[。.]$/, '')).filter(x => x.length >= 1).slice(0, 2) : [],
+        face: FACES.includes(parsed && parsed.face) ? parsed.face : '',
+        memo: list('memo', 24).slice(0, 3).filter(x => !(ctx.memo || []).includes(x)),
+        forget: list('forget', 24).filter(x => (ctx.memo || []).includes(x))
+      };
+    },
+
     extractJson(content) {
       if (content && typeof content === 'object') return content;
       let s = String(content || '').trim();
@@ -516,9 +586,10 @@
 
     async viaLlm(text, ctx, onDelta) {
       const override = readOverride();
+      const chat = !!(ctx && ctx.chat);
       const base = {
-        messages: this.buildMessages(text, ctx),
-        temperature: 0.2,
+        messages: chat ? this.chatMessages(text, ctx) : this.buildMessages(text, ctx),
+        temperature: chat ? 0.7 : 0.2, // 聊天要有点变化，别每次一样的话；记录要稳
         stream: false
       };
       if (override.model) base.model = override.model;
@@ -535,7 +606,7 @@
         try {
           const raw = await this.sendHedged(attempts[i], override, deltaFor());
           const parsed = this.extractJson(this.contentFromResponse(raw));
-          return this.normalize(parsed, Object.assign({ said: text }, ctx));
+          return chat ? this.normalizeChat(parsed, ctx) : this.normalize(parsed, Object.assign({ said: text }, ctx));
         } catch (e) {
           lastErr = e;
           const msg = (e && e.message) || '';
@@ -635,6 +706,7 @@
      */
     async parse(text, ctx, onDelta) {
       let r = await this.viaLlm(text, ctx, onDelta);
+      if (ctx && ctx.chat) return Object.assign(r, { source: 'llm' });
       // 明明在问练、吃的事，大模型却说「帮不上」（实测「我操，我想练腿要怎么练」）：提醒一句再问一次
       if (r.answer && /帮不上/.test(r.answer) && ABOUT_FIT.test(text) && !(ctx && ctx._again)) {
         r = await this.viaLlm(text, Object.assign({}, ctx, { _again: true }), onDelta);

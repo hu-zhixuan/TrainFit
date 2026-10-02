@@ -47,7 +47,12 @@
       `seenLine` 被看见（连着几天早饭、蛋白够、某个动作涨了、轻了、这周练得多；同一件 4 天不重复，`tf_seen_said`；打招呼时昨天的事是挑毛病就先说这个）；
       `festivalGreet`（`TF.Bond.festivalOf`：公历固定 + 农历表写死 2026～2028，**2029 年以前要补**）、生日 `profile.birthday`（`askBirthday`，那天 `buddyState` 给派对帽 `party`）；
       `askOnce` 熟了以后一天问一件：名字 → 生日 → 说话风格（`askTone`，答案进小本本，大模型照着来）；`typeOut` 主动说的话逐字打出 + `Sound.babble` 对话音；装备按最长连续天数 `bestStreak`，断了不收回。
-      `greetOrGuide` 的顺序：升级 > 纪念日 > 节日生日 > 每天第一次招呼 > 第一条 > 饭点 > 回来了 > 一次性问题 > 悄悄话。
+      `greetOrGuide` 的顺序：升级 > 纪念日 > 节日生日 > 深夜 > 每天第一次招呼 > 第一条 > 饭点 > 回来了 > 一次性问题 > 悄悄话。
+    - v5.8 能聊天（用户：「接了 AI，跟小人聊天可以深一点，但要权衡速度」；又发了一份「人味清单」：ta 有自己的生活、有情绪和小脾气、主动、回应情绪不只是内容、具体的细节、共同的「我们」、安静的陪伴、前后一致又会成长；底线是**不情感勒索**、鼓励用户好好生活）：
+      `TF.looksLikeChat`（helpers）认出在说心情 / 跟小人搭话（宁可漏判：说了吃了练了、数量、吃的练的东西、问吃练的事都不算）→ `submit` 走聊天（`p.chat`，不出卡片，`showBuddyThinking(text, 'chat')`），`Parser.chatMessages` 是单独的短提示词（人设 `TF.Bond.PERSONA` + 按等级的口气 + 先接情绪、说具体的、有主见、不拿「你不来我会难过」压人、低落时认真；只要 answer / next / face / memo），温度 0.7；记录的提示词一个字没动。
+      **只多带「刚才在聊」最多 3 轮、15 分钟内（`pushTalk` / `chatThread`，不存下来）**——这是「每次一个新 prompt」的唯一例外；正在聊时「还行」「嗯」这种接话也走聊天。`next` 变成「你可能回的话」（`.next-chip.reply`，点了接着聊），`face` 让小人害羞冒爱心 / 担心冒汗 / 得意秀肌肉（`buddyFace`），他说了自己的事悄悄进小本本。
+      真实 Atria（12 句 × 2）：见 v5.8 PR 里的数。
+      本机的人味：`buddyLife`（它自己的小日子，和人设一致）、`memoryLine`（一个月 / 三个月 / 半年 / 一年前的今天你说的话）、`askCall`（Lv3 问以后叫你什么，`callName()` 替掉小人说话里的 `userName()`）、`quietNow`（正在练、深夜不凑过来）+ `lateNight`、`rareLine`（点小人 8% 冒隐藏台词）、`coachTip` 的 late（Lv3 起深夜吃东西嘴硬一句）、Lv4 悄悄话说出它的秘密（以前在旧手机里没人理）。去掉了「有点想你」「趴在这儿等着」这类会让人内疚的话。
 
 ## 工作流
 

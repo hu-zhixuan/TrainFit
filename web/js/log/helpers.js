@@ -183,9 +183,36 @@
     return /不要|不想|别(放|吃|喝|排|练|加)|换成|换个|换一|换掉|改成|改一|(多|少)(吃|喝|练|放|来|做)?(一)?(点|些)|再(多|少|加|来|轻|重)|加(一)?点|减(一)?点|去掉|太(多|少|重|轻|油|辣|甜|难)/.test(t);
   }
 
-  /** 待整理的这句只是在问（「晚上吃点啥」）、在改小人给的计划：没整理出来也不留「没整理好」卡片，小人气泡里能重试 */
+  /** 待整理的这句只是在问（「晚上吃点啥」）、在改小人给的计划、在跟小人聊天：没整理出来也不留「没整理好」卡片，小人气泡里能重试 */
   function noCard(p) {
-    return !!(p && p.ask && (p.plan || pureQuestion(p.text)));
+    return !!(p && p.ask && (p.plan || p.chat || pureQuestion(p.text)));
+  }
+
+  /**
+   * 在跟小人聊天、说心情（「今天好累」「你在干嘛」「谢谢你」「晚安」），不是报吃了练了啥、也不是问吃和练的事（v5.8）。
+   * 走聊天：小人用自己的性格接话，不出「正在整理」卡片。宁可漏判（漏了照常走整理），不能把记录当成聊天吃掉：
+   * 说了吃了 / 练了 / 数量 / 体重、提到吃的练的东西，一律不算聊天。
+   * name：小人的名字（「阿肌你在吗」）；inThread：刚才正在聊（15 分钟内），「还行」「嗯」这种接话也算
+   */
+  function looksLikeChat(text, name, inThread) {
+    const raw = String(text || '').trim();
+    if (!raw || raw.length > 80) return false;
+    // 「不想练了」「没吃」「懒得动」：没做的事，去掉再看
+    const t = raw.replace(/(不想|不要|不能|不敢|没有?|懒得|别|不)(去)?(吃|喝|练|跑|做|运动|健身|动(?!力))(饭|东西)?了?/g, '');
+    if (/(吃|喝|练|跑|做|骑|游|走|撸)(了|完)(?!几|多少|啥|什么)|体重|称了|\d|[一两二三四五六七八九十半几]\s*(碗|杯|个|片|块|根|勺|份|盘|组|次|公斤|斤|克|分钟|小时|公里|瓶|袋|包)/.test(t)) return false;
+    const you = new RegExp(`(你|小练${name ? '|' + String(name).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') : ''})你?(是谁|叫什么|几岁|多大|喜欢|在干|在做|会不会|觉得我|累不累|饿不饿|吃饭了|睡了|想不想|怎么样|好吗|在吗|还在|开心吗|呢)`);
+    const fit = /(吃|喝|练)(点)?(什么|啥)|食谱|菜谱|计划|蛋白|热量|卡路里|千卡|大卡|碳水|脂肪|减脂|增肌|动作|训练|饮食|排(一下|个)|怎么(吃|练|减|瘦)/;
+    // 问小人自己的事（「你在干嘛」「你喜欢吃什么」）；问的是自己吃练（「你觉得我明天练什么」）的不算
+    if (you.test(raw) && !(fit.test(t) && /我/.test(t))) return true;
+    // 提到吃的、练的东西（「好累，早餐包子豆浆」）：交给整理，别漏记
+    if (/早餐|午餐|晚餐|早饭|午饭|晚饭|宵夜|夜宵|加餐|饭|面|粥|包子|馒头|饺子|蛋|奶|豆浆|咖啡|奶茶|肉|鸡|鱼|虾|菜|果|沙拉|面包|汉堡|披萨|火锅|烧烤|零食|可乐|酒|卧推|深蹲|硬拉|跑步|有氧|瑜伽|游泳|俯卧撑|引体|跳绳|骑车|散步|步数/.test(t)) return false;
+    // 问吃和练的事：交给整理（能排计划、算热量）
+    if (fit.test(t)) return false;
+    const feel = /累|困|乏|烦|压力|难受|不舒服|开心|高兴|郁闷|焦虑|emo|失眠|睡不着|无聊|心情|难过|伤心|生气|委屈|崩溃|孤单|孤独|寂寞|想哭|哭了|丧|紧张|害怕|担心|没动力|不想动|坚持不下去|放弃|好胖|好丑|自卑|讨厌自己|不想活|撑不住/i;
+    const social = /^(嗨|hi|hello|哈喽|你好|早安|早上好|午安|晚安|晚上好|在吗|在不在|在嘛|谢谢|谢了|多谢|辛苦了|哈哈|嘿嘿|嘻嘻|么么|抱抱|摸摸)/i;
+    const about = /陪我|聊聊|聊天|说说话|想你|爱你|喜欢你|讨厌你|笨蛋|夸夸我|安慰我|骂我|鼓励我/;
+    const reply = /^(还行|还好|一般般?|没事|随便|算了|不知道|是吗|真的吗?|对|对啊|是的|好吧|行吧|好的?|行|嗯+|哦+|噢|哈+|没有|有啊?|不是)[。！!~～…，,啊呀吧呢]*$/;
+    return feel.test(raw) || social.test(raw) || about.test(raw) || (reply.test(raw) && (inThread || raw.length <= 4));
   }
 
   /**
@@ -237,7 +264,7 @@
     return null;
   }
 
-  Object.assign(TF, { MUSCLES, MEAL_TYPES, num, cleanText, round1, mealTypeByHour, normMealType, mealTimes, mealSegments, NUTRIENTS, cleanNutrients, nutrientsText, toKg, quickWeight, findWeight, guessMuscle, looksLikeQuestion, looksLikePlanEdit, pureQuestion, noCard, needsHistory, saidWeight, quickIntent });
+  Object.assign(TF, { MUSCLES, MEAL_TYPES, num, cleanText, round1, mealTypeByHour, normMealType, mealTimes, mealSegments, NUTRIENTS, cleanNutrients, nutrientsText, toKg, quickWeight, findWeight, guessMuscle, looksLikeQuestion, looksLikePlanEdit, looksLikeChat, pureQuestion, noCard, needsHistory, saidWeight, quickIntent });
 
   if (typeof module !== 'undefined' && module.exports) module.exports = TF;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -886,3 +886,35 @@ test('一句话建档：身高体重年龄性别目标名字，各种说法都�
   assert.deepStrictEqual(p('175 70 28'), { heightCm: 175, weightKg: 70, age: 28 });
   assert.deepStrictEqual(p('今天天气不错'), {});
 });
+
+test('跟小人聊天：说心情、跟它搭话走聊天；报吃了练了、问吃练的事一律不算（宁可漏判，不能吃掉记录）', () => {
+  const yes = ['今天好累', '好累啊不想练了', '最近压力好大', '晚安', '谢谢你', '你在干嘛', '你叫什么名字', '阿肌你在吗', '陪我聊聊',
+    '我好胖啊', '没动力减肥了', '心情不好', '哈哈哈', '你觉得我能瘦下来吗', '你吃饭了吗', '有点不想动', '你喜欢吃什么', '今天不想吃饭，好烦'];
+  const no = ['中午吃了牛肉面', '卧推80公斤4组8个', '体重62', '好累，刚练完腿', '今天好累，晚上吃点什么好', '好累，早餐包子豆浆', '给我排明天练啥',
+    '我好胖怎么减肥', '早上好，早餐吃了包子', '两个鸡蛋', '明天吃什么', '还差多少蛋白', '跑了5公里好累', '你觉得我明天练什么', '累死了，晚上一碗牛肉面'];
+  yes.forEach(t => assert.ok(TF.looksLikeChat(t, '阿肌', false), '应是聊天：' + t));
+  no.forEach(t => assert.ok(!TF.looksLikeChat(t, '阿肌', false), '不该是聊天：' + t));
+  // 正在聊的时候，「还行」「嗯」这种接话也算；聊天没回出来不留卡片
+  assert.ok(TF.looksLikeChat('还好吧', '', true));
+  assert.ok(TF.noCard({ ask: true, chat: true, text: '今天好累' }));
+});
+
+test('聊天的提示词：小人是谁、多熟、刚才聊的都带上；回答整理成一段话 + 两句你可能回的 + 表情', () => {
+  const m = TF.Parser.chatMessages('还行吧', {
+    now: new Date(2026, 9, 2, 21, 5), memo: ['叫阿程'], day: { goal: 'fat_loss', budget: 1955, intake: 1200, protein: 80, proteinTarget: 144 },
+    dayRecords: [{ text: '午餐 黄焖鸡米饭 700kcal 蛋白35（黄焖鸡 …）' }], talk: [{ q: '今天好累', a: '辛苦了，忙啥了？' }],
+    buddy: { name: '阿肌', look: '男生，中分', facts: ['只喝无糖豆浆'], level: '健身搭子', lv: 3, tone: '像搭子', call: '阿程' }
+  });
+  assert.ok(m[0].content.includes('阿肌') && m[0].content.includes('无糖豆浆') && m[0].content.includes('健身搭子'));
+  assert.ok(m[0].content.includes('不拿「你不来我会难过」'));
+  const u = m[1].content;
+  assert.ok(u.includes('你叫他「阿程」') && u.includes('刚才在聊') && u.includes('他：今天好累') && u.endsWith('他说：还行吧'), u);
+  assert.ok(!u.includes('（黄焖鸡'), '今天记的只要一句，不带明细');
+  const r = TF.Parser.normalizeChat({ answer: '**累就早点睡**', next: ['嗯，有点累。', '还好啦', '第三句'], face: '担心', memo: ['在上夜班', '叫阿程'] }, { memo: ['叫阿程'] });
+  assert.strictEqual(r.answer, '累就早点睡');
+  assert.deepStrictEqual(r.next, ['嗯，有点累', '还好啦']);
+  assert.strictEqual(r.face, '担心');
+  assert.deepStrictEqual(r.memo, ['在上夜班']);
+  assert.ok(r.chat && !r.meals.length && !r.workouts.length);
+  assert.strictEqual(TF.Parser.normalizeChat({ answer: 'x', face: '大笑' }).face, '');
+});
