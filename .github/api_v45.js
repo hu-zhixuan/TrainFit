@@ -50,7 +50,7 @@ async function call(label, text, hhmm, check, ctxExtra) {
   let why;
   try { why = check(r); } catch (e) { why = '检查出错 ' + e.message; }
   (why === true ? note : err)(`[${TAG}] ${label} ${why === true ? 'OK' : 'CHECK: ' + why} (${(ms / 1000).toFixed(1)}s)`,
-    `${hhmm} 说：${text}${fallback}%0AdayOffset=${r.dayOffset}%0A${meals.concat(wos).join('%0A')}%0Aanswer：${String(r.answer || '').replace(/\n/g, ' ｜ ')}%0Aupdates：${JSON.stringify(r.updates).slice(0, 400)}%0A记住：${JSON.stringify(r.remember)}%0A小本本：+${JSON.stringify(r.memo)} -${JSON.stringify(r.forget)}%0Aplan：${r.plan ? JSON.stringify({ d: r.plan.dayOffset, w: r.plan.workouts.map(w => w.exerciseName + ' ' + w.weightKg + 'kg ' + w.sets + '×' + w.reps) }) : 'null'}%0Areply：${r.reply}`);
+    `${hhmm} 说：${text}${fallback}%0AdayOffset=${r.dayOffset}%0A${meals.concat(wos).join('%0A')}%0Aanswer：${String(r.answer || '').replace(/\n/g, ' ｜ ')}%0Aupdates：${JSON.stringify(r.updates).slice(0, 400)}%0A记住：${JSON.stringify(r.remember)}%0A小本本：+${JSON.stringify(r.memo)} -${JSON.stringify(r.forget)}%0Aplan：${r.plan ? JSON.stringify({ d: r.plan.dayOffset, w: (r.plan.days || [r.plan]).map(d => d.dayOffset + ':' + d.workouts.map(w => w.exerciseName + ' ' + w.weightKg + 'kg ' + w.sets + '×' + w.reps + (w.tip ? '「' + w.tip + '」' : '')).join('，')) }) : 'null'}%0Areply：${r.reply}`);
   return why === true;
 }
 
@@ -61,12 +61,28 @@ const CASES = [
   ['练腿怎么练（带脏话）', '我操，我想练腿要怎么练啊？', '01:30', r => {
     if (r.meals.length || r.workouts.length) return '不该记';
     if (/帮不上/.test(r.answer || '')) return '说帮不上：' + r.answer;
-    return /蹲|腿举|硬拉|弓步|腿屈伸/.test(r.answer || '') || '回答：' + r.answer;
+    if (!r.plan || !(r.plan.workouts || []).length) return '没有 plan';
+    return /蹲|腿举|硬拉|弓步|腿屈伸|腿弯举/.test(r.answer || '') || '回答：' + r.answer;
   }, { dayRecords: [{ ref: 'r1', kind: 'meal', id: 'd1', text: '加餐 李子几个 57kcal 蛋白1.1 碳水13.1 脂肪0.3' }] }],
-  ['练腿怎么练（新手小本本）', '我想练腿要怎么练', '19:00', r => {
+  ['练腿怎么练（新手：要点）', '我想练腿要怎么练', '19:00', r => {
     if (/帮不上/.test(r.answer || '')) return '说帮不上：' + r.answer;
-    return /蹲|腿举|硬拉|弓步|腿屈伸/.test(r.answer || '') || '回答：' + r.answer;
-  }, { memo: ['叫阿程', '健身新手'], recent: [] }]
+    const ws = (r.plan && r.plan.workouts) || [];
+    if (!ws.length) return '没有 plan';
+    return ws.filter(w => w.tip).length >= ws.length - 1 || '要点太少：' + JSON.stringify(ws.map(w => w.tip || null));
+  }, { memo: ['叫阿程', '健身新手'], recent: [] }],
+  ['排一周（新手三练）', '我是新手，一周练三次，帮我排一下', '21:00', r => {
+    if (r.meals.length || r.workouts.length) return '不该记';
+    const days = (r.plan && r.plan.days) || [];
+    if (days.length < 3) return '天数：' + days.length + ' ' + JSON.stringify(r.plan && r.plan.dayOffset);
+    if (days.some(d => d.dayOffset < 1)) return '排到今天之前了：' + days.map(d => d.dayOffset).join(',');
+    return days.every(d => d.workouts.length >= 3) || '每天动作太少：' + days.map(d => d.workouts.length).join(',');
+  }, { memo: ['健身新手'], recent: [] }],
+  ['李子几个（给选项）', '吃了几个李子', '15:00', r => {
+    const it = r.meals.flatMap(m => m.items).find(i => /李子/.test(i.name));
+    if (!it) return '没记李子';
+    return true;
+  }],
+  ['真的无关（还是帮不上）', '明天天气怎么样', '21:00', r => /帮不上/.test(r.answer || '') && !/～/.test(r.answer) || '回答：' + r.answer]
 ];
 const sumN = (items) => { const n = {}; items.forEach(i => Object.keys(i.nutrients || {}).forEach(k => { n[k] = (n[k] || 0) + i.nutrients[k]; })); return n; };
 const allItems = (r) => r.meals.map(m => `【${m.mealType}】` + m.items.map(i => i.name + (i.amount || '')).join('、')).join(' ');

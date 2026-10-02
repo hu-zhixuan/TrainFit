@@ -130,6 +130,9 @@
     return out.replace(/\*\*/g, '').trim();
   }
 
+  // 说的是吃、练、身体的事（用来判断「帮不上」是不是答错了）
+  const ABOUT_FIT = /练|训练|健身|动作|器械|深蹲|卧推|硬拉|腿|胸|背|肩|手臂|腹|核心|有氧|跑步|减脂|减肥|增肌|瘦|胖|体重|吃|喝|饭|餐|食|蛋白|热量|卡|碳水|脂肪|饿|饱|睡|酸|累|恢复/;
+
   const Parser = {
     buildMessages(text, ctx) {
       ctx = ctx || {};
@@ -161,7 +164,7 @@
         '   一顿说不清具体吃了哪些的（火锅、烧烤、烤肉、自助餐、麻辣烫、冒菜、串串、干锅、日料、聚餐、吃席）：按用户的描述拆成几项估——主要的肉（羊肉、肥牛、毛肚…，大概几盘或多少克）、蔬菜和豆制品、主食、蘸料（麻酱、香油碟热量很高）、锅底或汤里吸的油（牛油、红油锅比清汤、番茄锅多不少）；没说的按一个成年人一顿的中等量估。说了「吃了很多 / 吃撑了」按 1.5 倍左右，「没吃多少 / 吃了一点」按 0.6 倍左右。这种估得粗的，reply 用一句话说清楚按什么估的（如「按牛油锅、羊肉约300克估的，可以再补一句」）。',
         '   只有明显是几样东西拼起来的才分开写（盖饭 = 米饭 + 菜，套餐 = 主食 + 菜 + 饮料）。单独的米饭、馒头、鸡蛋、牛奶、水果这类单一食材 whole=false，name 尽量用下面「参考营养数据」里的名字，数值会按库重算。参考数据里的成品菜数值可以参考，但要按用户说的做法和份量自己判断。',
         '   克数都按熟的、吃下去的算：米饭一碗约 180g，盖饭和外卖套餐里的米饭约 250–300g，馒头一个约 100g，鸡蛋一个约 50g，牛奶一杯约 250g，糯米鸡一个约 150–200g，一份外卖约 400–600g。按「一个 / 一串 / 一块」的真实大小估，不要当成 100g：烤串一串的肉约 25–40g，烤白果一串约 6–8 颗、25g 左右，炸鸡一块（带骨）能吃的约 80–100g，一瓶牛奶 / 甜牛奶常见 200–250ml，一瓶饮料约 500ml，一罐可乐 330ml。',
-        '   份量说得含糊、不同大小热量差得多的（「一瓶甜牛奶」不知道 250ml 还是 500ml，「一串烤白果」不知道几颗，「一块炸鸡」不知道是鸡腿还是鸡翅）：grams 按最常见的估，这一项再加 "opts":[["250ml",250],["500ml",500]]——2～3 个最常见的大小，每个是 [给用户看的几个字, 这一项的总克数]，几个字要说成谁都能想象出来的样子（「小碗」「大碗」「拳头大」「巴掌大一块」「一盘」「6颗」「500ml」），不要写克数，其中一个就是你估的。「一份炒菜」「一碗饭」这种也可以问。说了具体量的（克数、毫升、几颗）、「记住的食物」里有的、热量低的（蔬菜、水、茶）不要加；一句话最多 2 样加 opts。',
+        '   份量说得含糊、不同大小热量差得多的（「一瓶甜牛奶」不知道 250ml 还是 500ml，「一串烤白果」不知道几颗，「一块炸鸡」不知道是鸡腿还是鸡翅）：grams 按最常见的估，这一项再加 "opts":[["250ml",250],["500ml",500]]——2～3 个最常见的大小，每个是 [给用户看的几个字, 这一项的总克数]，几个字要说成谁都能想象出来的样子（「小碗」「大碗」「拳头大」「巴掌大一块」「一盘」「6颗」「500ml」），不要写克数，其中一个就是你估的。「一份炒菜」「一碗饭」这种也可以问；「几个」「一些」「一把」没说数的，按常见的估一个数，也给 opts（「2个」「4个」「6个」）。说了具体量的（克数、毫升、几颗）、「记住的食物」里有的、热量低的（蔬菜、水、茶）不要加；一句话最多 2 样加 opts。',
         '   例外：单独吃的肉、鱼、虾（鸡胸肉、牛肉、猪瘦肉、鱼肉、虾仁）grams 写生重，参考数据里这些是生肉的数——用户说的克数一般就是生重，直接用；没说就估这块肉生的时候多重（熟肉约为生重的七成）。即食鸡胸肉按包装克数。',
         '   蛋白质用户最在意，要估准：肉、蛋、奶、豆制品、蛋白粉按实际份量算（乳清蛋白粉一勺约 30g、含蛋白约 24g）；整份的菜里有多少肉就按多少肉估蛋白质，不要只按菜名套平均值。',
         '   补剂和药（维生素、钙、镁、锌、铁、鱼油、益生菌、肌酸、药片…，蛋白粉不算补剂）：每样一项，加 "kind":"supplement"，不管什么时间都放进 mealType 为 加餐/补剂 的那条 meal，和饭菜分开。calories 按实际（普通片剂、胶囊是 0，鱼油一粒约 9，软糖一粒约 10）。含这些营养素就写 nutrients（这一项的总量，只用这些名字和单位）：' + Object.keys(NUTRIENTS).map(k => `${k}(${NUTRIENTS[k].unit})`).join('、') + '。用户没说剂量就按常见的一片 / 一粒估（维生素D 1μg = 40IU）；复合维生素也按常见一粒写出主要几种（维生素C、维生素D、维生素A、锌、钙、镁…）。药和说不清成分的补剂可以不写 nutrients。例：{"mealType":"加餐/补剂","foodSummary":"鱼油2粒、维生素D1粒","items":[{"name":"鱼油","amount":"2粒","kind":"supplement","calories":18,"fatG":2,"nutrients":{"EPA+DHA":600}},{"name":"维生素D","amount":"1粒","kind":"supplement","calories":0,"nutrients":{"维生素D":10}}]}',
@@ -176,11 +179,12 @@
         '7. 用户报自己的体重（「体重62.5」「今天称了124斤」「早上61公斤」）：bodyWeight 填公斤数（斤÷2；没说单位就参考下面的最近体重判断是斤还是公斤）。没说体重就填 null。训练用的重量不是体重。',
         '8. 用户让你记住某样东西的热量（「记住，糯米鸡一个350大卡」），或念了包装上的营养数：在 remember 里写一份的量 {"name","amount","grams","calories","proteinG","carbsG","fatG"}，补剂再加 "kind":"supplement" 和 nutrients。只是让你记住、没说吃了，就不要加进 meals。',
         '9. 听不懂：add 为空，reply 说明原因。',
-        '10. 用户在问问题、要建议（「明天吃什么」「给我定个明天的食谱」「今天还差多少蛋白」「练完吃啥好」「明天练什么」「晚上还能吃点啥」「能不能吃火锅」），不是在报自己吃了练了什么：不要记（add 为空；同一句里也说了已经吃过、练过的，那部分照常记），在 answer 里回答。',
+        '10. 用户在问问题、要建议（「明天吃什么」「给我定个明天的食谱」「今天还差多少蛋白」「练完吃啥好」「明天练什么」「我想练腿要怎么练」「深蹲怎么做」「一周练三次帮我排一下」「晚上还能吃点啥」「能不能吃火锅」），不是在报自己吃了练了什么：不要记（add 为空；同一句里也说了已经吃过、练过的，那部分照常记），在 answer 里回答。「我操」「卧槽」「妈的」这类是口头禅，不影响意思。',
         '   回答要用下面「今天的情况」「最近成绩」「记住的食物」，按这个人的目标和还剩的热量、还差的蛋白质来定，具体到吃什么、多少，大概多少千卡和蛋白质（训练就写动作、重量、组数）。用户说了要求（「训练强度大，碳水多点」「不想吃米饭」）就照着调。',
         '   写成几行短句，每行一件事（「早餐：两个鸡蛋＋一杯牛奶＋一个馒头，约450千卡、蛋白25g」），最多 8 行，不要 markdown 符号、不要客套话。reply 写一句「给了你明天的食谱」这样的话（又记又问就写「记了…，晚上吃啥看小人」），不要出现 answer 这个词。',
-        '   和吃、练、体重都无关的问题（天气、聊天）：answer 写一句「我只管吃和练，这个帮不上～」。',
-        '   answer 是某一天的具体安排（明天的食谱、今晚吃什么、明天练什么）时，同时写 plan：{"dayOffset":1,"meals":[和 add.meals 一样的格式],"workouts":[和 add.workouts 一样的格式]}，dayOffset 相对正在看的日期（明天 1，今天 0），内容和 answer 一致；只是回答问题（还差多少蛋白、能不能吃）就 plan 为 null。',
+        '   练什么、怎么练、动作怎么做、练哪儿、减脂增肌、饿不饿、睡眠恢复、身体酸痛，都算吃和练的事，要正经回答：练什么就给动作、重量、组数次数，小本本里是新手或者问怎么做的，每个动作带一句要点。只有天气、新闻、写作业这种完全无关的，answer 才写一句「这个我帮不上，我只管吃和练」。',
+        '   answer 是某一天的具体安排（明天的食谱、今晚吃什么、明天练什么、我想练腿怎么练）时，同时写 plan：{"dayOffset":1,"meals":[和 add.meals 一样的格式],"workouts":[和 add.workouts 一样的格式，每个动作再加 "tip":"一句要点，16字以内"]}，dayOffset 相对正在看的日期（明天 1，今天 0，没说哪天就是今天），内容和 answer 一致；只是回答问题（还差多少蛋白、能不能吃）就 plan 为 null。',
+        '   要排好几天的训练（「这周怎么练」「一周练三次帮我排一下」「给我一个新手计划」）：plan 写成 {"days":[{"dayOffset":1,"workouts":[…]},{"dayOffset":3,"workouts":[…]}]}，从明天开始排一周、练的日子之间隔开，每天 4～6 个动作，不排吃的；重量按最近成绩往上加一点，没练过的按新手能做的估。answer 每天一行（「周五 腿：深蹲 40kg 4×10、腿举…」）。',
         '   下面有「刚才给的计划」，用户说要改（「不要米饭换红薯」「蛋白再多点」「晚上少吃点」），就按要求改好，重新给完整的 answer 和 plan，不要记录。',
         '   下面有「这天的计划」，用户说照着吃了 / 练了（「早餐照计划吃了」「计划里的都练完了」）：把那几项 add 进来（份量照计划），donePlans 写它们的编号。',
         '11. 用户说了关于自己、以后一直有用的事（名字、在增肌还是减脂、健身新手、在练什么、不吃 / 过敏的东西、伤病、作息、口味）：写进 memo，每条一句话、12 字以内（「叫阿程」「健身新手」「不吃辣」「膝盖有旧伤」），下面「小本本」里已经有的不要重复；说要忘掉或者变了的（「现在能吃辣了」「膝盖好了」），一定把小本本里原来那句原样写进 forget。吃了什么、练了什么、今天的事不算。回答、估算、出计划时照顾到小本本里的事（不吃辣就别推荐辣的，膝盖有伤就别排深蹲跳）。',
@@ -197,6 +201,7 @@
       const plans = ctx.plans || [];
       if (plans.length) lines.push('这天的计划（还没做）：\n' + plans.map(p => `${p.ref} ${p.text}`).join('\n'));
       if (ctx.lastPlan) lines.push('刚才给的计划（用户可能要改）：\n' + ctx.lastPlan);
+      if (ctx._again) lines.push('注意：这句是在问吃或练的事，要正经回答，不能说帮不上。');
       const d = ctx.day;
       if (d) lines.push(`今天的情况：目标${GOALS[d.goal] || '减脂'}；热量预算 ${d.budget} 千卡（含训练消耗 ${d.burn}），已吃 ${d.intake}，还能吃 ${d.budget - d.intake}；蛋白质目标 ${d.proteinTarget}g，已吃 ${d.protein}g。`);
       const mine = (ctx.myFoods || []).slice(0, 40);
@@ -254,12 +259,21 @@
       out.reply = cleanText(parsed && parsed.reply, 40).replace(/(看)?\s*answer/gi, '看小人');
       out.answer = cleanAnswer(parsed && parsed.answer);
       // 计划（明天的食谱 / 训练）：和记录一样整理、按库算热量，但不存成记录
+      // 排一周的训练（「一周练三次帮我排一下」）：plan.days 是几天的，每天一份；只有一天的照旧 plan.dayOffset / meals / workouts
       const pl = parsed && parsed.plan;
       if (out.answer && pl && typeof pl === 'object' && !ctx._inPlan) {
-        const r = this.normalize({ add: { meals: Array.isArray(pl.meals) ? pl.meals : [], workouts: Array.isArray(pl.workouts) ? pl.workouts : [] } },
-          Object.assign({}, ctx, { said: '', _inPlan: true }));
-        const off = Math.max(-7, Math.min(7, Math.round(num(pl.dayOffset) || 0)));
-        if (r.meals.length || r.workouts.length) out.plan = { dayOffset: off, meals: r.meals, workouts: r.workouts };
+        const seen = new Set();
+        const days = (Array.isArray(pl.days) && pl.days.length ? pl.days : [pl]).slice(0, 7).map(d => {
+          if (!d || typeof d !== 'object') return null;
+          const r = this.normalize({ add: { meals: Array.isArray(d.meals) ? d.meals : [], workouts: Array.isArray(d.workouts) ? d.workouts : [] } },
+            Object.assign({}, ctx, { said: '', _inPlan: true }));
+          const off = Math.max(-7, Math.min(7, Math.round(num(d.dayOffset) || 0)));
+          if ((!r.meals.length && !r.workouts.length) || seen.has(off)) return null;
+          seen.add(off);
+          return { dayOffset: off, meals: r.meals, workouts: r.workouts };
+        }).filter(Boolean).sort((a, b) => a.dayOffset - b.dayOffset);
+        if (days.length === 1) out.plan = days[0];
+        else if (days.length > 1) out.plan = { days };
       }
       const known = new Set((ctx.plans || []).map(p => p.ref));
       out.donePlans = Array.isArray(parsed && parsed.donePlans) ? parsed.donePlans.filter(x => known.has(x)) : [];
@@ -371,6 +385,9 @@
           burnedCalories: Math.round(burn),
           estimated
         });
+        // 计划里的动作：新手看得懂的一句要点（「膝盖跟脚尖一个方向」）
+        const tip = ctx._inPlan ? cleanText(w.tip, 20) : '';
+        if (tip) out.workouts[out.workouts.length - 1].tip = tip;
       });
 
       let asks = 0; // 一句话最多问 2 样的份量
@@ -515,7 +532,11 @@
      * 现在失败就留一张「没整理好」的卡片，让用户重试或改字。
      */
     async parse(text, ctx, onDelta) {
-      const r = await this.viaLlm(text, ctx, onDelta);
+      let r = await this.viaLlm(text, ctx, onDelta);
+      // 明明在问练、吃的事，大模型却说「帮不上」（实测「我操，我想练腿要怎么练」）：提醒一句再问一次
+      if (r.answer && /帮不上/.test(r.answer) && ABOUT_FIT.test(text) && !(ctx && ctx._again)) {
+        r = await this.viaLlm(text, Object.assign({}, ctx, { _again: true }), onDelta);
+      }
       return Object.assign(r, { source: 'llm' });
     }
   };

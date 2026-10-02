@@ -5,17 +5,17 @@ on:
 jobs:
   atria:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 80
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: 复现（main 的提示词）×4（只用 Atria）
+      - name: 新提示词 ×4（只用 Atria）
         env:
           TZ: Asia/Shanghai
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
           LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
           LLM_MODEL: ${{ vars.LLM_MODEL }}
-          TAG: main
-        run: ROUNDS=4 node .github/api_v45.js
+          TAG: 新
+        run: ONLY="练腿怎么练（带脏话）,练腿怎么练（新手：要点）,排一周（新手三练）" ROUNDS=4 node .github/api_v45.js && ONLY="李子几个（给选项）,真的无关（还是帮不上）" ROUNDS=2 node .github/api_v45.js
