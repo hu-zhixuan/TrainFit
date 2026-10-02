@@ -296,12 +296,19 @@
       }
     },
 
+    /** 连着两次没听清：小人教一句（可以打字） */
+    voiceMiss() {
+      this._misses = (this._misses || 0) + 1;
+      if (this._misses >= 2 && root.app && root.app.coachVoice && root.app.coachVoice()) this._misses = 0;
+    },
+
     /** 拿到最终文字：交给大模型 */
     finishTalk(text) {
       this.state = 'idle';
       this.resetTalkUi();
       text = (text || '').trim();
-      if (!text) { this.setStatus('没听到内容，再按住说一次', 'warn'); return; }
+      if (!text) { this.setStatus('没听到内容，再按住说一次', 'warn'); this.voiceMiss(); return; }
+      this._misses = 0;
       this.setStatus('');
       this.submit(text);
     },
@@ -334,7 +341,7 @@
       this.state = 'idle';
       this.resetTalkUi();
       const msg = String(text || '');
-      if (msg === 'TOO_SHORT' || msg === 'NO_SPEECH') this.setStatus('没听到说话，按住再说一次', 'warn');
+      if (msg === 'TOO_SHORT' || msg === 'NO_SPEECH') { this.setStatus('没听到说话，按住再说一次', 'warn'); this.voiceMiss(); }
       else if (msg === 'LOCAL_NOT_READY') this.setStatus('识别模型还在加载，稍等一两秒再说', 'warn');
       else if (msg === 'MODEL_MISSING') this.setStatus('没认出来：本机识别模型还没下好，联网再说一次', 'warn');
       else if (msg === 'NO_KEY') this.setStatus('还没有语音识别 key，去设置里填', 'warn');
