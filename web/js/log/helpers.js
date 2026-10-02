@@ -161,6 +161,16 @@
   }
 
   /**
+   * 只是在问、没在报吃了练了什么（「晚上吃点啥」「上周练了几次」）。
+   * 「中午吃了牛肉面，晚上吃点啥」这种又记又问的不算——它没整理完时要留卡片，免得记录丢了。
+   */
+  function pureQuestion(text) {
+    const t = String(text || '');
+    if (!looksLikeQuestion(t)) return false;
+    return !/(吃|喝|练|跑|做|骑|游|走)了(?!几|多少|啥|什么|没)|体重\s*\d|称了|\d+(\.\d+)?\s*(克|g|公斤|kg|斤|组|个|次|分钟|碗|杯|片|块|根|勺|毫升|ml)/i.test(t);
+  }
+
+  /**
    * 手机自己就能算的问题（「还差多少蛋白」「还能吃多少」「卧推最好多少」「这周练了几次」）：不问大模型，马上答。
    * 只认整句都是这个意思的（去掉语气词以后从头到尾对得上），又记又问、问建议的都交给大模型。
    * @param names 记过的动作名（认「卧推最好多少」里的卧推）
@@ -199,7 +209,7 @@
     return null;
   }
 
-  Object.assign(TF, { MUSCLES, MEAL_TYPES, num, cleanText, round1, mealTypeByHour, normMealType, mealTimes, mealSegments, NUTRIENTS, cleanNutrients, nutrientsText, toKg, quickWeight, findWeight, guessMuscle, looksLikeQuestion, quickIntent });
+  Object.assign(TF, { MUSCLES, MEAL_TYPES, num, cleanText, round1, mealTypeByHour, normMealType, mealTimes, mealSegments, NUTRIENTS, cleanNutrients, nutrientsText, toKg, quickWeight, findWeight, guessMuscle, looksLikeQuestion, pureQuestion, quickIntent });
 
   if (typeof module !== 'undefined' && module.exports) module.exports = TF;
 })(typeof window !== 'undefined' ? window : globalThis);

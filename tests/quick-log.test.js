@@ -616,3 +616,8 @@ test('贝贝南瓜不是普通南瓜：大模型按普通南瓜估低了 4 倍�
   assert.ok(it.calories > 200 && it.calories < 230, String(it.calories));
   assert.strictEqual(groundItem({ name: '南瓜', grams: 200, calories: 46, proteinG: 1.4 }).calories, 46);
 });
+
+test('只是在问（不留「没整理」卡片）和又记又问（要留）分得开', () => {
+  for (const t of ['晚上吃点啥好？', '上周练了几次', '给我定一下明天的食谱', '我想练腿要怎么练', '今天吃了多少？']) assert.ok(TF.pureQuestion(t), t);
+  for (const t of ['中午吃了牛肉面，晚上吃点啥', '我吃了两个鸡蛋还差多少蛋白', '体重62，这周瘦了多少？', '中午一碗面']) assert.ok(!TF.pureQuestion(t), t);
+});

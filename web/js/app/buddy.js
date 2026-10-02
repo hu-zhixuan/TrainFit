@@ -1101,7 +1101,8 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     pop.querySelector('[data-pa="retry"]').addEventListener('click', (e) => {
       e.stopPropagation();
       this.showBuddyThinking(p.text);
-      this.retryPending(p.id);
+      if (this.pending.some(x => x.id === p.id)) this.retryPending(p.id);
+      else if (window.QuickLog) window.QuickLog.submit(p.text);
     });
     this.positionBuddyPop();
     this.popIn(pop);

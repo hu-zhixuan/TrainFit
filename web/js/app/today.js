@@ -170,7 +170,8 @@ Object.assign(FitnessApp.prototype, {
     $('remind-banner').classList.toggle('hidden', asked || !this.hasNotifApi() || (this.workouts.length + this.diet.length) < 1);
 
     // 记录：整理中的在最上面（提问的在小人气泡里等，不占卡片；没整理出来才显示）；然后是计划；饮食按 早→午→晚→加餐，训练按先后顺序
-    const pend = this.pending.filter(p => p.date === date && !(p.ask && p.status === 'working')).sort((a, b) => b.ts - a.ts);
+    // 提问：整理中不出卡片（小人在想）；没答上来也不留卡片（小人的气泡里能重试），又记又问的才留
+    const pend = this.pending.filter(p => p.date === date && !(p.ask && (p.status === 'working' || (TF.pureQuestion && TF.pureQuestion(p.text))))).sort((a, b) => b.ts - a.ts);
     const meals = this.diet.filter(d => d.date === date)
       .sort((a, b) => (MEAL_TYPES.indexOf(a.mealType) - MEAL_TYPES.indexOf(b.mealType)) || (recordTs(a) - recordTs(b)));
     const lifts = this.workouts.filter(w => w.date === date).sort((a, b) => recordTs(a) - recordTs(b));
