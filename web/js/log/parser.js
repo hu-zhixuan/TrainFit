@@ -181,7 +181,7 @@
         '8. 用户让你记住某样东西的热量（「记住，糯米鸡一个350大卡」），或念了包装上的营养数：在 remember 里写一份的量 {"name","amount","grams","calories","proteinG","carbsG","fatG"}，补剂再加 "kind":"supplement" 和 nutrients。只是让你记住、没说吃了，就不要加进 meals。',
         '9. 听不懂：add 为空，reply 说明原因。',
         '10. 用户在问问题、要建议（「明天吃什么」「给我定个明天的食谱」「今天还差多少蛋白」「练完吃啥好」「明天练什么」「我想练腿要怎么练」「深蹲怎么做」「一周练三次帮我排一下」「晚上还能吃点啥」「能不能吃火锅」），不是在报自己吃了练了什么：不要记（add 为空；同一句里也说了已经吃过、练过的，那部分照常记），在 answer 里回答。「我操」「卧槽」「妈的」这类是口头禅，不影响意思。问到以前的事（「上周练了几次」「这个月瘦了多少」「哪天吃得最多」「最近蛋白够不够」）就看下面「最近两周」，说到具体日期和数字。',
-        '   回答要用下面「今天的情况」「最近成绩」「记住的食物」，按这个人的目标和还剩的热量、还差的蛋白质来定，具体到吃什么、多少，大概多少千卡和蛋白质（训练就写动作、重量、组数）。用户说了要求（「训练强度大，碳水多点」「不想吃米饭」）就照着调。',
+        '   回答要用下面「今天的情况」「小本本」「画像」「最近成绩」「记住的食物」，按这个人的目标、习惯和还剩的热量、还差的蛋白质来定，具体到吃什么、多少，大概多少千卡和蛋白质（训练就写动作、重量、组数）。用户说了要求（「训练强度大，碳水多点」「不想吃米饭」）就照着调。',
         '   写成几行短句，每行一件事（「早餐：两个鸡蛋＋一杯牛奶＋一个馒头，约450千卡、蛋白25g」），最多 8 行，不要 markdown 符号、不要客套话。reply 写一句「给了你明天的食谱」这样的话（又记又问就写「记了…，晚上吃啥看小人」），不要出现 answer 这个词。',
         '   回答了问题时，next 写两句用户接着最可能想问的话（每句 12 字以内，用用户的口吻，比如「晚上吃点啥能补蛋白」「给我排个练腿的」）；没回答问题就 []。',
         '   练什么、怎么练、动作怎么做、练哪儿、减脂增肌、饿不饿、睡眠恢复、身体酸痛，都算吃和练的事，要正经回答：练什么就给动作、重量、组数次数，小本本里是新手或者问怎么做的，每个动作带一句要点。只有天气、新闻、写作业这种完全无关的，answer 才写一句「这个我帮不上，我只管吃和练」。',
@@ -200,9 +200,11 @@
       if (ctx.lastWeight) lines.push(`最近体重：${ctx.lastWeight}kg`);
       const past = (ctx.past || []).slice(-14);
       if (past.length) lines.push('最近两周（日期 吃了多少千卡 蛋白g 练了什么 体重kg）：\n' + past.join('\n'));
-      if (ctx.state) lines.push(`今天的状态：昨晚${ctx.state.replace(/^睡得/, '睡得')}（排训练时照顾到，没睡好就练轻点）。`);
+      if (ctx.state) lines.push(`今天的状态：昨晚${ctx.state}（排训练时照顾到，没睡好就练轻点）。`);
       const memo = (ctx.memo || []).slice(0, 12);
       if (memo.length) lines.push('小本本（用户说过的自己的事）：' + memo.join('；'));
+      const portrait = (ctx.portrait || []).slice(0, 7);
+      if (portrait.length) lines.push('画像（手机按最近 4 周的记录算的）：' + portrait.join('；'));
       const plans = ctx.plans || [];
       if (plans.length) lines.push('这天的计划（还没做）：\n' + plans.map(p => `${p.ref} ${p.text}`).join('\n'));
       if (ctx.lastPlan) lines.push('刚才给的计划（用户可能要改）：\n' + ctx.lastPlan);
@@ -486,7 +488,7 @@
             i -= 1; // 同一种请求再试
             continue;
           }
-          if (!/^HTTP 4\d\d/.test(msg) || /^HTTP 429/.test(msg)) break; // 只有参数被拒才换下一种写法
+          if (!/^HTTP (400|422)/.test(msg)) break; // 只有参数被拒才换下一种写法（key 不对的 401 / 403 换了也没用，别多花一次）
         }
       }
       throw lastErr || new Error('LLM_FAILED');
@@ -551,7 +553,8 @@
       if (msg === 'NO_KEY') return 'AI 接口没有配置 key';
       if (/^HTTP 429/.test(msg)) return 'AI 这会儿太忙（限流），点「重试」';
       if (/^HTTP 401|^HTTP 403/.test(msg)) return 'AI 接口的 key 不对';
-      if (/TIMEOUT|timed out|Timeout/i.test(msg)) return 'AI 这会儿太慢，没等到结果，点「重试」';
+      if (/^TOO_LONG/.test(msg)) return 'AI 卡住了，没整理出来';
+      if (/TIMEOUT|timed out|Timeout/i.test(msg)) return 'AI 太慢了，没等到结果';
       if (this.isTransient(msg)) return '网络不好，AI 没连上，点「重试」';
       return 'AI 没整理出来，点「重试」或「改字」';
     },

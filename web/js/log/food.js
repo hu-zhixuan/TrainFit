@@ -186,7 +186,10 @@
       const sameFood = ratio >= 0.8 && ratio <= 1.25;
       // 热量和蛋白质差的倍数一样（都差一倍）：是同一样东西，大模型把量算错了（实测「两个水煮蛋 100g」写成 286 千卡、25g 蛋白）
       const sameMix = pr > 0 && ratio > 0 && Math.abs(Math.log(pr / ratio)) < Math.log(1.25);
-      if (ratio >= 0.4 && ratio <= 2.5 && (!proteinOff || sameFood || sameMix)) {
+      // 自己整理的常见条目（src=dish，名字 / 别名完全对上）比大模型靠谱：差 4 倍也按库算
+      //（实测「贝贝南瓜 230g」大模型按普通南瓜写成 53 千卡，其实约 214 千卡）
+      const trusted = e.src === 'dish' && ratio >= 0.2 && ratio <= 5;
+      if (trusted || (ratio >= 0.4 && ratio <= 2.5 && (!proteinOff || sameFood || sameMix))) {
         return Object.assign(base, { src: e.src === 'cfct' ? '成分表' : '菜品库', dbName: e.name },
           vals(k, p, e.c * grams / 100, e.f * grams / 100));
       }

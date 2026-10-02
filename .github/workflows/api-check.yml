@@ -11,11 +11,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: v4.8 没睡好、很吃力、接着问 ×3（只用 Atria）
+      - name: v5.4 提速：提示词长短、缓存、不写空字段（只用 Atria）
         env:
           TZ: Asia/Shanghai
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
           LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
           LLM_MODEL: ${{ vars.LLM_MODEL }}
-          TAG: 新
-        run: ROUNDS=3 node .github/api_v48.js
+        run: node .github/speed_v54.js

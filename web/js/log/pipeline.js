@@ -8,18 +8,39 @@
   const { MEAL_TYPES, quickWeight, Native, Haptics, Parser, QuickLog, mergeItems, sumItems, looksLikeQuestion, partialAnswer } = TF;
 
   Object.assign(QuickLog, {
+    STUCK_MS: 3 * 60 * 1000, // 整理超过这么久还没好：算失败，留卡片让你重试
+
+    /** 切回 App 时看一眼：放在后台时计时器是停的，按真实时间算，卡太久的直接算失败 */
+    reapStale() {
+      const app = root.app;
+      if (!app || !app.pending) return;
+      app.pending.filter(p => p.status === 'working' && Date.now() - (p.startedAt || p.ts) > this.STUCK_MS)
+        .forEach(p => { if (p.expire) p.expire(); else app.failPending(p.id, 'AI 太慢了，没等到结果'); });
+    },
+
     // ----- 解析 + 保存（后台进行，不用等） -----
-    submit(text) {
+    /** opts.ask：点的是「接着问」这类，一定当成提问（小人马上进「我想想」）；opts.again：点了「再试一次」，不算重复 */
+    submit(text, opts) {
       text = (text || '').trim();
       if (!text) return;
+      // 同一句点了两下、发了两次：5 秒内、或者上一句还在整理，就不再发（省 token，也不打断已经出来的回答）
+      const now = Date.now();
+      if (!(opts && opts.again) && ((this._last && this._last.text === text && now - this._last.at < 5000) ||
+        (root.app.pending || []).some(p => p.text === text && p.status === 'working'))) return;
+      this._last = { text, at: now };
       // 手机自己就能答的（「还差多少蛋白」「卧推最好多少」）：马上答，不问大模型
       const quick = root.app.quickAnswer ? root.app.quickAnswer(text) : null;
       if (quick && root.app.showBuddyAnswer) {
         root.app.showBuddyAnswer(text, quick.text, { next: quick.next });
         return;
       }
+      // 「老样子」：这个钟点最常吃的那一餐，和空白页上那个按钮一样，马上记
+      if (/^(还是|跟平时一样|和平时一样|跟以前一样)?(老样子|照旧)[吧啊呀了。！!]*$/.test(text) && root.app.quickSuggestions) {
+        const usual = root.app.quickSuggestions().find(x => x.kind === 'meal' && x.usual && !x.done);
+        if (usual) { root.app.quickRepeatKey(usual.key); return; }
+      }
       // 听着像提问：不出「正在整理」卡片，小人马上在气泡里说「我想想…」（Atria 要 10～25 秒才出第一个字）
-      const ask = !!(looksLikeQuestion && looksLikeQuestion(text));
+      const ask = !!((opts && opts.ask) || (looksLikeQuestion && looksLikeQuestion(text)));
       const p = root.app.addPending(text, ask);
       if (ask && root.app.showBuddyThinking) root.app.showBuddyThinking(text);
       this.process(p);
@@ -68,7 +89,9 @@
       const plans = app.planContext ? app.planContext(date) : [];
       const offer = app._planOffer && Date.now() - app._planOffer.at < 15 * 60 * 1000 ? app._planOffer.text : '';
       return { now: new Date(p.ts || Date.now()), history: app.workouts, dayRecords, recent, dayLabel, lastWeight: lw ? lw.kg : null, myFoods: app.myFoods || [], day, plans, lastPlan: offer,
-        memo: app.memoList ? app.memoList() : [], date, ask: !!p.ask, past: p.ask ? this.pastDays(date) : [],
+        memo: app.memoList ? app.memoList() : [], date, ask: !!p.ask,
+        // 提问：带一行画像；问以前的事才把最近两周一天一行带上（省 token）
+        portrait: p.ask && app.portrait ? app.portrait() : [], past: p.ask && TF.needsHistory(p.text) ? this.pastDays(date) : [],
         state: app.profile.dayState && app.profile.dayState.date === date ? app.profile.dayState.sleep : '' };
     },
 
@@ -99,35 +122,51 @@
 
     async process(p) {
       const app = root.app;
-      const ctx = this.buildContext(p);
+      // 每整理一次记一个号：点了「重试」以后，上一次迟到的结果不算（不然会记两遍）
+      const run = p.run = (p.run || 0) + 1;
+      const mine = () => p.run === run && app.pending.some(x => x.id === p.id);
+      let shown = '';
+      const fail = (e) => {
+        if (!mine() || p.status !== 'working') return; // 已经算失败了 / 被删了 / 又重试了
+        clearTimeout(deadline);
+        app.failPending(p.id, Parser.failReason(e));
+        if ((p.ask || shown) && app.showBuddyFailed) app.showBuddyFailed(p, Parser.failReason(e));
+        if (p.ask && TF.pureQuestion && TF.pureQuestion(p.text)) app.finishPending(p.id); // 只是在问：不留「没整理好」卡片
+      };
+      // 不管卡在哪，3 分钟还没整理好就算失败，让你重试（以前会一直转「正在整理」）；结果晚到了照样记上
+      p.expire = () => fail(new Error('TIMEOUT'));
+      const deadline = setTimeout(p.expire, this.STUCK_MS);
       let result;
       // 边想边出字：answer 一出来就往小人的气泡里写
       // 回答写完了、后面在写计划（整份计划要 30～60 秒）：气泡里说「正在排成计划」，别让光标一直闪
-      let buf = '', shown = '', planning = false;
+      let buf = '', planning = false;
       const onDelta = (soFar) => {
         buf = soFar;
         const a = partialAnswer ? partialAnswer(buf) : '';
         const pl = !!a && /"answer"\s*:\s*"(?:[^"\\]|\\.)*"/.test(buf) && /"plan"\s*:\s*\{/.test(buf);
-        if (a && (a !== shown || pl !== planning) && app.showBuddyAnswer && app.pending.some(x => x.id === p.id)) {
+        if (a && (a !== shown || pl !== planning) && app.showBuddyAnswer && mine()) {
           shown = a;
           planning = pl;
           app.showBuddyAnswer(p.text, a, { streaming: true, planning: pl });
         }
       };
+      let ctx;
       try {
+        ctx = this.buildContext(p);
         // 只是报体重：不用等大模型
         const kg = quickWeight(p.text, ctx.lastWeight);
+        // 说的全是以前吃过的、练过的：按你以前的数直接记，不等大模型（秒记）
+        const fast = !kg && !p.ask && TF.fastLog ? TF.fastLog(p.text, { now: ctx.now, today: getTodayDateString(), myFoods: app.myFoods, diet: app.diet, workouts: app.workouts, simple: app.isSimple() }) : null;
         result = kg ? { dayOffset: 0, workouts: [], meals: [], updates: [], deletes: [], bodyWeight: kg, reply: '', source: 'fast' }
-          : await Parser.parse(p.text, ctx, onDelta);
+          : fast || await Parser.parse(p.text, ctx, onDelta);
       } catch (e) {
         console.warn('[QuickLog] 大模型没整理出来：', e && e.message);
-        if (app.pending.some(x => x.id === p.id)) {
-          app.failPending(p.id, Parser.failReason(e));
-          if ((p.ask || shown) && app.showBuddyFailed) app.showBuddyFailed(p, Parser.failReason(e));
-        }
+        clearTimeout(deadline);
+        fail(e);
         return;
       }
-      if (!app.pending.some(x => x.id === p.id)) return; // 已被用户删掉
+      clearTimeout(deadline);
+      if (!mine()) return; // 已被用户删掉，或者又点了重试
       // 「早餐照计划吃了」：大模型记好了，把那几条计划划掉
       if ((result.donePlans || []).length && app.dropPlan) {
         const byRef = new Map((ctx.plans || []).map(x => [x.ref, x.id]));
@@ -143,11 +182,15 @@
           if (app.showBuddyAnswer) app.showBuddyAnswer(p.text, result.answer, answerOpts);
           return;
         }
+        if (p.status !== 'working') return; // 3 分钟时已经算失败了，别再震一次
         app.failPending(p.id, result.reply || '没认出吃了什么');
         if (p.ask && app.showBuddyFailed) app.showBuddyFailed(p, result.reply || '没听懂，换个说法试试');
+        else if (!p.ask && app.coachFail) app.coachFail(p); // 卡住了：小人教一句怎么说好认
+        if (p.ask && TF.pureQuestion && TF.pureQuestion(p.text)) app.finishPending(p.id);
         return;
       }
       app.finishPending(p.id);
+      if ((result.updates || []).length || (result.deletes || []).length) { try { localStorage.setItem('tf_used_fix', '1'); } catch (e) {} }
       const batch = this.save(Object.assign(result, { said: p.text }), p.date, ctx);
       this.showSnack(batch, result);
       if (result.answer && app.showBuddyAnswer) app.showBuddyAnswer(p.text, result.answer, answerOpts); // 又记又问
@@ -373,6 +416,8 @@
       this.snack.classList.add('hidden');
     }
   });
+
+  if (root.document) root.document.addEventListener('visibilitychange', () => { if (!root.document.hidden) QuickLog.reapStale(); });
 
   if (typeof module !== 'undefined' && module.exports) module.exports = TF;
 })(typeof window !== 'undefined' ? window : globalThis);
