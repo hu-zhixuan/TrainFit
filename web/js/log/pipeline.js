@@ -28,6 +28,14 @@
       if (!(opts && opts.again) && ((this._last && this._last.text === text && now - this._last.at < 5000) ||
         (root.app.pending || []).some(p => p.text === text && p.status === 'working'))) return;
       this._last = { text, at: now };
+      // 改小人刚给的计划（点了「改一改」，或者刚给过计划、说的是「不要米饭，换成红薯」）：当成提问，小人马上想，不出卡片
+      const plan = root.app.planEditKind ? root.app.planEditKind(text) : '';
+      if (plan) {
+        const p = root.app.addPending(text, true, { plan });
+        if (root.app.showBuddyThinking) root.app.showBuddyThinking(text);
+        this.process(p);
+        return;
+      }
       // 手机自己就能答的（「还差多少蛋白」「卧推最好多少」）：马上答，不问大模型
       const quick = root.app.quickAnswer ? root.app.quickAnswer(text) : null;
       if (quick && root.app.showBuddyAnswer) {
@@ -89,7 +97,7 @@
       const plans = app.planContext ? app.planContext(date) : [];
       const offer = app._planOffer && Date.now() - app._planOffer.at < 15 * 60 * 1000 ? app._planOffer.text : '';
       return { now: new Date(p.ts || Date.now()), history: app.workouts, dayRecords, recent, dayLabel, lastWeight: lw ? lw.kg : null, myFoods: app.myFoods || [], day, plans, lastPlan: offer,
-        memo: app.memoList ? app.memoList() : [], date, ask: !!p.ask,
+        memo: app.memoList ? app.memoList() : [], date, ask: !!p.ask, editPlan: p.plan === 'edit',
         // 提问：带一行画像；问以前的事才把最近两周一天一行带上（省 token）
         portrait: p.ask && app.portrait ? app.portrait() : [], past: p.ask && TF.needsHistory(p.text) ? this.pastDays(date) : [],
         state: app.profile.dayState && app.profile.dayState.date === date ? app.profile.dayState.sleep : '' };
@@ -131,7 +139,7 @@
         clearTimeout(deadline);
         app.failPending(p.id, Parser.failReason(e));
         if ((p.ask || shown) && app.showBuddyFailed) app.showBuddyFailed(p, Parser.failReason(e));
-        if (p.ask && TF.pureQuestion && TF.pureQuestion(p.text)) app.finishPending(p.id); // 只是在问：不留「没整理好」卡片
+        if (TF.noCard(p)) app.finishPending(p.id); // 只是在问、在改计划：不留「没整理好」卡片
       };
       // 不管卡在哪，3 分钟还没整理好就算失败，让你重试（以前会一直转「正在整理」）；结果晚到了照样记上
       p.expire = () => fail(new Error('TIMEOUT'));
@@ -186,7 +194,7 @@
         app.failPending(p.id, result.reply || '没认出吃了什么');
         if (p.ask && app.showBuddyFailed) app.showBuddyFailed(p, result.reply || '没听懂，换个说法试试');
         else if (!p.ask && app.coachFail) app.coachFail(p); // 卡住了：小人教一句怎么说好认
-        if (p.ask && TF.pureQuestion && TF.pureQuestion(p.text)) app.finishPending(p.id);
+        if (TF.noCard(p)) app.finishPending(p.id);
         return;
       }
       app.finishPending(p.id);

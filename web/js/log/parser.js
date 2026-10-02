@@ -150,6 +150,12 @@
     return out.replace(new RegExp(`"next"\\s*:\\s*(${STR}(?:\\s*,\\s*${STR}(?!\\s*:))+)`, 'g'), '"next":[$1]');
   }
 
+  /** 「记上了，一碗牛肉面加蛋，约750千卡、蛋白35g」→「记上了，一碗牛肉面加蛋」 */
+  function dropNumberClauses(reply) {
+    const parts = String(reply || '').match(/[^，,；;。]+[，,；;。]?|[，,；;。]/g) || [];
+    return parts.filter(p => !/\d+(\.\d+)?\s*(千卡|大卡|kcal|卡)|蛋白(质)?\s*(约|大约)?\s*\d/i.test(p)).join('').replace(/[，,；;、\s]+$/, '');
+  }
+
   // 说的是吃、练、身体的事（用来判断「帮不上」是不是答错了）
   const ABOUT_FIT = /练|训练|健身|动作|器械|深蹲|卧推|硬拉|腿|胸|背|肩|手臂|腹|核心|有氧|跑步|减脂|减肥|增肌|瘦|胖|体重|吃|喝|饭|餐|食|蛋白|热量|卡|碳水|脂肪|饿|饱|睡|酸|累|恢复/;
 
@@ -167,8 +173,8 @@
         '你是「练食AI」的记录助手。用户用口语说吃了什么（吃进嘴的都算：饭菜、零食、饮料、水、补剂、药）、训练或体重，文字来自语音识别，可能有同音错字（"卧腿"=卧推，"四组八哥"=4组8个，"划川"=划船，"茶叶大"=茶叶蛋）、没有标点、夹着「呃、嗯、那个、然后、就是」这类口头禅，按意思理解，说到的每样吃的都要记上，听着像错字的按最像的食物记，不要漏。说了又改口（「两碗，不对，一碗」「哦应该是…」）以后说的为准。紧跟在一样东西后面、只补了份量的话（「一个包子，呃大的」「一份炒饭然后是小份」）是那样东西的份量，不要单独记成一项。',
         // 只写用得上的字段（v5.4）：Atria 一秒只写 17～20 个 token，以前每次都写一串 "answer":null,"next":[]…，白等两三秒。
         // dayOffset 每次都写：实测不写的话「昨晚吃了火锅」会漏掉 -1，记到今天。
-        // 例子里 add 后面还跟着 dayOffset（和以前一样是 ]}]},）：实测例子以 ]}]}} 收尾时，长计划偶尔多一个括号，JSON 写坏；
-        // 别的字段要写出形状（"next":["…","…"]），只列名字时实测会写成 "next":"a","b"
+        // 别的字段要写出形状（"next":["…","…"]）：只列名字时实测会写成 "next":"a","b"，JSON 写坏。
+        // 例子里 add 后面还跟着 dayOffset，括号的写法和以前的例子一样（]}]},）
         '由你决定怎么改数据：新增、修改或删除。只输出一个 JSON 对象，不要 markdown，不要解释。reply 和 dayOffset 每次都写，别的字段只写用得上的（值是 null、空数组的不要写）。',
         '例 1（记吃的、练的）：{"reply":"一句短话说你做了什么，15字以内，不写热量数（下面会单独列出来）；估得比较粗的，30字以内说按什么估的",',
         ' "add":{"workouts":[{"exerciseName":"杠铃卧推","muscleGroup":"胸部","weightKg":80,"sets":4,"reps":8,"burnedCalories":110}],',
@@ -212,7 +218,7 @@
         '   练什么、怎么练、动作怎么做、练哪儿、减脂增肌、饿不饿、睡眠恢复、身体酸痛，都算吃和练的事，要正经回答：练什么就给动作、重量、组数次数，小本本里是新手或者问怎么做的，每个动作带一句要点。只有天气、新闻、写作业这种完全无关的，answer 才写一句「这个我帮不上，我只管吃和练」。',
         '   answer 是某一天的具体安排（明天的食谱、今晚吃什么、明天练什么、我想练腿怎么练）时，同时写 plan：{"dayOffset":1,"meals":[和 add.meals 一样的格式],"workouts":[和 add.workouts 一样的格式，每个动作再加 "tip":"一句要点，16字以内"]}，dayOffset 相对正在看的日期（明天 1，今天 0，没说哪天就是今天），内容和 answer 一致；只是回答问题（还差多少蛋白、能不能吃）就不写 plan。',
         '   要排好几天的训练（「这周怎么练」「一周练三次帮我排一下」「给我一个新手计划」）：plan 写成 {"days":[{"dayOffset":1,"workouts":[…]},{"dayOffset":3,"workouts":[…]}]}，从明天开始排一周、练的日子之间隔开，每天 4～6 个动作，不排吃的；重量按最近成绩往上加一点，没练过的按新手能做的估。answer 每天一行，开头写那天的星期（按下面的日期对照，「周五 腿：深蹲 40kg 4×10、腿举…」）。',
-        '   下面有「刚才给的计划」，用户说要改（「不要米饭换红薯」「蛋白再多点」「晚上少吃点」），就按要求改好，重新给完整的 answer 和 plan，不要记录。',
+        '   下面有「刚才给的计划」，用户说要改（「不要米饭换红薯」「蛋白再多点」「晚上少吃点」「深蹲换成腿举」），就按要求改好，重新写完整的 answer 和 plan（还是那天的，dayOffset 按日期对照算；没让改的照原样写上），不要记录，不能只回一句「改好了」。',
         '   下面有「这天的计划」，用户说照着吃了 / 练了（「早餐照计划吃了」「计划里的都练完了」）：把那几项 add 进来（份量照计划），donePlans 写它们的编号。',
         '11. 用户说了关于自己、以后一直有用的事（名字、在增肌还是减脂、健身新手、在练什么、不吃 / 过敏的东西、伤病、作息、口味）：写进 memo，每条一句话、12 字以内（「叫阿程」「健身新手」「不吃辣」「膝盖有旧伤」），下面「小本本」里已经有的不要重复；说要忘掉或者变了的（「现在能吃辣了」「膝盖好了」），一定把小本本里原来那句原样写进 forget。吃了什么、练了什么、今天的事不算。回答、估算、出计划时照顾到小本本里的事（不吃辣就别推荐辣的，膝盖有伤就别排深蹲跳）。',
         '输出前核对一遍：原话里说到的每样吃的、喝的、补剂（包括听错字的，比如"茶叶大"）都记上了，没多记、没漏记。'
@@ -233,6 +239,8 @@
       const plans = ctx.plans || [];
       if (plans.length) lines.push('这天的计划（还没做）：\n' + plans.map(p => `${p.ref} ${p.text}`).join('\n'));
       if (ctx.lastPlan) lines.push('刚才给的计划（用户可能要改）：\n' + ctx.lastPlan);
+      // 点了「改一改」：明说这句是在改计划（v5.5，以前大模型常只回一句「计划改好了」，什么都没改）
+      if (ctx.lastPlan && (ctx.editPlan || ctx._editAgain)) lines.push(`注意：这句是在改上面「刚才给的计划」。照用户说的改好，写出改完的完整 answer 和 plan，不要记录${ctx._editAgain ? '。上一次你只说了改好了、没给计划，这次一定要把改好的 plan 写出来' : ''}。`);
       if (ctx._again) lines.push('注意：这句是在问吃或练的事，要正经回答，不能说帮不上。');
       // 问「这周怎么练」时大模型自己算星期几会算错：把接下来一周是周几直接给它
       if (ctx.ask && /^\d{4}-\d{2}-\d{2}$/.test(ctx.date || '')) {
@@ -266,8 +274,18 @@
       if (a === -1 || b <= a) throw new Error('NO_JSON');
       const body = s.slice(a, b + 1);
       try { return JSON.parse(body); } catch (e) {
-        // 小毛病本机修好，不用整份重发（重发要再等十几秒到一分钟）
-        try { return JSON.parse(repairJson(body)); } catch (e2) { throw new Error('BAD_JSON ' + e.message); }
+        // 小毛病本机修好，不用整份重发（重发要再等十几秒到一分钟，一份计划要一分钟）
+        let fixed = repairJson(body);
+        for (let i = 0; i < 3; i++) {
+          try { return JSON.parse(fixed); } catch (e2) {
+            // 多了一个右括号，对象提前收尾了，后面还跟着「,"dayOffset":0}」：把那个括号去掉接着读
+            const at = Number((/position (\d+)/.exec(e2.message) || [])[1]);
+            const head = at > 0 ? fixed.slice(0, at).replace(/\s+$/, '') : '';
+            if (!head.endsWith('}') || !/^\s*,\s*"/.test(fixed.slice(at))) break;
+            fixed = head.slice(0, -1) + fixed.slice(at);
+          }
+        }
+        throw new Error('BAD_JSON ' + e.message);
       }
     },
 
@@ -482,6 +500,9 @@
         if (to) moved.forEach(ref => { if (!out.updates.some(u => u.ref === ref)) out.updates.push({ ref, set: { date: to } }); });
         else out.reply = '没听清挪到哪天，再说一次，比如「挪到昨天」';
       }
+      // 提示条第一行别带热量数：大模型写的是它自己估的，和下面按成分表校准后的对不上（实测「约750千卡」，校准后 696）。
+      // 记了吃的、改了吃的时，带热量 / 蛋白数的那半句去掉，热量看下面那行
+      if (out.meals.length || out.updates.length) out.reply = dropNumberClauses(out.reply);
       const n = out.meals.length;
       out.meals = separateSupps(splitByTime(out.meals, ctx.said));
       // 拆开了：大模型那句「已记早餐…」就不对了
@@ -615,11 +636,16 @@
       if (r.answer && /帮不上/.test(r.answer) && ABOUT_FIT.test(text) && !(ctx && ctx._again)) {
         r = await this.viaLlm(text, Object.assign({}, ctx, { _again: true }), onDelta);
       }
+      // 在改刚给的计划，大模型却只回了一句「计划改好了」、没给计划（实测 main 的提示词 3/3 这样）：说清楚再问一次
+      const nothing = !r.plan && !r.meals.length && !r.workouts.length && !r.updates.length && !r.deletes.length && !r.bodyWeight;
+      if (ctx && ctx.lastPlan && !ctx._editAgain && nothing && (ctx.editPlan || (!r.answer && TF.looksLikePlanEdit && TF.looksLikePlanEdit(text)))) {
+        r = await this.viaLlm(text, Object.assign({}, ctx, { _editAgain: true }), onDelta);
+      }
       return Object.assign(r, { source: 'llm' });
     }
   };
 
-  Object.assign(TF, { partialAnswer, Parser, mergeItems, repairJson });
+  Object.assign(TF, { partialAnswer, Parser, mergeItems, repairJson, dropNumberClauses });
 
   if (typeof module !== 'undefined' && module.exports) module.exports = TF;
 })(typeof window !== 'undefined' ? window : globalThis);
