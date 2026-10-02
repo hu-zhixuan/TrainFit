@@ -25,6 +25,7 @@ import java.util.Locale
  *  - 「整理完成」：App 在后台时，语音记录整理好了发一条
  *  - 定时提醒：午餐 / 晚餐（这一餐已经记了就不提醒）、晚间小结（今天还能吃多少、蛋白还差多少）
  * 网页通过 NativeBridge 把提醒设置和「今天的状态」存进 SharedPreferences，闹钟响时在这里判断要不要提醒。
+ * v5.6：「今天的状态」里还带着小人替你写好的话（say / sayNext / away），标题是小人的名字，有就用它的。
  */
 object Reminders {
     private const val PREFS = "trainfit_reminders"
@@ -137,6 +138,26 @@ object Reminders {
 
     fun today(): String = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
 
+    /**
+     * 小人替你写好的那句（网页每次刷新都算好放进 day_state）：今天打开过用 say，昨天打开过用 sayNext（写的是「明天」的话），
+     * 好几天没打开、晚上那条用 away。没有（关了小人、旧版本存的）就返回 null，用下面原来的话。
+     */
+    private fun buddyLine(state: JSONObject, id: String): Pair<String, String>? {
+        val today = today()
+        val date = state.optString("date")
+        val next = state.optJSONObject("sayNext")
+        val src = when {
+            date == today -> state.optJSONObject("say")
+            next != null && next.optString("date") == today -> next
+            else -> null
+        }
+        val arr = src?.optJSONArray(id) ?: (if (date != today && src == null && id == "night") state.optJSONArray("away") else null)
+            ?: return null
+        val title = arr.optString(0)
+        val body = arr.optString(1)
+        return if (title.isBlank() || body.isBlank()) null else Pair(title, body)
+    }
+
     /** 闹钟响了：看今天的状态决定要不要提醒 */
     fun onAlarm(ctx: Context, id: String) {
         val state = try { JSONObject(prefs(ctx).getString(KEY_DAY, "{}")) } catch (_: Exception) { JSONObject() }
@@ -147,14 +168,25 @@ object Reminders {
             if (isToday && meals != null) for (i in 0 until meals.length()) if (meals.optString(i) == name) found = true
             found
         }
+        val buddy = buddyLine(state, id)
         when (id) {
-            "weigh" -> if (!(isToday && state.optBoolean("weighed", false)))
-                show(ctx, CH_REMIND, 104, "早，称个体重", "空腹称一下，打开练食AI点一下就记上，趋势图就有了")
-            "lunch" -> if (!hasMeal("午餐")) show(ctx, CH_REMIND, 101, "午饭吃了吗？", "打开练食AI，按住说一句就记好了")
-            "dinner" -> if (!hasMeal("晚餐")) show(ctx, CH_REMIND, 102, "晚饭记了吗？", "按住说一句，比如「晚上一碗牛肉面加个卤蛋」")
+            "weigh" -> if (!(isToday && state.optBoolean("weighed", false))) {
+                val (t, b) = buddy ?: Pair("早，称个体重", "空腹称一下，打开练食AI点一下就记上，趋势图就有了")
+                show(ctx, CH_REMIND, 104, t, b)
+            }
+            "lunch" -> if (!hasMeal("午餐")) {
+                val (t, b) = buddy ?: Pair("午饭吃了吗？", "打开练食AI，按住说一句就记好了")
+                show(ctx, CH_REMIND, 101, t, b)
+            }
+            "dinner" -> if (!hasMeal("晚餐")) {
+                val (t, b) = buddy ?: Pair("晚饭记了吗？", "按住说一句，比如「晚上一碗牛肉面加个卤蛋」")
+                show(ctx, CH_REMIND, 102, t, b)
+            }
             "night" -> {
                 val count = if (isToday) state.optInt("count", 0) else 0
-                if (count == 0) {
+                if (buddy != null) {
+                    show(ctx, CH_REMIND, 103, buddy.first, buddy.second)
+                } else if (count == 0) {
                     show(ctx, CH_REMIND, 103, "今天还没有记录", "睡前花 10 秒补一下今天吃了什么、练了什么？")
                 } else {
                     val remaining = state.optInt("remaining", 0)

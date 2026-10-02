@@ -52,8 +52,8 @@ test('像素图：尺寸固定、描了边、换衣服换发色都能拼', () =>
   assert.ok(flat.includes('O') && flat.includes('A') && flat.includes('K'), '描边、皇冠、墨镜');
   assert.strictEqual(img.colors.H, Buddy.HAIR.brown.H);
   assert.strictEqual(img.colors.J, Buddy.OUTFITS.navy.J);
-  // 最底下一行是胳膊（直接搭在输入栏的边上，下面不留空）
-  assert.ok(img.px[Buddy.H - 1].filter(c => c === 'w').length >= 20);
+  // 最底下一行是胳膊（直接搭在输入栏的边上，下面不留空）：棒球服是白袖子
+  assert.ok(img.px[Buddy.H - 1].filter(c => c === 'v').length >= 20);
   // 棒球帽把头顶翘起的头发压住
   const cap = Buddy.compose({ mood: 'ok', gear: ['cap'] }).px.map(r => r.join(''));
   assert.ok(!cap[3].includes('H'));
@@ -67,10 +67,14 @@ test('像素图：尺寸固定、描了边、换衣服换发色都能拼', () =>
 });
 
 test('设置里没选过就是默认样子，选过的保留', () => {
-  assert.deepStrictEqual(Buddy.look(undefined), { show: true, hair: 'black', outfit: 'varsity', char: 'boy' });
-  assert.deepStrictEqual(Buddy.look({ hair: 'blond', show: false }), { show: false, hair: 'blond', outfit: 'varsity', char: 'boy' });
+  const def = { show: true, hair: 'black', outfit: 'varsity', skin: 'natural', build: 'auto', char: 'boy', style: 'messy' };
+  assert.deepStrictEqual(Buddy.look(undefined), def);
+  assert.deepStrictEqual(Buddy.look({ hair: 'blond', show: false }), Object.assign({}, def, { hair: 'blond', show: false }));
   // 以前存过、现在没有的样子回到默认
-  assert.deepStrictEqual(Buddy.look({ outfit: 'jersey' }), { show: true, hair: 'black', outfit: 'varsity', char: 'boy' });
+  assert.deepStrictEqual(Buddy.look({ outfit: 'jersey', skin: 'green', build: 'huge' }), def);
+  // 换了角色，发型跟着换成那个角色默认的（男生的中分不给女生）
+  assert.strictEqual(Buddy.look({ char: 'girl', style: 'part' }).style, 'long');
+  assert.strictEqual(Buddy.look({ char: 'girl', style: 'pony' }).style, 'pony');
   // 没选过角色：跟着性别；选过就用选的
   assert.strictEqual(Buddy.look(undefined, 'female').char, 'girl');
   assert.strictEqual(Buddy.look({ char: 'boy' }, 'female').char, 'boy');
@@ -95,7 +99,7 @@ test('站起来的几个姿势：高度一样、鞋在最底下一行，走路�
     const stand = Buddy.compose({ char, pose: 'stand', mood: 'ok', gear: [] });
     assert.strictEqual(stand.h, Buddy.heightOf('stand'));
     assert.ok(stand.h > Buddy.heightOf('lie'));
-    assert.ok(stand.px[stand.h - 1].filter(c => c === 'W').length >= 6, char + ' 鞋');
+    assert.ok(stand.px[stand.h - 1].filter(c => c === 'F').length >= 6, char + ' 鞋');
     const w0 = Buddy.compose({ char, pose: 'walk', frame: 0 }).px.map(r => r.join('')).join('\n');
     const w1 = Buddy.compose({ char, pose: 'walk', frame: 1 }).px.map(r => r.join('')).join('\n');
     assert.notStrictEqual(w0, w1, char + ' 走路两帧');
@@ -111,4 +115,59 @@ test('没说重量时的几个选项：估的那个，轻一档、重一档，�
   assert.deepStrictEqual(Buddy.liftOpts(40), [25, 40, 55]);
   assert.deepStrictEqual(Buddy.liftOpts(10), [7.5, 10, 12.5]);
   assert.deepStrictEqual(Buddy.liftOpts(2.5), [2.5, 5]);
+});
+
+test('发型、衣服、身材、肤色：每种组合都拼得出来，颜色都有', () => {
+  for (const style of Object.keys(Buddy.STYLES)) for (const outfit of Object.keys(Buddy.OUTFITS)) for (const build of Buddy.BUILD_ORDER) for (const pose of Buddy.POSES) {
+    const char = Buddy.STYLES[style].char;
+    const img = Buddy.compose({ char, style, outfit, build, pose, mood: 'ok', gear: ['band'], skin: 'tan', hair: 'silver' });
+    assert.strictEqual(img.h, Buddy.heightOf(pose));
+    assert.ok(img.px.every(r => r.length === Buddy.W));
+    for (const c of new Set(img.px.flat().join('').replace(/\./g, ''))) assert.ok(img.colors[c], `${style} ${outfit} ${pose}: ${c}`);
+  }
+});
+
+test('身材：光膀子时看得出普通 / 薄肌 / 腹肌，穿棒球服看不出；腹肌男胳膊粗一圈', () => {
+  const body = (o) => Buddy.compose(Object.assign({ char: 'boy', pose: 'stand', mood: 'ok' }, o)).px.slice(17, 23).map(r => r.join('')).join('\n');
+  const n = body({ outfit: 'bare', build: 'normal' }), lean = body({ outfit: 'bare', build: 'lean' }), rip = body({ outfit: 'bare', build: 'ripped' });
+  const shade = (t) => (t.match(/s/g) || []).length;
+  assert.ok(shade(n) < shade(lean) && shade(lean) < shade(rip), [shade(n), shade(lean), shade(rip)].join());
+  assert.strictEqual(body({ outfit: 'varsity', build: 'lean' }), body({ outfit: 'varsity', build: 'normal' }));
+  const wide = (o) => Math.max(...Buddy.compose(Object.assign({ char: 'boy', pose: 'stand', mood: 'ok' }, o)).px.slice(16, 20).map(r => r.join('').replace(/^\.*O|O\.*$/g, '').length));
+  assert.ok(wide({ outfit: 'tank', build: 'ripped' }) > wide({ outfit: 'tank', build: 'normal' }));
+  // 敞开的外套：中间露出肚子，两边还是外套
+  const open = Buddy.compose({ char: 'boy', pose: 'stand', outfit: 'open', build: 'ripped' }).px[19].join('');
+  assert.ok(open.includes('J') && open.includes('S'), open);
+  // 女生光着肚子是运动内衣：胸口两行是衣服
+  const girl = Buddy.compose({ char: 'girl', style: 'pony', pose: 'stand', outfit: 'bare', build: 'lean' }).px;
+  assert.ok(girl[17].join('').includes('JJJ') && !girl[19].join('').includes('J'));
+});
+
+test('「跟着我练」：最近 4 周练 4 天薄肌，10 天腹肌', () => {
+  assert.strictEqual(Buddy.buildFor(0), 'normal');
+  assert.strictEqual(Buddy.buildFor(4), 'lean');
+  assert.strictEqual(Buddy.buildFor(9), 'lean');
+  assert.strictEqual(Buddy.buildFor(10), 'ripped');
+});
+
+test('秀肌肉：两只拳头举在脸两边', () => {
+  const f = Buddy.compose({ char: 'boy', pose: 'flex', mood: 'ok' }).px.map(r => r.join(''));
+  const fists = f[12].replace(/[^S]/g, '').length;
+  assert.ok(fists >= 6, f[12]);
+  assert.ok(Buddy.svg({ char: 'girl', pose: 'flex', mood: 'love', gear: [] }).includes('bd-fx-heart'));
+});
+
+test('亲密度：五级，离下一级还差多少，满级不再长', () => {
+  const Bond = require('../web/js/app/bond.js');
+  assert.deepStrictEqual([0, 59, 60, 179, 180, 450, 999, 1000, 5000].map(x => Bond.info(x).lv), [1, 1, 2, 2, 3, 4, 4, 5, 5]);
+  const b = Bond.info(200);
+  assert.strictEqual(b.name, '健身搭子');
+  assert.deepStrictEqual(b.next, { lv: 4, name: '老搭子', need: 250 });
+  assert.ok(b.pct > 0 && b.pct < 1);
+  assert.strictEqual(Bond.info(1200).next, null);
+  assert.strictEqual(Bond.info(1200).pct, 1);
+  // 每一级都有解锁的衣服（第 2～5 级），说的话也都有
+  for (let lv = 2; lv <= 5; lv++) assert.ok(Object.values(Buddy.OUTFITS).some(o => o.lv === lv), 'Lv' + lv);
+  assert.strictEqual(Bond.PAT_LINES.length, Bond.LEVELS.length);
+  assert.strictEqual(Bond.LEVEL_UP.length, Bond.LEVELS.length);
 });
