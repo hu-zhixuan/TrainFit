@@ -157,10 +157,49 @@
   function looksLikeQuestion(text) {
     const t = String(text || '');
     if (/[？?]\s*$/.test(t)) return true;
-    return /给我(定|制定|安排|推荐|出|做|列|想)|帮我(定|制定|安排|推荐|想|规划|看看)|(制定|安排|规划|推荐)(一下)?(明天|后天|今晚|晚上|下周|一周|一天)|(吃|练)点?(什么|啥)|该(吃|练)|(还)?(差|剩)多少|还能吃|能不能|可不可以|要不要|怎么(吃|练|办|样)|有什么(建议|推荐)|食谱|菜谱|训练计划|健身计划|吗[。！!]?\s*$/.test(t);
+    return /给我(定|制定|安排|推荐|出|做|列|想)|帮我(定|制定|安排|推荐|想|规划|看看)|(制定|安排|规划|推荐)(一下)?(明天|后天|今晚|晚上|下周|一周|一天)|(吃|练)点?(什么|啥)|该(吃|练)|(还)?(差|剩)多少|还能吃|能不能|可不可以|要不要|怎么(吃|喝|练|做|办|样)|有什么(建议|推荐)|食谱|菜谱|训练计划|健身计划|上(周|个月|一周)|这(周|个月)|几(次|天|顿|公斤|斤)|多少(次|天|斤|公斤|克|热量|卡)|哪(天|顿|个动作)|最(好|重|多|少)(的|是)|吗[。！!]?\s*$/.test(t);
   }
 
-  Object.assign(TF, { MUSCLES, MEAL_TYPES, num, cleanText, round1, mealTypeByHour, normMealType, mealTimes, mealSegments, NUTRIENTS, cleanNutrients, nutrientsText, toKg, quickWeight, findWeight, guessMuscle, looksLikeQuestion });
+  /**
+   * 手机自己就能算的问题（「还差多少蛋白」「还能吃多少」「卧推最好多少」「这周练了几次」）：不问大模型，马上答。
+   * 只认整句都是这个意思的（去掉语气词以后从头到尾对得上），又记又问、问建议的都交给大模型。
+   * @param names 记过的动作名（认「卧推最好多少」里的卧推）
+   * @returns {{kind, name?, span?}} 或 null
+   */
+  function quickIntent(text, names) {
+    let t = String(text || '').toLowerCase()
+      .replace(/[\s，。,.!！？?、~～…]+/g, '')
+      .replace(/我操|卧槽|嗯+|呃+|啊|呀|吧|呢|哈|那个|就是|请问|小人|告诉我|帮我(看看|查查|算算|看一下|查一下|算一下)?|你(说)?|现在|目前|一下/g, '');
+    // 动作名：「卧推」能对上「杠铃卧推」
+    const list = [];
+    (names || []).forEach(n => {
+      list.push([n, n]);
+      const short = n.replace(/^(杠铃|哑铃|器械|史密斯|坐姿|站姿|绳索)/, '');
+      if (short !== n && short.length >= 2) list.push([short, n]);
+    });
+    list.sort((a, b) => b[0].length - a[0].length);
+    const hit = list.find(([k]) => t.includes(k.toLowerCase()));
+    if (hit) t = t.replace(hit[0].toLowerCase(), '§');
+    const R = (re) => re.test(t);
+    if (hit && (R(/^我?的?§的?(最好|最重|最大|记录|pr|上次|上一次)(的?成绩|的?重量|是|练了|做了)?(多少|几公斤|几kg|多重)?了?$/) ||
+        R(/^我?(上次|上一次)§(练了|做了|是|用了)?(多少|几公斤|多重)(公斤|kg)?$/))) return { kind: 'lift', name: hit[1] };
+    if (hit && R(/^§(下次|下一次)(该|要|应该)?(练|做|用)?(多少|多重|几公斤)(公斤|kg)?$/)) return { kind: 'lift', name: hit[1] };
+    if (hit) return null;
+    if (R(/^(今天)?我?的?蛋白质?(还)?(差|剩|缺|吃了|够了没|够了吗|够不够|够没够|多少了|有多少)(多少|几克)?了?(吗)?$/) ||
+        R(/^(今天)?(还)?(差|缺|剩)(多少|几克)蛋白质?了?$/)) return { kind: 'protein' };
+    if (R(/^(今天)?(我)?(还)?(能|可以)吃多少(热量|卡|大卡|千卡|kcal)?了?$/) || R(/^(今天)?(还)?剩(多少|几)(热量|卡|大卡|千卡|kcal)?了?$/) ||
+        R(/^(今天)?我?(已经)?吃了多少(热量|卡|大卡|千卡|kcal)?了?$/) || R(/^(今天)?(我)?(吃|热量)超了?(没|吗|没有)$/) ||
+        R(/^(今天)?热量(还)?(剩|差)?多少了?$/)) return { kind: 'kcal' };
+    if (R(/^(今天)?的?(热量)?赤字(是|有)?(多少|够不够|够了吗|够了没)了?$/)) return { kind: 'deficit' };
+    if (R(/^我?的?(最近|最新)?体重(是|有)?多少了?$/) || R(/^体重(变化|怎么样|有变化吗)$/)) return { kind: 'weight', span: 7 };
+    const sp = /这个月|本月|一个月|这一个月/.test(t) ? 30 : 7;
+    if (R(/^(我)?(这周|本周|这个星期|这礼拜|最近一周|这几天|最近|这个月|本月|一个月|这一个月)?(瘦|胖|掉|涨|轻|重)了(多少|几)(斤|公斤|kg)?了?$/)) return { kind: 'weight', span: sp };
+    if (R(/^我?(已经)?连续(记|打卡|记录)了?(几|多少)天了?$/) || R(/^我?(一共)?(记|记录)了(几|多少)天了?$/)) return { kind: 'streak' };
+    if (R(/^我?(这周|本周|这个星期|这礼拜|最近一周|这个月|本月)练了(几|多少)(次|天)了?$/)) return { kind: 'trains', span: sp };
+    return null;
+  }
+
+  Object.assign(TF, { MUSCLES, MEAL_TYPES, num, cleanText, round1, mealTypeByHour, normMealType, mealTimes, mealSegments, NUTRIENTS, cleanNutrients, nutrientsText, toKg, quickWeight, findWeight, guessMuscle, looksLikeQuestion, quickIntent });
 
   if (typeof module !== 'undefined' && module.exports) module.exports = TF;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -180,7 +180,7 @@
         '7. 用户报自己的体重（「体重62.5」「今天称了124斤」「早上61公斤」）：bodyWeight 填公斤数（斤÷2；没说单位就参考下面的最近体重判断是斤还是公斤）。没说体重就填 null。训练用的重量不是体重。',
         '8. 用户让你记住某样东西的热量（「记住，糯米鸡一个350大卡」），或念了包装上的营养数：在 remember 里写一份的量 {"name","amount","grams","calories","proteinG","carbsG","fatG"}，补剂再加 "kind":"supplement" 和 nutrients。只是让你记住、没说吃了，就不要加进 meals。',
         '9. 听不懂：add 为空，reply 说明原因。',
-        '10. 用户在问问题、要建议（「明天吃什么」「给我定个明天的食谱」「今天还差多少蛋白」「练完吃啥好」「明天练什么」「我想练腿要怎么练」「深蹲怎么做」「一周练三次帮我排一下」「晚上还能吃点啥」「能不能吃火锅」），不是在报自己吃了练了什么：不要记（add 为空；同一句里也说了已经吃过、练过的，那部分照常记），在 answer 里回答。「我操」「卧槽」「妈的」这类是口头禅，不影响意思。',
+        '10. 用户在问问题、要建议（「明天吃什么」「给我定个明天的食谱」「今天还差多少蛋白」「练完吃啥好」「明天练什么」「我想练腿要怎么练」「深蹲怎么做」「一周练三次帮我排一下」「晚上还能吃点啥」「能不能吃火锅」），不是在报自己吃了练了什么：不要记（add 为空；同一句里也说了已经吃过、练过的，那部分照常记），在 answer 里回答。「我操」「卧槽」「妈的」这类是口头禅，不影响意思。问到以前的事（「上周练了几次」「这个月瘦了多少」「哪天吃得最多」「最近蛋白够不够」）就看下面「最近两周」，说到具体日期和数字。',
         '   回答要用下面「今天的情况」「最近成绩」「记住的食物」，按这个人的目标和还剩的热量、还差的蛋白质来定，具体到吃什么、多少，大概多少千卡和蛋白质（训练就写动作、重量、组数）。用户说了要求（「训练强度大，碳水多点」「不想吃米饭」）就照着调。',
         '   写成几行短句，每行一件事（「早餐：两个鸡蛋＋一杯牛奶＋一个馒头，约450千卡、蛋白25g」），最多 8 行，不要 markdown 符号、不要客套话。reply 写一句「给了你明天的食谱」这样的话（又记又问就写「记了…，晚上吃啥看小人」），不要出现 answer 这个词。',
         '   练什么、怎么练、动作怎么做、练哪儿、减脂增肌、饿不饿、睡眠恢复、身体酸痛，都算吃和练的事，要正经回答：练什么就给动作、重量、组数次数，小本本里是新手或者问怎么做的，每个动作带一句要点。只有天气、新闻、写作业这种完全无关的，answer 才写一句「这个我帮不上，我只管吃和练」。',
@@ -197,6 +197,8 @@
       lines.push(records.length ? '这天已有记录：\n' + records.map(r => `${r.ref} ${r.text}`).join('\n') : '这天还没有记录。');
       if (recent.length) lines.push('最近成绩：' + recent.join('；'));
       if (ctx.lastWeight) lines.push(`最近体重：${ctx.lastWeight}kg`);
+      const past = (ctx.past || []).slice(-14);
+      if (past.length) lines.push('最近两周（日期 吃了多少千卡 蛋白g 练了什么 体重kg）：\n' + past.join('\n'));
       const memo = (ctx.memo || []).slice(0, 12);
       if (memo.length) lines.push('小本本（用户说过的自己的事）：' + memo.join('；'));
       const plans = ctx.plans || [];
@@ -428,6 +430,18 @@
           items
         });
       });
+      // 兜底：说的是「挪到前一天」，大模型却只删了没加（实测 main 的提示词 8 次里 3 次这样，记录就没了）——不删，改成挪
+      const said = String(ctx.said || '');
+      if (out.deletes.length && !out.meals.length && !out.workouts.length && /挪|移到|放到|改到|弄到|搬到|记错(日子|天)/.test(said)) {
+        const day = (base, n) => { const d = new Date(base); d.setDate(d.getDate() + n); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+        const viewed = /^\d{4}-\d{2}-\d{2}$/.test(ctx.date || '') ? new Date(ctx.date + 'T00:00:00') : now;
+        const to = /前一天|上一天/.test(said) ? day(viewed, -1) : /后一天|下一天/.test(said) ? day(viewed, 1)
+          : /前天/.test(said) ? day(now, -2) : /昨天|昨晚/.test(said) ? day(now, -1) : /后天/.test(said) ? day(now, 2) : /明天/.test(said) ? day(now, 1) : '';
+        const moved = out.deletes;
+        out.deletes = [];
+        if (to) moved.forEach(ref => { if (!out.updates.some(u => u.ref === ref)) out.updates.push({ ref, set: { date: to } }); });
+        else out.reply = '没听清挪到哪天，再说一次，比如「挪到昨天」';
+      }
       const n = out.meals.length;
       out.meals = separateSupps(splitByTime(out.meals, ctx.said));
       // 拆开了：大模型那句「已记早餐…」就不对了
