@@ -34,6 +34,11 @@
         root.app.showBuddyAnswer(text, quick.text, { next: quick.next });
         return;
       }
+      // 「老样子」：这个钟点最常吃的那一餐，和空白页上那个按钮一样，马上记
+      if (/^(还是|跟平时一样|和平时一样|跟以前一样)?(老样子|照旧)[吧啊呀了。！!]*$/.test(text) && root.app.quickSuggestions) {
+        const usual = root.app.quickSuggestions().find(x => x.kind === 'meal' && x.usual && !x.done);
+        if (usual) { root.app.quickRepeatKey(usual.key); return; }
+      }
       // 听着像提问：不出「正在整理」卡片，小人马上在气泡里说「我想想…」（Atria 要 10～25 秒才出第一个字）
       const ask = !!((opts && opts.ask) || (looksLikeQuestion && looksLikeQuestion(text)));
       const p = root.app.addPending(text, ask);
@@ -150,8 +155,10 @@
         ctx = this.buildContext(p);
         // 只是报体重：不用等大模型
         const kg = quickWeight(p.text, ctx.lastWeight);
+        // 说的全是以前吃过的、练过的：按你以前的数直接记，不等大模型（秒记）
+        const fast = !kg && !p.ask && TF.fastLog ? TF.fastLog(p.text, { now: ctx.now, today: getTodayDateString(), myFoods: app.myFoods, diet: app.diet, workouts: app.workouts, simple: app.isSimple() }) : null;
         result = kg ? { dayOffset: 0, workouts: [], meals: [], updates: [], deletes: [], bodyWeight: kg, reply: '', source: 'fast' }
-          : await Parser.parse(p.text, ctx, onDelta);
+          : fast || await Parser.parse(p.text, ctx, onDelta);
       } catch (e) {
         console.warn('[QuickLog] 大模型没整理出来：', e && e.message);
         clearTimeout(deadline);

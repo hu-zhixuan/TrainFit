@@ -46,6 +46,53 @@ Object.assign(FitnessApp.prototype, {
     $('ob-goal').addEventListener('click', (e) => { const b = e.target.closest('.seg-btn'); if (b) { goal = b.dataset.value; setSeg('ob-goal', goal); } });
     $('ob-back').addEventListener('click', () => { $('ob-step-2').classList.add('hidden'); $('ob-step-1').classList.remove('hidden'); });
 
+    // 一句话建档：「男，175，70 公斤，28 岁，想减脂」→ 下面的表自动填好、闪一下，还能自己改
+    let introName = '';
+    const fill = (text) => {
+      const r = TF.parseIntro ? TF.parseIntro(text) : {};
+      const got = [];
+      const put = (id, v, label) => { const el = $(id); el.value = v; el.classList.remove('ob-filled'); void el.offsetWidth; el.classList.add('ob-filled'); got.push(label); };
+      if (r.gender) { gender = r.gender; setSeg('ob-gender', gender); got.push(gender === 'female' ? '女' : '男'); }
+      if (r.goal && pick === 'fit') { goal = r.goal; setSeg('ob-goal', goal); got.push({ fat_loss: '减脂', maintain: '维持', muscle_gain: '增肌' }[goal]); }
+      if (r.heightCm) put('ob-height', r.heightCm, `${r.heightCm}cm`);
+      if (r.weightKg) put('ob-weight', r.weightKg, `${r.weightKg}kg`);
+      if (r.age) put('ob-age', r.age, `${r.age}岁`);
+      if (r.name) { introName = r.name; got.unshift(`叫${r.name}`); }
+      $('ob-say-note').textContent = got.length ? `填好了：${got.join('、')}。看一眼对不对，不对直接改。` : '没听出身高体重，再说一次，或者直接填下面。';
+      $('ob-say-note').classList.toggle('ok', got.length > 0);
+      window.Haptics && window.Haptics.fire(got.length ? 'success' : 'error');
+    };
+    $('ob-say').addEventListener('change', () => { if ($('ob-say').value.trim()) fill($('ob-say').value); });
+    $('ob-say').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); $('ob-say').blur(); } });
+    const mic = $('ob-mic');
+    mic.innerHTML = ICONS.mic;
+    const QL = () => window.QuickLog;
+    if (!QL() || !QL().canTalk()) mic.classList.add('hidden');
+    let downAt = 0;
+    mic.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      const q = QL();
+      if (!q) return;
+      if (q.state === 'recording') { q.stopTalk(true); return; } // 点按模式：再点一下结束
+      if (q.state !== 'idle') return;
+      downAt = Date.now();
+      q.capture = (text, err) => {
+        mic.classList.remove('on');
+        if (text) { $('ob-say').value = text; fill(text); } else { $('ob-say-note').textContent = err || '没听清，再说一次'; $('ob-say-note').classList.remove('ok'); }
+      };
+      mic.classList.add('on');
+      q.startTalk();
+    });
+    mic.addEventListener('contextmenu', (e) => e.preventDefault());
+    const up = () => {
+      const q = QL();
+      if (!q || q.state !== 'recording' || !mic.classList.contains('on')) return;
+      if (Date.now() - downAt < 350) { $('ob-say-note').textContent = '在听，说完再点一下麦克风'; return; } // 点了一下：说完再点
+      q.stopTalk(true);
+    };
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
+
     const finish = (useInputs) => {
       const p = this.profile;
       p.mode = pick === 'fit' ? 'fit' : 'eat';
@@ -64,6 +111,7 @@ Object.assign(FitnessApp.prototype, {
           this.weights.push({ date: getTodayDateString(), kg: round1(w), ts: Date.now() });
         }
         if (h || w || a) p.customized = true;
+        if (introName && this.updateMemo) this.updateMemo(['叫' + introName], []); // 说了名字：小人以后叫你
       }
       this.needsOnboarding = false;
       this.recalculateMetabolism();

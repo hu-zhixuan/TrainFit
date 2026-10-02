@@ -955,6 +955,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     let day = '';
     try { day = localStorage.getItem('tf_tips_day') || ''; } catch (e) {}
     if (seen.length >= 2 && day === today) return false;
+    if (this.chatBudget && !this.chatBudget(false)) return false; // 今天说得够多了
     const n = this.diet.length + this.workouts.length;
     const simple = this.isSimple();
     let usedFix = false;
@@ -973,6 +974,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     if (!pick) return false;
     seen.push(pick[0]);
     try { localStorage.setItem('tf_tips', JSON.stringify(seen)); localStorage.setItem('tf_tips_day', today); } catch (e) {}
+    if (this.chatBudget) this.chatBudget(true);
     const name = this.userName();
     this.sayTip((name ? name + '，' : '') + pick[2]);
     return true;
@@ -1025,6 +1027,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     if (said.date !== today) said = { date: today, kinds: [] };
     const fire = (kind, text, next) => {
       if (said.kinds.includes(kind)) return false;
+      if (this.voiceBudget && !this.voiceBudget('remind', true)) return false; // 今天说得够多了
       said.kinds.push(kind);
       try { localStorage.setItem('tf_coach', JSON.stringify(said)); } catch (e) {}
       const name = this.userName();
