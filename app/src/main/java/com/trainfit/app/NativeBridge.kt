@@ -18,7 +18,9 @@ import com.trainfit.app.net.OpenAiApi
 import com.trainfit.app.net.Qianwen
 import com.trainfit.app.net.QianwenStream
 import org.json.JSONObject
+import java.net.HttpURLConnection
 import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 
 /**
@@ -306,6 +308,30 @@ class NativeBridge(
         put("hasKey", BuildConfig.LLM_API_KEY.isNotBlank())
     }.toString()
 
+    @Volatile private var lastWarm = 0L
+
+    /** 按住说话 / 点开键盘时调：先连上大模型接口，松手后整理不用再等握手。一分钟最多一次 */
+    @JavascriptInterface
+    fun warmLlm(overrideJson: String) {
+        val now = System.currentTimeMillis()
+        if (now - lastWarm < 60_000) return
+        lastWarm = now
+        io.execute {
+            val cfg = ApiConfig.resolve(overrideJson, BuildConfig.LLM_BASE_URL, BuildConfig.LLM_API_KEY, BuildConfig.LLM_MODEL)
+            if (cfg.isComplete) OpenAiApi.warm(cfg)
+        }
+    }
+
+    // 正在出字的请求：补发的那份先出了字，网页就调 llmCancel 把慢的这份掐掉（断开连接，不再等、不再花 token）
+    private val liveLlm = ConcurrentHashMap<String, HttpURLConnection>()
+    private val cancelledLlm: MutableSet<String> = ConcurrentHashMap.newKeySet()
+
+    @JavascriptInterface
+    fun llmCancel(requestId: String) {
+        cancelledLlm.add(requestId)
+        io.execute { liveLlm.remove(requestId)?.let { try { it.disconnect() } catch (_: Exception) { } } }
+    }
+
     /** 流式：边出字边回调 window.__tfLlmDelta(id, 这段字)，最后和 llmChat 一样回调 __tfLlm */
     @JavascriptInterface
     fun llmChatStream(requestId: String, bodyJson: String, overrideJson: String) {
@@ -316,9 +342,16 @@ class NativeBridge(
                 return@execute
             }
             val r = try {
-                OpenAiApi.chatStream(cfg, JSONObject(bodyJson)) { piece -> callJs("__tfLlmDelta", requestId, piece) }
+                OpenAiApi.chatStream(
+                    cfg, JSONObject(bodyJson),
+                    onConnection = { liveLlm[requestId] = it },
+                    cancelled = { requestId in cancelledLlm },
+                ) { piece -> callJs("__tfLlmDelta", requestId, piece) }
             } catch (e: Exception) {
                 ApiResult(false, "${e.javaClass.simpleName}: ${e.message.orEmpty()}")
+            } finally {
+                liveLlm.remove(requestId)
+                cancelledLlm.remove(requestId)
             }
             callJs("__tfLlm", requestId, r.ok, r.body)
         }

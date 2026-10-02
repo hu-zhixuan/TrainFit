@@ -267,6 +267,99 @@ test('大模型慢：过一会儿再发一份，谁先回来用谁；第一份�
   }
 });
 
+test('开口慢就换一份（v5.4）：7 秒没出字再发一份，谁先出字用谁，慢的那份马上掐掉', async () => {
+  const origSend = Parser.send;
+  Parser.hedgeMs = 30;
+  Parser.retryWaits = [0, 0];
+  const full = JSON.stringify({ reply: '记好了', add: { meals: [{ mealType: '午餐', foodSummary: '牛肉面1碗', items: [{ name: '牛肉面', amount: '1碗', grams: 500, whole: true, calories: 550, proteinG: 25, carbsG: 75, fatG: 15 }] }] } });
+  const ok = (c) => JSON.stringify({ choices: [{ message: { content: c } }] });
+  try {
+    let n = 0;
+    const cancelled = [];
+    Parser.send = (body, override, onDelta, handle) => {
+      const me = ++n;
+      return new Promise((resolve, reject) => {
+        const timers = [];
+        if (handle) handle.cancel = () => { cancelled.push(me); timers.forEach(clearTimeout); reject(new Error('CANCELLED')); };
+        if (me === 1) { timers.push(setTimeout(() => { onDelta('{"reply":"慢的"'); resolve(ok('{"reply":"慢的"}')); }, 400)); return; }
+        // 补发的这份很快开口，一段一段出字
+        timers.push(setTimeout(() => { onDelta(full.slice(0, 10)); onDelta(full.slice(10)); resolve(ok(full)); }, 10));
+      });
+    };
+    const t0 = Date.now();
+    const seen = [];
+    const r = await Parser.parse('中午一碗牛肉面', {}, (soFar) => seen.push(soFar));
+    assert.strictEqual(r.reply, '记好了');
+    assert.strictEqual(r.meals[0].calories, 550);
+    assert.strictEqual(n, 2);
+    assert.deepStrictEqual(cancelled, [1], '慢的那份被掐掉');
+    assert.ok(Date.now() - t0 < 300, '不用等慢的那份');
+    assert.ok(seen.every(x => !x.includes('慢的')), '慢的那份的字不往外送');
+    // 7 秒内就出字了：不补发
+    n = 0;
+    cancelled.length = 0;
+    Parser.send = (body, override, onDelta, handle) => {
+      n += 1;
+      if (handle) handle.cancel = () => cancelled.push(n);
+      return new Promise(resolve => { setTimeout(() => onDelta('{'), 5); setTimeout(() => resolve(ok(full)), 60); });
+    };
+    await Parser.parse('中午一碗牛肉面', {});
+    assert.strictEqual(n, 1);
+    assert.deepStrictEqual(cancelled, []);
+  } finally {
+    Parser.send = origSend;
+    delete Parser.hedgeMs;
+    delete Parser.retryWaits;
+  }
+});
+
+test('掐掉慢的那份：原生那边断开连接，网页这边马上算这份结束，晚到的结果不管', async () => {
+  const { Native } = TF;
+  const calls = [];
+  globalThis.TrainFitNative = {
+    llmChatStream(id) { calls.push('stream ' + id); },
+    llmCancel(id) { calls.push('cancel ' + id); }
+  };
+  try {
+    const h = {};
+    const pr = Native.chat({ messages: [] }, {}, null, () => {}, h);
+    assert.strictEqual(typeof h.cancel, 'function');
+    h.cancel();
+    await assert.rejects(pr, /CANCELLED/);
+    assert.match(calls[1], /^cancel r/);
+    assert.strictEqual(calls[0].slice(7), calls[1].slice(7), '掐的就是这一份');
+    globalThis.__tfLlm(calls[0].slice(7), true, '{}'); // 原生那边晚到的结果：不报错、不管
+    h.cancel(); // 再掐一次也没事
+  } finally {
+    delete globalThis.TrainFitNative;
+  }
+});
+
+test('大模型只写用得上的字段（v5.4）：没写 answer、next、plan、dayOffset…照样整理好', () => {
+  const sys = Parser.buildMessages('中午一碗牛肉面', {})[0].content;
+  assert.ok(!/"answer":null|"next":\[\],|"plan":null|"bodyWeight":null/.test(sys), '例子里不再列一串空字段');
+  assert.match(sys, /reply 和 dayOffset 每次都写/, 'dayOffset 不能省：省了「昨晚吃了火锅」会记到今天');
+  const r = Parser.normalize({ reply: '记好了', add: { meals: [{ mealType: '午餐', foodSummary: '牛肉面1碗', items: [{ name: '牛肉面', amount: '1碗', grams: 500, whole: true, calories: 550, proteinG: 25, carbsG: 75, fatG: 15 }] }] } }, { said: '中午一碗牛肉面' });
+  assert.strictEqual(r.meals.length, 1);
+  assert.strictEqual(r.dayOffset, 0);
+  assert.strictEqual(r.answer, '');
+  assert.deepStrictEqual([r.next, r.updates, r.deletes, r.remember, r.memo, r.forget, r.donePlans, r.workouts], [[], [], [], [], [], [], [], []]);
+  assert.strictEqual(r.plan, undefined);
+  assert.strictEqual(r.bodyWeight, undefined);
+  // 问天气：「帮不上」写进了 reply、answer 空着，照样当成回答（小人气泡里说）；记了东西的不算
+  assert.strictEqual(Parser.normalize({ reply: '这个我帮不上，我只管吃和练。' }, {}).answer, '这个我帮不上，我只管吃和练。');
+  assert.strictEqual(Parser.normalize({ reply: '帮不上', add: { meals: [] } }, {}).answer, '');
+  // 没说重量、大模型按上次填了 100kg 却没写 estimated：本机补上（新手没说重量时小人要问「用了多重？」）
+  const lift = (said) => Parser.normalize({ add: { workouts: [{ exerciseName: '杠铃深蹲', muscleGroup: '腿部', weightKg: 100, sets: 5, reps: 5 }] } }, { said }).workouts[0].estimated;
+  assert.strictEqual(lift('今天练了深蹲'), true);
+  assert.strictEqual(lift('深蹲五组'), true);
+  assert.strictEqual(lift('深蹲一百公斤五组五个'), false);
+  assert.strictEqual(lift('深蹲 100 5组5个'), false);
+  const w = Parser.normalize({ add: { workouts: [{ exerciseName: '跑步', muscleGroup: '有氧', durationMin: 30, burnedCalories: 300 }] } }, {});
+  assert.strictEqual(w.workouts[0].durationMin, 30);
+  assert.strictEqual(w.workouts[0].estimated, false);
+});
+
 test('边想边出字：拿到的是到目前为止的全部文字；卡住重试时从头算，不和上一次的半截拼起来', async () => {
   const origSend = Parser.send;
   Parser.retryWaits = [0, 0];
@@ -305,9 +398,38 @@ test('热量和蛋白质都差一倍：是大模型算错了量，用成分表�
   assert.ok(egg.calories < 160 && egg.proteinG < 15, `${egg.calories} ${egg.proteinG}`);
 });
 
-test('大模型回到一半就断了（JSON 不完整）：再发一次', async () => {
+test('提示条第一行不带大模型自己估的热量数（和按库校准后的对不上），热量看下面那行', () => {
+  const meal = { mealType: '午餐', foodSummary: '牛肉面1碗、鸡蛋1个', items: [{ name: '牛肉面', amount: '1碗', grams: 650, whole: true, calories: 618, proteinG: 25, carbsG: 90, fatG: 15 }, { name: '鸡蛋', amount: '1个', grams: 50, calories: 72, proteinG: 6.5 }] };
+  assert.strictEqual(Parser.normalize({ reply: '记上了，一碗牛肉面加蛋，约750千卡、蛋白35g', add: { meals: [meal] } }, {}).reply, '记上了，一碗牛肉面加蛋');
+  assert.strictEqual(Parser.normalize({ reply: '下午的奶茶记上了，一杯约300大卡', add: { meals: [meal] } }, {}).reply, '下午的奶茶记上了');
+  assert.strictEqual(Parser.normalize({ reply: '猪脚饭记上了，按常见份量约480g估的', add: { meals: [meal] } }, {}).reply, '猪脚饭记上了，按常见份量约480g估的');
+  // 只记了训练、只回答问题：不动
+  assert.strictEqual(Parser.normalize({ reply: '跑步机30分钟记上了，消耗约300千卡', add: { workouts: [{ exerciseName: '跑步机', muscleGroup: '有氧', durationMin: 30, burnedCalories: 300 }] } }, {}).reply, '跑步机30分钟记上了，消耗约300千卡');
+  assert.strictEqual(Parser.normalize({ reply: '还差40g蛋白，看小人', answer: '还差 40g' }, {}).reply, '还差40g蛋白，看小人');
+});
+
+test('JSON 的小毛病本机修好，不用整份重发（v5.4 实测的写法）', () => {
+  // "next" 写成几个散的字符串；字符串里的中文标点不动
+  let r = Parser.extractJson('{"reply":"x","answer":"早餐：鸡蛋，牛奶","next":"鸡腿饭能换成牛肉吗","练后只喝粉够不够","plan":{"dayOffset":1}}');
+  assert.deepStrictEqual(r.next, ['鸡腿饭能换成牛肉吗', '练后只喝粉够不够']);
+  assert.strictEqual(r.answer, '早餐：鸡蛋，牛奶');
+  assert.deepStrictEqual(r.plan, { dayOffset: 1 });
+  // 字符串外面用了中文逗号、冒号
+  r = Parser.extractJson('{"reply":"x","next":["蛋白再多点","不要米饭换红薯"]，\n "plan":{"dayOffset"：1}}');
+  assert.deepStrictEqual(r.next, ['蛋白再多点', '不要米饭换红薯']);
+  assert.strictEqual(r.plan.dayOffset, 1);
+  // 写完计划就把整个对象收尾了，又补了「,"dayOffset":0}」（多一个右括号）：去掉那个括号接着读
+  r = Parser.extractJson('{"reply":"给了你明天的食谱","answer":"早餐：鸡蛋","plan":{"dayOffset":1,"meals":[{"mealType":"早餐","items":[{"name":"鸡蛋"}]}]}},\n "dayOffset":0}');
+  assert.strictEqual(r.plan.meals[0].mealType, '早餐');
+  assert.strictEqual(r.dayOffset, 0);
+  // 真坏了还是报错（走重发）
+  assert.throws(() => Parser.extractJson('{"a":1,,}'), /^Error: BAD_JSON/);
+  assert.throws(() => Parser.extractJson('{"a":1} {"b":2}'), /^Error: BAD_JSON/);
+});
+
+test('大模型回到一半就断了（JSON 不完整）：马上再发一次，不用等', async () => {
   const origSend = Parser.send;
-  Parser.retryWaits = [0, 0];
+  Parser.retryWaits = [3000, 8000];
   let n = 0;
   try {
     Parser.send = async () => {
@@ -315,9 +437,11 @@ test('大模型回到一半就断了（JSON 不完整）：再发一次', async 
       if (n === 1) return JSON.stringify({ choices: [{ message: { content: '{"reply":"这个问题我帮你算算","answer":"今天还差60g。\\n建议：乳清蛋白粉1勺（约120千卡' } }] });
       return JSON.stringify({ choices: [{ message: { content: '{"reply":"ok","answer":"今天还差60g。"}' } }] });
     };
+    const t0 = Date.now();
     const r = await Parser.parse('今天还差多少蛋白', {});
     assert.strictEqual(n, 2);
     assert.strictEqual(r.answer, '今天还差60g。');
+    assert.ok(Date.now() - t0 < 1000, '不是限流，不用等 3 秒');
   } finally {
     Parser.send = origSend;
     delete Parser.retryWaits;

@@ -39,7 +39,7 @@
         const usual = root.app.quickSuggestions().find(x => x.kind === 'meal' && x.usual && !x.done);
         if (usual) { root.app.quickRepeatKey(usual.key); return; }
       }
-      // 听着像提问：不出「正在整理」卡片，小人马上在气泡里说「我想想…」（Atria 要 10～25 秒才出第一个字）
+      // 听着像提问：不出「正在整理」卡片，小人马上在气泡里说「我想想…」（Atria 写完一整个回答要十几秒）
       const ask = !!((opts && opts.ask) || (looksLikeQuestion && looksLikeQuestion(text)));
       const p = root.app.addPending(text, ask);
       if (ask && root.app.showBuddyThinking) root.app.showBuddyThinking(text);
@@ -254,7 +254,7 @@
       // 新增
       // 新手练了个没练过的动作、整句话都没说重量：记好后小人问一句「用了多重？」
       const said = String(result.said || '');
-      const saidWeight = /(\d+(\.\d+)?|[一二两三四五六七八九十百半]+)\s*(公斤|kg|千克|斤|磅|lb)|自重|空杆|徒手/i.test(said);
+      const saidWeight = TF.saidWeight(said);
       result.workouts.forEach((w, i) => {
         const id = 'w_' + stamp + '_' + i;
         batch.workoutIds.push(id);

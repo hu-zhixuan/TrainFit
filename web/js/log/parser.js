@@ -10,7 +10,7 @@
     require('./food.js');
   }
   const TF = root.TF = root.TF || {};
-  const { MUSCLES, MEAL_TYPES, NUTRIENTS, num, cleanText, round1, mealTypeByHour, normMealType, mealTimes, mealSegments, findWeight, guessMuscle, readOverride, Native, FoodDB, MyFoods, groundItem, sizeOpts, sumItems } = TF;
+  const { MUSCLES, MEAL_TYPES, NUTRIENTS, num, cleanText, round1, mealTypeByHour, normMealType, mealTimes, mealSegments, findWeight, guessMuscle, saidWeight, readOverride, Native, FoodDB, MyFoods, groundItem, sizeOpts, sumItems } = TF;
 
   const summaryOf = (items) => cleanText(items.map(it => it.name + (it.amount || '')).join('、'), 60);
 
@@ -130,6 +130,32 @@
     return out.replace(/\*\*/g, '').trim();
   }
 
+  /**
+   * 大模型偶尔写坏 JSON 的两种小毛病（v5.4 实测），修好再解析：
+   *  - 字符串外面用了中文逗号、冒号（"next":["a","b"]，"plan":…）；
+   *  - "next" 写成几个散的字符串（"next":"a","b"）→ "next":["a","b"]。
+   */
+  function repairJson(s) {
+    let out = '', inStr = false, esc = false;
+    for (const ch of String(s)) {
+      if (inStr) {
+        out += ch;
+        if (esc) esc = false; else if (ch === '\\') esc = true; else if (ch === '"') inStr = false;
+        continue;
+      }
+      if (ch === '"') inStr = true;
+      out += ch === '，' ? ',' : ch === '：' ? ':' : ch;
+    }
+    const STR = '"(?:[^"\\\\]|\\\\.)*"';
+    return out.replace(new RegExp(`"next"\\s*:\\s*(${STR}(?:\\s*,\\s*${STR}(?!\\s*:))+)`, 'g'), '"next":[$1]');
+  }
+
+  /** 「记上了，一碗牛肉面加蛋，约750千卡、蛋白35g」→「记上了，一碗牛肉面加蛋」 */
+  function dropNumberClauses(reply) {
+    const parts = String(reply || '').match(/[^，,；;。]+[，,；;。]?|[，,；;。]/g) || [];
+    return parts.filter(p => !/\d+(\.\d+)?\s*(千卡|大卡|kcal|卡)|蛋白(质)?\s*(约|大约)?\s*\d/i.test(p)).join('').replace(/[，,；;、\s]+$/, '');
+  }
+
   // 说的是吃、练、身体的事（用来判断「帮不上」是不是答错了）
   const ABOUT_FIT = /练|训练|健身|动作|器械|深蹲|卧推|硬拉|腿|胸|背|肩|手臂|腹|核心|有氧|跑步|减脂|减肥|增肌|瘦|胖|体重|吃|喝|饭|餐|食|蛋白|热量|卡|碳水|脂肪|饿|饱|睡|酸|累|恢复/;
 
@@ -145,16 +171,21 @@
 
       const system = [
         '你是「练食AI」的记录助手。用户用口语说吃了什么（吃进嘴的都算：饭菜、零食、饮料、水、补剂、药）、训练或体重，文字来自语音识别，可能有同音错字（"卧腿"=卧推，"四组八哥"=4组8个，"划川"=划船，"茶叶大"=茶叶蛋）、没有标点、夹着「呃、嗯、那个、然后、就是」这类口头禅，按意思理解，说到的每样吃的都要记上，听着像错字的按最像的食物记，不要漏。说了又改口（「两碗，不对，一碗」「哦应该是…」）以后说的为准。紧跟在一样东西后面、只补了份量的话（「一个包子，呃大的」「一份炒饭然后是小份」）是那样东西的份量，不要单独记成一项。',
-        '由你决定怎么改数据：新增、修改或删除。只输出一个 JSON 对象，不要 markdown，不要解释：',
-        '{"reply":"一句话告诉用户你做了什么，20字以内（估得比较粗的，30字以内说按什么估的）","answer":null,"next":[],"plan":null,"donePlans":[],"dayOffset":0,"bodyWeight":null,"remember":[],"memo":[],"forget":[],',
-        ' "add":{"workouts":[{"exerciseName":"杠铃卧推","muscleGroup":"胸部","weightKg":80,"sets":4,"reps":8,"durationMin":null,"burnedCalories":110,"estimated":false}],',
+        // 只写用得上的字段（v5.4）：Atria 一秒只写 17～20 个 token，以前每次都写一串 "answer":null,"next":[]…，白等两三秒。
+        // dayOffset 每次都写：实测不写的话「昨晚吃了火锅」会漏掉 -1，记到今天。
+        // 别的字段要写出形状（"next":["…","…"]）：只列名字时实测会写成 "next":"a","b"，JSON 写坏。
+        // 例子里 add 后面还跟着 dayOffset，括号的写法和以前的例子一样（]}]},）
+        '由你决定怎么改数据：新增、修改或删除。只输出一个 JSON 对象，不要 markdown，不要解释。reply 和 dayOffset 每次都写，别的字段只写用得上的（值是 null、空数组的不要写）。',
+        '例 1（记吃的、练的）：{"reply":"一句短话说你做了什么，15字以内，不写热量数（下面会单独列出来）；估得比较粗的，30字以内说按什么估的",',
+        ' "add":{"workouts":[{"exerciseName":"杠铃卧推","muscleGroup":"胸部","weightKg":80,"sets":4,"reps":8,"burnedCalories":110}],',
         '        "meals":[{"mealType":"早餐","foodSummary":"肉包2个","items":[{"name":"肉包","amount":"2个","grams":200,"whole":true,"calories":460,"proteinG":16,"carbsG":60,"fatG":16}]},',
         '                 {"mealType":"午餐","foodSummary":"番茄炒蛋盖饭1份","items":[{"name":"米饭","amount":"1碗","grams":200,"whole":false,"calories":232,"proteinG":5,"carbsG":52,"fatG":0.6},{"name":"番茄炒蛋","amount":"1份","grams":200,"whole":true,"calories":260,"proteinG":11,"carbsG":10,"fatG":19}]}]},',
-        ' "update":[{"ref":"r2","set":{"weightKg":85}}],',
-        ' "delete":["r3"]}',
+        ' "dayOffset":0}',
+        '例 2（改、删已有的记录）：{"reply":"改好了","update":[{"ref":"r2","set":{"weightKg":85}}],"delete":["r3"],"dayOffset":0}',
+        '别的字段只在下面规则说要用时才写，都放在这一个 JSON 对象里："bodyWeight":62.5、"remember":[{…}]、"memo":["…"]、"forget":["…"]、"answer":"…"、"next":["…","…"]、"plan":{…}、"donePlans":["p1"]；add 里只有吃的就不写 workouts，只有练的就不写 meals。',
         '规则：',
         '1. muscleGroup 只能是：' + MUSCLES.join('、') + '；mealType 只能是：' + MEAL_TYPES.join('、') + '（怎么判断见第 4 条）。',
-        '2. 重量换算成公斤（磅×0.45，斤×0.5），自重 weightKg=0。跑步、单车、跳绳、平板支撑等按时间算的填 durationMin（分钟），sets、reps 为 null；只说了距离（「跑了5公里」）就按常见配速估分钟数。',
+        '2. 重量换算成公斤（磅×0.45，斤×0.5），自重 weightKg=0。跑步、单车、跳绳、平板支撑等按时间算的填 durationMin（分钟），不写 sets、reps；只说了距离（「跑了5公里」）就按常见配速估分钟数。',
         '3. 用户没说的重量/组数/次数：优先用下面「最近成绩」里同一动作的数；没有就按常见训练估一个（别拿别的动作的重量套），并设 "estimated":true。同一动作请沿用最近成绩里的名字。',
         '   新手常常叫不出动作、器械的名字，只会描述（「坐着往前推的那个机器」「拉下来的那个」「夹胸的」「坐着蹬腿的」「躺着推杠铃」）：按描述记成最像的标准名字（坐姿推胸、高位下拉、蝴蝶机夹胸、腿举、杠铃卧推），reply 里顺便告诉他叫什么（「这个叫高位下拉，记上了」）。只说了「练了一个小时器械」「练了会儿」：记一项「力量训练」，填 durationMin。',
         '4. 饮食按餐分：用户说的时间决定是哪一餐——早上/早饭 → 早餐，中午/午饭 → 午餐，晚上/晚饭 → 晚餐，下午茶、练前练后、睡前、夜宵、零食 → 加餐/补剂；没说时间（「刚吃了」）按现在时间和食物判断。',
@@ -177,15 +208,15 @@
         '   记到了别的日子（「记错日子了」「挪到前一天」「这是昨天吃的」「放到后天」）：用 update，set 里写 "dayOffset":-1（相对正在看的这天，前一天 -1、后一天 1），整条挪过去，不要删了重新加。',
         '   update 的 set 里只写要改的字段。改一餐里的某几样：set.items 里只写这几样（写全 name、amount、grams 和数值），name 用下面记录里的原名，换了名字就加 "was":"原名"；没写到的会原样保留。去掉某一样写 {"name":"原名","remove":true}。整餐的量都变了（「只吃了一半」）就把每一样都写上。',
         '6. 说「昨天」「昨晚」dayOffset=-1，「前天」=-2，否则 0；修改和删除只针对下面列出的这天记录。',
-        '7. 用户报自己的体重（「体重62.5」「今天称了124斤」「早上61公斤」）：bodyWeight 填公斤数（斤÷2；没说单位就参考下面的最近体重判断是斤还是公斤）。没说体重就填 null。训练用的重量不是体重。',
+        '7. 用户报自己的体重（「体重62.5」「今天称了124斤」「早上61公斤」）：bodyWeight 填公斤数（斤÷2；没说单位就参考下面的最近体重判断是斤还是公斤）。没说体重就不写。训练用的重量不是体重。',
         '8. 用户让你记住某样东西的热量（「记住，糯米鸡一个350大卡」），或念了包装上的营养数：在 remember 里写一份的量 {"name","amount","grams","calories","proteinG","carbsG","fatG"}，补剂再加 "kind":"supplement" 和 nutrients。只是让你记住、没说吃了，就不要加进 meals。',
-        '9. 听不懂：add 为空，reply 说明原因。',
-        '10. 用户在问问题、要建议（「明天吃什么」「给我定个明天的食谱」「今天还差多少蛋白」「练完吃啥好」「明天练什么」「我想练腿要怎么练」「深蹲怎么做」「一周练三次帮我排一下」「晚上还能吃点啥」「能不能吃火锅」），不是在报自己吃了练了什么：不要记（add 为空；同一句里也说了已经吃过、练过的，那部分照常记），在 answer 里回答。「我操」「卧槽」「妈的」这类是口头禅，不影响意思。问到以前的事（「上周练了几次」「这个月瘦了多少」「哪天吃得最多」「最近蛋白够不够」）就看下面「最近两周」，说到具体日期和数字。',
+        '9. 听不懂：不写 add，reply 说明原因。',
+        '10. 用户在问问题、要建议（「明天吃什么」「给我定个明天的食谱」「今天还差多少蛋白」「练完吃啥好」「明天练什么」「我想练腿要怎么练」「深蹲怎么做」「一周练三次帮我排一下」「晚上还能吃点啥」「能不能吃火锅」），不是在报自己吃了练了什么：不要记（不写 add；同一句里也说了已经吃过、练过的，那部分照常记），在 answer 里回答。「我操」「卧槽」「妈的」这类是口头禅，不影响意思。问到以前的事（「上周练了几次」「这个月瘦了多少」「哪天吃得最多」「最近蛋白够不够」）就看下面「最近两周」，说到具体日期和数字。',
         '   回答要用下面「今天的情况」「小本本」「画像」「最近成绩」「记住的食物」，按这个人的目标、习惯和还剩的热量、还差的蛋白质来定，具体到吃什么、多少，大概多少千卡和蛋白质（训练就写动作、重量、组数）。用户说了要求（「训练强度大，碳水多点」「不想吃米饭」）就照着调。',
         '   写成几行短句，每行一件事（「早餐：两个鸡蛋＋一杯牛奶＋一个馒头，约450千卡、蛋白25g」），最多 8 行，不要 markdown 符号、不要客套话。reply 写一句「给了你明天的食谱」这样的话（又记又问就写「记了…，晚上吃啥看小人」），不要出现 answer 这个词。',
-        '   回答了问题时，next 写两句用户接着最可能想问的话（每句 12 字以内，用用户的口吻，比如「晚上吃点啥能补蛋白」「给我排个练腿的」）；没回答问题就 []。',
+        '   回答了问题时，next 写两句用户接着最可能想问的话（每句 12 字以内，用用户的口吻，比如「晚上吃点啥能补蛋白」「给我排个练腿的」）；没回答问题就不写 next。',
         '   练什么、怎么练、动作怎么做、练哪儿、减脂增肌、饿不饿、睡眠恢复、身体酸痛，都算吃和练的事，要正经回答：练什么就给动作、重量、组数次数，小本本里是新手或者问怎么做的，每个动作带一句要点。只有天气、新闻、写作业这种完全无关的，answer 才写一句「这个我帮不上，我只管吃和练」。',
-        '   answer 是某一天的具体安排（明天的食谱、今晚吃什么、明天练什么、我想练腿怎么练）时，同时写 plan：{"dayOffset":1,"meals":[和 add.meals 一样的格式],"workouts":[和 add.workouts 一样的格式，每个动作再加 "tip":"一句要点，16字以内"]}，dayOffset 相对正在看的日期（明天 1，今天 0，没说哪天就是今天），内容和 answer 一致；只是回答问题（还差多少蛋白、能不能吃）就 plan 为 null。',
+        '   answer 是某一天的具体安排（明天的食谱、今晚吃什么、明天练什么、我想练腿怎么练）时，同时写 plan：{"dayOffset":1,"meals":[和 add.meals 一样的格式],"workouts":[和 add.workouts 一样的格式，每个动作再加 "tip":"一句要点，16字以内"]}，dayOffset 相对正在看的日期（明天 1，今天 0，没说哪天就是今天），内容和 answer 一致；只是回答问题（还差多少蛋白、能不能吃）就不写 plan。',
         '   要排好几天的训练（「这周怎么练」「一周练三次帮我排一下」「给我一个新手计划」）：plan 写成 {"days":[{"dayOffset":1,"workouts":[…]},{"dayOffset":3,"workouts":[…]}]}，从明天开始排一周、练的日子之间隔开，每天 4～6 个动作，不排吃的；重量按最近成绩往上加一点，没练过的按新手能做的估。answer 每天一行，开头写那天的星期（按下面的日期对照，「周五 腿：深蹲 40kg 4×10、腿举…」）。',
         '   下面有「刚才给的计划」，用户说要改（「不要米饭换红薯」「蛋白再多点」「晚上少吃点」），就按要求改好，重新给完整的 answer 和 plan，不要记录。',
         '   下面有「这天的计划」，用户说照着吃了 / 练了（「早餐照计划吃了」「计划里的都练完了」）：把那几项 add 进来（份量照计划），donePlans 写它们的编号。',
@@ -239,7 +270,21 @@
       const a = s.indexOf('{');
       const b = s.lastIndexOf('}');
       if (a === -1 || b <= a) throw new Error('NO_JSON');
-      try { return JSON.parse(s.slice(a, b + 1)); } catch (e) { throw new Error('BAD_JSON ' + e.message); }
+      const body = s.slice(a, b + 1);
+      try { return JSON.parse(body); } catch (e) {
+        // 小毛病本机修好，不用整份重发（重发要再等十几秒到一分钟，一份计划要一分钟）
+        let fixed = repairJson(body);
+        for (let i = 0; i < 3; i++) {
+          try { return JSON.parse(fixed); } catch (e2) {
+            // 多了一个右括号，对象提前收尾了，后面还跟着「,"dayOffset":0}」：把那个括号去掉接着读
+            const at = Number((/position (\d+)/.exec(e2.message) || [])[1]);
+            const head = at > 0 ? fixed.slice(0, at).replace(/\s+$/, '') : '';
+            if (!head.endsWith('}') || !/^\s*,\s*"/.test(fixed.slice(at))) break;
+            fixed = head.slice(0, -1) + fixed.slice(at);
+          }
+        }
+        throw new Error('BAD_JSON ' + e.message);
+      }
     },
 
     /** 从 chat/completions 的原始响应里拿出 message.content */
@@ -271,6 +316,8 @@
       }
       out.reply = cleanText(parsed && parsed.reply, 40).replace(/(看)?\s*answer/gi, '看小人');
       out.answer = cleanAnswer(parsed && parsed.answer);
+      // 问天气这类，大模型偶尔把「这个我帮不上」写进 reply、answer 空着（v5.4 只写用得上的字段后见过）：照样当成回答
+      if (!out.answer && /帮不上/.test(out.reply) && !(parsed && (parsed.add || parsed.workouts || parsed.meals || parsed.update || parsed.delete))) out.answer = out.reply;
       // 「接着问」：两句短问题，点了就跟说出来一样
       out.next = out.answer && Array.isArray(parsed.next) ? parsed.next.map(x => cleanText(x, 16).replace(/[。.]$/, '')).filter(x => x && x.length >= 3).slice(0, 2) : [];
       // 计划（明天的食谱 / 训练）：和记录一样整理、按库算热量，但不存成记录
@@ -387,6 +434,9 @@
         if (!sets) { sets = last ? last.sets : 3; estimated = true; }
         if (!reps) { reps = last ? last.reps : 10; estimated = true; }
         weight = Math.max(0, round1(weight));
+        // 原话没说重量、这个数也不在原话里（「今天练了深蹲」记成上次的 100kg）：是估的。
+        // 大模型常忘了写 estimated（v5.4 例子里不再列它），新手没说重量时小人要靠它问一句「用了多重？」
+        if (!estimated && weight > 0 && ctx.said && !saidWeight(ctx.said) && !String(ctx.said).includes(String(weight))) estimated = true;
         sets = Math.max(1, Math.min(20, Math.round(sets)));
         reps = Math.max(1, Math.min(100, Math.round(reps)));
 
@@ -448,6 +498,9 @@
         if (to) moved.forEach(ref => { if (!out.updates.some(u => u.ref === ref)) out.updates.push({ ref, set: { date: to } }); });
         else out.reply = '没听清挪到哪天，再说一次，比如「挪到昨天」';
       }
+      // 提示条第一行别带热量数：大模型写的是它自己估的，和下面按成分表校准后的对不上（实测「约750千卡」，校准后 696）。
+      // 记了吃的、改了吃的时，带热量 / 蛋白数的那半句去掉，热量看下面那行
+      if (out.meals.length || out.updates.length) out.reply = dropNumberClauses(out.reply);
       const n = out.meals.length;
       out.meals = separateSupps(splitByTime(out.meals, ctx.said));
       // 拆开了：大模型那句「已记早餐…」就不对了
@@ -484,7 +537,10 @@
           if (msg === 'NO_KEY') break;
           // 实测 Atria 偶尔回到一半就断了（JSON 不完整）：和超时一样，再发一次
           if ((Parser.isTransient(msg) || /^(NO_JSON|BAD_JSON)/.test(msg)) && retries < waits.length) {
-            await new Promise(r => setTimeout(r, waits[retries++]));
+            // 回到一半断了不是限流，马上再发；限流、超时、网络断了才等一等
+            const ms = /^(NO_JSON|BAD_JSON)/.test(msg) ? 0 : waits[retries];
+            retries += 1;
+            await new Promise(r => setTimeout(r, ms));
             i -= 1; // 同一种请求再试
             continue;
           }
@@ -495,35 +551,44 @@
     },
 
     /**
-     * 大模型偶尔特别慢（平时 10～18 秒，慢的时候 40 秒以上）：20 秒还没回来就再发一份一样的，
-     * 谁先回来用谁（整理是只读的，多发一份只多花一点 token）。第一份很快就失败的不补发，照原来的重试。
+     * 大模型偶尔开口特别慢（v5.4 实测：多数 2～6 秒出第一个字，约四分之一要等 15～18 秒才出，和提示词长短无关）：
+     * 7 秒还没出字就再发一份一样的，谁先出字用谁，另一份马上掐掉（还在排队就掐，不白花 token）。
+     * 第一份很快就失败的不补发，照原来的重试；服务商不支持流式（一直不出字）的，谁先回来用谁。
      */
     sendHedged(body, override, onDelta) {
-      const wait = this.hedgeMs == null ? 20000 : this.hedgeMs;
+      const wait = this.hedgeMs == null ? 7000 : this.hedgeMs;
       return new Promise((resolve, reject) => {
         let done = false, running = 0, timer = null, leader = null;
-        const finish = (fn, v) => { if (done) return; done = true; clearTimeout(timer); fn(v); };
+        const all = [];
+        const stop = (keep) => all.forEach(h => { if (h !== keep && h.cancel && !h.stopped) { h.stopped = true; try { h.cancel(); } catch (e) {} } });
+        const finish = (fn, v, from) => { if (done) return; done = true; clearTimeout(timer); stop(from); fn(v); };
         const go = () => {
           running += 1;
-          const me = running + Math.random();
-          // 边想边出字：只转发先出字的那一份；出了字就不再补发
-          const delta = onDelta ? (chunk) => {
-            if (leader === null) { leader = me; clearTimeout(timer); }
-            if (leader === me && !done) onDelta(chunk);
-          } : null;
-          this.send(body, override, delta).then(r => finish(resolve, r), e => { running -= 1; if (!running) finish(reject, e); });
+          const me = {};
+          all.push(me);
+          // 只转发先出字的那一份；出了字就不再补发，别的那份掐掉
+          const delta = (chunk) => {
+            if (done) return;
+            if (leader === null) { leader = me; clearTimeout(timer); stop(me); }
+            if (leader === me && onDelta) onDelta(chunk);
+          };
+          this.send(body, override, delta, me).then(
+            r => { if (leader === null || leader === me) finish(resolve, r, me); },
+            e => { running -= 1; if (leader === me || (leader === null && !running)) finish(reject, e, me); });
         };
         go();
-        if (wait > 0) timer = setTimeout(() => { if (!done) go(); }, wait);
+        if (wait > 0) timer = setTimeout(() => { if (!done && leader === null) go(); }, wait);
       });
     },
 
-    async send(body, override, onDelta) {
-      if (Native.has()) return Native.chat(body, override, null, onDelta);
+    /** handle：传进来的对象会挂上 cancel()，补发的那份先出了字就用它掐掉这份 */
+    async send(body, override, onDelta, handle) {
+      if (Native.has()) return Native.chat(body, override, null, onDelta, handle);
       if (override.apiKey && override.baseUrl) {
         // 浏览器里调试：直接请求（部分服务商不允许跨域，会失败）
         const b = Object.assign({ model: 'gpt-4o-mini' }, body);
         const ctrl = new AbortController();
+        if (handle) handle.cancel = () => ctrl.abort();
         const t = setTimeout(() => ctrl.abort(), 45000);
         try {
           const res = await fetch(override.baseUrl.replace(/\/+$/, '') + '/chat/completions', {
@@ -573,7 +638,7 @@
     }
   };
 
-  Object.assign(TF, { partialAnswer, Parser, mergeItems });
+  Object.assign(TF, { partialAnswer, Parser, mergeItems, repairJson, dropNumberClauses });
 
   if (typeof module !== 'undefined' && module.exports) module.exports = TF;
 })(typeof window !== 'undefined' ? window : globalThis);

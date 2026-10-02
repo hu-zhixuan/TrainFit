@@ -39,6 +39,7 @@
       this.sendBtn.addEventListener('click', () => this.sendText());
       document.getElementById('ql-undo')?.addEventListener('click', () => this.undo());
       this.textEl.addEventListener('input', () => { this.autoGrow(); this.updateSend(); this.notifyTyping(); });
+      this.textEl.addEventListener('focus', () => Native.warm());
       this.textEl.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); this.sendText(); }
       });
@@ -193,6 +194,7 @@
       clearInterval(this._timer);
       this._timer = setInterval(() => this.tick(), 250);
       this.tick();
+      Native.warm(); // 趁说话先连上大模型接口，松手后整理少等一次握手
       if (engine === 'asr') {
         try { root.TrainFitNative.startRecording(JSON.stringify(readAsrOverride())); } catch (e) { this.failTalk('录音启动失败'); }
       } else {
