@@ -13,9 +13,9 @@
       text = (text || '').trim();
       if (!text) return;
       // 手机自己就能答的（「还差多少蛋白」「卧推最好多少」）：马上答，不问大模型
-      const quick = root.app.quickAnswer ? root.app.quickAnswer(text) : '';
+      const quick = root.app.quickAnswer ? root.app.quickAnswer(text) : null;
       if (quick && root.app.showBuddyAnswer) {
-        root.app.showBuddyAnswer(text, quick, {});
+        root.app.showBuddyAnswer(text, quick.text, { next: quick.next });
         return;
       }
       // 听着像提问：不出「正在整理」卡片，小人马上在气泡里说「我想想…」（Atria 要 10～25 秒才出第一个字）
@@ -50,7 +50,8 @@
         .forEach(w => {
           if (seen.has(w.exerciseName)) return;
           seen.add(w.exerciseName);
-          recent.push(`${w.exerciseName} ${w.weightKg > 0 ? w.weightKg + 'kg' : '自重'} ${w.sets}×${w.reps}（${w.date.slice(5)}）`);
+          const feel = w.rpe >= 9.5 ? '，很吃力' : w.rpe && w.rpe <= 7 ? '，还能加' : '';
+          recent.push(`${w.exerciseName} ${w.weightKg > 0 ? w.weightKg + 'kg' : '自重'} ${w.sets}×${w.reps}（${w.date.slice(5)}${feel}）`);
         });
 
       const today = getTodayDateString();
@@ -67,7 +68,8 @@
       const plans = app.planContext ? app.planContext(date) : [];
       const offer = app._planOffer && Date.now() - app._planOffer.at < 15 * 60 * 1000 ? app._planOffer.text : '';
       return { now: new Date(p.ts || Date.now()), history: app.workouts, dayRecords, recent, dayLabel, lastWeight: lw ? lw.kg : null, myFoods: app.myFoods || [], day, plans, lastPlan: offer,
-        memo: app.memoList ? app.memoList() : [], date, ask: !!p.ask, past: p.ask ? this.pastDays(date) : [] };
+        memo: app.memoList ? app.memoList() : [], date, ask: !!p.ask, past: p.ask ? this.pastDays(date) : [],
+        state: app.profile.dayState && app.profile.dayState.date === date ? app.profile.dayState.sleep : '' };
     },
 
     /**
@@ -132,7 +134,7 @@
         app.markPlansDone(result.donePlans.map(ref => byRef.get(ref)).filter(Boolean));
       }
       const changes = result.workouts.length + result.meals.length + (result.updates || []).length + (result.deletes || []).length + (result.bodyWeight ? 1 : 0) + (result.remember || []).length + (result.memo || []).length + (result.forget || []).length;
-      const answerOpts = { plan: result.plan, baseDate: p.date };
+      const answerOpts = { plan: result.plan, baseDate: p.date, next: result.next };
       if (!changes) {
         // 问问题（「明天吃什么」）：不记、不报错，小人回答；给了计划的话气泡里能「加到明天」
         if (result.answer) {
@@ -151,6 +153,8 @@
       if (result.answer && app.showBuddyAnswer) app.showBuddyAnswer(p.text, result.answer, answerOpts); // 又记又问
       else if (batch.asks.length && app.askPortion) app.askPortion(batch.asks); // 份量含糊：小人问一句，点一下就改
       else if (app.newbieTip && app.newbieTip(result)) { /* 新手第一周：小人说一句小提示 */ }
+      else if (app.coachTip && app.coachTip(result, batch)) { /* 该提醒的时候说一句：破纪录、晚上蛋白还差很多、吃超了 */ }
+      else if (app.askFeeling && app.askFeeling(result, batch)) { /* 练完问一句感受，下次加重量按这个来 */ }
       else if (app.closeBuddyPop) app.closeBuddyPop('thinking'); // 猜成提问其实是记录：把「我想想」收起来
     },
 
