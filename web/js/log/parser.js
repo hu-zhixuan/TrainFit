@@ -551,7 +551,8 @@
       if (msg === 'NO_KEY') return 'AI 接口没有配置 key';
       if (/^HTTP 429/.test(msg)) return 'AI 这会儿太忙（限流），点「重试」';
       if (/^HTTP 401|^HTTP 403/.test(msg)) return 'AI 接口的 key 不对';
-      if (/TIMEOUT|timed out|Timeout/i.test(msg)) return 'AI 这会儿太慢，没等到结果，点「重试」';
+      if (/^TOO_LONG/.test(msg)) return 'AI 卡住了，没整理出来';
+      if (/TIMEOUT|timed out|Timeout/i.test(msg)) return 'AI 太慢了，没等到结果';
       if (this.isTransient(msg)) return '网络不好，AI 没连上，点「重试」';
       return 'AI 没整理出来，点「重试」或「改字」';
     },
