@@ -50,7 +50,8 @@
         .forEach(w => {
           if (seen.has(w.exerciseName)) return;
           seen.add(w.exerciseName);
-          recent.push(`${w.exerciseName} ${w.weightKg > 0 ? w.weightKg + 'kg' : '自重'} ${w.sets}×${w.reps}（${w.date.slice(5)}）`);
+          const feel = w.rpe >= 9.5 ? '，很吃力' : w.rpe && w.rpe <= 7 ? '，还能加' : '';
+          recent.push(`${w.exerciseName} ${w.weightKg > 0 ? w.weightKg + 'kg' : '自重'} ${w.sets}×${w.reps}（${w.date.slice(5)}${feel}）`);
         });
 
       const today = getTodayDateString();
@@ -67,7 +68,8 @@
       const plans = app.planContext ? app.planContext(date) : [];
       const offer = app._planOffer && Date.now() - app._planOffer.at < 15 * 60 * 1000 ? app._planOffer.text : '';
       return { now: new Date(p.ts || Date.now()), history: app.workouts, dayRecords, recent, dayLabel, lastWeight: lw ? lw.kg : null, myFoods: app.myFoods || [], day, plans, lastPlan: offer,
-        memo: app.memoList ? app.memoList() : [], date, ask: !!p.ask, past: p.ask ? this.pastDays(date) : [] };
+        memo: app.memoList ? app.memoList() : [], date, ask: !!p.ask, past: p.ask ? this.pastDays(date) : [],
+        state: app.profile.dayState && app.profile.dayState.date === date ? app.profile.dayState.sleep : '' };
     },
 
     /**
@@ -152,6 +154,7 @@
       else if (batch.asks.length && app.askPortion) app.askPortion(batch.asks); // 份量含糊：小人问一句，点一下就改
       else if (app.newbieTip && app.newbieTip(result)) { /* 新手第一周：小人说一句小提示 */ }
       else if (app.coachTip && app.coachTip(result, batch)) { /* 该提醒的时候说一句：破纪录、晚上蛋白还差很多、吃超了 */ }
+      else if (app.askFeeling && app.askFeeling(result, batch)) { /* 练完问一句感受，下次加重量按这个来 */ }
       else if (app.closeBuddyPop) app.closeBuddyPop('thinking'); // 猜成提问其实是记录：把「我想想」收起来
     },
 

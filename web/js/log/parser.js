@@ -200,6 +200,7 @@
       if (ctx.lastWeight) lines.push(`最近体重：${ctx.lastWeight}kg`);
       const past = (ctx.past || []).slice(-14);
       if (past.length) lines.push('最近两周（日期 吃了多少千卡 蛋白g 练了什么 体重kg）：\n' + past.join('\n'));
+      if (ctx.state) lines.push(`今天的状态：昨晚${ctx.state}（排训练时照顾到，没睡好就练轻点）。`);
       const memo = (ctx.memo || []).slice(0, 12);
       if (memo.length) lines.push('小本本（用户说过的自己的事）：' + memo.join('；'));
       const plans = ctx.plans || [];

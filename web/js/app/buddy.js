@@ -1164,7 +1164,15 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       document.querySelectorAll('.sheet').forEach(el => ro.observe(el));
     }
     // 过了零点、晚上犯困：回到前台时重画一下
-    document.addEventListener('visibilitychange', () => { if (!document.hidden) this.renderBuddy(); else this.buddyStop(); });
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) { this.buddyStop(); return; }
+      this.renderBuddy();
+      clearTimeout(this._greetT);
+      this._greetT = setTimeout(() => this.greetToday && this.greetToday(), 1500);
+    });
+    // 打开 App：小人打个招呼（每天第一次）
+    clearTimeout(this._greetT);
+    this._greetT = setTimeout(() => this.greetToday && this.greetToday(), 2200);
     this.buddyIdle();
     this.bindTour();
   },
@@ -1270,6 +1278,8 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     sw('buddy-hair', TF.Buddy.HAIR, look.hair, (h) => `background:${h.H}`);
     sw('buddy-outfit', TF.Buddy.OUTFITS, look.outfit, (o) => `background:linear-gradient(90deg, ${o.W} 0 30%, ${o.J} 30% 70%, ${o.W} 70%)`);
     $('buddy-show').checked = look.show;
+    $('buddy-chatty').checked = (this.profile.buddy || {}).chatty !== false;
+    $('buddy-chatty').disabled = !look.show;
     $('buddy-note').textContent = (st.streak ? `连续记录 ${st.streak} 天。` : '') + '趴在「按住说话」上面，点它会打招呼；连续记 3 天戴头带，7 天戴棒球帽，30 天戴皇冠。';
   },
 
@@ -1292,5 +1302,6 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       if (b) set({ char: b.dataset.value });
     });
     document.getElementById('buddy-show').addEventListener('change', (e) => set({ show: e.target.checked }));
+    document.getElementById('buddy-chatty').addEventListener('change', (e) => set({ chatty: e.target.checked }));
   }
 });
