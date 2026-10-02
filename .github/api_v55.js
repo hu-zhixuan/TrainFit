@@ -25,14 +25,14 @@ const PLAN = ['早餐 燕麦50g、鸡蛋2个、牛奶1杯 490kcal 蛋白28', '�
 const lastPlan = '10月3日的：\n' + PLAN.join('\n'); // 和 App 的 planText 一样
 const names = (ms) => ms.map(m => m.foodSummary + ',' + (m.items || []).map(i => i.name).join(',')).join('；');
 const sum = (ms, k) => Math.round(ms.reduce((a, m) => a + (m[k] || 0), 0));
-const CASES = [
-  ['没点按钮（提醒一句）：不要米饭换红薯', '不要米饭，换成红薯', 3, {}, (r) => {
+const CASES0 = [
+  ['没点按钮（提醒一句）：不要米饭换红薯', '不要米饭，换成红薯', 1, {}, (r) => {
     const ms = (r.plan && r.plan.meals) || [];
     if (ms.length < 3) return '没给新的 plan';
     if (r.plan.dayOffset !== 1) return 'dayOffset=' + r.plan.dayOffset;
     return (!/米饭/.test(names(ms)) && /红薯/.test(names(ms))) || names(ms);
   }],
-  ['没点按钮（提醒一句）：蛋白再多一点', '蛋白再多一点', 2, {}, (r) => {
+  ['没点按钮（提醒一句）：蛋白再多一点', '蛋白再多一点', 1, {}, (r) => {
     const ms = (r.plan && r.plan.meals) || [];
     if (ms.length < 3) return '没给新的 plan';
     return sum(ms, 'proteinG') >= 160 || '蛋白 ' + sum(ms, 'proteinG') + '（原来 152）';
@@ -45,6 +45,7 @@ const CASES = [
     return (egg && egg.grams >= 140 && egg.grams <= 160) || '鸡蛋：' + JSON.stringify(egg);
   }]
 ];
+const CASES = CASES0.slice(2).concat(CASES0.slice(0, 2));
 (async () => {
   const lines = [];
   let pass = 0, n = 0;
