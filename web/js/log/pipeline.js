@@ -254,7 +254,7 @@
       // 新增
       // 新手练了个没练过的动作、整句话都没说重量：记好后小人问一句「用了多重？」
       const said = String(result.said || '');
-      const saidWeight = /(\d+(\.\d+)?|[一二两三四五六七八九十百半]+)\s*(公斤|kg|千克|斤|磅|lb)|自重|空杆|徒手/i.test(said);
+      const saidWeight = TF.saidWeight(said);
       result.workouts.forEach((w, i) => {
         const id = 'w_' + stamp + '_' + i;
         batch.workoutIds.push(id);

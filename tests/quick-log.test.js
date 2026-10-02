@@ -349,6 +349,12 @@ test('大模型只写用得上的字段（v5.4）：没写 answer、next、plan�
   // 问天气：「帮不上」写进了 reply、answer 空着，照样当成回答（小人气泡里说）；记了东西的不算
   assert.strictEqual(Parser.normalize({ reply: '这个我帮不上，我只管吃和练。' }, {}).answer, '这个我帮不上，我只管吃和练。');
   assert.strictEqual(Parser.normalize({ reply: '帮不上', add: { meals: [] } }, {}).answer, '');
+  // 没说重量、大模型按上次填了 100kg 却没写 estimated：本机补上（新手没说重量时小人要问「用了多重？」）
+  const lift = (said) => Parser.normalize({ add: { workouts: [{ exerciseName: '杠铃深蹲', muscleGroup: '腿部', weightKg: 100, sets: 5, reps: 5 }] } }, { said }).workouts[0].estimated;
+  assert.strictEqual(lift('今天练了深蹲'), true);
+  assert.strictEqual(lift('深蹲五组'), true);
+  assert.strictEqual(lift('深蹲一百公斤五组五个'), false);
+  assert.strictEqual(lift('深蹲 100 5组5个'), false);
   const w = Parser.normalize({ add: { workouts: [{ exerciseName: '跑步', muscleGroup: '有氧', durationMin: 30, burnedCalories: 300 }] } }, {});
   assert.strictEqual(w.workouts[0].durationMin, 30);
   assert.strictEqual(w.workouts[0].estimated, false);

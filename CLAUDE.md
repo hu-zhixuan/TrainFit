@@ -66,7 +66,7 @@
 
 - 仓库是公开的。大模型和云端语音识别的 key 在 Actions Secrets（`LLM_API_KEY`、`ASR_API_KEY`），编译时注入 APK。**任何 key 都不要写进代码或提交记录**。
 - 这意味着公开发布的 APK 里带着用户的 key，别人用的都是他的额度；提醒过他在接口后台设消费上限。
-- 大模型：OpenAI 兼容接口（默认 Atria，`Atria-Dawn-Preview`；2026-10 实测不支持联网搜索：`tools:[{type:"web_search"}]` 被拒 422，`web_search_options` / `enable_search` 不报错但没真搜），请求里带 `thinking: {type: 'disabled'}` 提速（不带要 47～90 秒；`reasoning_effort` 会被拒 422）；2026-10 实测一次整理 10～18 秒、偶尔 40 秒，是接口本身慢（输出才 113 token）。在后台做，不阻塞界面；`Parser.sendHedged` 20 秒没回来就再发一份，谁先回来用谁；「正在整理…」超过 15 秒标「有点慢，稍等」。
+- 大模型：OpenAI 兼容接口（默认 Atria，`Atria-Dawn-Preview`，`/models` 里只有这一个；2026-10 实测不支持联网搜索：`tools:[{type:"web_search"}]` 被拒 422，`web_search_options` / `enable_search` 不报错但没真搜），请求里带 `thinking: {type: 'disabled'}` 提速（不带要 47～90 秒；`reasoning_effort` 会被拒 422）。**慢在哪（2026-10-02 实测，v5.4）**：提示词 1200 / 4300 / 7000 字，第一个字都是 3 秒左右出来，长短不影响，别为了提速砍规则；约四分之一的请求要 15～18 秒才开口（随机，和内容无关）；出字只有 17～20 token/秒，一次整理一百几十个 token 光写就要七八秒——**省输出 token 才是提速的关键**；没有缓存。所以 v5.4：提示词的例子只列用得上的字段（`reply`、`dayOffset` 每次都写——省了 dayOffset 实测会把「昨晚吃了火锅」记到今天），别再把 `"answer":null` 这种空字段放回例子里；`reply` 15 字以内、不写热量数（以前写的数和按库校准后的对不上）；`Parser.sendHedged` 7 秒没出字就再发一份，先出字的留下，另一份用 `Native.chat` 的 `handle.cancel` → 原生 `llmCancel` 断开；按住说话 / 点输入框时 `Native.warm` → 原生 `warmLlm`（GET /models，一分钟最多一次）先连上，`OpenAiApi.readResponse` 读完不 disconnect，连接留在池里；JSON 断了（`NO_JSON` / `BAD_JSON`）马上重发不等。都在后台做，不阻塞界面；「正在整理…」超过 15 秒标「有点慢，稍等」。
 
 ## 其他要知道的
 
@@ -80,4 +80,5 @@
 - **网页版 + 藏 key（推广前最该做的）**：现在只有安卓、要去 GitHub 下 APK，而且 key 打在公开的 APK 里。出一个网页版链接（`web/` 本来就是网页，放到免费托管上），用一个小中转服务（比如 Cloudflare Worker）藏 key 并按人限流；iPhone 也能用。用户认同方向，还没开始。小程序更麻烦，往后放。
 - **验证是不是自嗨**：除了用户自己，还没有人持续在用。找 5～10 个真人（他姐姐、同学、推特来的人）用一周，看谁还在记，再决定加什么，别一直堆功能。
 - **秒记再扩一点**：`fastLog` 现在只认吃过的、练过的；可以看用户实际说的话里哪些常常落到大模型、其实能本机记，再放宽（别放宽到会记错）。
+- **排计划再快一点**：问「明天吃什么」「这周怎么练」时，answer 和 plan 把同一份内容写了两遍（Atria 出字慢，整份要 30～60 秒）。可以让 answer 只写一两句要点、plan 一边出一边画进清单（`planPreview`）。v5.4 没做，改之前照「测试」一节在真实接口上比新旧。
 - **拍照记录**：讨论过，用户觉得难，先不做。

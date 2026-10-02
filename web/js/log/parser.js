@@ -10,7 +10,7 @@
     require('./food.js');
   }
   const TF = root.TF = root.TF || {};
-  const { MUSCLES, MEAL_TYPES, NUTRIENTS, num, cleanText, round1, mealTypeByHour, normMealType, mealTimes, mealSegments, findWeight, guessMuscle, readOverride, Native, FoodDB, MyFoods, groundItem, sizeOpts, sumItems } = TF;
+  const { MUSCLES, MEAL_TYPES, NUTRIENTS, num, cleanText, round1, mealTypeByHour, normMealType, mealTimes, mealSegments, findWeight, guessMuscle, saidWeight, readOverride, Native, FoodDB, MyFoods, groundItem, sizeOpts, sumItems } = TF;
 
   const summaryOf = (items) => cleanText(items.map(it => it.name + (it.amount || '')).join('、'), 60);
 
@@ -391,6 +391,9 @@
         if (!sets) { sets = last ? last.sets : 3; estimated = true; }
         if (!reps) { reps = last ? last.reps : 10; estimated = true; }
         weight = Math.max(0, round1(weight));
+        // 原话没说重量、这个数也不在原话里（「今天练了深蹲」记成上次的 100kg）：是估的。
+        // 大模型常忘了写 estimated（v5.4 例子里不再列它），新手没说重量时小人要靠它问一句「用了多重？」
+        if (!estimated && weight > 0 && ctx.said && !saidWeight(ctx.said) && !String(ctx.said).includes(String(weight))) estimated = true;
         sets = Math.max(1, Math.min(20, Math.round(sets)));
         reps = Math.max(1, Math.min(100, Math.round(reps)));
 
