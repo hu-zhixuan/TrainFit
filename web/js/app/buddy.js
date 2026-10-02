@@ -785,8 +785,11 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     const dayWord = (d) => (d === getTodayDateString() ? '今天' : d === shiftDateString(getTodayDateString(), 1) ? '明天' : `${+d.slice(5, 7)}月${+d.slice(8)}日`);
     const added = plan && (this.plans || []).some(x => x.date === planDate && x.from === this._lastAnswer.at);
     const where = days.length > 1 ? `这 ${days.length} 天` : dayWord(planDate);
+    // 有计划：动作、吃的画成一张张清单（按天分组），回答里已经画进清单的那几行就不重复了，只留说明
+    const shownText = plan ? this.planNotes(answer, days) : answer;
     pop.innerHTML = `<div class="buddy-pop-head">${esc(q.length > 26 ? q.slice(0, 25) + '…' : q)}</div>` +
-      `<p class="buddy-answer${opts.streaming && !opts.planning ? ' typing' : ''}">${esc(answer)}</p>` +
+      (shownText ? `<p class="buddy-answer${opts.streaming && !opts.planning ? ' typing' : ''}${plan ? ' notes' : ''}">${esc(shownText)}</p>` : '') +
+      (plan ? this.planPreview(days, dayWord) : '') +
       (opts.streaming ? `<p class="buddy-wait${opts.planning ? '' : ' hidden'}">正在排成计划，好了能一键加上<span class="think-dots"><i></i><i></i><i></i></span></p>` : '') +
       (plan ? `<div class="buddy-acts"><button class="buddy-act" type="button" data-pa="edit">改一改</button>` +
         `<button class="buddy-act primary" type="button" data-pa="add"${added ? ' disabled' : ''}>${added ? '✓ 已加到' : '加到'}${where}</button></div>` +
@@ -798,12 +801,24 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       e.stopPropagation();
       if (b.dataset.pa === 'add') {
         const from = this._lastAnswer.at;
-        const n = days.reduce((t, d) => t + this.addPlans(d.date, Object.assign({}, d, { from })), 0);
+        const n = days.reduce((t, d) => t + this.addPlans(d.date, Object.assign({}, d, { from }), true), 0);
+        this.saveData();
         b.disabled = true;
         b.textContent = `✓ 已加到${where}`;
         window.Haptics && window.Haptics.fire('success');
         window.Sound && window.Sound.play('success');
-        this.showToast(days.length > 1 ? `排好了 ${days.length} 天，从${dayWord(planDate)}开始，练完点 ✓ 就记上` : `加了 ${n} 条计划，到时候做完点 ✓ 就记上`);
+        if (!this._touring) this.buddyDo([['stand', 100], ['wave', 900], ['stand', 300]]);
+        // 清单一行一行打上勾，然后跳到那天，计划一行行落下来
+        const rows = [...pop.querySelectorAll('.pp-row')];
+        const quick = this.reducedMotion();
+        rows.forEach((r, i) => (quick ? r.classList.add('in') : setTimeout(() => r.classList.add('in'), 120 + i * 70)));
+        setTimeout(() => {
+          this.closeBuddyPop('answer');
+          this.selectedDate = planDate;
+          this.render();
+          this.landPlanRows();
+          this.showToast(days.length > 1 ? `排好了 ${days.length} 天，练完点 ✓ 就记上` : `加了 ${n} 条，做完点 ✓ 就记上`);
+        }, quick ? 300 : 120 + rows.length * 70 + 700);
       } else {
         pop.querySelector('.buddy-tip').classList.remove('hidden');
         const talk = document.querySelector('#voice-row:not(.hidden) .talk-btn') || document.querySelector('#text-row:not(.hidden) .cmp-text');
@@ -957,6 +972,46 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     clearTimeout(this._askT);
     this._askT = setTimeout(() => this.closeBuddyPop('tip'), 9000);
     return true;
+  },
+
+  /** 气泡里的计划清单：按天一组，每行一个勾、名字、份量 / 重量，动作下面一句要点 */
+  planPreview(days, dayWord) {
+    const WK = '日一二三四五六';
+    let k = 0;
+    return '<div class="plan-preview">' + days.map(d => {
+      const meals = d.meals || [], lifts = d.workouts || [];
+      const kcal = meals.reduce((t, m) => t + (m.calories || 0), 0);
+      const prot = meals.reduce((t, m) => t + (m.proteinG || 0), 0);
+      const right = kcal ? `约 ${fmt(kcal)} kcal · 蛋白 ${fmt(prot)}g` : `${lifts.length} 个动作`;
+      const wd = WK[new Date(d.date + 'T00:00:00').getDay()];
+      const rows = meals.map(m => ({ tag: m.mealType.replace('/补剂', ''), name: m.foodSummary, val: `${fmt(m.calories)} kcal` }))
+        .concat(lifts.map(w => ({ tag: w.durationMin ? '有氧' : '', name: w.exerciseName, tip: w.tip,
+          val: w.durationMin ? `${w.durationMin} 分钟` : `${w.weightKg > 0 ? round1(w.weightKg) + 'kg' : '自重'} ${w.sets}×${w.reps}` })));
+      return `<div class="pp-day"><div class="pp-head"><b>${esc(dayWord(d.date))} · 周${wd}</b><span>${esc(right)}</span></div>` +
+        rows.map(r => `<div class="pp-row" style="--i:${k++}"><span class="pp-tick"></span><div class="pp-main">` +
+          `<div class="pp-title">${r.tag ? `<em>${esc(r.tag)}</em>` : ''}${esc(r.name)}</div>${r.tip ? `<div class="pp-tip">${esc(r.tip)}</div>` : ''}</div>` +
+          `<span class="pp-val">${esc(r.val)}</span></div>`).join('') + '</div>';
+    }).join('') + '</div>';
+  },
+
+  /** 回答里没画进清单的那几行（「重量先轻点」「练完喝杯蛋白粉」），最多 3 行 */
+  planNotes(answer, days) {
+    const names = [];
+    days.forEach(d => {
+      (d.workouts || []).forEach(w => names.push(w.exerciseName));
+      (d.meals || []).forEach(m => (m.items || []).forEach(i => names.push(i.name)));
+    });
+    const keys = names.filter(n => n && n.length >= 2).map(n => n.slice(0, 4));
+    return String(answer || '').split('\n').filter(l => l.trim() && !keys.some(n => l.includes(n))).slice(0, 3).join('\n');
+  },
+
+  /** 加进计划后跳到那天：计划一行行落下来，滚到看得见 */
+  landPlanRows() {
+    const rows = [...document.querySelectorAll('#timeline .item.plan')];
+    if (!rows.length) return;
+    rows.forEach((r, i) => { r.style.setProperty('--i', i); r.classList.add('land'); });
+    rows[0].scrollIntoView({ block: 'center', behavior: this.reducedMotion() ? 'auto' : 'smooth' });
+    setTimeout(() => rows.forEach(r => r.classList.remove('land')), 1800 + rows.length * 70);
   },
 
   /** 计划写成几行字（给大模型看「刚才给的计划」） */

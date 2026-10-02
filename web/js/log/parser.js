@@ -174,6 +174,7 @@
         '   下面「记住的食物」是用户确认过的数：说到同样的东西（同名或明显是同一样）就用那里的名字，数值按份数换算；只是相似的不要套用。burnedCalories 按常见强度估算。',
         '5. 用户说「记错了/改成/其实是/只吃了一半/删掉/不算」，或者回头补充某样东西（「刚才那个牛奶是甜的，包装上写每100毫升290千焦」「鸡蛋其实只吃了一个」），是在改已有记录：用 update 或 delete，引用下面的编号，不要重复新增。',
         '   接着补充刚记的那一顿（「火锅是羊肉的」「锅底是牛油的」「肉吃了三盘」「吃得挺多」「是汉堡王的」）也是改：按新的描述把那一条重估一遍，用 update 改，没说吃了新东西就不要新增。',
+        '   记到了别的日子（「记错日子了」「挪到前一天」「这是昨天吃的」「放到后天」）：用 update，set 里写 "dayOffset":-1（相对正在看的这天，前一天 -1、后一天 1），整条挪过去，不要删了重新加。',
         '   update 的 set 里只写要改的字段。改一餐里的某几样：set.items 里只写这几样（写全 name、amount、grams 和数值），name 用下面记录里的原名，换了名字就加 "was":"原名"；没写到的会原样保留。去掉某一样写 {"name":"原名","remove":true}。整餐的量都变了（「只吃了一半」）就把每一样都写上。',
         '6. 说「昨天」「昨晚」dayOffset=-1，「前天」=-2，否则 0；修改和删除只针对下面列出的这天记录。',
         '7. 用户报自己的体重（「体重62.5」「今天称了124斤」「早上61公斤」）：bodyWeight 填公斤数（斤÷2；没说单位就参考下面的最近体重判断是斤还是公斤）。没说体重就填 null。训练用的重量不是体重。',
@@ -308,6 +309,10 @@
           }
         }
         if (set.muscleGroup && !MUSCLES.includes(set.muscleGroup)) delete set.muscleGroup;
+        // 挪到别的日子：相对正在看的这天几天（大模型偶尔直接写日期，也认）
+        const mv = num(u.set.dayOffset);
+        if (mv !== null && Math.round(mv) !== 0 && Math.abs(mv) <= 7) set.dayOffset = Math.round(mv);
+        else if (/^\d{4}-\d{2}-\d{2}$/.test(String(u.set.date || ''))) set.date = String(u.set.date);
         if (Object.keys(set).length) out.updates.push({ ref: u.ref, set });
       });
       (Array.isArray(parsed && parsed.delete) ? parsed.delete : []).forEach(ref => { if (refs.has(ref)) out.deletes.push(ref); });
@@ -423,6 +428,18 @@
           items
         });
       });
+      // 兜底：说的是「挪到前一天」，大模型却只删了没加（实测 main 的提示词 8 次里 3 次这样，记录就没了）——不删，改成挪
+      const said = String(ctx.said || '');
+      if (out.deletes.length && !out.meals.length && !out.workouts.length && /挪|移到|放到|改到|弄到|搬到|记错(日子|天)/.test(said)) {
+        const day = (base, n) => { const d = new Date(base); d.setDate(d.getDate() + n); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+        const viewed = /^\d{4}-\d{2}-\d{2}$/.test(ctx.date || '') ? new Date(ctx.date + 'T00:00:00') : now;
+        const to = /前一天|上一天/.test(said) ? day(viewed, -1) : /后一天|下一天/.test(said) ? day(viewed, 1)
+          : /前天/.test(said) ? day(now, -2) : /昨天|昨晚/.test(said) ? day(now, -1) : /后天/.test(said) ? day(now, 2) : /明天/.test(said) ? day(now, 1) : '';
+        const moved = out.deletes;
+        out.deletes = [];
+        if (to) moved.forEach(ref => { if (!out.updates.some(u => u.ref === ref)) out.updates.push({ ref, set: { date: to } }); });
+        else out.reply = '没听清挪到哪天，再说一次，比如「挪到昨天」';
+      }
       const n = out.meals.length;
       out.meals = separateSupps(splitByTime(out.meals, ctx.said));
       // 拆开了：大模型那句「已记早餐…」就不对了

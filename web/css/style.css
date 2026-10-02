@@ -147,6 +147,7 @@ b, .num { font-variant-numeric: tabular-nums; }
   color: var(--text-2);
 }
 .group-head b { font-size: 0.8rem; font-weight: 600; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.group-head.plan-head b { color: var(--accent-text); }
 .date-label {
   flex: 1;
   border: none;
@@ -557,6 +558,40 @@ body.has-buddy .views { padding-bottom: calc(var(--cmp-h, 110px) + 52px + var(--
 .portion-opt.skip.on { background: var(--surface-2); color: var(--text-2); border-color: var(--line); }
 .buddy-pop[data-mode="ask"] { width: min(300px, calc(100vw - 32px)); }
 /* 点小人：训练建议（今天可以练哪儿） */
+/* 计划：「完成 2/5」+ 进度条；点 ✓ 先打勾划掉滑走；加进来时一行行落下 */
+.plan-bar { height: 4px; margin: 6px 2px 2px; border-radius: 2px; background: var(--line); overflow: hidden; }
+.plan-bar i { display: block; height: 100%; border-radius: 2px; background: var(--accent); transition: width 0.6s cubic-bezier(0.3, 1, 0.4, 1); }
+.item.plan.checking .plan-done { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.item.plan.checking .item-title { text-decoration: line-through; opacity: 0.55; }
+.item.plan.land { border-color: var(--accent); }
+@media (prefers-reduced-motion: no-preference) {
+  .item.plan.checking { animation: planDone 0.42s ease-in forwards; }
+  .item.plan.checking .plan-done { animation: ppTick 0.3s ease-out; }
+  .item.plan.land { animation: planLand 0.55s cubic-bezier(0.2, 1.3, 0.4, 1) both; animation-delay: calc(var(--i, 0) * 70ms); }
+}
+@keyframes planDone { 0%, 45% { opacity: 1; transform: none; } 100% { opacity: 0; transform: translateX(24px); } }
+@keyframes planLand { 0% { opacity: 0; transform: translateY(-16px) scale(0.97); } 65% { opacity: 1; transform: translateY(2px); } 100% { transform: none; } }
+/* 小人给的计划：气泡里画成清单，按天一组 */
+.buddy-answer.notes { font-size: 0.86rem; color: var(--text-2); }
+.plan-preview { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.pp-day { padding: 8px 10px 4px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface-2); }
+.pp-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 2px; font-size: 0.74rem; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.pp-head b { font-size: 0.84rem; color: var(--text); }
+.pp-row { display: grid; grid-template-columns: 18px 1fr auto; gap: 8px; align-items: start; padding: 7px 0; border-top: 1px dashed var(--line); }
+.pp-head + .pp-row { border-top: 0; }
+.pp-tick { position: relative; width: 16px; height: 16px; margin-top: 2px; border: 1.5px solid var(--text-3); border-radius: 50%; box-sizing: border-box; transition: background-color 0.2s ease, border-color 0.2s ease; }
+.pp-row.in .pp-tick { background: var(--accent); border-color: var(--accent); }
+.pp-row.in .pp-tick::after { content: ''; position: absolute; left: 4.5px; top: 1.5px; width: 3.5px; height: 7.5px; border: solid var(--accent-ink); border-width: 0 2px 2px 0; transform: rotate(45deg); }
+.pp-title { font-size: 0.86rem; font-weight: 600; line-height: 1.4; color: var(--text); }
+.pp-title em { margin-right: 5px; font-style: normal; font-size: 0.7rem; font-weight: 650; color: var(--text-3); }
+.pp-tip { margin-top: 1px; font-size: 0.72rem; line-height: 1.4; color: var(--accent-text); }
+.pp-val { font-size: 0.78rem; color: var(--text-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+@media (prefers-reduced-motion: no-preference) {
+  .pp-row { animation: ppIn 0.34s cubic-bezier(0.2, 0.9, 0.3, 1) both; animation-delay: calc(var(--i, 0) * 45ms); }
+  .pp-row.in .pp-tick { animation: ppTick 0.3s ease-out; }
+}
+@keyframes ppIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes ppTick { 0% { transform: scale(0.5); } 60% { transform: scale(1.25); } 100% { transform: scale(1); } }
 /* 计划里动作的一句要点（新手看得懂怎么做） */
 .item.plan .item-tip { margin-top: 2px; font-size: 0.74rem; line-height: 1.45; color: var(--accent-text); white-space: normal; }
 .buddy-obs { margin: 6px 0 0; font-size: 0.82rem; line-height: 1.5; color: var(--text-2); }

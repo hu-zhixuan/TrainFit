@@ -6,13 +6,16 @@
  * 存在 fit_plans：[{ id, date, kind: 'meal' | 'workout', ts, ...和记录一样的字段 }]，跟着备份走。
  */
 Object.assign(FitnessApp.prototype, {
+  /** 那天的计划（做完的也算在里面，用来算「完成 2/5」；要没做的用 todoPlans） */
   plansFor(date) {
     return (this.plans || []).filter(p => p.date === date)
       .sort((a, b) => (a.kind === b.kind ? (a.kind === 'meal' ? MEAL_TYPES.indexOf(a.mealType) - MEAL_TYPES.indexOf(b.mealType) : 0) || a.ts - b.ts : (a.kind === 'meal' ? -1 : 1)));
   },
 
+  todoPlans(date) { return this.plansFor(date).filter(p => !p.done); },
+
   /** 把小人给的计划放到那一天（同一天原来的计划换掉，免得改了几次叠在一起） */
-  addPlans(date, plan) {
+  addPlans(date, plan, noSave) {
     const stamp = Date.now();
     const from = plan.from || stamp;
     const meals = (plan.meals || []).map((m, i) => ({
@@ -26,8 +29,7 @@ Object.assign(FitnessApp.prototype, {
       durationMin: w.durationMin || undefined, burnedCalories: w.burnedCalories, tip: w.tip || undefined
     }));
     this.plans = (this.plans || []).filter(p => p.date !== date).concat(meals, lifts);
-    this.saveData();
-    this.render();
+    if (!noSave) { this.saveData(); this.render(); }
     return meals.length + lifts.length;
   },
 
@@ -46,7 +48,9 @@ Object.assign(FitnessApp.prototype, {
         sets: p.sets, reps: p.reps, durationMin: p.durationMin, rpe: 8.0, burnedCalories: p.burnedCalories, notes: '照计划' };
       this.workouts.unshift(rec);
     }
-    this.plans = this.plans.filter(x => x.id !== id);
+    // 留着、标成做完：「计划」那行的进度条要算「完成 2/5」
+    p.done = true;
+    p.recId = rec.id;
     this.saveData();
     this.render();
     window.Haptics && window.Haptics.fire('success');
@@ -57,12 +61,29 @@ Object.assign(FitnessApp.prototype, {
       const list = p.kind === 'meal' ? this.diet : this.workouts;
       const i = list.findIndex(x => x.id === rec.id);
       if (i !== -1) list.splice(i, 1);
-      this.plans.push(p);
+      delete p.done;
+      delete p.recId;
       this.saveData();
       this.render();
     };
     const fb = p.kind === 'workout' ? this.liftFeedback(rec) : '';
     if (window.QuickLog && window.QuickLog.showUndo) window.QuickLog.showUndo('✓ 照计划记上了', fb ? [line, fb] : [line], undo);
+  },
+
+  /** 点 ✓：这一行先打勾、划掉、滑走，再变成记录 */
+  checkPlan(btn, id) {
+    const row = btn.closest('.item.plan');
+    window.Haptics && window.Haptics.fire('tick');
+    if (!row || this.reducedMotion()) { this.donePlan(id); return; }
+    row.classList.add('checking');
+    setTimeout(() => this.donePlan(id), 420);
+  },
+
+  /** 进度条从上次的位置长到现在的位置 */
+  growPlanBar() {
+    const bar = document.querySelector('#timeline .plan-bar i[data-to]');
+    if (!bar) return;
+    requestAnimationFrame(() => requestAnimationFrame(() => { bar.style.width = bar.dataset.to + '%'; }));
   },
 
   dropPlan(id) {
@@ -71,9 +92,14 @@ Object.assign(FitnessApp.prototype, {
     this.render();
   },
 
+  /** 大模型说「早餐照计划吃了」：那几条标成做完（记录大模型已经记了） */
+  markPlansDone(ids) {
+    (this.plans || []).forEach(p => { if (ids.includes(p.id)) p.done = true; });
+  },
+
   /** 给大模型看的：这天还没做的计划（「早餐照计划吃了」时用） */
   planContext(date) {
-    return this.plansFor(date).map((p, i) => ({
+    return this.todoPlans(date).map((p, i) => ({
       ref: 'p' + (i + 1), id: p.id,
       text: p.kind === 'meal' ? `${p.mealType} ${p.foodSummary} ${p.calories}kcal 蛋白${p.proteinG || 0}`
         : `训练 ${p.exerciseName} ${p.durationMin ? p.durationMin + '分钟' : (p.weightKg > 0 ? p.weightKg + 'kg' : '自重') + ` ${p.sets}组×${p.reps}次`}`
@@ -82,11 +108,16 @@ Object.assign(FitnessApp.prototype, {
 
   /** 今天页：计划那几行（虚线框、点 ✓ 记上、点 × 不要了） */
   renderPlanRows(date) {
-    const list = this.plansFor(date);
-    if (!list.length) return '';
-    const kcal = list.reduce((s, p) => s + (p.kind === 'meal' ? p.calories || 0 : 0), 0);
-    const prot = list.reduce((s, p) => s + (p.kind === 'meal' ? p.proteinG || 0 : 0), 0);
-    let html = `<div class="group-head"><span>计划</span><b>${kcal ? `约 ${fmt(kcal)} kcal · 蛋白 ${fmt(prot)}g` : '做完点 ✓'}</b></div>`;
+    const all = this.plansFor(date);
+    if (!all.length) return '';
+    const list = all.filter(p => !p.done);
+    const done = all.length - list.length;
+    const pct = Math.round(done / all.length * 100);
+    // 「计划  完成 2/5」+ 一根进度条；全做完了只留一行
+    let html = `<div class="group-head plan-head"><span>计划</span><b>${done ? (list.length ? `完成 ${done}/${all.length}` : `全部完成 ✓`) : '做完点 ✓'}</b></div>` +
+      `<div class="plan-bar${list.length ? '' : ' full'}"><i style="width:${this._planPct && this._planPct[date] != null ? this._planPct[date] : pct}%" data-to="${pct}"></i></div>`;
+    this._planPct = Object.assign(this._planPct || {}, { [date]: pct });
+    if (!list.length) return html;
     html += list.map(p => {
       const meal = p.kind === 'meal';
       const title = meal ? `<span class="tag tag-meal">${esc(p.mealType.replace('/补剂', ''))}</span>${esc(p.foodSummary)}`
