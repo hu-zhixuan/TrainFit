@@ -1,13 +1,15 @@
 // 临时：v4.1 计划（定明天食谱 → 改一改 → 照计划吃了），用 App 同样的提示词、流式调真实 Atria（不打印 key）
 global.window = global;
-const TF = require('../web/js/log/parser.js');
+const OLD = process.env.PARSER === 'old';
+const TF = require(OLD ? './old/web/js/log/parser.js' : '../web/js/log/parser.js');
+const TAG = process.env.TAG || (OLD ? '旧' : '新');
 const P = TF.Parser;
 const key = (process.env.LLM_API_KEY || '').split(/\r?\n/).map(s => s.trim()).find(Boolean) || '';
 const base = (process.env.LLM_BASE_URL || 'https://api.atria-asi.ai/v1').replace(/\/+$/, '');
 const model = process.env.LLM_MODEL || 'Atria-Dawn-Preview';
 const esc = (m) => String(m).replace(/%/g, '%25').replace(/\r/g, '').replace(/\n/g, '%0A').slice(0, 3500);
-const note = (t, m) => console.log(`::notice title=${t}::${esc(t + '\n' + m)}`);
-const err = (t, m) => console.log(`::error title=${t}::${esc(t + '\n' + m)}`);
+const note = (t, m) => console.log(`::notice title=[${TAG}] ${t}::${esc('[' + TAG + '] ' + t + '\n' + m)}`);
+const err = (t, m) => console.log(`::error title=[${TAG}] ${t}::${esc('[' + TAG + '] ' + t + '\n' + m)}`);
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
 const PLAN_TEXT = ['早餐 燕麦50g、鸡蛋2个、牛奶1杯 490kcal 蛋白28', '午餐 米饭1碗半、鸡胸肉200g、青菜 610kcal 蛋白59',
