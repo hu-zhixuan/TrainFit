@@ -498,3 +498,48 @@ test('小本本：大模型只加了「能吃辣」忘了划掉「不吃辣」�
   assert.deepStrictEqual(Parser.normalize({ memo: ['不吃香菜'] }, ctx).forget, []);
   assert.deepStrictEqual(Parser.normalize({ memo: ['不吃牛肉'] }, { memo: ['吃牛肉'] }).forget, ['吃牛肉']);
 });
+
+test('排好几天的训练：plan.days 整理好、按天排序、同一天只留一份；动作要点只在计划里留', () => {
+  const lift = (n, w, tip) => ({ exerciseName: n, muscleGroup: '腿部', weightKg: w, sets: 4, reps: 10, tip });
+  const r = Parser.normalize({ answer: '周五 腿\n周日 胸', plan: { days: [
+    { dayOffset: 3, workouts: [lift('杠铃卧推', 40, '肩胛收紧，杠铃落到胸口')] },
+    { dayOffset: 1, workouts: [lift('杠铃深蹲', 40, '膝盖跟脚尖一个方向'), lift('腿举', 80)] },
+    { dayOffset: 1, workouts: [lift('重复的一天', 10)] },
+    { dayOffset: 5, workouts: [] }] } }, {});
+  assert.deepStrictEqual(r.plan.days.map(d => d.dayOffset), [1, 3]);
+  assert.strictEqual(r.plan.days[0].workouts[0].tip, '膝盖跟脚尖一个方向');
+  assert.ok(!('tip' in r.plan.days[0].workouts[1]));
+  // 只有一天：还是原来的样子
+  const one = Parser.normalize({ answer: '今天练腿', plan: { dayOffset: 0, workouts: [lift('杠铃深蹲', 40, '蹲到大腿平')] } }, {});
+  assert.strictEqual(one.plan.dayOffset, 0);
+  assert.strictEqual(one.plan.workouts[0].tip, '蹲到大腿平');
+  // 真的记训练时不带要点
+  assert.ok(!('tip' in Parser.normalize({ add: { workouts: [lift('杠铃深蹲', 40, 'x')] } }, {}).workouts[0]));
+});
+
+test('明明在问练什么，大模型说「帮不上」：提醒一句再问一次；真的无关就不再问', async () => {
+  const origSend = Parser.send;
+  Parser.retryWaits = [0, 0];
+  Parser.hedgeMs = 0;
+  const reply = (o) => JSON.stringify({ choices: [{ message: { content: JSON.stringify(o) } }] });
+  try {
+    const bodies = [];
+    Parser.send = async (body) => {
+      bodies.push(body.messages[1].content);
+      return bodies.length === 1 ? reply({ reply: '帮不上', answer: '我只管吃和练，这个帮不上～' })
+        : reply({ reply: '给了你练腿的', answer: '深蹲 40kg 4×10\n腿举 80kg 4×12' });
+    };
+    const r = await Parser.parse('我操，我想练腿要怎么练啊', {});
+    assert.strictEqual(bodies.length, 2);
+    assert.ok(bodies[1].includes('不能说帮不上'));
+    assert.ok(/深蹲/.test(r.answer));
+    bodies.length = 0;
+    Parser.send = async (body) => { bodies.push(1); return reply({ reply: '帮不上', answer: '这个我帮不上，我只管吃和练' }); };
+    await Parser.parse('明天天气怎么样', {});
+    assert.strictEqual(bodies.length, 1);
+  } finally {
+    Parser.send = origSend;
+    delete Parser.retryWaits;
+    delete Parser.hedgeMs;
+  }
+});

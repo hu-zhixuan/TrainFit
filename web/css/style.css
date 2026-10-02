@@ -557,6 +557,8 @@ body.has-buddy .views { padding-bottom: calc(var(--cmp-h, 110px) + 52px + var(--
 .portion-opt.skip.on { background: var(--surface-2); color: var(--text-2); border-color: var(--line); }
 .buddy-pop[data-mode="ask"] { width: min(300px, calc(100vw - 32px)); }
 /* 点小人：训练建议（今天可以练哪儿） */
+/* 计划里动作的一句要点（新手看得懂怎么做） */
+.item.plan .item-tip { margin-top: 2px; font-size: 0.74rem; line-height: 1.45; color: var(--accent-text); white-space: normal; }
 .buddy-obs { margin: 6px 0 0; font-size: 0.82rem; line-height: 1.5; color: var(--text-2); }
 .buddy-train { margin: 6px 0 0; font-size: 0.82rem; line-height: 1.5; color: var(--accent-text); }
 .buddy-wait { display: flex; align-items: center; gap: 6px; margin: 10px 0 0; padding-top: 8px; border-top: 1px solid var(--line); font-size: 0.78rem; color: var(--text-3); }
