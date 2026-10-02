@@ -34,6 +34,23 @@ object OpenAiApi {
     private const val STREAM_MAX_MS = 150_000L
     private const val STREAM_MAX_CHARS = 24_000
 
+    /**
+     * 先把到大模型接口的连接建好（DNS、TCP、TLS 握手），留在系统的连接池里：按住说话时调一下，
+     * 松手后整理的请求直接用这条连接，不用再握手。只读一下模型列表，不花 token。
+     */
+    fun warm(cfg: ApiConfig) {
+        try {
+            val conn = (URL("${cfg.baseUrl}/models").openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"
+                connectTimeout = 10000
+                readTimeout = 10000
+                setRequestProperty("Authorization", "Bearer ${cfg.apiKey}")
+            }
+            readResponse(conn)
+        } catch (_: Exception) {
+        }
+    }
+
     fun chat(cfg: ApiConfig, body: JSONObject): ApiResult {
         return try {
             if (body.optString("model").isBlank()) body.put("model", cfg.model)
@@ -59,7 +76,13 @@ object OpenAiApi {
      * {"choices":[{"message":{"content":"…"}}]} 返回，网页那边解析不用改。
      * 服务商不认 stream、直接回整段 JSON 的，原样返回。读超时按「两段字之间」算。
      */
-    fun chatStream(cfg: ApiConfig, body: JSONObject, onDelta: (String) -> Unit): ApiResult {
+    fun chatStream(
+        cfg: ApiConfig,
+        body: JSONObject,
+        onConnection: (HttpURLConnection) -> Unit = {},
+        cancelled: () -> Boolean = { false },
+        onDelta: (String) -> Unit,
+    ): ApiResult {
         return try {
             if (body.optString("model").isBlank()) body.put("model", cfg.model)
             body.put("stream", true)
@@ -72,8 +95,15 @@ object OpenAiApi {
                 setRequestProperty("Accept", "text/event-stream")
                 setRequestProperty("Authorization", "Bearer ${cfg.apiKey}")
             }
+            // 补发的那份先出了字：这份被掐掉（网页那边调 llmCancel，断开这条连接，卡在读的地方会马上抛异常）
+            onConnection(conn)
+            if (cancelled()) return ApiResult(false, "CANCELLED")
             conn.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
             val code = conn.responseCode
+            if (cancelled()) {
+                conn.disconnect()
+                return ApiResult(false, "CANCELLED")
+            }
             if (code !in 200..299) {
                 val (_, text) = readResponse(conn)
                 return ApiResult(false, "HTTP $code ${text.take(300)}")
@@ -93,6 +123,10 @@ object OpenAiApi {
                         return ApiResult(false, "TOO_LONG ${content.length} chars")
                     }
                     val line = reader.readLine() ?: break
+                    if (cancelled()) {
+                        conn.disconnect()
+                        return ApiResult(false, "CANCELLED")
+                    }
                     if (!line.startsWith("data:")) continue
                     val data = line.substring(5).trim()
                     if (data == "[DONE]") break
@@ -106,7 +140,7 @@ object OpenAiApi {
                     }
                 }
             }
-            conn.disconnect()
+            // 读完了不 disconnect：连接留在连接池里，下一次请求接着用（disconnect 会把它关掉）
             val msg = JSONObject().put("role", "assistant").put("content", content.toString())
             ApiResult(true, JSONObject().put("choices", org.json.JSONArray().put(JSONObject().put("message", msg))).toString())
         } catch (e: Exception) {
@@ -163,11 +197,11 @@ object OpenAiApi {
         .replace(Regex("^\\s*language\\s+\\S+\\s*", RegexOption.IGNORE_CASE), "")
         .trim()
 
+    /** 读完整个回复再关掉流（不 disconnect）：这样连接会回到连接池，下一次请求不用重新握手 */
     internal fun readResponse(conn: HttpURLConnection): Pair<Int, String> {
         val code = conn.responseCode
         val stream = if (code in 200..299) conn.inputStream else conn.errorStream
         val text = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
-        conn.disconnect()
         return code to text
     }
 

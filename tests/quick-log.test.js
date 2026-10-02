@@ -267,6 +267,90 @@ test('大模型慢：过一会儿再发一份，谁先回来用谁；第一份�
   }
 });
 
+test('开口慢就换一份（v5.4）：7 秒没出字再发一份，谁先出字用谁，慢的那份马上掐掉', async () => {
+  const origSend = Parser.send;
+  Parser.hedgeMs = 30;
+  Parser.retryWaits = [0, 0];
+  const full = JSON.stringify({ reply: '记好了', add: { meals: [{ mealType: '午餐', foodSummary: '牛肉面1碗', items: [{ name: '牛肉面', amount: '1碗', grams: 500, whole: true, calories: 550, proteinG: 25, carbsG: 75, fatG: 15 }] }] } });
+  const ok = (c) => JSON.stringify({ choices: [{ message: { content: c } }] });
+  try {
+    let n = 0;
+    const cancelled = [];
+    Parser.send = (body, override, onDelta, handle) => {
+      const me = ++n;
+      return new Promise((resolve, reject) => {
+        const timers = [];
+        if (handle) handle.cancel = () => { cancelled.push(me); timers.forEach(clearTimeout); reject(new Error('CANCELLED')); };
+        if (me === 1) { timers.push(setTimeout(() => { onDelta('{"reply":"慢的"'); resolve(ok('{"reply":"慢的"}')); }, 400)); return; }
+        // 补发的这份很快开口，一段一段出字
+        timers.push(setTimeout(() => { onDelta(full.slice(0, 10)); onDelta(full.slice(10)); resolve(ok(full)); }, 10));
+      });
+    };
+    const t0 = Date.now();
+    const seen = [];
+    const r = await Parser.parse('中午一碗牛肉面', {}, (soFar) => seen.push(soFar));
+    assert.strictEqual(r.reply, '记好了');
+    assert.strictEqual(r.meals[0].calories, 550);
+    assert.strictEqual(n, 2);
+    assert.deepStrictEqual(cancelled, [1], '慢的那份被掐掉');
+    assert.ok(Date.now() - t0 < 300, '不用等慢的那份');
+    assert.ok(seen.every(x => !x.includes('慢的')), '慢的那份的字不往外送');
+    // 7 秒内就出字了：不补发
+    n = 0;
+    cancelled.length = 0;
+    Parser.send = (body, override, onDelta, handle) => {
+      n += 1;
+      if (handle) handle.cancel = () => cancelled.push(n);
+      return new Promise(resolve => { setTimeout(() => onDelta('{'), 5); setTimeout(() => resolve(ok(full)), 60); });
+    };
+    await Parser.parse('中午一碗牛肉面', {});
+    assert.strictEqual(n, 1);
+    assert.deepStrictEqual(cancelled, []);
+  } finally {
+    Parser.send = origSend;
+    delete Parser.hedgeMs;
+    delete Parser.retryWaits;
+  }
+});
+
+test('掐掉慢的那份：原生那边断开连接，网页这边马上算这份结束，晚到的结果不管', async () => {
+  const { Native } = TF;
+  const calls = [];
+  globalThis.TrainFitNative = {
+    llmChatStream(id) { calls.push('stream ' + id); },
+    llmCancel(id) { calls.push('cancel ' + id); }
+  };
+  try {
+    const h = {};
+    const pr = Native.chat({ messages: [] }, {}, null, () => {}, h);
+    assert.strictEqual(typeof h.cancel, 'function');
+    h.cancel();
+    await assert.rejects(pr, /CANCELLED/);
+    assert.match(calls[1], /^cancel r/);
+    assert.strictEqual(calls[0].slice(7), calls[1].slice(7), '掐的就是这一份');
+    globalThis.__tfLlm(calls[0].slice(7), true, '{}'); // 原生那边晚到的结果：不报错、不管
+    h.cancel(); // 再掐一次也没事
+  } finally {
+    delete globalThis.TrainFitNative;
+  }
+});
+
+test('大模型只写用得上的字段（v5.4）：没写 answer、next、plan、dayOffset…照样整理好', () => {
+  const sys = Parser.buildMessages('中午一碗牛肉面', {})[0].content;
+  assert.ok(!/"answer":null|"next":\[\],|"plan":null|"dayOffset":0/.test(sys), '例子里不再列一串空字段');
+  assert.match(sys, /只写用得上的字段/);
+  const r = Parser.normalize({ reply: '记好了', add: { meals: [{ mealType: '午餐', foodSummary: '牛肉面1碗', items: [{ name: '牛肉面', amount: '1碗', grams: 500, whole: true, calories: 550, proteinG: 25, carbsG: 75, fatG: 15 }] }] } }, { said: '中午一碗牛肉面' });
+  assert.strictEqual(r.meals.length, 1);
+  assert.strictEqual(r.dayOffset, 0);
+  assert.strictEqual(r.answer, '');
+  assert.deepStrictEqual([r.next, r.updates, r.deletes, r.remember, r.memo, r.forget, r.donePlans, r.workouts], [[], [], [], [], [], [], [], []]);
+  assert.strictEqual(r.plan, undefined);
+  assert.strictEqual(r.bodyWeight, undefined);
+  const w = Parser.normalize({ add: { workouts: [{ exerciseName: '跑步', muscleGroup: '有氧', durationMin: 30, burnedCalories: 300 }] } }, {});
+  assert.strictEqual(w.workouts[0].durationMin, 30);
+  assert.strictEqual(w.workouts[0].estimated, false);
+});
+
 test('边想边出字：拿到的是到目前为止的全部文字；卡住重试时从头算，不和上一次的半截拼起来', async () => {
   const origSend = Parser.send;
   Parser.retryWaits = [0, 0];

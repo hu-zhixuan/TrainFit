@@ -70,15 +70,21 @@
       try { return this.has() && root.TrainFitNative.getAsrInfo ? JSON.parse(root.TrainFitNative.getAsrInfo()) : null; } catch (e) { return null; }
     },
 
+    /** 按住说话 / 点开键盘时先连上大模型接口（原生那边一分钟最多连一次），松手后整理不用再等握手 */
+    warm() {
+      try { if (this.has() && root.TrainFitNative.warmLlm) root.TrainFitNative.warmLlm(JSON.stringify(readOverride())); } catch (e) {}
+    },
+
     llmInfo() {
       try { return this.has() ? JSON.parse(root.TrainFitNative.getLlmInfo()) : null; } catch (e) { return null; }
     },
 
     /**
      * onDelta：有的话走流式（原生 llmChatStream，边出字边回调 window.__tfLlmDelta），最后照样回调完整结果。
-     * Atria 实测要等 10～25 秒才出第一个字：流式时只要还在出字就不算超时
+     * Atria 多数 2～6 秒出第一个字，偶尔 15～18 秒（v5.4 实测）：流式时只要还在出字就不算超时
+     * handle：挂上 cancel()——补发的那份先出了字，这份就掐掉（原生那边断开连接，不再等、不再花 token）
      */
-    chat(body, override, timeoutMs, onDelta) {
+    chat(body, override, timeoutMs, onDelta, handle) {
       const stream = !!(onDelta && root.TrainFitNative.llmChatStream);
       return new Promise((resolve, reject) => {
         const id = 'r' + (++this._seq) + '_' + Date.now();
@@ -93,6 +99,13 @@
         const p = { resolve, reject, timer: setTimeout(expire, limit), hard: setTimeout(() => expire('TOO_LONG'), this.hardMs || 150000) };
         if (stream) p.onDelta = (chunk) => { clearTimeout(p.timer); p.timer = setTimeout(expire, limit); onDelta(chunk); };
         this._pending[id] = p;
+        if (handle) {
+          handle.cancel = () => {
+            if (!this._pending[id]) return;
+            try { if (root.TrainFitNative.llmCancel) root.TrainFitNative.llmCancel(id); } catch (e) {}
+            expire('CANCELLED');
+          };
+        }
         try {
           if (stream) root.TrainFitNative.llmChatStream(id, JSON.stringify(Object.assign({}, body, { stream: true })), JSON.stringify(override || {}));
           else root.TrainFitNative.llmChat(id, JSON.stringify(body), JSON.stringify(override || {}));

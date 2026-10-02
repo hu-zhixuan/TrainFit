@@ -39,7 +39,7 @@
         const usual = root.app.quickSuggestions().find(x => x.kind === 'meal' && x.usual && !x.done);
         if (usual) { root.app.quickRepeatKey(usual.key); return; }
       }
-      // 听着像提问：不出「正在整理」卡片，小人马上在气泡里说「我想想…」（Atria 要 10～25 秒才出第一个字）
+      // 听着像提问：不出「正在整理」卡片，小人马上在气泡里说「我想想…」（Atria 写完一整个回答要十几秒）
       const ask = !!((opts && opts.ask) || (looksLikeQuestion && looksLikeQuestion(text)));
       const p = root.app.addPending(text, ask);
       if (ask && root.app.showBuddyThinking) root.app.showBuddyThinking(text);
