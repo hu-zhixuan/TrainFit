@@ -13,6 +13,7 @@ const err = (t, m) => console.log(`::error title=${t}::${esc(t + '\n' + m)}`);
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
 const TIMES = [];
+const TOKS = [];
 const FAILED = [];
 async function call(label, text, hhmm, check, ctxExtra) {
   const [h, mi] = hhmm.split(':').map(Number);
@@ -36,6 +37,7 @@ async function call(label, text, hhmm, check, ctxExtra) {
   const raw = await res.text();
   const ms = Date.now() - t0;
   TIMES.push(ms);
+  try { const u = JSON.parse(raw).usage; if (u && u.completion_tokens) TOKS.push(u.completion_tokens); } catch (e) {}
   if (!res.ok) { err(`${label} HTTP ${res.status}`, raw.slice(0, 400)); return false; }
   let r;
   let fallback = '';
@@ -245,6 +247,8 @@ const inR = (what, v, a, b) => (v >= a && v <= b) || `${what} ${v} 不在 ${a}�
   }
   const t = TIMES.slice().sort((a, b) => a - b);
   const q = (f) => t.length ? (t[Math.min(t.length - 1, Math.floor(t.length * f))] / 1000).toFixed(1) + 's' : '-';
-  note(`[${TAG}] 汇总`, `通过 ${rs.filter(Boolean).length}/${rs.length} · 耗时中位 ${q(0.5)} · 九成以内 ${q(0.9)} · 最慢 ${q(0.999)}%0A没过：${FAILED.join('、') || '无'}`);
+  const tk = TOKS.slice().sort((a, b) => a - b);
+  const tq = (f) => tk.length ? tk[Math.min(tk.length - 1, Math.floor(tk.length * f))] : '-';
+  note(`[${TAG}] 汇总`, `通过 ${rs.filter(Boolean).length}/${rs.length} · 耗时中位 ${q(0.5)} · 九成以内 ${q(0.9)} · 最慢 ${q(0.999)} · 输出 token 中位 ${tq(0.5)}（九成以内 ${tq(0.9)}，平均 ${tk.length ? Math.round(tk.reduce((a, b) => a + b, 0) / tk.length) : '-'}）%0A没过：${FAILED.join('、') || '无'}`);
   process.exit(0);
 })();

@@ -11,10 +11,23 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: v5.4 提速：提示词长短、缓存、不写空字段（只用 Atria）
+      - name: v5.4 回归 44 句，新旧提示词同时跑（只用 Atria）
         env:
           TZ: Asia/Shanghai
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
           LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
           LLM_MODEL: ${{ vars.LLM_MODEL }}
-        run: node .github/speed_v54.js
+        run: |
+          GAP=20000 TAG=新 node .github/api_check.js > new.log 2>&1 &
+          sleep 7
+          GAP=20000 PARSER=old TAG=旧 node .github/api_check.js > old.log 2>&1 &
+          wait
+          cat new.log old.log
+      - name: v5.4 计划、挪日期、份量、小本本、练腿、接着问（新提示词，只用 Atria）
+        env:
+          TZ: Asia/Shanghai
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
+          LLM_MODEL: ${{ vars.LLM_MODEL }}
+        run: |
+          for f in api_plan api_move api_portion api_v45 api_v43 api_v48; do echo "=== $f"; GAP=15000 node .github/$f.js || true; done

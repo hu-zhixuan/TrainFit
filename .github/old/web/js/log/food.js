@@ -186,7 +186,10 @@
       const sameFood = ratio >= 0.8 && ratio <= 1.25;
       // 热量和蛋白质差的倍数一样（都差一倍）：是同一样东西，大模型把量算错了（实测「两个水煮蛋 100g」写成 286 千卡、25g 蛋白）
       const sameMix = pr > 0 && ratio > 0 && Math.abs(Math.log(pr / ratio)) < Math.log(1.25);
-      if (ratio >= 0.4 && ratio <= 2.5 && (!proteinOff || sameFood || sameMix)) {
+      // 自己整理的常见条目（src=dish，名字 / 别名完全对上）比大模型靠谱：差 4 倍也按库算
+      //（实测「贝贝南瓜 230g」大模型按普通南瓜写成 53 千卡，其实约 214 千卡）
+      const trusted = e.src === 'dish' && ratio >= 0.2 && ratio <= 5;
+      if (trusted || (ratio >= 0.4 && ratio <= 2.5 && (!proteinOff || sameFood || sameMix))) {
         return Object.assign(base, { src: e.src === 'cfct' ? '成分表' : '菜品库', dbName: e.name },
           vals(k, p, e.c * grams / 100, e.f * grams / 100));
       }
@@ -196,6 +199,26 @@
     return withN(Object.assign(base, { src: supp ? '补剂' : '估算' }, vals(ai.calories, ai.proteinG, ai.carbsG, ai.fatG)));
   }
 
+  /**
+   * 份量说得含糊（「一瓶甜牛奶」「一串烤白果」）：大模型给 2～3 个常见大小 [[「250ml」, 250], [「500ml」, 500]]，
+   * 记好后小人问一句，点哪个就按克数比例改。记住的、包装上的、补剂、选哪个热量都差不多的，不问。
+   * @param raw 大模型给的 opts；@param g groundItem 整理好的这一项
+   * @returns [{label, grams}] 或 null
+   */
+  function sizeOpts(raw, g) {
+    if (!Array.isArray(raw) || !g || !(g.grams > 0) || ['我的', '包装', '补剂'].includes(g.src)) return null;
+    const seen = new Set();
+    const opts = raw.map(o => {
+      const label = cleanText(Array.isArray(o) ? o[0] : o && (o.label || o.name), 10);
+      const grams = Math.round(num(Array.isArray(o) ? o[1] : o && o.grams) || 0);
+      return label && grams > 0 && grams <= 3000 ? { label, grams } : null;
+    }).filter(o => o && !seen.has(o.grams) && seen.add(o.grams)).slice(0, 3);
+    if (opts.length < 2) return null;
+    const gs = opts.map(o => o.grams);
+    const spread = (Math.max(...gs) - Math.min(...gs)) * g.calories / g.grams;
+    return spread >= 60 ? opts.sort((a, b) => a.grams - b.grams) : null;
+  }
+
   function sumItems(items) {
     return items.reduce((t, x) => ({
       calories: t.calories + x.calories, proteinG: round1(t.proteinG + x.proteinG),
@@ -203,7 +226,7 @@
     }), { calories: 0, proteinG: 0, carbsG: 0, fatG: 0 });
   }
 
-  Object.assign(TF, { FoodDB, MyFoods, countOf, groundItem, sumItems });
+  Object.assign(TF, { FoodDB, MyFoods, countOf, groundItem, sizeOpts, sumItems });
 
   if (typeof module !== 'undefined' && module.exports) module.exports = TF;
 })(typeof window !== 'undefined' ? window : globalThis);

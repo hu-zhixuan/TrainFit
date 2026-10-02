@@ -157,10 +157,67 @@
   function looksLikeQuestion(text) {
     const t = String(text || '');
     if (/[？?]\s*$/.test(t)) return true;
-    return /给我(定|制定|安排|推荐|出|做|列|想)|帮我(定|制定|安排|推荐|想|规划|看看)|(制定|安排|规划|推荐)(一下)?(明天|后天|今晚|晚上|下周|一周|一天)|(吃|练)点?(什么|啥)|该(吃|练)|(还)?(差|剩)多少|还能吃|能不能|可不可以|要不要|怎么(吃|练|办|样)|有什么(建议|推荐)|食谱|菜谱|训练计划|健身计划|吗[。！!]?\s*$/.test(t);
+    return /给我(定|制定|安排|推荐|出|做|列|想)|帮我(定|制定|安排|推荐|想|规划|看看)|(制定|安排|规划|推荐)(一下)?(明天|后天|今晚|晚上|下周|一周|一天)|(吃|练)点?(什么|啥)|该(吃|练)|(还)?(差|剩)多少|还能吃|能不能|可不可以|要不要|怎么(吃|喝|练|做|办|样)|给我排|帮我排|够不够|多不多|(练|吃|喝)多少|咋(行|办|样|整|弄|吃|喝|练|回事|没|不)|为(啥|什么)|行不行|好不好|有什么(建议|推荐)|食谱|菜谱|训练计划|健身计划|上(周|个月|一周)|这(周|个月)|几(次|天|顿|公斤|斤)|多少(次|天|斤|公斤|克|热量|卡)|哪(天|顿|个动作)|最(好|重|多|少)(的|是)|吗[。！!]?\s*$/.test(t);
   }
 
-  Object.assign(TF, { MUSCLES, MEAL_TYPES, num, cleanText, round1, mealTypeByHour, normMealType, mealTimes, mealSegments, NUTRIENTS, cleanNutrients, nutrientsText, toKg, quickWeight, findWeight, guessMuscle, looksLikeQuestion });
+  /**
+   * 问的是以前的事（「上周练了几次」「最近瘦了多少」「哪天吃得最多」）：要把最近两周一天一行带给大模型。
+   * 别的问题（「明天吃啥」「腿怎么练」）带一行画像就够了，省 token、也快。
+   */
+  function needsHistory(text) {
+    return /上(周|个?星期|个?礼拜|个?月|次|回)|这(周|星期|礼拜|个月|几天|段时间|阵子)|本(周|月)|最近|近(期|来|一周|两周|几天)|哪(天|一天|顿|次|回)|几(次|天|顿|回)|多少(天|次|回)|瘦了|胖了|轻了|重了|涨了|降了|掉了|长了|变化|趋势|以前|之前|昨天|前天|平均|一直|每天|天天|那天|连续|进步|退步|停滞|平台期|卡住|够不够|多不多/.test(String(text || ''));
+  }
+
+  /**
+   * 只是在问、没在报吃了练了什么（「晚上吃点啥」「上周练了几次」）。
+   * 「中午吃了牛肉面，晚上吃点啥」这种又记又问的不算——它没整理完时要留卡片，免得记录丢了。
+   */
+  function pureQuestion(text) {
+    const t = String(text || '');
+    if (!looksLikeQuestion(t)) return false;
+    return !/(吃|喝|练|跑|做|骑|游|走)了(?!几|多少|啥|什么|没)|体重\s*\d|称了|\d+(\.\d+)?\s*(克|g|公斤|kg|斤|组|个|次|分钟|碗|杯|片|块|根|勺|毫升|ml)/i.test(t);
+  }
+
+  /**
+   * 手机自己就能算的问题（「还差多少蛋白」「还能吃多少」「卧推最好多少」「这周练了几次」）：不问大模型，马上答。
+   * 只认整句都是这个意思的（去掉语气词以后从头到尾对得上），又记又问、问建议的都交给大模型。
+   * @param names 记过的动作名（认「卧推最好多少」里的卧推）
+   * @returns {{kind, name?, span?}} 或 null
+   */
+  function quickIntent(text, names) {
+    let t = String(text || '').toLowerCase()
+      .replace(/[\s，。,.!！？?、~～…]+/g, '')
+      .replace(/我操|卧槽|嗯+|呃+|啊|呀|吧|呢|哈|那个|就是|请问|小人|告诉我|帮我(看看|查查|算算|看一下|查一下|算一下)?|你(说)?|现在|目前|一下/g, '');
+    // 动作名：「卧推」能对上「杠铃卧推」
+    const list = [];
+    (names || []).forEach(n => {
+      list.push([n, n]);
+      const short = n.replace(/^(杠铃|哑铃|器械|史密斯|坐姿|站姿|绳索)/, '');
+      if (short !== n && short.length >= 2) list.push([short, n]);
+    });
+    list.sort((a, b) => b[0].length - a[0].length);
+    const hit = list.find(([k]) => t.includes(k.toLowerCase()));
+    if (hit) t = t.replace(hit[0].toLowerCase(), '§');
+    const R = (re) => re.test(t);
+    if (hit && (R(/^我?的?§的?(最好|最重|最大|记录|pr|上次|上一次)(的?成绩|的?重量|是|练了|做了)?(多少|几公斤|几kg|多重)?了?$/) ||
+        R(/^我?(上次|上一次)§(练了|做了|是|用了)?(多少|几公斤|多重)(公斤|kg)?$/))) return { kind: 'lift', name: hit[1] };
+    if (hit && R(/^§(下次|下一次)(该|要|应该)?(练|做|用)?(多少|多重|几公斤)(公斤|kg)?$/)) return { kind: 'lift', name: hit[1] };
+    if (hit) return null;
+    if (R(/^(今天)?我?的?蛋白质?(还)?(差|剩|缺|吃了|够了没|够了吗|够不够|够没够|多少了|有多少)(多少|几克)?了?(吗)?$/) ||
+        R(/^(今天)?(还)?(差|缺|剩)(多少|几克)蛋白质?了?$/)) return { kind: 'protein' };
+    if (R(/^(今天)?(我)?(还)?(能|可以)吃多少(热量|卡|大卡|千卡|kcal)?了?$/) || R(/^(今天)?(还)?剩(多少|几)(热量|卡|大卡|千卡|kcal)?了?$/) ||
+        R(/^(今天)?我?(已经)?吃了多少(热量|卡|大卡|千卡|kcal)?了?$/) || R(/^(今天)?(我)?(吃|热量)超了?(没|吗|没有)$/) ||
+        R(/^(今天)?热量(还)?(剩|差)?多少了?$/)) return { kind: 'kcal' };
+    if (R(/^(今天)?的?(热量)?赤字(是|有)?(多少|够不够|够了吗|够了没)了?$/)) return { kind: 'deficit' };
+    if (R(/^我?的?(最近|最新)?体重(是|有)?多少了?$/) || R(/^体重(变化|怎么样|有变化吗)$/)) return { kind: 'weight', span: 7 };
+    const sp = /这个月|本月|一个月|这一个月/.test(t) ? 30 : 7;
+    if (R(/^(我)?(这周|本周|这个星期|这礼拜|最近一周|这几天|最近|这个月|本月|一个月|这一个月)?(瘦|胖|掉|涨|轻|重)了(多少|几)(斤|公斤|kg)?了?$/)) return { kind: 'weight', span: sp };
+    if (R(/^我?(已经)?连续(记|打卡|记录)了?(几|多少)天了?$/) || R(/^我?(一共)?(记|记录)了(几|多少)天了?$/)) return { kind: 'streak' };
+    if (R(/^我?(这周|本周|这个星期|这礼拜|最近一周|这个月|本月)练了(几|多少)(次|天)了?$/)) return { kind: 'trains', span: sp };
+    return null;
+  }
+
+  Object.assign(TF, { MUSCLES, MEAL_TYPES, num, cleanText, round1, mealTypeByHour, normMealType, mealTimes, mealSegments, NUTRIENTS, cleanNutrients, nutrientsText, toKg, quickWeight, findWeight, guessMuscle, looksLikeQuestion, pureQuestion, needsHistory, quickIntent });
 
   if (typeof module !== 'undefined' && module.exports) module.exports = TF;
 })(typeof window !== 'undefined' ? window : globalThis);

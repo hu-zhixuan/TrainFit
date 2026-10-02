@@ -70,6 +70,11 @@
       try { return this.has() && root.TrainFitNative.getAsrInfo ? JSON.parse(root.TrainFitNative.getAsrInfo()) : null; } catch (e) { return null; }
     },
 
+    /** 按住说话 / 点开键盘时先连上大模型接口（原生那边一分钟最多连一次），松手后整理不用再等握手 */
+    warm() {
+      try { if (this.has() && root.TrainFitNative.warmLlm) root.TrainFitNative.warmLlm(JSON.stringify(readOverride())); } catch (e) {}
+    },
+
     llmInfo() {
       try { return this.has() ? JSON.parse(root.TrainFitNative.getLlmInfo()) : null; } catch (e) { return null; }
     },
