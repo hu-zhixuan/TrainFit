@@ -171,3 +171,27 @@ test('亲密度：五级，离下一级还差多少，满级不再长', () => {
   assert.strictEqual(Bond.PAT_LINES.length, Bond.LEVELS.length);
   assert.strictEqual(Bond.LEVEL_UP.length, Bond.LEVELS.length);
 });
+
+test('节日：公历每年一样，农历按年份；生日写法都认得', () => {
+  const Bond = require('../web/js/app/bond.js');
+  assert.strictEqual(Bond.festivalOf('2026-09-25').key, 'midautumn');
+  assert.strictEqual(Bond.festivalOf('2027-02-06').key, 'spring');
+  assert.strictEqual(Bond.festivalOf('2028-05-28').key, 'dragon');
+  assert.strictEqual(Bond.festivalOf('2031-02-14').key, 'valentine');
+  assert.ok(Bond.festivalOf('2026-12-31').text.includes('{days}'));
+  assert.strictEqual(Bond.festivalOf('2026-10-02'), null);
+  // 农历表里每年都有、日期格式对
+  for (const k of Object.keys(Bond.LUNAR)) assert.ok(Bond.LUNAR[k].every(d => /^\d{4}-\d{2}-\d{2}$/.test(d)), k);
+  assert.deepStrictEqual(['3月14日', '3.14', '0314', '03-14', ' 3 月 14 ', '12/1'].map(Bond.parseBirthday), ['03-14', '03-14', '03-14', '03-14', '03-14', '12-01']);
+  assert.deepStrictEqual(['13.1', '2月30日', '明天', ''].map(Bond.parseBirthday), ['', '', '', '']);
+});
+
+test('装备按拿到过的最长连续天数：断了也留着，下一个按现在连着几天算', () => {
+  const days = (from, n) => Array.from({ length: n }, (_, i) => { const d = new Date(from + 'T12:00:00'); d.setDate(d.getDate() + i); return d.toISOString().slice(0, 10); });
+  const dates = days('2026-08-01', 9).concat(days('2026-09-28', 2));
+  assert.strictEqual(Buddy.bestStreak(dates), 9);
+  assert.strictEqual(Buddy.bestStreak([]), 0);
+  assert.deepStrictEqual(Buddy.gearFor(Buddy.bestStreak(dates)), ['cap']);
+  assert.deepStrictEqual(Buddy.nextGear(9, 2), { name: '皇冠', days: 28 });
+  assert.ok(Buddy.compose({ mood: 'ok', gear: ['party'] }).px.flat().includes('I'), '生日派对帽');
+});

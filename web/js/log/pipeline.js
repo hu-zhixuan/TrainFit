@@ -203,6 +203,7 @@
       this.showSnack(batch, result);
       if (result.answer && app.showBuddyAnswer) app.showBuddyAnswer(p.text, result.answer, answerOpts); // 又记又问
       else if (batch.asks.length && app.askPortion) app.askPortion(batch.asks); // 份量含糊：小人问一句，点一下就改
+      else if (app.memoTip && app.memoTip(result, batch)) { /* 你说过有伤：练到那儿提醒一句 */ }
       else if (app.newbieTip && app.newbieTip(result)) { /* 新手第一周：小人说一句小提示 */ }
       else if (app.coachTip && app.coachTip(result, batch)) { /* 该提醒的时候说一句：破纪录、晚上蛋白还差很多、吃超了 */ }
       else if (app.askFeeling && app.askFeeling(result, batch)) { /* 练完问一句感受，下次加重量按这个来 */ }

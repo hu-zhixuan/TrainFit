@@ -42,6 +42,12 @@
     - 长按小人摸头（`patBuddy`：闭眼冒爱心 `love`，话按等级 `PAT_LINES`），连戳三下 `pokeBuddy`；认识满 7 / 30 / 100… 天 `anniversary`；Lv2 起没名字问一次 `askName`（`profile.buddy.name`，默认「小练」）。
     - 更主动（`chat.js`）：话多少 `talkLevel()`（`profile.buddy.talk`，旧的 `chatty: false` 算安静）；离开 3 小时以上回来 `welcomeBack`（`tf_seen`，一天两次）；`dayNote`（`tf_daylog`，最近 7 天睡得怎么样 / 歇不歇）让第二天接着问；熟了（Lv3）没事也打个招呼。
     - 通知用小人的口吻：`buddyPushLines` 算好 `say`（今天）/ `sayNext`（明天没打开时）/ `away`（好几天没打开的晚上那条）放进 `pushDayState`，`Reminders.buddyLine` 有就用，标题是小人的名字。关了小人就不带，用原来的话。
+    - v5.7 被记住、被看见（用户发来的乙女游戏原理：「被坚定地选择、被专注地看见」；记住用户、渐进解锁、对等的脆弱、日常仪式、多感官、选择有影响；**陪伴不绑架**，别搞断签惩罚、FOMO）：
+      `memoTip`（小本本里有膝 / 腰 / 肩的伤，练到那儿提醒，排在 `newbieTip` 前面）；`whisper` 悄悄话（`whispers()` 按等级解锁，用你自己的记录：说的第一句 `said`、吃得最多的、最重的一次；两天最多一条，`tf_whisper`，要先打过招呼）；
+      `seenLine` 被看见（连着几天早饭、蛋白够、某个动作涨了、轻了、这周练得多；同一件 4 天不重复，`tf_seen_said`；打招呼时昨天的事是挑毛病就先说这个）；
+      `festivalGreet`（`TF.Bond.festivalOf`：公历固定 + 农历表写死 2026～2028，**2029 年以前要补**）、生日 `profile.birthday`（`askBirthday`，那天 `buddyState` 给派对帽 `party`）；
+      `askOnce` 熟了以后一天问一件：名字 → 生日 → 说话风格（`askTone`，答案进小本本，大模型照着来）；`typeOut` 主动说的话逐字打出 + `Sound.babble` 对话音；装备按最长连续天数 `bestStreak`，断了不收回。
+      `greetOrGuide` 的顺序：升级 > 纪念日 > 节日生日 > 每天第一次招呼 > 第一条 > 饭点 > 回来了 > 一次性问题 > 悄悄话。
 
 ## 工作流
 

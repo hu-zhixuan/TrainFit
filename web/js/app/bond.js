@@ -44,7 +44,51 @@
   // 升到这一级时说的话
   const LEVEL_UP = ['', '我们熟起来了，以后有啥直接跟我说。', '我们算是健身搭子了。', '老搭子了，你的习惯我差不多都摸清了。', '现在我应该是最懂你的那个了。'];
 
-  TF.Bond = { LEVELS, GAIN, DAY_CAP, PAT_CAP, ANNIVERSARY, PAT_LINES, POKE_LINES, LEVEL_UP, info };
+  // 节日（v5.7，日常仪式感）：公历的每年一样；农历的按年份写死（2026～2028），过了再补
+  const FIXED = {
+    '01-01': ['newyear', '新年第一天。今年也一起，慢慢来就行。'],
+    '02-14': ['valentine', '情人节快乐。不管今天跟谁过，我都在这儿。'],
+    '05-20': ['520', '今天 520。……也没什么，就是想说，谢谢你每天都来。'],
+    '10-01': ['national', '国庆快乐！放假吃好玩好，记得动一动，我陪你记。'],
+    '12-24': ['xmaseve', '平安夜快乐。吃个苹果，八十来千卡，放心吃。'],
+    '12-25': ['xmas', '圣诞快乐。今天想吃点好的就吃，记上就行。'],
+    '12-31': ['yearend', '今年最后一天。这一年你记了 {days} 天，辛苦了，明年接着一起。']
+  };
+  const LUNAR = {
+    eve: ['2026-02-16', '2027-02-05', '2028-01-25'],
+    spring: ['2026-02-17', '2027-02-06', '2028-01-26'],
+    lantern: ['2026-03-03', '2027-02-20', '2028-02-09'],
+    dragon: ['2026-06-19', '2027-06-09', '2028-05-28'],
+    qixi: ['2026-08-19', '2027-08-08', '2028-08-26'],
+    midautumn: ['2026-09-25', '2027-09-15', '2028-10-03']
+  };
+  const LUNAR_TEXT = {
+    eve: '除夕快乐！年夜饭敞开吃，记个大概就行，今天不跟你算赤字。',
+    spring: '过年好！这几天吃多了别慌，记着就行，年后我们一起找回来。',
+    lantern: '元宵节快乐。汤圆一个 70 千卡左右，吃了几个说一声。',
+    dragon: '端午安康。粽子一个两百来千卡，肉粽更多，吃了说一声。',
+    qixi: '七夕快乐。今天有人陪你吗？没有的话，我陪你。',
+    midautumn: '中秋快乐。月饼一个四百来千卡，吃一个就好，剩下的明天再吃。'
+  };
+  /** 这天是什么节日：{ key, text } 或 null */
+  function festivalOf(date) {
+    for (const k of Object.keys(LUNAR)) if (LUNAR[k].includes(date)) return { key: k, text: LUNAR_TEXT[k] };
+    const f = FIXED[String(date).slice(5)];
+    return f ? { key: f[0], text: f[1] } : null;
+  }
+
+  /** 「3月14日」「3.14」「0314」「3-14」→ '03-14'；认不出来返回 '' */
+  function parseBirthday(text) {
+    const t = String(text || '').replace(/\s+/g, '');
+    const m = /(\d{1,2})[月.\-/](\d{1,2})/.exec(t) || /^(\d{2})(\d{2})$/.exec(t);
+    if (!m) return '';
+    const mo = +m[1], d = +m[2];
+    const days = [0, 31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    if (!(mo >= 1 && mo <= 12 && d >= 1 && d <= days[mo])) return '';
+    return `${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  }
+
+  TF.Bond = { LEVELS, GAIN, DAY_CAP, PAT_CAP, ANNIVERSARY, PAT_LINES, POKE_LINES, LEVEL_UP, LUNAR, info, festivalOf, parseBirthday };
   if (typeof module !== 'undefined' && module.exports) module.exports = TF.Bond;
 })(typeof window !== 'undefined' ? window : globalThis);
 
@@ -242,7 +286,8 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     if (!pop) return;
     pop.dataset.mode = 'quip';
     pop.dataset.level = 'none';
-    pop.innerHTML = `<p class="buddy-say">${esc(text)}</p>`;
+    pop.innerHTML = `<p class="buddy-say"></p>`;
+    this.typeOut(pop.querySelector('.buddy-say'), text);
     this.positionBuddyPop();
     this.popIn(pop);
     document.getElementById('gauge-pop').classList.add('hidden');
@@ -312,7 +357,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       this.setBuddy({ name: n });
       this.bondGain('answer');
       const say = pop.querySelector('.buddy-say');
-      say.textContent = `好，以后我就叫${n}了。`;
+      this.typeOut(say, `好，以后我就叫${n}了。`);
       say.classList.add('reply');
       pop.querySelectorAll('.name-row, .chat-opts').forEach(x => x.remove());
       this.positionBuddyPop();
@@ -331,6 +376,224 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     clearTimeout(this._askT);
     this._askT = setTimeout(() => this.closeBuddyPop('chat'), 45000);
     return true;
+  },
+
+  // ================= v5.7 被记住、被看见 =================
+  // 乙女游戏抓人的是「被坚定地选择、被专注地看见」：叫你的名字、记得你说过的话、看见你做到的具体的事、
+  // 关系越近越愿意说心里话、日常有仪式感。但只陪着、不绑架：没有断签惩罚、没有「再不来就……」。
+
+  /** 今天是不是用户生日（profile.birthday 'MM-DD'） */
+  isBirthday() {
+    const b = this.profile.birthday;
+    return !!b && getTodayDateString().slice(5) === b;
+  },
+
+  /** 生日、节日那天第一次打开：说一句（生日戴派对帽、冒爱心） */
+  festivalGreet() {
+    if (!this.chatty() || this._touring || this.needsOnboarding) return false;
+    const pop = document.getElementById('buddy-pop');
+    if (!pop || !pop.classList.contains('hidden')) return false;
+    const today = getTodayDateString();
+    let said = '';
+    try { said = localStorage.getItem('tf_fest') || ''; } catch (e) {}
+    if (said === today) return false;
+    const name = this.userName();
+    let text;
+    if (this.isBirthday()) text = `生日快乐${name ? '，' + name : ''}！今天想吃啥就吃，蛋糕我不算你的。又长大一岁，也又强了一点。`;
+    else {
+      const f = TF.Bond.festivalOf(today);
+      if (!f) return false;
+      const days = new Set(this.recordDates().filter(d => d.slice(0, 4) === today.slice(0, 4))).size;
+      text = (name ? name + '，' : '') + f.text.replace('{days}', days);
+    }
+    try { localStorage.setItem('tf_fest', today); } catch (e) {}
+    this.voiceBudget('must', true);
+    this.sayTip(text);
+    this.buddyBang('♥');
+    this.buddyMood('love', 2200);
+    return true;
+  },
+
+  /**
+   * 悄悄话：关系越近，小人越愿意说点心里话——记得你说的第一句、偷偷数你吃得最多的、也会承认自己怕你不来了
+   * （好角色会在你面前露出一点脆弱）。按亲密度解锁，每条只说一次，两天最多一条，用到的数都是你自己的记录。
+   */
+  whispers() {
+    const name = this.userName();
+    const md = (d) => `${+d.slice(5, 7)}月${+d.slice(8)}日`;
+    const first = this.diet.filter(d => d.said && d.said !== '照计划')
+      .reduce((m, d) => (!m || d.date < m.date || (d.date === m.date && (d.ts || 0) < (m.ts || 0)) ? d : m), null);
+    const foods = {};
+    this.diet.forEach(d => {
+      const k = String(d.foodSummary || '').split(/[、，,+＋]/)[0].replace(/[\d一两二三四五六七八九十半]+.*$/, '').trim();
+      if (k.length >= 2) foods[k] = (foods[k] || 0) + 1;
+    });
+    const top = Object.entries(foods).sort((a, b) => b[1] - a[1])[0];
+    const heavy = this.isSimple() ? null : this.workouts.filter(w => w.weightKg > 0 && !w.durationMin).reduce((m, w) => (!m || w.weightKg > m.weightKg ? w : m), null);
+    const dates = [...new Set(this.recordDates())].sort();
+    const gap = dates.some((d, i) => i && (new Date(d) - new Date(dates[i - 1])) / 86400000 >= 3);
+    const hard = this.workouts.some(w => w.rpe >= 9);
+    return [
+      { lv: 2, key: 'wait', text: '跟你说个小秘密：我每天最期待的，就是你按住说话的那一下。' },
+      top && top[1] >= 3 ? { lv: 2, key: 'topfood', text: `我偷偷数过，你记得最多的是${top[0]}，${top[1]} 次了。我都快背下来了。` } : null,
+      first ? { lv: 3, key: 'first', text: `还记得吗？你跟我说的第一句是「${String(first.said).slice(0, 24)}」，那天是${md(first.date)}。我一直记着。` } : null,
+      { lv: 3, key: 'tired', text: hard ? '其实我也有练不动的时候。所以你说「很吃力」那几次，我挺懂的。' : '其实我也有累得不想动的时候。所以哪天你累了，跟我说一声就行，不用硬撑。' },
+      gap ? { lv: 3, key: 'miss', text: '你没来的那几天，我就趴在这儿等着。不是怪你，就是想让你知道。' } : null,
+      heavy ? { lv: 4, key: 'heavy', text: `你练得最重的一次是${md(heavy.date)}，${heavy.exerciseName} ${round1(heavy.weightKg)}kg。那天我在旁边都替你使劲。` } : null,
+      { lv: 4, key: 'afraid', text: '说实话，一开始我挺怕你用两天就不来了。现在不怕了。' },
+      { lv: 5, key: 'why', text: `我想了很久，我在这儿，大概就是为了让${name || '你'}不用一个人坚持。` },
+      { lv: 5, key: 'remember', text: '不管你以后练成什么样，我都会记得你一开始的样子。' }
+    ].filter(Boolean);
+  },
+
+  /** 说一句悄悄话（今天打过招呼以后、闲下来的时候；两天最多一条）。idle：发呆时说的，次数由那边记 */
+  whisper(idle) {
+    if (!this.canChat() || Date.now() - (this._popAt || 0) < 60000) return false;
+    const today = getTodayDateString();
+    let w;
+    try { w = JSON.parse(localStorage.getItem('tf_whisper') || '{}'); } catch (e) { w = {}; }
+    if (!w || typeof w !== 'object') w = {};
+    if (!Array.isArray(w.said)) w.said = [];
+    if (w.date && w.date >= shiftDateString(today, -1)) return false;
+    let greeted = '';
+    try { greeted = localStorage.getItem('tf_greet') || ''; } catch (e) {}
+    if (greeted !== today) return false; // 每天第一次打开先打招呼，心里话留到后面
+    const lv = this.bond().lv;
+    const next = this.whispers().find(x => x.lv <= lv && !w.said.includes(x.key));
+    if (!next) return false;
+    w.said.push(next.key);
+    w.date = today;
+    try { localStorage.setItem('tf_whisper', JSON.stringify(w)); } catch (e) {}
+    if (!idle) this.chatBudget(true);
+    this.sayTip(next.text, null, '悄悄话');
+    this.buddyMood('love', 1800);
+    return true;
+  },
+
+  /**
+   * 被看见：挑一件你最近真做到了的、具体的事说出来（连着几天吃了早饭、蛋白吃够、某个动作涨了、轻了、这周练得比上周多）。
+   * 不夸空话，都按记录算；同一件事 4 天内不重复说。peek=true 只看不记。
+   */
+  seenLine(peek) {
+    const today = getTodayDateString();
+    const simple = this.isSimple();
+    let said;
+    try { said = JSON.parse(localStorage.getItem('tf_seen_said') || '{}'); } catch (e) { said = {}; }
+    if (!said || typeof said !== 'object') said = {};
+    const fresh = (k) => !said[k] || said[k] < shiftDateString(today, -3);
+    const cands = [];
+    let n = 0, d = shiftDateString(today, -1);
+    while (n < 60 && this.diet.some(x => x.date === d && x.mealType === '早餐')) { n++; d = shiftDateString(d, -1); }
+    if (n >= 5) cands.push(['breakfast', `连着 ${n} 天早饭都按时吃了，这个很多人做不到。`]);
+    if (!simple) {
+      const target = this.gaugeProteinTarget();
+      let k = 0;
+      d = shiftDateString(today, -1);
+      while (k < 30) { const s = this.getDaySummary(d); if (!s.hasDiet || s.protein < target * 0.95) break; k++; d = shiftDateString(d, -1); }
+      if (k >= 3) cands.push(['protein', `连着 ${k} 天蛋白都吃够了，这个最难，你做到了。`]);
+      const recent = shiftDateString(today, -13), old = shiftDateString(today, -45);
+      let gain = null;
+      [...new Set(this.workouts.filter(w => w.date >= recent && w.weightKg > 0 && !w.durationMin).map(w => w.exerciseName))].forEach(nm => {
+        const now = Math.max(...this.workouts.filter(w => w.exerciseName === nm && w.date >= recent).map(w => w.weightKg || 0));
+        const before = this.workouts.filter(w => w.exerciseName === nm && w.date < recent && w.date >= old && w.weightKg > 0).map(w => w.weightKg);
+        if (!before.length) return;
+        const b = Math.max(...before);
+        if (now - b >= 2.5 && (!gain || now - b > gain.up)) gain = { nm, b, now, up: now - b };
+      });
+      if (gain) cands.push(['lift:' + gain.nm, `这个月${gain.nm}从 ${round1(gain.b)}kg 练到 ${round1(gain.now)}kg 了，我都看着呢。`]);
+      const wk = (end) => new Set(this.workouts.filter(w => w.date > shiftDateString(end, -7) && w.date <= end).map(w => w.date)).size;
+      const thisW = wk(today), lastW = wk(shiftDateString(today, -7));
+      if (thisW >= 3 && thisW > lastW) cands.push(['trains', `这 7 天练了 ${thisW} 天，比之前那 7 天多，节奏起来了。`]);
+    }
+    const ws = this.weights.slice().sort((a, b) => (a.date > b.date ? 1 : -1));
+    if (ws.length >= 2 && (this.profile.goalType || 'fat_loss') === 'fat_loss') {
+      const last = ws[ws.length - 1];
+      const base = ws.filter(w => w.date <= shiftDateString(last.date, -10) && w.date >= shiftDateString(last.date, -21)).pop();
+      if (base && base.kg - last.kg >= 0.5) cands.push(['weight', `这两周轻了 ${round1(base.kg - last.kg)}kg，稳稳的，就这个节奏。`]);
+    }
+    const pick = cands.find(c => fresh(c[0]));
+    if (!pick) return '';
+    if (!peek) {
+      said[pick[0]] = today;
+      try { localStorage.setItem('tf_seen_said', JSON.stringify(said)); } catch (e) {}
+    }
+    return pick[1];
+  },
+
+  /** 熟起来以后慢慢问的几件事（一天最多问一件）：给它起名字 → 你生日哪天 → 喜欢它怎么跟你说话 */
+  askOnce() {
+    if (!this.chatty() || this._touring || this.needsOnboarding || this.bond().lv < 2) return false;
+    const today = getTodayDateString();
+    let d = '';
+    try { d = localStorage.getItem('tf_ask_day') || ''; } catch (e) {}
+    if (d === today) return false;
+    const ok = this.askName() || this.askBirthday() || this.askTone();
+    if (ok) { try { localStorage.setItem('tf_ask_day', today); } catch (e) {} }
+    return ok;
+  },
+
+  /** 问生日：到那天第一个跟你说生日快乐，戴派对帽（只问一次，「不想说」也行） */
+  askBirthday() {
+    if (this.profile.birthday) return false;
+    let asked = '';
+    try { asked = localStorage.getItem('tf_bday_ask') || ''; } catch (e) {}
+    const pop = document.getElementById('buddy-pop');
+    if (asked || !pop || !pop.classList.contains('hidden') || !this.chatBudget(false)) return false;
+    try { localStorage.setItem('tf_bday_ask', '1'); } catch (e) {}
+    this.chatBudget(true);
+    pop.dataset.mode = 'chat';
+    pop.dataset.level = 'none';
+    pop.innerHTML = `<p class="buddy-say"></p>` +
+      `<div class="name-row"><input class="name-input" type="text" inputmode="text" maxlength="8" placeholder="比如 3月14日" aria-label="生日"><button class="portion-opt on" type="button" data-a="ok">记上</button></div>` +
+      `<div class="portion-opts chat-opts"><button class="portion-opt skip" type="button" data-a="skip">不想说</button></div>`;
+    this.typeOut(pop.querySelector('.buddy-say'), '问你个事：你生日是哪天？到时候我想第一个跟你说。');
+    const input = pop.querySelector('.name-input');
+    const say = (t) => {
+      clearTimeout(this._askT);
+      const el = pop.querySelector('.buddy-say');
+      this.typeOut(el, t);
+      el.classList.add('reply');
+      pop.querySelectorAll('.name-row, .chat-opts').forEach(x => x.remove());
+      this.positionBuddyPop();
+      this._askT = setTimeout(() => this.closeBuddyPop('chat'), 2600);
+    };
+    const done = () => {
+      const v = TF.Bond.parseBirthday(input.value);
+      if (!v) { input.value = ''; input.placeholder = '写成「3月14日」这样'; input.focus(); return; }
+      this.profile.birthday = v;
+      this.saveData();
+      this.bondGain('answer');
+      window.Sound && window.Sound.play('success');
+      this.buddyDo([['stand', 100], ['wave', 900], ['stand', 300]]);
+      say(`记住了，${+v.slice(0, 2)}月${+v.slice(3)}日。`);
+    };
+    input.addEventListener('click', (e) => e.stopPropagation());
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') done(); });
+    pop.querySelector('[data-a="ok"]').addEventListener('click', (e) => { e.stopPropagation(); done(); });
+    pop.querySelector('[data-a="skip"]').addEventListener('click', (e) => { e.stopPropagation(); say('好，不问了。'); });
+    this.positionBuddyPop();
+    this.popIn(pop);
+    document.getElementById('gauge-pop').classList.add('hidden');
+    this.buddyBang('?');
+    clearTimeout(this._askT);
+    this._askT = setTimeout(() => this.closeBuddyPop('chat'), 45000);
+    return true;
+  },
+
+  /** 问你喜欢它怎么说话：答案进小本本，大模型回答、排计划时照着来（你的选择真的会改变它） */
+  askTone() {
+    if (/直接|温柔|说话/.test(this.memoList().join('；'))) return false;
+    let asked = '';
+    try { asked = localStorage.getItem('tf_tone_ask') || ''; } catch (e) {}
+    const pop = document.getElementById('buddy-pop');
+    if (asked || !pop || !pop.classList.contains('hidden') || !this.chatBudget(false)) return false;
+    try { localStorage.setItem('tf_tone_ask', '1'); } catch (e) {}
+    this.chatBudget(true);
+    const add = (line) => () => { this.updateMemo([line], []); this.saveData(); };
+    return this.askUser('问你一下：我跟你说话，你喜欢哪种？', [
+      { label: '直接点', pick: add('喜欢说话直接点，别绕弯'), reply: '行，以后有啥我直说。' },
+      { label: '温柔点', pick: add('喜欢说话温柔点、多鼓励'), reply: '好，我慢慢说。' },
+      { label: '现在这样就好', reply: '那就这样，想换了随时说。' }]);
   },
 
   /**
