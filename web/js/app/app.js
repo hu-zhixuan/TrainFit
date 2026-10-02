@@ -196,6 +196,80 @@ class FitnessApp {
   }
 
   /**
+   * 手机自己就能答的问题，马上答，不问大模型（「还差多少蛋白」「还能吃多少」「卧推最好多少」「这周练了几次」）。
+   * 认不出来就返回 ''，交给大模型。
+   */
+  quickAnswer(text) {
+    const names = [...new Set(this.workouts.filter(w => !w.durationMin).map(w => w.exerciseName))];
+    const it = TF.quickIntent(text, names);
+    if (!it) return '';
+    const today = getTodayDateString();
+    const md = (d) => `${+d.slice(5, 7)}月${+d.slice(8)}日`;
+    const s = this.getDaySummary(today);
+    const simple = this.isSimple();
+    if (it.kind === 'protein') {
+      if (simple) return '';
+      const target = Math.round(this.gaugeProteinTarget());
+      const p = Math.round(s.protein), left = target - p;
+      if (left <= 0) return `今天蛋白吃了 ${p}g，够了（目标 ${target}g）。`;
+      const tip = left >= 40 ? '差不多一块鸡胸肉（200g 约 46g）' : left >= 20 ? '一勺蛋白粉（约 24g），或者两个鸡蛋加一杯牛奶（约 21g）' : '一杯牛奶加个鸡蛋就差不多';
+      return `今天蛋白吃了 ${p}g，目标 ${target}g，还差 ${left}g。\n补上的话：${tip}。`;
+    }
+    if (it.kind === 'kcal') {
+      const budget = Math.round(s.budget), intake = Math.round(s.intake), rem = budget - intake;
+      if (rem < 0) return `今天吃了 ${fmt(intake)} kcal，超了 ${fmt(-rem)}（预算 ${fmt(budget)}）。\n别慌，明天少吃一口就回来了。`;
+      const b = rem / RICE_BOWL_KCAL;
+      return `今天预算 ${fmt(budget)}，吃了 ${fmt(intake)}，还能吃 ${fmt(rem)} kcal。\n大概是 ${b < 0.75 ? '小半碗' : Math.round(b * 2) / 2 + ' 碗'}米饭的量。`;
+    }
+    if (it.kind === 'deficit') {
+      if (simple) return '';
+      // 一天还没过完，「现在的赤字」会越吃越小：直接说按目标还能吃多少
+      const d = Math.round(s.deficit), tgt = Math.round(this.profile.targetDeficitKcal || 0), rem = Math.round(s.budget - s.intake);
+      if (!s.intake) return `今天还没记吃的。按目标赤字 ${fmt(tgt)}，今天能吃 ${fmt(Math.round(s.budget))} kcal。`;
+      return `现在热量赤字 ${fmt(d)}，目标 ${fmt(tgt)}。\n` + (rem >= 0 ? `按目标今天还能吃 ${fmt(rem)} kcal，吃到这儿正好。` : `已经比目标多吃了 ${fmt(-rem)} kcal，明天少吃一口就回来了。`);
+    }
+    if (it.kind === 'weight') {
+      const ws = this.weights.slice().sort((a, b) => (a.date > b.date ? 1 : -1));
+      if (!ws.length) return '还没记过体重。说一句「体重 62.5」就记上了。';
+      const last = ws[ws.length - 1];
+      const since = shiftDateString(today, -it.span);
+      const base = ws.filter(w => w.date <= since).pop() || ws.find(w => w.date >= since && w.date < last.date);
+      const lines = [`最新体重 ${round1(last.kg)}kg（${md(last.date)}）。`];
+      if (base) {
+        const diff = round1(last.kg - base.kg);
+        lines.push(`比 ${md(base.date)} 的 ${round1(base.kg)}kg ${diff < 0 ? `轻了 ${-diff}kg` : diff > 0 ? `重了 ${diff}kg` : '没变'}${diff > 0 && (this.profile.goalType || 'fat_loss') === 'fat_loss' ? '，一两天的起伏正常，看一周的趋势' : ''}。`);
+      } else lines.push('再记几天，我就能告诉你变化。');
+      return lines.join('\n');
+    }
+    if (it.kind === 'streak') {
+      const st = this.buddyState();
+      return `${st.streak ? `连续记了 ${st.streak} 天` : '今天还没记'}，一共记了 ${st.days} 天。${st.next ? `\n再连续 ${st.next.days} 天拿${st.next.name}。` : ''}`;
+    }
+    if (it.kind === 'trains') {
+      const since = shiftDateString(today, -(it.span - 1));
+      const ws = this.workouts.filter(w => w.date >= since && w.date <= today);
+      const days = [...new Set(ws.map(w => w.date))].sort();
+      if (!days.length) return `${it.span === 30 ? '这 30 天' : '这一周'}还没练。找一天动一动，说一句我就帮你记上。`;
+      const WK = '日一二三四五六';
+      const what = days.map(d => {
+        const parts = [...new Set(ws.filter(w => w.date === d).map(w => (w.durationMin ? w.exerciseName : (w.muscleGroup || '').replace(/部$/, ''))))].filter(Boolean);
+        return `周${WK[new Date(d + 'T00:00:00').getDay()]} ${parts.join('、')}`;
+      });
+      return `${it.span === 30 ? '这 30 天' : '这一周'}练了 ${days.length} 天${it.span === 7 ? '：' + what.join('；') : ''}。`;
+    }
+    if (it.kind === 'lift') {
+      const p = this.exerciseProgress(it.name);
+      if (!p) return '';
+      const logs = this.workouts.filter(w => w.exerciseName === it.name && !w.durationMin);
+      const best = logs.reduce((m, w) => (!m || w.weightKg > m.weightKg || (w.weightKg === m.weightKg && w.reps > m.reps) ? w : m), null);
+      const fmtSet = (w) => `${w.weightKg > 0 ? round1(w.weightKg) + 'kg' : '自重'} ${w.sets}×${w.reps}`;
+      return `${it.name}：上次 ${fmtSet(p.last)}（${md(p.last.date)}）` +
+        (best && best.id !== p.last.id ? `，最重 ${fmtSet(best)}（${md(best.date)}）` : '，就是你目前最重的') + `。\n${p.next.text}。`;
+    }
+    return '';
+  }
+
+  /**
    * 点小人时的一句观察（本机算）：最近 7 天（不算今天）里蛋白质没吃够的天数、早餐蛋白太少；
    * 只记吃的模式看吃没吃超。记的天数少于 3 天不说。
    */
