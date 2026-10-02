@@ -257,7 +257,7 @@ class FitnessApp {
         if (act.dataset.act === 'retry') this.retryPending(id);
         else if (act.dataset.act === 'drop') this.dropPending(id);
         else if (act.dataset.act === 'edit-text') this.editPendingText(id);
-        else if (act.dataset.act === 'plan-done') this.donePlan(id);
+        else if (act.dataset.act === 'plan-done') this.checkPlan(act, id);
         else if (act.dataset.act === 'plan-drop') this.dropPlan(id);
         return;
       }

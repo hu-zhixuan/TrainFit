@@ -166,6 +166,7 @@ Object.assign(FitnessApp.prototype, {
           : `<div class="empty"><div class="empty-icon">${ICONS.mic}</div><b>按住下面的按钮</b>，说说练了啥、吃了啥<br>想到一句说一句，一大段一起说也行<br>说不准多少、叫不出名字也没事，我会问你<br><span class="empty-example">「中午一碗牛肉面」「坐着推胸的那个机器，三组」</span></div>`;
     }
     tl.innerHTML = html;
+    this.growPlanBar && this.growPlanBar();
 
     this.renderChips();
     const tip = $('cmp-tip');

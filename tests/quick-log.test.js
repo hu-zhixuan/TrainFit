@@ -550,3 +550,11 @@ test('提问时给大模型接下来一周的日期和星期（排一周时别�
   assert.ok(ask.includes('7：10月6日 周二'));
   assert.ok(!Parser.buildMessages('中午一碗面', { date: '2026-09-29' })[1].content.includes('日期对照'));
 });
+
+test('挪到别的日子：update 里的 dayOffset / date 留下，0 和太远的丢掉', () => {
+  const ctx = { dayRecords: [{ ref: 'r1', kind: 'workout', id: 'w1', text: '训练 瑜伽 60分钟' }] };
+  assert.deepStrictEqual(Parser.normalize({ update: [{ ref: 'r1', set: { dayOffset: -1 } }] }, ctx).updates, [{ ref: 'r1', set: { dayOffset: -1 } }]);
+  assert.deepStrictEqual(Parser.normalize({ update: [{ ref: 'r1', set: { date: '2026-09-28' } }] }, ctx).updates, [{ ref: 'r1', set: { date: '2026-09-28' } }]);
+  assert.deepStrictEqual(Parser.normalize({ update: [{ ref: 'r1', set: { dayOffset: 0 } }] }, ctx).updates, []);
+  assert.deepStrictEqual(Parser.normalize({ update: [{ ref: 'r1', set: { dayOffset: -30 } }] }, ctx).updates, []);
+});

@@ -98,7 +98,7 @@
       // 「早餐照计划吃了」：大模型记好了，把那几条计划划掉
       if ((result.donePlans || []).length && app.dropPlan) {
         const byRef = new Map((ctx.plans || []).map(x => [x.ref, x.id]));
-        result.donePlans.forEach(ref => { const id = byRef.get(ref); if (id) app.plans = app.plans.filter(x => x.id !== id); });
+        app.markPlansDone(result.donePlans.map(ref => byRef.get(ref)).filter(Boolean));
       }
       const changes = result.workouts.length + result.meals.length + (result.updates || []).length + (result.deletes || []).length + (result.bodyWeight ? 1 : 0) + (result.remember || []).length + (result.memo || []).length + (result.forget || []).length;
       const answerOpts = { plan: result.plan, baseDate: p.date };
@@ -137,11 +137,18 @@
         const r = refMap.get(u.ref);
         const rec = r && find(r);
         if (!rec) return;
+        r.date0 = rec.date;
         batch.before.push({ kind: r.kind, snapshot: JSON.parse(JSON.stringify(rec)) });
         Object.keys(u.set).forEach(k => {
           if (r.kind === 'meal' && ['mealType', 'foodSummary', 'calories', 'proteinG', 'carbsG', 'fatG'].includes(k)) rec[k] = u.set[k];
           if (r.kind === 'workout' && ['exerciseName', 'muscleGroup', 'weightKg', 'sets', 'reps', 'durationMin', 'burnedCalories'].includes(k)) rec[k] = u.set[k];
         });
+        // 挪到别的日子（「记错日子了，挪到前一天」）：整条改日期，不删了重加
+        const to = u.set.dayOffset ? shiftDateString(base, u.set.dayOffset) : u.set.date;
+        if (to && to !== rec.date && to <= shiftDateString(getTodayDateString(), 7)) {
+          rec.date = to;
+          batch.moved = (batch.moved || []).concat(to);
+        }
         // 改了其中几样：按名字换掉 / 去掉，其他原样保留，合计重算
         if (r.kind === 'meal' && (u.set.items || u.set.removeItems)) {
           const items = mergeItems(rec.items, u.set.items, u.set.removeItems);
@@ -149,8 +156,9 @@
           Object.assign(rec, sumItems(items));
           if (!u.set.foodSummary && items.length) rec.foodSummary = items.map(it => it.name + (it.amount || '')).join('、').slice(0, 60);
         }
-        batch.changed.push(r.kind === 'meal' ? `改 · ${rec.foodSummary} ${rec.calories} kcal` :
-          `改 · ${rec.exerciseName} ${rec.durationMin ? rec.durationMin + ' 分钟' : (rec.weightKg > 0 ? rec.weightKg + 'kg' : '自重') + ' ' + rec.sets + '×' + rec.reps}`);
+        const what = r.kind === 'meal' ? `${rec.foodSummary} ${rec.calories} kcal` :
+          `${rec.exerciseName} ${rec.durationMin ? rec.durationMin + ' 分钟' : (rec.weightKg > 0 ? rec.weightKg + 'kg' : '自重') + ' ' + rec.sets + '×' + rec.reps}`;
+        batch.changed.push(rec.date !== r.date0 ? `挪 · ${what} → ${+rec.date.slice(5, 7)}月${+rec.date.slice(8)}日` : `改 · ${what}`);
       });
 
       // 删除
