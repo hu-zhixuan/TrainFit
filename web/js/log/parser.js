@@ -218,7 +218,7 @@
         '   练什么、怎么练、动作怎么做、练哪儿、减脂增肌、饿不饿、睡眠恢复、身体酸痛，都算吃和练的事，要正经回答：练什么就给动作、重量、组数次数，小本本里是新手或者问怎么做的，每个动作带一句要点。只有天气、新闻、写作业这种完全无关的，answer 才写一句「这个我帮不上，我只管吃和练」。',
         '   answer 是某一天的具体安排（明天的食谱、今晚吃什么、明天练什么、我想练腿怎么练）时，同时写 plan：{"dayOffset":1,"meals":[和 add.meals 一样的格式],"workouts":[和 add.workouts 一样的格式，每个动作再加 "tip":"一句要点，16字以内"]}，dayOffset 相对正在看的日期（明天 1，今天 0，没说哪天就是今天），内容和 answer 一致；只是回答问题（还差多少蛋白、能不能吃）就不写 plan。',
         '   要排好几天的训练（「这周怎么练」「一周练三次帮我排一下」「给我一个新手计划」）：plan 写成 {"days":[{"dayOffset":1,"workouts":[…]},{"dayOffset":3,"workouts":[…]}]}，从明天开始排一周、练的日子之间隔开，每天 4～6 个动作，不排吃的；重量按最近成绩往上加一点，没练过的按新手能做的估。answer 每天一行，开头写那天的星期（按下面的日期对照，「周五 腿：深蹲 40kg 4×10、腿举…」）。',
-        '   下面有「刚才给的计划」，用户说要改（「不要米饭换红薯」「蛋白再多点」「晚上少吃点」），就按要求改好，重新给完整的 answer 和 plan，不要记录。',
+        '   下面有「刚才给的计划」，用户说要改（「不要米饭换红薯」「蛋白再多点」「晚上少吃点」「深蹲换成腿举」），就按要求改好，重新写完整的 answer 和 plan（还是那天的，dayOffset 按日期对照算；没让改的照原样写上），不要记录，不能只回一句「改好了」。',
         '   下面有「这天的计划」，用户说照着吃了 / 练了（「早餐照计划吃了」「计划里的都练完了」）：把那几项 add 进来（份量照计划），donePlans 写它们的编号。',
         '11. 用户说了关于自己、以后一直有用的事（名字、在增肌还是减脂、健身新手、在练什么、不吃 / 过敏的东西、伤病、作息、口味）：写进 memo，每条一句话、12 字以内（「叫阿程」「健身新手」「不吃辣」「膝盖有旧伤」），下面「小本本」里已经有的不要重复；说要忘掉或者变了的（「现在能吃辣了」「膝盖好了」），一定把小本本里原来那句原样写进 forget。吃了什么、练了什么、今天的事不算。回答、估算、出计划时照顾到小本本里的事（不吃辣就别推荐辣的，膝盖有伤就别排深蹲跳）。',
         '输出前核对一遍：原话里说到的每样吃的、喝的、补剂（包括听错字的，比如"茶叶大"）都记上了，没多记、没漏记。'
@@ -239,6 +239,11 @@
       const plans = ctx.plans || [];
       if (plans.length) lines.push('这天的计划（还没做）：\n' + plans.map(p => `${p.ref} ${p.text}`).join('\n'));
       if (ctx.lastPlan) lines.push('刚才给的计划（用户可能要改）：\n' + ctx.lastPlan);
+      // 点了「改一改」：明说这句是在改计划（v5.5，以前大模型常只回一句「计划改好了」，什么都没改）
+      if (ctx.lastPlan && (ctx.editPlan || ctx._editAgain)) lines.push(`注意：这句是在改上面「刚才给的计划」。照用户说的改好，写出改完的完整 answer 和 plan，不要记录${ctx._editAgain ? '。上一次你只说了改好了、没给计划，这次一定要把改好的 plan 写出来' : ''}。`);
+      // 没点按钮，刚给过计划、话像在改计划（「不要米饭，换成红薯」）、这天又没有记录可改：提醒一句，免得只回「改好了」再多问一次（实测不提醒 2/2 要多问一次，提醒了 3/3 一次就好）。
+      // 这天有记录时不提醒：实测提醒了，「早上的鸡蛋改成三个」3/3 被当成改计划
+      else if (ctx.lastPlan && ctx.maybeEditPlan && !records.length) lines.push('注意：这句是在改上面「刚才给的计划」（这天没有记录可改）：照他说的改好，写出改完的完整 answer 和 plan，不要记录。');
       if (ctx._again) lines.push('注意：这句是在问吃或练的事，要正经回答，不能说帮不上。');
       // 问「这周怎么练」时大模型自己算星期几会算错：把接下来一周是周几直接给它
       if (ctx.ask && /^\d{4}-\d{2}-\d{2}$/.test(ctx.date || '')) {
@@ -633,6 +638,11 @@
       // 明明在问练、吃的事，大模型却说「帮不上」（实测「我操，我想练腿要怎么练」）：提醒一句再问一次
       if (r.answer && /帮不上/.test(r.answer) && ABOUT_FIT.test(text) && !(ctx && ctx._again)) {
         r = await this.viaLlm(text, Object.assign({}, ctx, { _again: true }), onDelta);
+      }
+      // 在改刚给的计划，大模型却只回了一句「计划改好了」、没给计划（实测 main 的提示词 3/3 这样）：说清楚再问一次
+      const nothing = !r.plan && !r.meals.length && !r.workouts.length && !r.updates.length && !r.deletes.length && !r.bodyWeight;
+      if (ctx && ctx.lastPlan && !ctx._editAgain && nothing && (ctx.editPlan || (!r.answer && TF.looksLikePlanEdit && TF.looksLikePlanEdit(text)))) {
+        r = await this.viaLlm(text, Object.assign({}, ctx, { _editAgain: true }), onDelta);
       }
       return Object.assign(r, { source: 'llm' });
     }

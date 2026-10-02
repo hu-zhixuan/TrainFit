@@ -37,7 +37,7 @@ class FitnessApp {
     this.recalculateMetabolism();
 
     // 上次没整理完就关了 App 的，恢复成「失败，可重试」；只是在问的就算了（旧版存的没有 ask 标记，按字判断）
-    this.pending = load(PENDING_KEY, []).filter(p => !(TF.pureQuestion && TF.pureQuestion(p.text)))
+    this.pending = load(PENDING_KEY, []).filter(p => !p.plan && !(TF.pureQuestion && TF.pureQuestion(p.text)))
       .map(p => Object.assign(p, { status: 'failed', error: '上次没整理完' }));
 
     this.bindEvents();

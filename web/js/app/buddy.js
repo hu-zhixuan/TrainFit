@@ -822,6 +822,8 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
           this.showToast(days.length > 1 ? `排好了 ${days.length} 天，练完点 ✓ 就记上` : `加了 ${n} 条，做完点 ✓ 就记上`);
         }, quick ? 300 : 120 + rows.length * 70 + 700);
       } else {
+        // 「改一改」：接下来说的那一句就是在改这份计划（v5.5，以前不做标记，「不要米饭换红薯」被当成记录，冒一张「没整理好」）
+        this._planEdit = Date.now();
         pop.querySelector('.buddy-tip').classList.remove('hidden');
         const talk = document.querySelector('#voice-row:not(.hidden) .talk-btn') || document.querySelector('#text-row:not(.hidden) .cmp-text');
         if (talk) { talk.classList.add('tour-glow'); setTimeout(() => talk.classList.remove('tour-glow'), 2600); }
@@ -1101,8 +1103,22 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
   planText(plan, base) {
     const one = (p) => (p.meals || []).map(m => `${m.mealType} ${m.foodSummary} ${m.calories}kcal 蛋白${m.proteinG || 0}`)
       .concat((p.workouts || []).map(w => `训练 ${w.exerciseName} ${w.durationMin ? w.durationMin + '分钟' : (w.weightKg > 0 ? w.weightKg + 'kg' : '自重') + ` ${w.sets}×${w.reps}`}`));
-    if (!plan.days) return one(plan).join('\n');
-    return plan.days.map(d => { const dt = shiftDateString(base || getTodayDateString(), d.dayOffset || 0); return `${+dt.slice(5, 7)}月${+dt.slice(8)}日：${one(d).join('；')}`; }).join('\n');
+    const day = (d) => { const dt = shiftDateString(base || getTodayDateString(), d.dayOffset || 0); return `${+dt.slice(5, 7)}月${+dt.slice(8)}日`; };
+    // 带上是哪天的：改完的计划还放在那天（以前一天的不写日期，改完偶尔跑到今天）
+    if (!plan.days) return `${day(plan)}的：\n` + one(plan).join('\n');
+    return plan.days.map(d => `${day(d)}：${one(d).join('；')}`).join('\n');
+  },
+
+  /**
+   * 这句是不是在改刚给的计划：'edit' —— 点了「改一改」以后说的第一句（5 分钟内）；
+   * 'maybe' —— 15 分钟内给过计划，说的是「不要米饭，换成红薯」「蛋白再多点」这种；'' —— 不是
+   */
+  planEditKind(text) {
+    const offer = this._planOffer;
+    const now = Date.now();
+    if (!offer || now - offer.at > 15 * 60 * 1000) return '';
+    if (this._planEdit && now - this._planEdit < 5 * 60 * 1000) { this._planEdit = 0; return 'edit'; }
+    return TF.looksLikePlanEdit && TF.looksLikePlanEdit(text) ? 'maybe' : '';
   },
 
   /** 提问没整理出来：气泡里说清楚，能重试（卡片也留着） */

@@ -174,6 +174,21 @@
   }
 
   /**
+   * 「不要米饭，换成红薯」「蛋白再多点」「晚上少吃点」「深蹲换成腿举」：像在改小人刚给的计划（不是报吃了练了什么、不是改记录）。
+   * 只在刚给过计划时用（v5.5）
+   */
+  function looksLikePlanEdit(text) {
+    const t = String(text || '');
+    if (/(吃|喝|练|跑|做|骑|游|走)了(?!几|多少|啥|什么|没)|刚才|刚刚|今天|昨|前天|体重|称了|删|记错|撤销|挪/.test(t)) return false;
+    return /不要|不想|别(放|吃|喝|排|练|加)|换成|换个|换一|换掉|改成|改一|(多|少)(吃|喝|练|放|来|做)?(一)?(点|些)|再(多|少|加|来|轻|重)|加(一)?点|减(一)?点|去掉|太(多|少|重|轻|油|辣|甜|难)/.test(t);
+  }
+
+  /** 待整理的这句只是在问（「晚上吃点啥」）、在改小人给的计划：没整理出来也不留「没整理好」卡片，小人气泡里能重试 */
+  function noCard(p) {
+    return !!(p && p.ask && (p.plan || pureQuestion(p.text)));
+  }
+
+  /**
    * 只是在问、没在报吃了练了什么（「晚上吃点啥」「上周练了几次」）。
    * 「中午吃了牛肉面，晚上吃点啥」这种又记又问的不算——它没整理完时要留卡片，免得记录丢了。
    */
@@ -222,7 +237,7 @@
     return null;
   }
 
-  Object.assign(TF, { MUSCLES, MEAL_TYPES, num, cleanText, round1, mealTypeByHour, normMealType, mealTimes, mealSegments, NUTRIENTS, cleanNutrients, nutrientsText, toKg, quickWeight, findWeight, guessMuscle, looksLikeQuestion, pureQuestion, needsHistory, saidWeight, quickIntent });
+  Object.assign(TF, { MUSCLES, MEAL_TYPES, num, cleanText, round1, mealTypeByHour, normMealType, mealTimes, mealSegments, NUTRIENTS, cleanNutrients, nutrientsText, toKg, quickWeight, findWeight, guessMuscle, looksLikeQuestion, looksLikePlanEdit, pureQuestion, noCard, needsHistory, saidWeight, quickIntent });
 
   if (typeof module !== 'undefined' && module.exports) module.exports = TF;
 })(typeof window !== 'undefined' ? window : globalThis);
