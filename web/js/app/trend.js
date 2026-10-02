@@ -13,7 +13,7 @@ Object.assign(FitnessApp.prototype, {
     for (let i = n - 1; i >= 0; i--) dates.push(shiftDateString(today, -i));
     const sums = dates.map(d => ({ d, s: this.getDaySummary(d) }));
     const logged = sums.filter(x => x.s.hasLogs).length;
-    const name = this.userName ? this.userName() : '';
+    const name = this.callName ? this.callName() : '';
     const range = n === 7 ? '这一周' : `这 ${n} 天`;
     if (logged < 2) {
       return { head: `${name ? name + '，' : ''}${range}只记了 ${logged} 天`, lines: ['吃完一顿随口说一句就算一条，记上三天，我就能看出点门道。'] };

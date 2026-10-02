@@ -37,7 +37,7 @@ class FitnessApp {
     this.recalculateMetabolism();
 
     // 上次没整理完就关了 App 的，恢复成「失败，可重试」；只是在问的就算了（旧版存的没有 ask 标记，按字判断）
-    this.pending = load(PENDING_KEY, []).filter(p => !p.plan && !(TF.pureQuestion && TF.pureQuestion(p.text)))
+    this.pending = load(PENDING_KEY, []).filter(p => !p.plan && !p.chat && !(TF.pureQuestion && TF.pureQuestion(p.text)))
       .map(p => Object.assign(p, { status: 'failed', error: '上次没整理完' }));
 
     this.bindEvents();
@@ -69,7 +69,7 @@ class FitnessApp {
   }
 
   savePending() {
-    store(PENDING_KEY, this.pending.map(p => ({ id: p.id, text: p.text, date: p.date, ts: p.ts, ask: p.ask || undefined })));
+    store(PENDING_KEY, this.pending.map(p => ({ id: p.id, text: p.text, date: p.date, ts: p.ts, ask: p.ask || undefined, plan: p.plan || undefined, chat: p.chat || undefined })));
   }
 
   /** 只记吃的模式：藏起训练、蛋白质、赤字这些健身词 */

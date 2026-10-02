@@ -634,6 +634,8 @@ body.has-buddy .views { padding-bottom: calc(var(--cmp-h, 110px) + 52px + var(--
 .next-chip:disabled { cursor: default; opacity: 0.35; }
 .next-chip.sent { opacity: 1; background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .next-chip.sent::before { content: '✓ '; color: inherit; }
+/* 聊天时的「你可能回的话」：像对话选项，不带「问」 */
+.next-chip.reply::before { content: '› '; }
 .buddy-obs { margin: 6px 0 0; font-size: 0.82rem; line-height: 1.5; color: var(--text-2); }
 .buddy-train { margin: 6px 0 0; font-size: 0.82rem; line-height: 1.5; color: var(--accent-text); }
 .buddy-wait { display: flex; align-items: center; gap: 6px; margin: 10px 0 0; padding-top: 8px; border-top: 1px solid var(--line); font-size: 0.78rem; color: var(--text-3); }
@@ -723,6 +725,8 @@ body.has-buddy .views { padding-bottom: calc(var(--cmp-h, 110px) + 52px + var(--
 /* 小人说话一个字一个字打出来：没打出来的先透明占位，气泡不跳 */
 .type-ghost { opacity: 0; }
 .whisper-head { display: flex; align-items: center; gap: 4px; color: var(--love); }
+/* 点小人偶尔冒出的隐藏台词 */
+.buddy-rare { margin: 6px 0 0; font-size: 0.86rem; line-height: 1.5; color: var(--love); }
 .whisper-head i { font-style: normal; }
 /* 摸摸头、戳它：一句短话 */
 .buddy-pop[data-mode="quip"] { width: auto; max-width: min(240px, calc(100vw - 32px)); }

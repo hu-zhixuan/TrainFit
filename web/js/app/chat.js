@@ -98,6 +98,7 @@ Object.assign(FitnessApp.prototype, {
     const pop = document.getElementById('buddy-pop');
     const cmp = document.getElementById('composer');
     return this.chatty() && this.view === 'today' && this.selectedDate === getTodayDateString() && !this._touring && !this.needsOnboarding &&
+      !(this.quietNow && this.quietNow()) && // 正在练、深夜：安静陪着
       pop && pop.classList.contains('hidden') && !cmp.classList.contains('recording') && !(this.pending || []).some(p => p.status === 'working') &&
       (this.diet.length + this.workouts.length > 0) && this.chatBudget(false);
   },
@@ -239,7 +240,7 @@ Object.assign(FitnessApp.prototype, {
   greetOrGuide() {
     const away = this.awayMs ? this.awayMs() : 0;
     return (this.bondUpNow && this.bondUpNow()) || (this.anniversary && this.anniversary()) || (this.festivalGreet && this.festivalGreet()) ||
-      this.greetToday() || this.firstGuide() || this.mealGapNudge() || this.welcomeBack(away) ||
+      (this.lateNight && this.lateNight()) || this.greetToday() || this.firstGuide() || this.mealGapNudge() || this.welcomeBack(away) ||
       (this.askOnce && this.askOnce()) || (this.whisper && this.whisper());
   },
 
@@ -285,7 +286,7 @@ Object.assign(FitnessApp.prototype, {
     if (c.n >= 2) return false;
     const hour = new Date().getHours();
     if (hour < 6) return false;
-    const name = this.userName();
+    const name = this.callName();
     const hi = `回来啦${name ? '，' + name : ''}。`;
     const simple = this.isSimple();
     const todo = this.todoPlans ? this.todoPlans(today) : [];
@@ -297,10 +298,7 @@ Object.assign(FitnessApp.prototype, {
     else if (!simple && hour >= 17 && s.hasDiet && left >= 30) { say = `${hi}蛋白还差 ${left}g，晚饭多吃点肉蛋。`; next = ['晚上吃点啥能补蛋白']; }
     else if (!simple && lifts.length) { say = `${hi}今天练了${(lifts[0].muscleGroup || '').replace(/部$/, '') || lifts[0].exerciseName}，记得多喝水、早点睡。`; next = ['明天练什么']; }
     else if (this.seenLine && this.seenLine(true)) say = hi + this.seenLine();
-    else if (this.bond().lv >= 3 || this.talkLevel() === 'more') {
-      const pool = hour < 11 ? ['早上吃了啥？说一句就行。', '今天打算练吗？'] : hour < 17 ? ['中午吃了啥？说一句就行。', '下午有空练一会儿吗？'] : ['晚上吃了啥？说一句就行。', '今天过得怎么样？'];
-      say = hi + pool[Math.floor(Math.random() * pool.length)];
-    }
+    else if (this.bond().lv >= 2 || this.talkLevel() === 'more') say = hi + this.buddyLife(); // 你不在的时候它也在过自己的小日子
     if (!say) return false;
     c.n += 1;
     try { localStorage.setItem('tf_back', JSON.stringify(c)); } catch (e) {}
@@ -318,12 +316,14 @@ Object.assign(FitnessApp.prototype, {
     if (last === today) return false;
     const hour = new Date().getHours();
     if (hour < 5) return false;
-    const name = this.userName();
+    const name = this.callName();
     const hi = hour < 11 ? `早${name ? '，' + name : ''}。` : hour < 18 ? `${name ? name + '，' : ''}下午好。` : `${name ? name + '，' : ''}晚上好。`;
     // 接一句昨天的事；昨天的事是挑毛病（蛋白差了、吃超了）而你最近又真做到了点什么，先说做到的（被看见比被纠正更想再来）
     const y0 = this.yesterdayLine();
     const seen = this.seenLine ? this.seenLine(true) : '';
-    const yest = seen && (!y0 || /差了|吃超/.test(y0)) ? this.seenLine() : y0;
+    // 都没有的话，提一件以前的事（「一个月前的今天你说的是…」）
+    const fault = !y0 || /差了|吃超/.test(y0);
+    const yest = seen && fault ? this.seenLine() : (fault && this.memoryLine && this.memoryLine()) || y0;
     const done = () => { try { localStorage.setItem('tf_greet', today); } catch (e) {} this.chatBudget(true); return true; };
     const st = this.profile.dayState && this.profile.dayState.date === today ? this.profile.dayState : null;
     // 好几天没记了：别让人有负担，从今天接着来；想补的话带你翻到昨天
@@ -375,7 +375,7 @@ Object.assign(FitnessApp.prototype, {
     if (todo.length) { this.sayTip(`${hi}${yest}${yest ? '\n' : ''}今天的计划有 ${todo.length} 条，做完点 ✓ 就记上。`); return done(); }
     if (yest) { this.sayTip(`${hi}${yest}`); return done(); }
     // 熟了以后，没什么事也打个招呼（刚认识时没事就不打扰）
-    if (this.bond && this.bond().lv >= 3) { this.sayTip(hi + (hour < 11 ? '今天也一起加油。' : hour < 18 ? '今天过得怎么样？' : '今天辛苦了。')); return done(); }
+    if (this.bond && this.bond().lv >= 3) { this.sayTip(hi + (this.buddyLife ? this.buddyLife() : '今天也一起加油。')); return done(); }
     return false;
   },
 
@@ -453,7 +453,7 @@ Object.assign(FitnessApp.prototype, {
     try { localStorage.setItem('tf_first', today); } catch (e) {}
     this.voiceBudget('must', true);
     const m = this.mealNow(new Date().getHours());
-    const name = this.userName();
+    const name = this.callName();
     this.askUser(`${name ? name + '，' : ''}${this.weights.length ? '' : '来记第一条吧。'}${m.word}吃了啥？`, this.firstOptions(m));
     return true;
   },
@@ -575,6 +575,7 @@ Object.assign(FitnessApp.prototype, {
   /** 现在凑过去合不合适：没在录音、打字、改记录、看别的弹窗，小人那边也没在说话 */
   canNudge(kind) {
     if (!this.chatty() || this._touring || this.needsOnboarding || !this.nudgeBudget(false)) return false;
+    if (this.quietNow && this.quietNow()) return false; // 正在练、深夜：不凑过来
     if (Date.now() - (this._popAt || 0) < 60000) return false;
     if ((this.pending || []).some(p => p.status === 'working')) return false;
     const shown = (id) => { const el = document.getElementById(id); return el && !el.classList.contains('hidden'); };
@@ -677,6 +678,7 @@ Object.assign(FitnessApp.prototype, {
     if (st && st.streak >= 3) opts.push({ key: 'idle:streak', say: `连续记了 ${st.streak} 天了。${st.next ? `再 ${st.next.days} 天拿${st.next.name}。` : ''}`, next: simple ? ['还能吃多少', '这个月瘦了多少'] : ['这周练了几次', '这个月瘦了多少'] });
     const seen = this.seenLine ? this.seenLine(true) : '';
     if (seen) opts.push({ key: 'idle:seen', seen: true, say: seen, next: [] });
+    if (this.bond && this.bond().lv >= 2) opts.push({ key: 'idle:life', say: this.buddyLife(), next: [] });
     const fact = this.buddyFact();
     if (fact) opts.push({ key: 'idle:fact', say: fact, fact: true });
     // 发呆的时候也是说悄悄话的好时候（两天最多一条）
