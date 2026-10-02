@@ -398,6 +398,20 @@ test('热量和蛋白质都差一倍：是大模型算错了量，用成分表�
   assert.ok(egg.calories < 160 && egg.proteinG < 15, `${egg.calories} ${egg.proteinG}`);
 });
 
+test('JSON 的小毛病本机修好，不用整份重发（v5.4 实测的写法）', () => {
+  // "next" 写成几个散的字符串；字符串里的中文标点不动
+  let r = Parser.extractJson('{"reply":"x","answer":"早餐：鸡蛋，牛奶","next":"鸡腿饭能换成牛肉吗","练后只喝粉够不够","plan":{"dayOffset":1}}');
+  assert.deepStrictEqual(r.next, ['鸡腿饭能换成牛肉吗', '练后只喝粉够不够']);
+  assert.strictEqual(r.answer, '早餐：鸡蛋，牛奶');
+  assert.deepStrictEqual(r.plan, { dayOffset: 1 });
+  // 字符串外面用了中文逗号、冒号
+  r = Parser.extractJson('{"reply":"x","next":["蛋白再多点","不要米饭换红薯"]，\n "plan":{"dayOffset"：1}}');
+  assert.deepStrictEqual(r.next, ['蛋白再多点', '不要米饭换红薯']);
+  assert.strictEqual(r.plan.dayOffset, 1);
+  // 真坏了还是报错（走重发）
+  assert.throws(() => Parser.extractJson('{"a":1,,}'), /^Error: BAD_JSON/);
+});
+
 test('大模型回到一半就断了（JSON 不完整）：马上再发一次，不用等', async () => {
   const origSend = Parser.send;
   Parser.retryWaits = [3000, 8000];

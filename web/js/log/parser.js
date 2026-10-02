@@ -130,6 +130,26 @@
     return out.replace(/\*\*/g, '').trim();
   }
 
+  /**
+   * 大模型偶尔写坏 JSON 的两种小毛病（v5.4 实测），修好再解析：
+   *  - 字符串外面用了中文逗号、冒号（"next":["a","b"]，"plan":…）；
+   *  - "next" 写成几个散的字符串（"next":"a","b"）→ "next":["a","b"]。
+   */
+  function repairJson(s) {
+    let out = '', inStr = false, esc = false;
+    for (const ch of String(s)) {
+      if (inStr) {
+        out += ch;
+        if (esc) esc = false; else if (ch === '\\') esc = true; else if (ch === '"') inStr = false;
+        continue;
+      }
+      if (ch === '"') inStr = true;
+      out += ch === '，' ? ',' : ch === '：' ? ':' : ch;
+    }
+    const STR = '"(?:[^"\\\\]|\\\\.)*"';
+    return out.replace(new RegExp(`"next"\\s*:\\s*(${STR}(?:\\s*,\\s*${STR}(?!\\s*:))+)`, 'g'), '"next":[$1]');
+  }
+
   // 说的是吃、练、身体的事（用来判断「帮不上」是不是答错了）
   const ABOUT_FIT = /练|训练|健身|动作|器械|深蹲|卧推|硬拉|腿|胸|背|肩|手臂|腹|核心|有氧|跑步|减脂|减肥|增肌|瘦|胖|体重|吃|喝|饭|餐|食|蛋白|热量|卡|碳水|脂肪|饿|饱|睡|酸|累|恢复/;
 
@@ -146,14 +166,17 @@
       const system = [
         '你是「练食AI」的记录助手。用户用口语说吃了什么（吃进嘴的都算：饭菜、零食、饮料、水、补剂、药）、训练或体重，文字来自语音识别，可能有同音错字（"卧腿"=卧推，"四组八哥"=4组8个，"划川"=划船，"茶叶大"=茶叶蛋）、没有标点、夹着「呃、嗯、那个、然后、就是」这类口头禅，按意思理解，说到的每样吃的都要记上，听着像错字的按最像的食物记，不要漏。说了又改口（「两碗，不对，一碗」「哦应该是…」）以后说的为准。紧跟在一样东西后面、只补了份量的话（「一个包子，呃大的」「一份炒饭然后是小份」）是那样东西的份量，不要单独记成一项。',
         // 只写用得上的字段（v5.4）：Atria 一秒只写 17～20 个 token，以前每次都写一串 "answer":null,"next":[]…，白等两三秒。
-        // dayOffset 每次都写：实测不写的话「昨晚吃了火锅」会漏掉 -1，记到今天
+        // dayOffset 每次都写：实测不写的话「昨晚吃了火锅」会漏掉 -1，记到今天。
+        // 例子里 add 后面还跟着 dayOffset（和以前一样是 ]}]},）：实测例子以 ]}]}} 收尾时，长计划偶尔多一个括号，JSON 写坏；
+        // 别的字段要写出形状（"next":["…","…"]），只列名字时实测会写成 "next":"a","b"
         '由你决定怎么改数据：新增、修改或删除。只输出一个 JSON 对象，不要 markdown，不要解释。reply 和 dayOffset 每次都写，别的字段只写用得上的（值是 null、空数组的不要写）。',
-        '例 1（记吃的、练的）：{"reply":"一句短话说你做了什么，15字以内，不写热量数（下面会单独列出来）；估得比较粗的，30字以内说按什么估的","dayOffset":0,',
+        '例 1（记吃的、练的）：{"reply":"一句短话说你做了什么，15字以内，不写热量数（下面会单独列出来）；估得比较粗的，30字以内说按什么估的",',
         ' "add":{"workouts":[{"exerciseName":"杠铃卧推","muscleGroup":"胸部","weightKg":80,"sets":4,"reps":8,"burnedCalories":110}],',
         '        "meals":[{"mealType":"早餐","foodSummary":"肉包2个","items":[{"name":"肉包","amount":"2个","grams":200,"whole":true,"calories":460,"proteinG":16,"carbsG":60,"fatG":16}]},',
-        '                 {"mealType":"午餐","foodSummary":"番茄炒蛋盖饭1份","items":[{"name":"米饭","amount":"1碗","grams":200,"whole":false,"calories":232,"proteinG":5,"carbsG":52,"fatG":0.6},{"name":"番茄炒蛋","amount":"1份","grams":200,"whole":true,"calories":260,"proteinG":11,"carbsG":10,"fatG":19}]}]}}',
-        '例 2（改、删已有的记录）：{"reply":"改好了","dayOffset":0,"update":[{"ref":"r2","set":{"weightKg":85}}],"delete":["r3"]}',
-        '别的字段（bodyWeight、remember、memo、forget、answer、next、plan、donePlans）只在下面规则说要用时才写，和 add 一样放在这一个 JSON 对象里；add 里只有吃的就不写 workouts，只有练的就不写 meals。',
+        '                 {"mealType":"午餐","foodSummary":"番茄炒蛋盖饭1份","items":[{"name":"米饭","amount":"1碗","grams":200,"whole":false,"calories":232,"proteinG":5,"carbsG":52,"fatG":0.6},{"name":"番茄炒蛋","amount":"1份","grams":200,"whole":true,"calories":260,"proteinG":11,"carbsG":10,"fatG":19}]}]},',
+        ' "dayOffset":0}',
+        '例 2（改、删已有的记录）：{"reply":"改好了","update":[{"ref":"r2","set":{"weightKg":85}}],"delete":["r3"],"dayOffset":0}',
+        '别的字段只在下面规则说要用时才写，都放在这一个 JSON 对象里："bodyWeight":62.5、"remember":[{…}]、"memo":["…"]、"forget":["…"]、"answer":"…"、"next":["…","…"]、"plan":{…}、"donePlans":["p1"]；add 里只有吃的就不写 workouts，只有练的就不写 meals。',
         '规则：',
         '1. muscleGroup 只能是：' + MUSCLES.join('、') + '；mealType 只能是：' + MEAL_TYPES.join('、') + '（怎么判断见第 4 条）。',
         '2. 重量换算成公斤（磅×0.45，斤×0.5），自重 weightKg=0。跑步、单车、跳绳、平板支撑等按时间算的填 durationMin（分钟），不写 sets、reps；只说了距离（「跑了5公里」）就按常见配速估分钟数。',
@@ -241,7 +264,11 @@
       const a = s.indexOf('{');
       const b = s.lastIndexOf('}');
       if (a === -1 || b <= a) throw new Error('NO_JSON');
-      try { return JSON.parse(s.slice(a, b + 1)); } catch (e) { throw new Error('BAD_JSON ' + e.message); }
+      const body = s.slice(a, b + 1);
+      try { return JSON.parse(body); } catch (e) {
+        // 小毛病本机修好，不用整份重发（重发要再等十几秒到一分钟）
+        try { return JSON.parse(repairJson(body)); } catch (e2) { throw new Error('BAD_JSON ' + e.message); }
+      }
     },
 
     /** 从 chat/completions 的原始响应里拿出 message.content */
@@ -592,7 +619,7 @@
     }
   };
 
-  Object.assign(TF, { partialAnswer, Parser, mergeItems });
+  Object.assign(TF, { partialAnswer, Parser, mergeItems, repairJson });
 
   if (typeof module !== 'undefined' && module.exports) module.exports = TF;
 })(typeof window !== 'undefined' ? window : globalThis);
