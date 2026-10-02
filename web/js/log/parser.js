@@ -428,6 +428,18 @@
           items
         });
       });
+      // 兜底：说的是「挪到前一天」，大模型却只删了没加（实测 main 的提示词 8 次里 3 次这样，记录就没了）——不删，改成挪
+      const said = String(ctx.said || '');
+      if (out.deletes.length && !out.meals.length && !out.workouts.length && /挪|移到|放到|改到|弄到|搬到|记错(日子|天)/.test(said)) {
+        const day = (base, n) => { const d = new Date(base); d.setDate(d.getDate() + n); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+        const viewed = /^\d{4}-\d{2}-\d{2}$/.test(ctx.date || '') ? new Date(ctx.date + 'T00:00:00') : now;
+        const to = /前一天|上一天/.test(said) ? day(viewed, -1) : /后一天|下一天/.test(said) ? day(viewed, 1)
+          : /前天/.test(said) ? day(now, -2) : /昨天|昨晚/.test(said) ? day(now, -1) : /后天/.test(said) ? day(now, 2) : /明天/.test(said) ? day(now, 1) : '';
+        const moved = out.deletes;
+        out.deletes = [];
+        if (to) moved.forEach(ref => { if (!out.updates.some(u => u.ref === ref)) out.updates.push({ ref, set: { date: to } }); });
+        else out.reply = '没听清挪到哪天，再说一次，比如「挪到昨天」';
+      }
       const n = out.meals.length;
       out.meals = separateSupps(splitByTime(out.meals, ctx.said));
       // 拆开了：大模型那句「已记早餐…」就不对了
