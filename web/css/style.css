@@ -621,6 +621,10 @@ body.has-buddy .views { padding-bottom: calc(var(--cmp-h, 110px) + 52px + var(--
 .next-chip { max-width: 100%; padding: 6px 11px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface-2); color: var(--text-2); font: inherit; font-size: 0.8rem; line-height: 1.3; text-align: left; cursor: pointer; }
 .next-chip::before { content: '问 '; color: var(--accent-text); font-weight: 650; }
 .next-chip:active { background: var(--accent-soft); }
+/* 点了一个：这个亮起来，其他的淡掉、不能再点 */
+.next-chip:disabled { cursor: default; opacity: 0.35; }
+.next-chip.sent { opacity: 1; background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.next-chip.sent::before { content: '✓ '; color: inherit; }
 .buddy-obs { margin: 6px 0 0; font-size: 0.82rem; line-height: 1.5; color: var(--text-2); }
 .buddy-train { margin: 6px 0 0; font-size: 0.82rem; line-height: 1.5; color: var(--accent-text); }
 .buddy-wait { display: flex; align-items: center; gap: 6px; margin: 10px 0 0; padding-top: 8px; border-top: 1px solid var(--line); font-size: 0.78rem; color: var(--text-3); }
@@ -1279,6 +1283,11 @@ body.no-composer .snackbar { bottom: calc(20px + var(--sab)); }
 .myfood-kcal { font-weight: 700; font-variant-numeric: tabular-nums; }
 .myfood-kcal small { font-size: 0.7rem; color: var(--text-3); margin-left: 2px; font-weight: 600; }
 .breakdown-note { font-size: 0.72rem; color: var(--text-3); line-height: 1.45; margin-top: 2px; }
+/* 小人记住的 · 按记录看出来的画像 */
+.portrait { margin-top: 4px; padding: 10px 12px; border-radius: var(--r-sm); background: var(--surface-2); }
+.portrait b { display: block; font-size: 0.78rem; font-weight: 650; color: var(--text-3); }
+.portrait p { margin: 4px 0 2px; font-size: 0.86rem; line-height: 1.55; color: var(--text); }
+.portrait small { font-size: 0.72rem; color: var(--text-3); }
 
 /* ---------- 提醒与震动 ---------- */
 .switch-row { display: flex; align-items: center; gap: 10px; }

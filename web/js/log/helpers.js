@@ -157,7 +157,15 @@
   function looksLikeQuestion(text) {
     const t = String(text || '');
     if (/[？?]\s*$/.test(t)) return true;
-    return /给我(定|制定|安排|推荐|出|做|列|想)|帮我(定|制定|安排|推荐|想|规划|看看)|(制定|安排|规划|推荐)(一下)?(明天|后天|今晚|晚上|下周|一周|一天)|(吃|练)点?(什么|啥)|该(吃|练)|(还)?(差|剩)多少|还能吃|能不能|可不可以|要不要|怎么(吃|喝|练|做|办|样)|咋(行|办|样|整|弄|吃|喝|练|回事|没|不)|为(啥|什么)|行不行|好不好|有什么(建议|推荐)|食谱|菜谱|训练计划|健身计划|上(周|个月|一周)|这(周|个月)|几(次|天|顿|公斤|斤)|多少(次|天|斤|公斤|克|热量|卡)|哪(天|顿|个动作)|最(好|重|多|少)(的|是)|吗[。！!]?\s*$/.test(t);
+    return /给我(定|制定|安排|推荐|出|做|列|想)|帮我(定|制定|安排|推荐|想|规划|看看)|(制定|安排|规划|推荐)(一下)?(明天|后天|今晚|晚上|下周|一周|一天)|(吃|练)点?(什么|啥)|该(吃|练)|(还)?(差|剩)多少|还能吃|能不能|可不可以|要不要|怎么(吃|喝|练|做|办|样)|给我排|帮我排|够不够|多不多|(练|吃|喝)多少|咋(行|办|样|整|弄|吃|喝|练|回事|没|不)|为(啥|什么)|行不行|好不好|有什么(建议|推荐)|食谱|菜谱|训练计划|健身计划|上(周|个月|一周)|这(周|个月)|几(次|天|顿|公斤|斤)|多少(次|天|斤|公斤|克|热量|卡)|哪(天|顿|个动作)|最(好|重|多|少)(的|是)|吗[。！!]?\s*$/.test(t);
+  }
+
+  /**
+   * 问的是以前的事（「上周练了几次」「最近瘦了多少」「哪天吃得最多」）：要把最近两周一天一行带给大模型。
+   * 别的问题（「明天吃啥」「腿怎么练」）带一行画像就够了，省 token、也快。
+   */
+  function needsHistory(text) {
+    return /上(周|个?星期|个?礼拜|个?月|次|回)|这(周|星期|礼拜|个月|几天|段时间|阵子)|本(周|月)|最近|近(期|来|一周|两周|几天)|哪(天|一天|顿|次|回)|几(次|天|顿|回)|多少(天|次|回)|瘦了|胖了|轻了|重了|涨了|降了|掉了|长了|变化|趋势|以前|之前|昨天|前天|平均|一直|每天|天天|那天|连续|进步|退步|停滞|平台期|卡住|够不够|多不多/.test(String(text || ''));
   }
 
   /**
@@ -209,7 +217,7 @@
     return null;
   }
 
-  Object.assign(TF, { MUSCLES, MEAL_TYPES, num, cleanText, round1, mealTypeByHour, normMealType, mealTimes, mealSegments, NUTRIENTS, cleanNutrients, nutrientsText, toKg, quickWeight, findWeight, guessMuscle, looksLikeQuestion, pureQuestion, quickIntent });
+  Object.assign(TF, { MUSCLES, MEAL_TYPES, num, cleanText, round1, mealTypeByHour, normMealType, mealTimes, mealSegments, NUTRIENTS, cleanNutrients, nutrientsText, toKg, quickWeight, findWeight, guessMuscle, looksLikeQuestion, pureQuestion, needsHistory, quickIntent });
 
   if (typeof module !== 'undefined' && module.exports) module.exports = TF;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -321,6 +321,67 @@ class FitnessApp {
     return '';
   }
 
+  /**
+   * 用户画像：手机按最近 4 周的记录算（不调大模型），几句短话——用了多久、常吃什么、早饭习惯、平均吃多少、蛋白够不够、
+   * 一周练几天练哪儿、体重往哪走。提问时一行带给大模型，比把两周的记录一天一行全塞进去省 token、也快；
+   * 设置里「小人记住的」下面能看到。小本本是你说的，画像是记录看出来的。
+   */
+  portrait() {
+    const today = getTodayDateString();
+    const since = shiftDateString(today, -27);
+    const simple = this.isSimple();
+    const out = [];
+    const all = this.recordDates();
+    if (!all.length) return out;
+    const first = all.reduce((m, d) => (d < m ? d : m), today);
+    const used = Math.round((new Date(today + 'T00:00:00') - new Date(first + 'T00:00:00')) / 86400000) + 1;
+    if (used <= 7) out.push(`刚开始用（第 ${used} 天）`);
+    const diet = this.diet.filter(d => d.date >= since && d.date <= today);
+    // 常吃：一样东西 4 周里吃过 2 次以上
+    const cnt = {};
+    diet.forEach(d => (Array.isArray(d.items) && d.items.length ? d.items.map(i => i.name) : [d.foodSummary]).forEach(n => {
+      n = String(n || '').replace(/[\d一二两三四五六七八九十半]+\s*(个|碗|杯|份|片|块|根|勺|盒|瓶|袋|颗|串|g|克|ml|毫升).*$/i, '').trim();
+      if (n && n.length <= 12 && !/^(水|白开水|温水|米饭)$/.test(n)) cnt[n] = (cnt[n] || 0) + 1;
+    }));
+    const top = Object.entries(cnt).filter(([, c]) => c >= 2).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([n]) => n);
+    if (top.length) out.push('常吃' + top.join('、'));
+    // 只算这一天吃的记全了的日子（三顿里记了两顿以上），不然平均数会偏低
+    const days = [...new Set(diet.map(d => d.date))].filter(d => d < today);
+    const full = days.filter(d => new Set(diet.filter(x => x.date === d && x.mealType !== '加餐/补剂').map(x => x.mealType)).size >= 2);
+    if (days.length >= 4) {
+      const bf = days.filter(d => diet.some(x => x.date === d && x.mealType === '早餐'));
+      if (bf.length / days.length < 0.4) out.push('常不吃早饭（或者没记）');
+      else if (!simple) {
+        const p = bf.reduce((a, d) => a + diet.filter(x => x.date === d && x.mealType === '早餐').reduce((s, x) => s + (x.proteinG || 0), 0), 0) / bf.length;
+        if (p < 12) out.push(`早饭蛋白少（平均 ${Math.round(p)}g）`);
+      }
+    }
+    if (full.length >= 3) {
+      const sums = full.map(d => this.getDaySummary(d));
+      const avg = (f) => Math.round(sums.reduce((a, s) => a + f(s), 0) / sums.length);
+      out.push(`记全的日子平均吃 ${avg(s => s.intake)} 千卡（预算 ${avg(s => s.budget)}）`);
+      if (!simple) {
+        const target = Math.round(this.gaugeProteinTarget());
+        const p = avg(s => s.protein);
+        if (target > 0) out.push(`蛋白平均 ${p}g（目标 ${target}g）`);
+      }
+    }
+    if (!simple) {
+      const lifts = this.workouts.filter(w => w.date >= since && w.date <= today);
+      const tdays = [...new Set(lifts.map(w => w.date))];
+      if (tdays.length) {
+        const parts = {};
+        tdays.forEach(d => new Set(lifts.filter(w => w.date === d && w.muscleGroup).map(w => w.muscleGroup.replace(/部$/, ''))).forEach(m => { parts[m] = (parts[m] || 0) + 1; }));
+        const main = Object.entries(parts).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([m]) => m);
+        const weeks = Math.min(4, used / 7);
+        out.push((weeks >= 1.5 ? `一周练 ${Math.round(tdays.length / weeks * 10) / 10} 天左右` : `这些天练了 ${tdays.length} 天`) + (main.length ? `，常练${main.join('、')}` : ''));
+      } else if (used >= 10) out.push('最近 4 周没记训练');
+    }
+    const ws = this.weights.filter(w => w.date >= since && w.date <= today).sort((a, b) => (a.date > b.date ? 1 : -1));
+    if (ws.length >= 2 && ws[0].date !== ws[ws.length - 1].date) out.push(`体重 ${round1(ws[0].kg)} → ${round1(ws[ws.length - 1].kg)}kg（${+ws[0].date.slice(5, 7)}月${+ws[0].date.slice(8)}日到现在）`);
+    return out.slice(0, 7);
+  }
+
   bindEvents() {
     const $ = (id) => document.getElementById(id);
 

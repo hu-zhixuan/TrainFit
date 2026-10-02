@@ -19,9 +19,15 @@
     },
 
     // ----- 解析 + 保存（后台进行，不用等） -----
-    submit(text) {
+    /** opts.ask：点的是「接着问」这类，一定当成提问（小人马上进「我想想」）；opts.again：点了「再试一次」，不算重复 */
+    submit(text, opts) {
       text = (text || '').trim();
       if (!text) return;
+      // 同一句点了两下、发了两次：5 秒内、或者上一句还在整理，就不再发（省 token，也不打断已经出来的回答）
+      const now = Date.now();
+      if (!(opts && opts.again) && ((this._last && this._last.text === text && now - this._last.at < 5000) ||
+        (root.app.pending || []).some(p => p.text === text && p.status === 'working'))) return;
+      this._last = { text, at: now };
       // 手机自己就能答的（「还差多少蛋白」「卧推最好多少」）：马上答，不问大模型
       const quick = root.app.quickAnswer ? root.app.quickAnswer(text) : null;
       if (quick && root.app.showBuddyAnswer) {
@@ -29,7 +35,7 @@
         return;
       }
       // 听着像提问：不出「正在整理」卡片，小人马上在气泡里说「我想想…」（Atria 要 10～25 秒才出第一个字）
-      const ask = !!(looksLikeQuestion && looksLikeQuestion(text));
+      const ask = !!((opts && opts.ask) || (looksLikeQuestion && looksLikeQuestion(text)));
       const p = root.app.addPending(text, ask);
       if (ask && root.app.showBuddyThinking) root.app.showBuddyThinking(text);
       this.process(p);
@@ -78,7 +84,9 @@
       const plans = app.planContext ? app.planContext(date) : [];
       const offer = app._planOffer && Date.now() - app._planOffer.at < 15 * 60 * 1000 ? app._planOffer.text : '';
       return { now: new Date(p.ts || Date.now()), history: app.workouts, dayRecords, recent, dayLabel, lastWeight: lw ? lw.kg : null, myFoods: app.myFoods || [], day, plans, lastPlan: offer,
-        memo: app.memoList ? app.memoList() : [], date, ask: !!p.ask, past: p.ask ? this.pastDays(date) : [],
+        memo: app.memoList ? app.memoList() : [], date, ask: !!p.ask,
+        // 提问：带一行画像；问以前的事才把最近两周一天一行带上（省 token）
+        portrait: p.ask && app.portrait ? app.portrait() : [], past: p.ask && TF.needsHistory(p.text) ? this.pastDays(date) : [],
         state: app.profile.dayState && app.profile.dayState.date === date ? app.profile.dayState.sleep : '' };
     },
 

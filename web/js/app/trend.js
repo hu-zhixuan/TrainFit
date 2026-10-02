@@ -89,9 +89,12 @@ Object.assign(FitnessApp.prototype, {
       `<div class="coach-bubble"><p class="coach-head">${esc(r.head)}</p>${r.lines.map(l => `<p>${esc(l)}</p>`).join('')}${more}</div></div>`;
     el.querySelectorAll('.next-chip').forEach(b => b.addEventListener('click', (e) => {
       e.stopPropagation();
+      if (b.disabled) return;
+      b.disabled = true;
       window.Haptics && window.Haptics.fire('tick');
+      this._trendExtra = null; // 问过了，这句收起来
       this.switchView('today');
-      if (window.QuickLog) window.QuickLog.submit(b.dataset.q);
+      if (window.QuickLog) window.QuickLog.submit(b.dataset.q, { ask: true });
     }));
   },
 

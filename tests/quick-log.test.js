@@ -653,3 +653,28 @@ test('「咋行」「为啥」也听得出是在问', () => {
   }
   assert.ok(!TF.pureQuestion('中午吃了两碗饭，为啥还饿'));
 });
+
+test('画像：提问时带一行画像；问以前的事才带最近两周（省 token）', () => {
+  for (const t of ['上周练了几次', '最近瘦了多少', '哪天吃得最多', '这个月体重有变化吗', '最近蛋白够不够']) assert.ok(TF.needsHistory(t), t);
+  for (const t of ['明天吃啥', '我想练腿要怎么练', '晚上吃点啥好', '能不能吃火锅', '给我排一周的训练']) assert.ok(!TF.needsHistory(t), t);
+  const m = Parser.buildMessages('明天吃啥', { ask: true, date: '2026-10-02', portrait: ['常吃牛肉面、鸡腿饭', '早饭蛋白少（平均 9g）', '一周练 3 天左右，常练胸、腿'] });
+  assert.match(m[1].content, /画像（手机按最近 4 周的记录算的）：常吃牛肉面、鸡腿饭；早饭蛋白少/);
+  assert.ok(!/最近两周/.test(m[1].content));
+  assert.ok(!/画像/.test(Parser.buildMessages('中午一碗面', {}).at(1).content), '记录时不带');
+});
+
+test('key 不对（401）：不再换写法多发一次', async () => {
+  const origSend = Parser.send;
+  Parser.retryWaits = [0, 0];
+  Parser.hedgeMs = 0;
+  let n = 0;
+  try {
+    Parser.send = async () => { n += 1; throw new Error('HTTP 401 invalid key'); };
+    await assert.rejects(Parser.parse('明天吃啥', {}), /HTTP 401/);
+    assert.strictEqual(n, 1);
+  } finally {
+    Parser.send = origSend;
+    delete Parser.retryWaits;
+    delete Parser.hedgeMs;
+  }
+});
