@@ -47,6 +47,14 @@
         const usual = root.app.quickSuggestions().find(x => x.kind === 'meal' && x.usual && !x.done);
         if (usual) { root.app.quickRepeatKey(usual.key); return; }
       }
+      // 跟小人聊天、说心情（「今天好累」「你在干嘛」）：小人用自己的性格接话，不出卡片（v5.8）
+      const app = root.app;
+      if ((opts && opts.chat) || (TF.looksLikeChat && TF.looksLikeChat(text, app.buddyName ? app.buddyName() : '', app.chatActive && app.chatActive()))) {
+        const p = app.addPending(text, true, { chat: true });
+        if (app.showBuddyThinking) app.showBuddyThinking(text, 'chat');
+        this.process(p);
+        return;
+      }
       // 听着像提问：不出「正在整理」卡片，小人马上在气泡里说「我想想…」（Atria 写完一整个回答要十几秒）
       const ask = !!((opts && opts.ask) || (looksLikeQuestion && looksLikeQuestion(text)));
       const p = root.app.addPending(text, ask);
@@ -100,7 +108,9 @@
         memo: app.memoList ? app.memoList() : [], date, ask: !!p.ask, editPlan: p.plan === 'edit', maybeEditPlan: p.plan === 'maybe',
         // 提问：带一行画像；问以前的事才把最近两周一天一行带上（省 token）
         portrait: p.ask && app.portrait ? app.portrait() : [], past: p.ask && TF.needsHistory(p.text) ? this.pastDays(date) : [],
-        state: app.profile.dayState && app.profile.dayState.date === date ? app.profile.dayState.sleep : '' };
+        state: app.profile.dayState && app.profile.dayState.date === date ? app.profile.dayState.sleep : '',
+        // 聊天：小人是谁、你们多熟、刚才聊了啥（最多 3 轮，15 分钟内）
+        chat: !!p.chat, buddy: p.chat && app.buddyPersona ? app.buddyPersona() : null, talk: p.chat && app.chatThread ? app.chatThread() : [] };
     },
 
     /**
@@ -155,7 +165,7 @@
         if (a && (a !== shown || pl !== planning) && app.showBuddyAnswer && mine()) {
           shown = a;
           planning = pl;
-          app.showBuddyAnswer(p.text, a, { streaming: true, planning: pl });
+          app.showBuddyAnswer(p.text, a, { streaming: true, planning: pl, chat: !!p.chat });
         }
       };
       let ctx;
@@ -180,6 +190,14 @@
         const byRef = new Map((ctx.plans || []).map(x => [x.ref, x.id]));
         app.markPlansDone(result.donePlans.map(ref => byRef.get(ref)).filter(Boolean));
       }
+      // 聊天：不记录；他说了自己的事悄悄记进小本本，小人接话（带表情、两句你可能回的）
+      if (p.chat) {
+        if (!result.answer) { fail(new Error('EMPTY_RESPONSE')); return; }
+        app.finishPending(p.id);
+        if (((result.memo || []).length || (result.forget || []).length) && app.updateMemo) { app.updateMemo(result.memo, result.forget); app.saveData(); }
+        if (app.showBuddyAnswer) app.showBuddyAnswer(p.text, result.answer, { next: result.next, chat: true, face: result.face });
+        return;
+      }
       const changes = result.workouts.length + result.meals.length + (result.updates || []).length + (result.deletes || []).length + (result.bodyWeight ? 1 : 0) + (result.remember || []).length + (result.memo || []).length + (result.forget || []).length;
       const answerOpts = { plan: result.plan, baseDate: p.date, next: result.next };
       if (!changes) {
@@ -203,6 +221,7 @@
       this.showSnack(batch, result);
       if (result.answer && app.showBuddyAnswer) app.showBuddyAnswer(p.text, result.answer, answerOpts); // 又记又问
       else if (batch.asks.length && app.askPortion) app.askPortion(batch.asks); // 份量含糊：小人问一句，点一下就改
+      else if (app.memoTip && app.memoTip(result, batch)) { /* 你说过有伤：练到那儿提醒一句 */ }
       else if (app.newbieTip && app.newbieTip(result)) { /* 新手第一周：小人说一句小提示 */ }
       else if (app.coachTip && app.coachTip(result, batch)) { /* 该提醒的时候说一句：破纪录、晚上蛋白还差很多、吃超了 */ }
       else if (app.askFeeling && app.askFeeling(result, batch)) { /* 练完问一句感受，下次加重量按这个来 */ }

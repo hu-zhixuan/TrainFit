@@ -3,6 +3,7 @@
  *   start 按住开始说话（轻轻上扬）   stop 松手（轻轻落下）
  *   success 记好了（两声小铃）       undo 撤销    error 没听清 / 没整理好
  *   blip 点小人（8-bit 哔哔）        unlock 连续记录拿到新装备（8-bit 小琶音）
+ *   babble(text) 小人主动说话时一个字一声的对话音
  * 设置里能关（localStorage tf_sound = off）；手机静音 / 震动模式时不响（问原生 soundAllowed）。
  * WebView 要在用户点屏幕时才让出声：第一次点屏幕时 warm() 一下，之后异步的「记好了」也能响。
  */
@@ -83,6 +84,25 @@
       try { SOUNDS[kind](c, c.currentTime + 0.01 + (delay || 0)); } catch (e) {}
     },
     warm() { if (this.on()) audio(); },
+    /**
+     * 小人说话的声音（像游戏里角色说话时的「哔哔」声，v5.7）：前二十几个字每个字一声很轻的方波，
+     * 同一个字同一个音高，听着像在说话；男生低一点、女生高一点。静音、关了音效时不响。
+     */
+    babble(text, voice) {
+      if (!this.on() || !this.allowed()) return;
+      const c = audio();
+      if (!c) return;
+      const chars = [...String(text || '')].filter(ch => !/[\s，。、！？!?,.…：:；;「」（）()\d]/.test(ch)).slice(0, 24);
+      const base = voice === 'girl' ? 640 : 430;
+      let t = c.currentTime + 0.02;
+      try {
+        chars.forEach((ch) => {
+          const f = base * (1 + ((ch.codePointAt(0) * 7) % 9) / 22);
+          tone(c, t, { f, dur: 0.032, gain: 0.016, type: 'square', attack: 0.002 });
+          t += 0.056;
+        });
+      } catch (e) {}
+    },
     KINDS: Object.keys(SOUNDS)
   };
   root.Sound = Sound;
