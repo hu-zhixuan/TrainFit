@@ -238,6 +238,7 @@ Object.assign(FitnessApp.prototype, {
 
   /** 打开 App / 切回来：每天第一次打招呼；还没记过的带你记第一条；饭点空着问一句 */
   greetOrGuide() {
+    if (document.body.classList.contains('onboarding')) return false; // 还在选谁陪你
     const away = this.awayMs ? this.awayMs() : 0;
     return (this.bondUpNow && this.bondUpNow()) || (this.anniversary && this.anniversary()) || (this.festivalGreet && this.festivalGreet()) ||
       (this.lateNight && this.lateNight()) || this.greetToday() || this.firstGuide() || this.mealGapNudge() || this.welcomeBack(away) ||

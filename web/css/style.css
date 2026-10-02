@@ -415,7 +415,7 @@ body.no-composer .views { padding-bottom: calc(32px + var(--sab)); }
   left: 0;
   top: 0;
   z-index: 31;
-  width: 60px;
+  width: 78px;
   padding: 0;
   display: block;
   border: none;
@@ -428,42 +428,61 @@ body.no-composer .views { padding-bottom: calc(32px + var(--sab)); }
 }
 .buddy.placed { transition: transform 0.3s cubic-bezier(0.3, 1.3, 0.5, 1); }
 .bd-move { display: block; }
-.buddy-svg { display: block; overflow: visible; }
-.buddy-svg .bd-fb, .buddy-svg .bd-blink, .buddy-svg .bd-lookl, .buddy-svg .bd-lookr { opacity: 0; }
-body.has-buddy .views { padding-bottom: calc(var(--cmp-h, 110px) + 52px + var(--sab)); }
+/* v6.0 Q 版小人（chibi.js）：一个部件一组，CSS 让它们动 */
+.ch-svg { display: block; overflow: visible; }
+.ch-svg g { transform-box: fill-box; }
+.ch-svg .ch-arm { transform-box: view-box; } /* 胳膊绕肩膀转（transform-origin 写在元素上，是 SVG 坐标） */
+/* 深色背景上描一圈白边（像贴纸），深色衣服、黑头发也看得清 */
+:root:not([data-theme="light"]) .ch-svg { filter: drop-shadow(0 0 0.6px rgba(255, 255, 255, 0.85)) drop-shadow(0 0 0.6px rgba(255, 255, 255, 0.85)); }
+@media (prefers-color-scheme: light) { :root:not([data-theme]) .ch-svg { filter: none; } }
+body.has-buddy .views { padding-bottom: calc(var(--cmp-h, 110px) + 60px + var(--sab)); }
 @media (prefers-reduced-motion: no-preference) {
-  /* 小动作：头发隔一会儿晃一下、眨眼、偶尔左右看一眼；特效飘、跳、闪 */
-  .buddy .bd-fa { animation: bdSwayA 4.4s steps(1, end) infinite; }
-  .buddy .bd-fb { animation: bdSwayB 4.4s steps(1, end) infinite; }
-  .buddy .bd-blink { animation: bdBlink 5.7s steps(1, end) infinite 1.3s; }
-  .buddy .bd-lookl { animation: bdLookL 13s steps(1, end) infinite 4s; }
-  .buddy .bd-lookr { animation: bdLookR 13s steps(1, end) infinite 4s; }
-  .buddy .bd-fx-zzz { animation: bdFloat 2.4s steps(3, end) infinite; }
-  .buddy .bd-fx-note { animation: bdBob 1.2s steps(1, end) infinite; }
-  .buddy .bd-fx-sparkle { animation: bdTwinkle 1.8s steps(1, end) infinite; }
-  .buddy .bd-fx-sweat { animation: bdDrip 1.6s steps(1, end) infinite; }
-  .buddy .bd-fx-heart { animation: bdFloat 1.8s steps(3, end) infinite; }
-  /* 走路、招手：两帧换得快 */
-  .buddy .pose-walk .bd-fa, .buddy .pose-wave .bd-fa { animation: bdAltA 0.34s steps(1, end) infinite; }
-  .buddy .pose-walk .bd-fb, .buddy .pose-wave .bd-fb { animation: bdAltB 0.34s steps(1, end) infinite; }
-  /* 站起来 / 趴下：蹦一下 */
-  .buddy .pose-stand, .buddy .pose-stretch, .buddy .pose-wave { animation: bdUp 0.24s steps(2, end); }
-  /* 秀肌肉：站起来，再顿两下 */
-  .buddy .pose-flex { animation: bdUp 0.24s steps(2, end), bdFlex 0.36s steps(2, end) 0.24s 2; }
+  /* 一直在的小动作：眨眼、呼吸、呆毛和马尾晃、趴着偶尔歪头；特效飘、闪 */
+  .ch-svg .ch-eyes { transform-origin: 50% 55%; animation: chBlink 4.6s infinite 0.8s; }
+  .ch-svg .ch-ahoge { transform-origin: 40% 100%; animation: chSway 2.8s ease-in-out infinite; }
+  .ch-svg .ch-tail { transform-origin: 8% 4%; animation: chTail 3.4s ease-in-out infinite; }
+  .ch-svg .ch-headwrap { transform-origin: 50% 90%; animation: chBreathe 3.6s ease-in-out infinite; }
+  .ch-svg.pose-lie .ch-headwrap { animation: chBreathe 3.6s ease-in-out infinite, chTilt 11s ease-in-out infinite 3s; }
+  .ch-svg .ch-body { transform-origin: 50% 100%; animation: chChest 3.6s ease-in-out infinite; }
+  .ch-svg .ch-fx-zzz { animation: chFloat 2.4s ease-in infinite; }
+  .ch-svg .ch-fx-note { animation: chBob 1.2s ease-in-out infinite; }
+  .ch-svg .ch-fx-sparkle { animation: chTwinkle 1.6s ease-in-out infinite; transform-origin: center; }
+  .ch-svg .ch-fx-heart { animation: chFloat 1.8s ease-out infinite; }
+  /* 招手、走路、秀肌肉、托腮、举手欢呼 */
+  .ch-svg .ch-wave { animation: chWave 0.5s ease-in-out infinite alternate; }
+  .ch-svg.pose-walk .ch-all { animation: chStep 0.36s ease-in-out infinite alternate; }
+  .ch-svg.pose-walk .ch-arm-l { animation: chSwingL 0.36s ease-in-out infinite alternate; }
+  .ch-svg.pose-walk .ch-arm-r { animation: chSwingR 0.36s ease-in-out infinite alternate; }
+  .ch-svg.pose-flex .ch-arms { transform-origin: 50% 70%; animation: chPump 0.34s ease-in-out 0.2s 3 alternate; }
+  .ch-svg.pose-stretch .ch-arm-l { animation: chCheerL 0.45s ease-in-out infinite alternate; }
+  .ch-svg.pose-stretch .ch-arm-r { animation: chCheerR 0.45s ease-in-out infinite alternate; }
+  .ch-svg.pose-think .ch-headwrap { animation: chThinkTilt 2.4s ease-in-out infinite; }
+  /* 站起来 / 换姿势：蹦一下 */
+  .buddy .pose-stand, .buddy .pose-stretch, .buddy .pose-wave, .buddy .pose-flex, .buddy .pose-think { animation: chUp 0.28s cubic-bezier(0.3, 1.6, 0.5, 1); }
+  .buddy.hop .bd-move { animation: bdHop 0.5s ease-out; }
 }
-@keyframes bdSwayA { 0% { opacity: 1; } 76% { opacity: 0; } 83% { opacity: 1; } 89% { opacity: 0; } 95% { opacity: 1; } }
-@keyframes bdSwayB { 0% { opacity: 0; } 76% { opacity: 1; } 83% { opacity: 0; } 89% { opacity: 1; } 95% { opacity: 0; } }
-@keyframes bdAltA { 0% { opacity: 1; } 50% { opacity: 0; } }
-@keyframes bdAltB { 0% { opacity: 0; } 50% { opacity: 1; } }
-@keyframes bdBlink { 0% { opacity: 0; } 62% { opacity: 1; } 65% { opacity: 0; } }
-@keyframes bdLookL { 0% { opacity: 0; } 70% { opacity: 1; } 77% { opacity: 0; } }
-@keyframes bdLookR { 0% { opacity: 0; } 77% { opacity: 1; } 84% { opacity: 0; } }
-@keyframes bdFloat { from { transform: none; opacity: 1; } to { transform: translateY(-3px); opacity: 0.2; } }
-@keyframes bdBob { 0% { transform: none; } 50% { transform: translateY(-1px); } }
-@keyframes bdTwinkle { 0% { opacity: 1; } 55% { opacity: 0.35; } 70% { opacity: 1; } }
-@keyframes bdDrip { 0% { transform: none; } 60% { transform: translateY(1px); } }
-@keyframes bdUp { from { transform: translateY(6px); } to { transform: none; } }
-@keyframes bdFlex { 0%, 100% { transform: none; } 50% { transform: translateY(-2px); } }
+/* 你在打字：低头看输入框；在翻：抬头看 */
+.ch-svg .ch-eye { transition: transform 0.25s ease; }
+.buddy[data-peek="down"] .ch-eye { transform: translateY(2.5px); }
+.buddy[data-peek="up"] .ch-eye { transform: translateY(-2px); }
+@keyframes chBlink { 0%, 93%, 100% { transform: scaleY(1); } 95% { transform: scaleY(0.08); } 97% { transform: scaleY(1); } }
+@keyframes chSway { 0%, 100% { transform: rotate(-7deg); } 50% { transform: rotate(9deg); } }
+@keyframes chTail { 0%, 100% { transform: rotate(-2deg); } 50% { transform: rotate(4deg); } }
+@keyframes chBreathe { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(1.6px); } }
+@keyframes chChest { 0%, 100% { transform: scaleY(1); } 50% { transform: scaleY(1.018); } }
+@keyframes chTilt { 0%, 80%, 100% { transform: rotate(0); } 84%, 92% { transform: rotate(-5deg); } }
+@keyframes chThinkTilt { 0%, 100% { transform: rotate(-3deg); } 50% { transform: rotate(-6deg) translateY(1px); } }
+@keyframes chFloat { from { transform: none; opacity: 1; } to { transform: translateY(-9px); opacity: 0; } }
+@keyframes chBob { 0%, 100% { transform: none; } 50% { transform: translateY(-3px); } }
+@keyframes chTwinkle { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.7); } }
+@keyframes chWave { from { transform: rotate(-10deg); } to { transform: rotate(12deg); } }
+@keyframes chStep { from { transform: translateY(0); } to { transform: translateY(-3px); } }
+@keyframes chSwingL { from { transform: rotate(-14deg); } to { transform: rotate(10deg); } }
+@keyframes chSwingR { from { transform: rotate(14deg); } to { transform: rotate(-10deg); } }
+@keyframes chPump { from { transform: none; } to { transform: translateY(-4px) scale(1.04); } }
+@keyframes chCheerL { from { transform: rotate(0); } to { transform: rotate(10deg); } }
+@keyframes chCheerR { from { transform: rotate(0); } to { transform: rotate(-10deg); } }
+@keyframes chUp { from { transform: translateY(8px) scale(0.96, 1.04); } to { transform: none; } }
 
 /* ---------- 新手教程：小人头上的对话框 ---------- */
 .tour-pop {
@@ -546,7 +565,7 @@ body.has-buddy .views { padding-bottom: calc(var(--cmp-h, 110px) + 52px + var(--
 .coach-card { padding: 14px 14px 14px 10px; }
 .coach { display: flex; align-items: flex-end; gap: 10px; }
 .coach-buddy { flex: none; padding: 0; border: 0; background: none; line-height: 0; cursor: pointer; -webkit-tap-highlight-color: transparent; }
-.coach-buddy .buddy-svg { width: 52px; height: auto; }
+.coach-buddy .ch-svg { width: 68px; height: auto; }
 .coach-bubble { position: relative; flex: 1; min-width: 0; padding: 10px 12px; border-radius: var(--r-md); background: var(--surface-2); }
 .coach-bubble::before { content: ''; position: absolute; left: -6px; bottom: 14px; width: 12px; height: 12px; background: inherit; transform: rotate(45deg); border-radius: 2px; }
 .coach-bubble p { position: relative; margin: 0; font-size: 0.86rem; line-height: 1.55; color: var(--text-2); }
@@ -556,15 +575,6 @@ body.has-buddy .views { padding-bottom: calc(var(--cmp-h, 110px) + 52px + var(--
 .coach-bubble .coach-more { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--line); color: var(--text); }
 .coach-bubble .buddy-next { margin-top: 8px; }
 @media (prefers-reduced-motion: no-preference) { .coach-bubble .coach-more, .coach-bubble .buddy-next { animation: ppIn 0.35s ease both; } }
-@media (prefers-reduced-motion: no-preference) {
-  .coach-buddy .bd-fa { animation: bdSwayA 4.4s steps(1, end) infinite; }
-  .coach-buddy .bd-fb { animation: bdSwayB 4.4s steps(1, end) infinite; }
-  .coach-buddy .bd-blink { animation: bdBlink 5.7s steps(1, end) infinite 1.3s; }
-  .coach-buddy .bd-fx-note { animation: bdBob 1.2s steps(1, end) infinite; }
-  .coach-buddy .bd-fx-sparkle { animation: bdTwinkle 1.8s steps(1, end) infinite; }
-  .coach-buddy .pose-wave .bd-fa { animation: bdAltA 0.34s steps(1, end) infinite; }
-  .coach-buddy .pose-wave .bd-fb { animation: bdAltB 0.34s steps(1, end) infinite; }
-  .coach-buddy .pose-wave { animation: bdUp 0.24s steps(2, end); }
 }
 /* 份量问一句：几个选项，当前按哪个记的高亮 */
 .buddy-q { margin: 6px 0 0; font-size: 0.95rem; font-weight: 650; line-height: 1.5; color: var(--text); }
@@ -685,8 +695,8 @@ body.has-buddy .views { padding-bottom: calc(var(--cmp-h, 110px) + 52px + var(--
 .buddy-set { display: flex; align-items: center; gap: 14px; margin: 14px 0 12px; }
 .buddy-preview {
   flex: none;
-  width: 92px;
-  height: 100px;
+  width: 104px;
+  height: 118px;
   padding: 0;
   border: none;
   display: flex;
@@ -699,11 +709,41 @@ body.has-buddy .views { padding-bottom: calc(var(--cmp-h, 110px) + 52px + var(--
   -webkit-tap-highlight-color: transparent;
 }
 /* 预览里站在一条边上 */
-.buddy-preview svg { flex: none; width: 90px; height: auto; border-bottom: 2px solid var(--line); box-sizing: content-box; }
+.buddy-preview svg { flex: none; width: 96px; height: auto; margin-bottom: -2px; }
 .buddy-opts { display: flex; flex-direction: column; gap: 10px; min-width: 0; flex: 1; }
-.buddy-top { display: flex; align-items: center; gap: 8px; }
-.buddy-top .buddy-name { flex: 1; min-width: 0; height: 36px; padding: 0 10px; font-size: 0.9rem; }
-.buddy-top #buddy-char { flex: none; width: 108px; }
+.buddy-who { display: flex; flex-direction: column; gap: 8px; margin: 16px 0 0; }
+.buddy-blurb { margin: 0; font-size: 0.82rem; line-height: 1.5; color: var(--text-2); }
+.buddy-memories { display: flex; flex-direction: column; gap: 8px; margin: 4px 0 0; }
+.buddy-memories small { margin-left: 4px; font-weight: 500; color: var(--text-3); }
+.mem-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.mem-card { position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; padding: 14px 2px 7px; border: 1px solid color-mix(in srgb, var(--love) 35%, var(--line)); border-radius: var(--r-sm);
+  background: linear-gradient(160deg, color-mix(in srgb, var(--love) 16%, var(--surface-2)), var(--surface-2)); color: var(--text); font: inherit; cursor: pointer; }
+.mem-card b { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.74rem; }
+.mem-card small { font-size: 0.6rem; color: var(--text-3); white-space: nowrap; }
+.mem-card .mem-n { position: absolute; top: 3px; left: 5px; font-style: normal; font-size: 0.6rem; font-weight: 700; color: var(--love); }
+.mem-card.locked { background: var(--surface-2); border-color: var(--line); opacity: 0.6; }
+/* 升级时弹出来的回忆（像收集 CG）、设置里重看的整屏卡片 */
+.buddy-pop[data-mode="story"] { width: min(320px, calc(100vw - 32px)); }
+.story-card { display: flex; align-items: flex-end; gap: 10px; margin: -2px 0 4px; }
+.story-art { flex: none; width: 92px; height: 84px; display: flex; align-items: flex-end; justify-content: center; overflow: hidden; border-radius: var(--r-sm);
+  background: radial-gradient(circle at 50% 40%, color-mix(in srgb, var(--love) 32%, transparent), transparent 70%), var(--surface-2); }
+.story-art svg { width: 92px; height: auto; margin-bottom: -2px; }
+.story-meta { display: flex; flex-direction: column; gap: 3px; min-width: 0; padding-bottom: 4px; }
+.story-tag { display: inline-flex; align-items: center; gap: 4px; font-size: 0.72rem; font-weight: 700; color: var(--love); }
+.story-tag i { font-style: normal; }
+.story-title { font-size: 1.05rem; color: var(--text); }
+.story-who { font-size: 0.72rem; color: var(--text-3); }
+.story-lead { margin: 6px 0 0; font-size: 0.84rem; color: var(--text-2); }
+.story-text { margin: 6px 0 0; font-size: 0.95rem; line-height: 1.65; color: var(--text); }
+.story-acts { flex-wrap: wrap; }
+.mem-view { position: fixed; inset: 0; z-index: 200; display: grid; place-items: center; padding: 24px; background: rgba(8, 9, 12, 0.72); }
+.mem-sheet { width: min(320px, 100%); display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 18px 18px 14px; border-radius: var(--r-lg, 18px);
+  background: radial-gradient(circle at 50% 22%, color-mix(in srgb, var(--love) 26%, transparent), transparent 62%), var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow); text-align: center; }
+.mem-art svg { width: 150px; height: auto; }
+.mem-title { font-size: 1.15rem; color: var(--text); }
+.mem-text { margin: 4px 0 0; font-size: 0.95rem; line-height: 1.7; color: var(--text); text-align: left; }
+.mem-close { margin-top: 6px; font-size: 0.72rem; color: var(--text-3); }
+@media (prefers-reduced-motion: no-preference) { .mem-sheet { animation: popSpring 0.42s cubic-bezier(0.2, 1.5, 0.4, 1); } }
 .bond-set, .bond-row { display: flex; flex-direction: column; gap: 4px; }
 .bond-row { margin: 8px 0 2px; padding: 8px 10px; border-radius: var(--r-sm); background: var(--surface-2); }
 .bond-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
@@ -1438,3 +1478,16 @@ body.onboarding .rec-panel { z-index: 210; bottom: calc(24px + var(--sab)); }
 .ob-back { align-self: flex-start; background: none; border: 0; padding: 4px 0; color: var(--text-2); font-weight: 600; }
 .ob-actions { margin-top: 10px; }
 #buddy-tour { margin-top: 10px; width: 100%; }
+/* 选搭子（v6.0）：江叙 / 夏柚 两张卡，点一下 TA 招手说一句；下面「极简模式」 */
+.ob-cast { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 4px; }
+.ob-pal { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 14px 10px 14px; border: 2px solid var(--line); border-radius: var(--r-lg); background: var(--surface); color: var(--text); font: inherit; cursor: pointer; box-shadow: var(--shadow-sm); transition: border-color 0.15s ease, transform 0.12s ease; -webkit-tap-highlight-color: transparent; }
+.ob-pal-art { display: flex; align-items: flex-end; justify-content: center; width: 100%; height: 146px; border-radius: var(--r-md); background: radial-gradient(circle at 50% 45%, color-mix(in srgb, var(--love) 18%, transparent), transparent 70%); }
+.ob-pal-art svg { width: 116px; height: auto; }
+.ob-pal b { margin-top: 2px; font-size: 1.1rem; }
+.ob-pal small { font-size: 0.74rem; line-height: 1.45; color: var(--text-3); text-align: center; }
+.ob-pal.on { border-color: var(--love); transform: translateY(-2px); box-shadow: 0 6px 18px color-mix(in srgb, var(--love) 25%, transparent); }
+.ob-pal-say { min-height: 3.2em; margin: 2px 4px 0; font-size: 0.92rem; line-height: 1.6; color: var(--text-2); text-align: center; }
+.ob-pal-say.said { color: var(--text); font-weight: 600; }
+#ob-cast-done { flex: none; }
+.ob-min { display: flex; flex-direction: column; align-items: center; gap: 2px; margin: 4px auto 0; padding: 10px 12px; border: 0; background: none; color: var(--text-2); font: inherit; font-size: 0.9rem; font-weight: 600; cursor: pointer; }
+.ob-min small { font-size: 0.74rem; font-weight: 500; color: var(--text-3); }
