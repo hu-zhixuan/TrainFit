@@ -724,6 +724,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
 
   /** 气泡弹出来的动画（每次重新弹） */
   popIn(pop) {
+    this._popAt = Date.now(); // 逛的时候凑过来说话要隔开一会儿
     pop.classList.remove('hidden', 'pop-spring');
     void pop.offsetWidth;
     pop.classList.add('pop-spring');
@@ -1174,6 +1175,8 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     // 打开 App：小人打个招呼（每天第一次）
     clearTimeout(this._greetT);
     this._greetT = setTimeout(() => this.greetToday && this.greetToday(), 2200);
+    // 逛的时候（发呆、翻以前的日子、翻记录、看趋势）有时凑过来说一句
+    this.watchBrowse && this.watchBrowse();
     this.buddyIdle();
     this.bindTour();
   },
