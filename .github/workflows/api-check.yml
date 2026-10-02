@@ -18,4 +18,4 @@ jobs:
           LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
           LLM_MODEL: ${{ vars.LLM_MODEL }}
           TAG: 新
-        run: ONLY="上周练了几次,哪天吃得最多,体重变化" ROUNDS=4 node .github/api_past.js \&\& ONLY="蛋白够不够（带两周）,记录不受影响" ROUNDS=2 node .github/api_past.js
+        run: ONLY="上周练了几次,哪天吃得最多,体重变化" ROUNDS=4 node .github/api_past.js && ONLY="蛋白够不够（带两周）,记录不受影响" ROUNDS=2 node .github/api_past.js
