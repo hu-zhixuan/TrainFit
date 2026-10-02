@@ -75,8 +75,13 @@ const CASES = [
     const days = (r.plan && r.plan.days) || [];
     if (days.length < 3) return '天数：' + days.length + ' ' + JSON.stringify(r.plan && r.plan.dayOffset);
     if (days.some(d => d.dayOffset < 1)) return '排到今天之前了：' + days.map(d => d.dayOffset).join(',');
-    return days.every(d => d.workouts.length >= 3) || '每天动作太少：' + days.map(d => d.workouts.length).join(',');
-  }, { memo: ['健身新手'], recent: [] }],
+    if (!days.every(d => d.workouts.length >= 3)) return '每天动作太少：' + days.map(d => d.workouts.length).join(',');
+    // answer 里每天那行的星期要和 dayOffset 对上（2026-09-29 是周二）
+    const WK = '日一二三四五六';
+    const want = days.map(d => '周' + WK[(2 + d.dayOffset) % 7]);
+    const got = (r.answer || '').split('\n').map(l => (l.match(/周[一二三四五六日天]/) || [''])[0]).filter(Boolean);
+    return want.every(w => got.includes(w)) || `星期对不上：应该 ${want.join(',')}，写的 ${got.join(',')}`;
+  }, { memo: ['健身新手'], recent: [], ask: true, date: '2026-09-29' }],
   ['李子几个（给选项）', '吃了几个李子', '15:00', r => {
     const it = r.meals.flatMap(m => m.items).find(i => /李子/.test(i.name));
     if (!it) return '没记李子';
