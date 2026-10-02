@@ -145,13 +145,15 @@
 
       const system = [
         '你是「练食AI」的记录助手。用户用口语说吃了什么（吃进嘴的都算：饭菜、零食、饮料、水、补剂、药）、训练或体重，文字来自语音识别，可能有同音错字（"卧腿"=卧推，"四组八哥"=4组8个，"划川"=划船，"茶叶大"=茶叶蛋）、没有标点、夹着「呃、嗯、那个、然后、就是」这类口头禅，按意思理解，说到的每样吃的都要记上，听着像错字的按最像的食物记，不要漏。说了又改口（「两碗，不对，一碗」「哦应该是…」）以后说的为准。紧跟在一样东西后面、只补了份量的话（「一个包子，呃大的」「一份炒饭然后是小份」）是那样东西的份量，不要单独记成一项。',
-        // 只写用得上的字段（v5.4）：Atria 一秒只写 17～20 个 token，以前每次都写一串 "answer":null,"next":[]…，白等两三秒
-        '由你决定怎么改数据：新增、修改或删除。只输出一个 JSON 对象，不要 markdown，不要解释。只写用得上的字段：值是 null、空数组的，dayOffset 是 0 的，都不要写。例：',
-        '{"reply":"一句短话说你做了什么，15字以内，不写热量数（下面会单独列出来）；估得比较粗的，30字以内说按什么估的",',
+        // 只写用得上的字段（v5.4）：Atria 一秒只写 17～20 个 token，以前每次都写一串 "answer":null,"next":[]…，白等两三秒。
+        // dayOffset 每次都写：实测不写的话「昨晚吃了火锅」会漏掉 -1，记到今天
+        '由你决定怎么改数据：新增、修改或删除。只输出一个 JSON 对象，不要 markdown，不要解释。reply 和 dayOffset 每次都写，别的字段只写用得上的（值是 null、空数组的不要写）。',
+        '例 1（记吃的、练的）：{"reply":"一句短话说你做了什么，15字以内，不写热量数（下面会单独列出来）；估得比较粗的，30字以内说按什么估的","dayOffset":0,',
         ' "add":{"workouts":[{"exerciseName":"杠铃卧推","muscleGroup":"胸部","weightKg":80,"sets":4,"reps":8,"burnedCalories":110}],',
         '        "meals":[{"mealType":"早餐","foodSummary":"肉包2个","items":[{"name":"肉包","amount":"2个","grams":200,"whole":true,"calories":460,"proteinG":16,"carbsG":60,"fatG":16}]},',
         '                 {"mealType":"午餐","foodSummary":"番茄炒蛋盖饭1份","items":[{"name":"米饭","amount":"1碗","grams":200,"whole":false,"calories":232,"proteinG":5,"carbsG":52,"fatG":0.6},{"name":"番茄炒蛋","amount":"1份","grams":200,"whole":true,"calories":260,"proteinG":11,"carbsG":10,"fatG":19}]}]}}',
-        '用得上才写的字段（规则里说什么时候用）："update":[{"ref":"r2","set":{"weightKg":85}}]、"delete":["r3"]、"dayOffset":-1、"bodyWeight":62.5、"remember":[…]、"memo":[…]、"forget":[…]、"answer":"…"、"next":[…]、"plan":{…}、"donePlans":[…]；add 里只有吃的就不写 workouts，只有练的就不写 meals。',
+        '例 2（改、删已有的记录）：{"reply":"改好了","dayOffset":0,"update":[{"ref":"r2","set":{"weightKg":85}}],"delete":["r3"]}',
+        '别的字段（bodyWeight、remember、memo、forget、answer、next、plan、donePlans）只在下面规则说要用时才写，和 add 一样放在这一个 JSON 对象里；add 里只有吃的就不写 workouts，只有练的就不写 meals。',
         '规则：',
         '1. muscleGroup 只能是：' + MUSCLES.join('、') + '；mealType 只能是：' + MEAL_TYPES.join('、') + '（怎么判断见第 4 条）。',
         '2. 重量换算成公斤（磅×0.45，斤×0.5），自重 weightKg=0。跑步、单车、跳绳、平板支撑等按时间算的填 durationMin（分钟），不写 sets、reps；只说了距离（「跑了5公里」）就按常见配速估分钟数。',
@@ -271,6 +273,8 @@
       }
       out.reply = cleanText(parsed && parsed.reply, 40).replace(/(看)?\s*answer/gi, '看小人');
       out.answer = cleanAnswer(parsed && parsed.answer);
+      // 问天气这类，大模型偶尔把「这个我帮不上」写进 reply、answer 空着（v5.4 只写用得上的字段后见过）：照样当成回答
+      if (!out.answer && /帮不上/.test(out.reply) && !(parsed && (parsed.add || parsed.workouts || parsed.meals || parsed.update || parsed.delete))) out.answer = out.reply;
       // 「接着问」：两句短问题，点了就跟说出来一样
       out.next = out.answer && Array.isArray(parsed.next) ? parsed.next.map(x => cleanText(x, 16).replace(/[。.]$/, '')).filter(x => x && x.length >= 3).slice(0, 2) : [];
       // 计划（明天的食谱 / 训练）：和记录一样整理、按库算热量，但不存成记录
@@ -484,7 +488,10 @@
           if (msg === 'NO_KEY') break;
           // 实测 Atria 偶尔回到一半就断了（JSON 不完整）：和超时一样，再发一次
           if ((Parser.isTransient(msg) || /^(NO_JSON|BAD_JSON)/.test(msg)) && retries < waits.length) {
-            await new Promise(r => setTimeout(r, waits[retries++]));
+            // 回到一半断了不是限流，马上再发；限流、超时、网络断了才等一等
+            const ms = /^(NO_JSON|BAD_JSON)/.test(msg) ? 0 : waits[retries];
+            retries += 1;
+            await new Promise(r => setTimeout(r, ms));
             i -= 1; // 同一种请求再试
             continue;
           }

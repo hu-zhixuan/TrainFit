@@ -337,8 +337,8 @@ test('掐掉慢的那份：原生那边断开连接，网页这边马上算这�
 
 test('大模型只写用得上的字段（v5.4）：没写 answer、next、plan、dayOffset…照样整理好', () => {
   const sys = Parser.buildMessages('中午一碗牛肉面', {})[0].content;
-  assert.ok(!/"answer":null|"next":\[\],|"plan":null|"dayOffset":0/.test(sys), '例子里不再列一串空字段');
-  assert.match(sys, /只写用得上的字段/);
+  assert.ok(!/"answer":null|"next":\[\],|"plan":null|"bodyWeight":null/.test(sys), '例子里不再列一串空字段');
+  assert.match(sys, /reply 和 dayOffset 每次都写/, 'dayOffset 不能省：省了「昨晚吃了火锅」会记到今天');
   const r = Parser.normalize({ reply: '记好了', add: { meals: [{ mealType: '午餐', foodSummary: '牛肉面1碗', items: [{ name: '牛肉面', amount: '1碗', grams: 500, whole: true, calories: 550, proteinG: 25, carbsG: 75, fatG: 15 }] }] } }, { said: '中午一碗牛肉面' });
   assert.strictEqual(r.meals.length, 1);
   assert.strictEqual(r.dayOffset, 0);
@@ -346,6 +346,9 @@ test('大模型只写用得上的字段（v5.4）：没写 answer、next、plan�
   assert.deepStrictEqual([r.next, r.updates, r.deletes, r.remember, r.memo, r.forget, r.donePlans, r.workouts], [[], [], [], [], [], [], [], []]);
   assert.strictEqual(r.plan, undefined);
   assert.strictEqual(r.bodyWeight, undefined);
+  // 问天气：「帮不上」写进了 reply、answer 空着，照样当成回答（小人气泡里说）；记了东西的不算
+  assert.strictEqual(Parser.normalize({ reply: '这个我帮不上，我只管吃和练。' }, {}).answer, '这个我帮不上，我只管吃和练。');
+  assert.strictEqual(Parser.normalize({ reply: '帮不上', add: { meals: [] } }, {}).answer, '');
   const w = Parser.normalize({ add: { workouts: [{ exerciseName: '跑步', muscleGroup: '有氧', durationMin: 30, burnedCalories: 300 }] } }, {});
   assert.strictEqual(w.workouts[0].durationMin, 30);
   assert.strictEqual(w.workouts[0].estimated, false);
@@ -389,9 +392,9 @@ test('热量和蛋白质都差一倍：是大模型算错了量，用成分表�
   assert.ok(egg.calories < 160 && egg.proteinG < 15, `${egg.calories} ${egg.proteinG}`);
 });
 
-test('大模型回到一半就断了（JSON 不完整）：再发一次', async () => {
+test('大模型回到一半就断了（JSON 不完整）：马上再发一次，不用等', async () => {
   const origSend = Parser.send;
-  Parser.retryWaits = [0, 0];
+  Parser.retryWaits = [3000, 8000];
   let n = 0;
   try {
     Parser.send = async () => {
@@ -399,9 +402,11 @@ test('大模型回到一半就断了（JSON 不完整）：再发一次', async 
       if (n === 1) return JSON.stringify({ choices: [{ message: { content: '{"reply":"这个问题我帮你算算","answer":"今天还差60g。\\n建议：乳清蛋白粉1勺（约120千卡' } }] });
       return JSON.stringify({ choices: [{ message: { content: '{"reply":"ok","answer":"今天还差60g。"}' } }] });
     };
+    const t0 = Date.now();
     const r = await Parser.parse('今天还差多少蛋白', {});
     assert.strictEqual(n, 2);
     assert.strictEqual(r.answer, '今天还差60g。');
+    assert.ok(Date.now() - t0 < 1000, '不是限流，不用等 3 秒');
   } finally {
     Parser.send = origSend;
     delete Parser.retryWaits;
