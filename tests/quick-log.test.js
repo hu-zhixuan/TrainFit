@@ -543,3 +543,10 @@ test('明明在问练什么，大模型说「帮不上」：提醒一句再问�
     delete Parser.hedgeMs;
   }
 });
+
+test('提问时给大模型接下来一周的日期和星期（排一周时别把周几算错）；记录时不带', () => {
+  const ask = Parser.buildMessages('一周练三次帮我排一下', { ask: true, date: '2026-09-29' })[1].content;
+  assert.ok(ask.includes('0：9月29日 周二，1：9月30日 周三'), ask.slice(-160));
+  assert.ok(ask.includes('7：10月6日 周二'));
+  assert.ok(!Parser.buildMessages('中午一碗面', { date: '2026-09-29' })[1].content.includes('日期对照'));
+});
