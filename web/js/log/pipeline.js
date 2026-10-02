@@ -8,6 +8,16 @@
   const { MEAL_TYPES, quickWeight, Native, Haptics, Parser, QuickLog, mergeItems, sumItems, looksLikeQuestion, partialAnswer } = TF;
 
   Object.assign(QuickLog, {
+    STUCK_MS: 3 * 60 * 1000, // 整理超过这么久还没好：算失败，留卡片让你重试
+
+    /** 切回 App 时看一眼：放在后台时计时器是停的，按真实时间算，卡太久的直接算失败 */
+    reapStale() {
+      const app = root.app;
+      if (!app || !app.pending) return;
+      app.pending.filter(p => p.status === 'working' && Date.now() - (p.startedAt || p.ts) > this.STUCK_MS)
+        .forEach(p => { if (p.expire) p.expire(); else app.failPending(p.id, 'AI 太慢了，没等到结果'); });
+    },
+
     // ----- 解析 + 保存（后台进行，不用等） -----
     submit(text) {
       text = (text || '').trim();
@@ -99,36 +109,49 @@
 
     async process(p) {
       const app = root.app;
-      const ctx = this.buildContext(p);
+      // 每整理一次记一个号：点了「重试」以后，上一次迟到的结果不算（不然会记两遍）
+      const run = p.run = (p.run || 0) + 1;
+      const mine = () => p.run === run && app.pending.some(x => x.id === p.id);
+      let shown = '';
+      const fail = (e) => {
+        if (!mine() || p.status !== 'working') return; // 已经算失败了 / 被删了 / 又重试了
+        clearTimeout(deadline);
+        app.failPending(p.id, Parser.failReason(e));
+        if ((p.ask || shown) && app.showBuddyFailed) app.showBuddyFailed(p, Parser.failReason(e));
+        if (p.ask && TF.pureQuestion && TF.pureQuestion(p.text)) app.finishPending(p.id); // 只是在问：不留「没整理好」卡片
+      };
+      // 不管卡在哪，3 分钟还没整理好就算失败，让你重试（以前会一直转「正在整理」）；结果晚到了照样记上
+      p.expire = () => fail(new Error('TIMEOUT'));
+      const deadline = setTimeout(p.expire, this.STUCK_MS);
       let result;
       // 边想边出字：answer 一出来就往小人的气泡里写
       // 回答写完了、后面在写计划（整份计划要 30～60 秒）：气泡里说「正在排成计划」，别让光标一直闪
-      let buf = '', shown = '', planning = false;
+      let buf = '', planning = false;
       const onDelta = (soFar) => {
         buf = soFar;
         const a = partialAnswer ? partialAnswer(buf) : '';
         const pl = !!a && /"answer"\s*:\s*"(?:[^"\\]|\\.)*"/.test(buf) && /"plan"\s*:\s*\{/.test(buf);
-        if (a && (a !== shown || pl !== planning) && app.showBuddyAnswer && app.pending.some(x => x.id === p.id)) {
+        if (a && (a !== shown || pl !== planning) && app.showBuddyAnswer && mine()) {
           shown = a;
           planning = pl;
           app.showBuddyAnswer(p.text, a, { streaming: true, planning: pl });
         }
       };
+      let ctx;
       try {
+        ctx = this.buildContext(p);
         // 只是报体重：不用等大模型
         const kg = quickWeight(p.text, ctx.lastWeight);
         result = kg ? { dayOffset: 0, workouts: [], meals: [], updates: [], deletes: [], bodyWeight: kg, reply: '', source: 'fast' }
           : await Parser.parse(p.text, ctx, onDelta);
       } catch (e) {
         console.warn('[QuickLog] 大模型没整理出来：', e && e.message);
-        if (app.pending.some(x => x.id === p.id)) {
-          app.failPending(p.id, Parser.failReason(e));
-          if ((p.ask || shown) && app.showBuddyFailed) app.showBuddyFailed(p, Parser.failReason(e));
-          if (p.ask && TF.pureQuestion && TF.pureQuestion(p.text)) app.finishPending(p.id); // 只是在问：不留「没整理好」卡片
-        }
+        clearTimeout(deadline);
+        fail(e);
         return;
       }
-      if (!app.pending.some(x => x.id === p.id)) return; // 已被用户删掉
+      clearTimeout(deadline);
+      if (!mine()) return; // 已被用户删掉，或者又点了重试
       // 「早餐照计划吃了」：大模型记好了，把那几条计划划掉
       if ((result.donePlans || []).length && app.dropPlan) {
         const byRef = new Map((ctx.plans || []).map(x => [x.ref, x.id]));
@@ -144,6 +167,7 @@
           if (app.showBuddyAnswer) app.showBuddyAnswer(p.text, result.answer, answerOpts);
           return;
         }
+        if (p.status !== 'working') return; // 3 分钟时已经算失败了，别再震一次
         app.failPending(p.id, result.reply || '没认出吃了什么');
         if (p.ask && app.showBuddyFailed) app.showBuddyFailed(p, result.reply || '没听懂，换个说法试试');
         if (p.ask && TF.pureQuestion && TF.pureQuestion(p.text)) app.finishPending(p.id);
@@ -375,6 +399,8 @@
       this.snack.classList.add('hidden');
     }
   });
+
+  if (root.document) root.document.addEventListener('visibilitychange', () => { if (!root.document.hidden) QuickLog.reapStale(); });
 
   if (typeof module !== 'undefined' && module.exports) module.exports = TF;
 })(typeof window !== 'undefined' ? window : globalThis);

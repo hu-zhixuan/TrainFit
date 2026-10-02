@@ -31,6 +31,9 @@ data class ApiResult(val ok: Boolean, val body: String)
  */
 object OpenAiApi {
 
+    private const val STREAM_MAX_MS = 150_000L
+    private const val STREAM_MAX_CHARS = 24_000
+
     fun chat(cfg: ApiConfig, body: JSONObject): ApiResult {
         return try {
             if (body.optString("model").isBlank()) body.put("model", cfg.model)
@@ -81,8 +84,14 @@ object OpenAiApi {
                 return ApiResult(true, text)
             }
             val content = StringBuilder()
+            val started = System.currentTimeMillis()
             conn.inputStream.bufferedReader(Charsets.UTF_8).use { reader ->
                 while (true) {
+                    // 大模型偶尔停不下来，一直出字：超过 150 秒或 2.4 万字就断开，别一直转「正在整理」、一直花 token
+                    if (System.currentTimeMillis() - started > STREAM_MAX_MS || content.length > STREAM_MAX_CHARS) {
+                        conn.disconnect()
+                        return ApiResult(false, "TOO_LONG ${content.length} chars")
+                    }
                     val line = reader.readLine() ?: break
                     if (!line.startsWith("data:")) continue
                     val data = line.substring(5).trim()

@@ -221,7 +221,7 @@ test('大模型失败：限流 / 超时会重试，最后还是失败就报错�
     Parser.send = async () => { n += 1; throw new Error('TIMEOUT'); };
     await assert.rejects(() => Parser.parse('两个水煮蛋加乳清蛋白粉700毫升', {}), /TIMEOUT/);
     assert.strictEqual(n, 3);
-    assert.strictEqual(Parser.failReason(new Error('TIMEOUT')), 'AI 这会儿太慢，没等到结果，点「重试」');
+    assert.strictEqual(Parser.failReason(new Error('TIMEOUT')), 'AI 太慢了，没等到结果');
     assert.strictEqual(Parser.failReason(new Error('UnknownHostException: x')), '网络不好，AI 没连上，点「重试」');
     assert.strictEqual(Parser.failReason(new Error('HTTP 429 x')), 'AI 这会儿太忙（限流），点「重试」');
     assert.strictEqual(Parser.failReason(new Error('NO_KEY')), 'AI 接口没有配置 key');
@@ -620,4 +620,36 @@ test('贝贝南瓜不是普通南瓜：大模型按普通南瓜估低了 4 倍�
 test('只是在问（不留「没整理」卡片）和又记又问（要留）分得开', () => {
   for (const t of ['晚上吃点啥好？', '上周练了几次', '给我定一下明天的食谱', '我想练腿要怎么练', '今天吃了多少？']) assert.ok(TF.pureQuestion(t), t);
   for (const t of ['中午吃了牛肉面，晚上吃点啥', '我吃了两个鸡蛋还差多少蛋白', '体重62，这周瘦了多少？', '中午一碗面']) assert.ok(!TF.pureQuestion(t), t);
+});
+
+test('大模型停不下来（一直出字）：到点就算卡住，不重试，不会一直转「正在整理」', async () => {
+  const { Native } = TF;
+  Parser.retryWaits = [0, 0];
+  Parser.hedgeMs = 0;
+  Native.hardMs = 120;
+  let calls = 0;
+  const timers = [];
+  globalThis.TrainFitNative = {
+    llmChatStream(id) { calls += 1; timers.push(setInterval(() => globalThis.__tfLlmDelta(id, '好'), 5)); },
+    llmChat() { throw new Error('不该走整段'); }
+  };
+  try {
+    await assert.rejects(Parser.parse('早上不吃早饭咋行？', {}, () => {}), e => /^TOO_LONG/.test(e.message));
+    assert.strictEqual(calls, 1, '卡住了不再发一份，免得又花一遍 token');
+    assert.match(Parser.failReason(new Error('TOO_LONG 24001 chars')), /卡住了/);
+  } finally {
+    timers.forEach(clearInterval);
+    delete globalThis.TrainFitNative;
+    delete Native.hardMs;
+    delete Parser.retryWaits;
+    delete Parser.hedgeMs;
+  }
+});
+
+test('「咋行」「为啥」也听得出是在问', () => {
+  for (const t of ['早上不吃早饭咋行？他妈都要那么搞', '为啥我体重不降', '晚上吃火锅行不行']) {
+    assert.ok(TF.looksLikeQuestion(t), t);
+    assert.ok(TF.pureQuestion(t), t);
+  }
+  assert.ok(!TF.pureQuestion('中午吃了两碗饭，为啥还饿'));
 });

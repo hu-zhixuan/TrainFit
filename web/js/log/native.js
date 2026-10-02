@@ -82,12 +82,15 @@
       const stream = !!(onDelta && root.TrainFitNative.llmChatStream);
       return new Promise((resolve, reject) => {
         const id = 'r' + (++this._seq) + '_' + Date.now();
-        const expire = () => {
+        const expire = (why) => {
+          clearTimeout(p.timer);
+          clearTimeout(p.hard);
           delete this._pending[id];
-          reject(new Error('TIMEOUT'));
+          reject(new Error(why || 'TIMEOUT'));
         };
         const limit = timeoutMs || 75000; // 原生那边连接 15 秒 + 读取 60 秒
-        const p = { resolve, reject, timer: setTimeout(expire, limit) };
+        // 一直在出字也有个头：大模型偶尔停不下来（一直出字，上面的计时一直被重置），「正在整理」就永远转下去
+        const p = { resolve, reject, timer: setTimeout(expire, limit), hard: setTimeout(() => expire('TOO_LONG'), this.hardMs || 150000) };
         if (stream) p.onDelta = (chunk) => { clearTimeout(p.timer); p.timer = setTimeout(expire, limit); onDelta(chunk); };
         this._pending[id] = p;
         try {
@@ -95,6 +98,7 @@
           else root.TrainFitNative.llmChat(id, JSON.stringify(body), JSON.stringify(override || {}));
         } catch (e) {
           clearTimeout(p.timer);
+          clearTimeout(p.hard);
           delete this._pending[id];
           reject(e);
         }
@@ -110,6 +114,7 @@
       const p = this._pending[id];
       if (!p) return;
       clearTimeout(p.timer);
+      clearTimeout(p.hard);
       delete this._pending[id];
       if (ok) p.resolve(payload); else p.reject(new Error(payload || 'LLM_ERROR'));
     }
