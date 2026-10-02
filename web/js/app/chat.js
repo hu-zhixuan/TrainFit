@@ -1,6 +1,6 @@
 /**
  * 小人主动找你说话（v4.8）：陪伴类产品留得住人，是因为它记得你、会问你、每天有个小仪式、你做了什么它有反应。
- * 我们的小人也这样，但不卖萌、不烦人：一次打开最多主动说一次，一天最多三次（tf_chat），设置里能关（profile.buddy.chatty）。
+ * 我们的小人也这样，但不卖萌、不烦人：主动说的话共用一个节奏（voiceBudget，tf_voice），一天最多 5 句，设置里能关（profile.buddy.chatty）。
  *  - 每天第一次打开：打个招呼，接一句昨天的事，再问一句（早上问睡得怎么样，下午问练不练，晚上没记晚饭问吃了没）；
  *  - 头两周慢慢认识你：一天问一个（练多久了、有不吃的吗、有伤吗），答案记进小本本；
  *  - 练完问感受：还能加 / 刚好 / 很吃力，记在那几组上（rpe），下次加重量按这个来。
@@ -12,16 +12,31 @@ Object.assign(FitnessApp.prototype, {
     return look.show && (this.profile.buddy || {}).chatty !== false;
   },
 
-  /** 今天还能不能主动说（一天最多三次） */
-  chatBudget(use) {
+  /**
+   * 小人主动说话的一个节奏（v5.3）：以前招呼、逛的时候、提醒、小提示各管各的次数，加起来一天能冒十几句。现在一起算：
+   *  must   —— 卡住了 / 第一条 / 刚记的份量要问：随时说，不占次数
+   *  guide  —— 打招呼、饭点空着、新手提示、练完问感受：一天一共 5 句以内
+   *  remind —— 破纪录、晚上蛋白差很多、吃超了：一样算在这 5 句里
+   *  chat   —— 逛的时候凑过来说的闲话：只在今天还没说满 3 句、离上一句 5 分钟以上时说
+   * use=true 记一次；返回现在能不能说。
+   */
+  voiceBudget(level, use) {
     const today = getTodayDateString();
     let c;
-    try { c = JSON.parse(localStorage.getItem('tf_chat') || '{}'); } catch (e) { c = {}; }
-    if (c.date !== today) c = { date: today, n: 0 };
-    if (!use) return c.n < 3;
-    c.n += 1;
-    try { localStorage.setItem('tf_chat', JSON.stringify(c)); } catch (e) {}
-    return true;
+    try { c = JSON.parse(localStorage.getItem('tf_voice') || '{}'); } catch (e) { c = {}; }
+    if (c.date !== today) c = { date: today, n: 0, at: 0 };
+    const ok = level === 'must' || (level === 'chat' ? c.n < 3 && Date.now() - (c.at || 0) > 5 * 60000 : c.n < 5);
+    if (use && ok) {
+      if (level !== 'must') c.n += 1;
+      c.at = Date.now();
+      try { localStorage.setItem('tf_voice', JSON.stringify(c)); } catch (e) {}
+    }
+    return ok;
+  },
+
+  /** 打招呼、练完问感受这类（guide） */
+  chatBudget(use) {
+    return this.voiceBudget('guide', use);
   },
 
   /**
@@ -346,6 +361,7 @@ Object.assign(FitnessApp.prototype, {
     try { d = localStorage.getItem('tf_first') || ''; } catch (e) {}
     if (d === today && !force) return false;
     try { localStorage.setItem('tf_first', today); } catch (e) {}
+    this.voiceBudget('must', true);
     const m = this.mealNow(new Date().getHours());
     const name = this.userName();
     this.askUser(`${name ? name + '，' : ''}${this.weights.length ? '' : '来记第一条吧。'}${m.word}吃了啥？`, this.firstOptions(m));
@@ -354,7 +370,7 @@ Object.assign(FitnessApp.prototype, {
 
   /** 饭点过了这顿还空着：问一句吃了没（每顿一天一次，算在「逛的时候」那 4 句里） */
   mealGapNudge() {
-    if (!this.canChat() || !this.nudgeBudget(false) || Date.now() - (this._popAt || 0) < 60000) return false;
+    if (!this.canChat() || Date.now() - (this._popAt || 0) < 60000) return false;
     const today = getTodayDateString();
     const now = new Date();
     const t = now.getHours() + now.getMinutes() / 60;
@@ -367,13 +383,15 @@ Object.assign(FitnessApp.prototype, {
       { label: '记不清吃了啥', talk: true, reply: '说个大概就行，比如「一份盖浇饭」，量我按常见的算，不准再改。' },
       { label: '还没', reply: '吃完说一声。' },
       { label: '不吃了', reply: '行，别饿过头就好。' }]);
-    this.nudgeBudget(true, key);
+    this.nudgeMark(key);
+    this.chatBudget(true);
     return true;
   },
 
   /** 卡住了教一句：说了两次都没听清，告诉你可以打字（一天一次） */
   coachVoice() {
     if (!this.chatty() || this._touring || this.tipToday('voice')) return false;
+    this.voiceBudget('must', true);
     this.sayTip('没听清。离手机近一点、正常说话就行；不方便出声就点左边的键盘打字，一样能记。');
     return true;
   },
@@ -381,6 +399,7 @@ Object.assign(FitnessApp.prototype, {
   /** 卡住了教一句：大模型没认出吃了啥，告诉你怎么说好认（一天一次） */
   coachFail(p) {
     if (!this.chatty() || this._touring || this.tipToday('fail')) return false;
+    this.voiceBudget('must', true);
     return this.askUser('这句没认出来吃了啥。说成「什么 + 大概多少」最好认，比如「中午一碗牛肉面」。', [
       { label: '改一下字', pick: () => this.editPendingText(p.id) },
       { label: '再说一次', talk: true, pick: () => this.dropPending(p.id) }]);
@@ -442,18 +461,11 @@ Object.assign(FitnessApp.prototype, {
     if (n) this.nudgeBudget(true, n.key);
   },
 
-  /** 一天最多 4 句、隔 4 分钟；key 是今天说过的（同一句不说两遍） */
+  /** 逛的时候凑过来说的闲话（chat 那一档）；key 记下今天说过的（同一句不说两遍） */
   nudgeBudget(use, key) {
-    const today = getTodayDateString();
-    let c;
-    try { c = JSON.parse(localStorage.getItem('tf_nudge') || '{}'); } catch (e) { c = {}; }
-    if (c.date !== today) c = { date: today, n: 0, at: 0, said: [] };
-    if (!use) return c.n < 4 && Date.now() - (c.at || 0) > 4 * 60000;
-    c.n += 1;
-    c.at = Date.now();
-    if (key) c.said.push(key);
-    try { localStorage.setItem('tf_nudge', JSON.stringify(c)); } catch (e) {}
-    return true;
+    if (!use) return this.voiceBudget('chat');
+    if (key) this.nudgeMark(key);
+    return this.voiceBudget('chat', true);
   },
 
   /** 记一下今天问过了（不占次数） */

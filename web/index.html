@@ -200,7 +200,7 @@
             <input type="checkbox" class="switch" id="buddy-show" aria-label="显示小人">
           </div>
           <div class="switch-row">
-            <div class="switch-text"><b>小人主动找你说话</b><small>每天打个招呼、练完问问感受，你逛的时候偶尔凑过来说一句</small></div>
+            <div class="switch-text"><b>小人主动找你说话</b><small>打招呼、饭点问一句、逛的时候凑过来，一天最多 5 句</small></div>
             <input type="checkbox" class="switch" id="buddy-chatty" aria-label="小人主动找你说话">
           </div>
           <button type="button" class="btn" id="buddy-tour">让小人再带我看一遍</button>
@@ -341,6 +341,11 @@
       <button class="ob-back" id="ob-back" type="button" aria-label="返回">‹ 返回</button>
       <h2 class="ob-title">简单填一下</h2>
       <p class="ob-sub" id="ob-step-2-sub"></p>
+      <div class="ob-say" id="ob-say-box">
+        <button class="ob-mic" id="ob-mic" type="button" aria-label="按住说一句"></button>
+        <input class="input ob-say-input" id="ob-say" type="text" enterkeyhint="done" placeholder="或者打一句：男 175 70公斤 28岁 想减脂">
+      </div>
+      <p class="ob-say-note" id="ob-say-note">懒得填？按住麦克风说一句，比如「男，175，70 公斤，28 岁，想减脂」，下面自动填好</p>
       <div class="field" id="ob-goal-field">
         <span class="field-label">目标</span>
         <div class="seg seg-sm" id="ob-goal">
@@ -435,6 +440,7 @@
   <script src="js/log/native.js"></script>
   <script src="js/log/sound.js"></script>
   <script src="js/log/food.js"></script>
+  <script src="js/log/fastlog.js"></script>
   <script src="js/log/parser.js"></script>
   <script src="js/log/quick_log.js"></script>
   <script src="js/log/pipeline.js"></script>

@@ -678,3 +678,38 @@ test('key 不对（401）：不再换写法多发一次', async () => {
     delete Parser.hedgeMs;
   }
 });
+
+test('秒记：全是以前吃过的、练过的，本机直接记；有一样没把握就交给大模型', () => {
+  require('../web/js/log/fastlog.js');
+  const diet = [
+    { date: '2026-09-30', mealType: '早餐', items: [{ name: '鸡蛋', amount: '2个', grams: 100, calories: 144, proteinG: 13.3, carbsG: 1.4, fatG: 8.8 }, { name: '牛奶', amount: '1杯', grams: 250, calories: 135, proteinG: 7.5, carbsG: 12, fatG: 8 }] },
+    { date: '2026-09-28', mealType: '早餐', items: [{ name: '三明治', amount: '1个', grams: 150, calories: 330, proteinG: 15, carbsG: 35, fatG: 14, whole: true }] },
+    { date: '2026-06-01', mealType: '午餐', items: [{ name: '炸鸡', amount: '1块', calories: 300, proteinG: 15, carbsG: 10, fatG: 20 }] }
+  ];
+  const data = { now: new Date('2026-10-02T08:10:00'), today: '2026-10-02', diet, workouts: [{ date: '2026-09-30', exerciseName: '杠铃卧推', muscleGroup: '胸部', weightKg: 80, sets: 4, reps: 8 }],
+    myFoods: [{ name: '蛋白粉', amount: '1勺', grams: 30, calories: 120, proteinG: 24, carbsG: 3, fatG: 1.5 }] };
+  const r = TF.fastLog('早上吃了三个鸡蛋一杯牛奶', data);
+  assert.strictEqual(r.source, 'local');
+  assert.strictEqual(r.meals[0].mealType, '早餐');
+  assert.strictEqual(r.meals[0].calories, 216 + 135);
+  assert.strictEqual(TF.fastLog('两个三明治', data).meals[0].calories, 660); // 「三」不是数量
+  assert.strictEqual(TF.fastLog('一勺蛋白粉', data).meals[0].proteinG, 24);
+  const w = TF.fastLog('卧推八十公斤四组每组八个', data).workouts[0];
+  assert.deepStrictEqual([w.exerciseName, w.weightKg, w.sets, w.reps, w.estimated], ['杠铃卧推', 80, 4, 8, false]);
+  assert.strictEqual(TF.fastLog('卧推4组8个', data).workouts[0].estimated, true);
+  for (const t of ['一杯牛奶一个包子', '一碗牛奶', '两个鸡蛋，昨天的', '牛肉面200克', '早上鸡蛋晚上牛奶', '鸡蛋能吃几个', '跑步30分钟', '把鸡蛋改成三个', '一块炸鸡', '一勺蛋白粉一个鸡蛋卧推4组8个'])
+    assert.strictEqual(TF.fastLog(t, data), null, t);
+  assert.strictEqual(TF.cnNum('一百二十五'), 125);
+  assert.strictEqual(TF.cnNum('七十五点五'), 75.5);
+});
+
+test('一句话建档：身高体重年龄性别目标名字，各种说法都认', () => {
+  require('../web/js/log/fastlog.js');
+  const p = (t) => TF.parseIntro(t, 2026);
+  assert.deepStrictEqual(p('男，175，70公斤，28岁，想减脂'), { gender: 'male', weightKg: 70, heightCm: 175, age: 28, goal: 'fat_loss' });
+  assert.deepStrictEqual(p('我叫阿程，一米八，140斤，95后，想增肌'), { heightCm: 180, weightKg: 70, age: 29, goal: 'muscle_gain', name: '阿程' });
+  assert.deepStrictEqual(p('女生 163 52kg 二十六岁 想瘦一点'), { gender: 'female', weightKg: 52, heightCm: 163, age: 26, goal: 'fat_loss' });
+  assert.deepStrictEqual(p('身高1.68米 体重六十二公斤 保持健康就行'), { heightCm: 168, weightKg: 62, goal: 'maintain' });
+  assert.deepStrictEqual(p('175 70 28'), { heightCm: 175, weightKg: 70, age: 28 });
+  assert.deepStrictEqual(p('今天天气不错'), {});
+});

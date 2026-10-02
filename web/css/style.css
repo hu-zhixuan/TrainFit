@@ -1332,6 +1332,20 @@ body.no-composer .snackbar { bottom: calc(20px + var(--sab)); }
 .w-dot { fill: var(--surface); stroke: var(--accent); stroke-width: 2; }
 
 /* ---------- 第一次打开 ---------- */
+/* 一句话建档 */
+.ob-say { display: flex; align-items: center; gap: 10px; margin: 4px 0 6px; }
+.ob-mic { flex: 0 0 auto; width: 48px; height: 48px; border-radius: 50%; border: none; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; cursor: pointer; touch-action: none; -webkit-user-select: none; user-select: none; }
+.ob-mic svg { width: 22px; height: 22px; }
+.ob-mic.on { background: var(--danger, #e05a4f); box-shadow: 0 0 0 6px color-mix(in srgb, var(--danger, #e05a4f) 22%, transparent); }
+.ob-mic.hidden { display: none; }
+.ob-say-input { flex: 1; min-width: 0; }
+.ob-say-note { margin: 0 0 14px; font-size: 0.78rem; line-height: 1.5; color: var(--text-3); }
+.ob-say-note.ok { color: var(--accent-text); }
+.input.ob-filled { animation: obFill 0.9s ease; }
+@keyframes obFill { 0% { box-shadow: 0 0 0 0 var(--accent); } 30% { box-shadow: 0 0 0 3px var(--accent-soft); background: var(--accent-soft); } 100% { box-shadow: none; } }
+@media (prefers-reduced-motion: reduce) { .input.ob-filled { animation: none; } }
+/* 建档时按住说：录音面板要在引导页上面 */
+body.onboarding .rec-panel { z-index: 210; bottom: calc(24px + var(--sab)); }
 .onboard {
   position: fixed;
   inset: 0;

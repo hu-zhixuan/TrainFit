@@ -273,6 +273,7 @@
       root.Sound && root.Sound.play('error');
       this.state = 'idle';
       this.resetTalkUi();
+      if (this.capture) { const f = this.capture; this.capture = null; f('', msg); return; }
       this.setStatus(msg, 'warn');
     },
 
@@ -307,6 +308,7 @@
       this.state = 'idle';
       this.resetTalkUi();
       text = (text || '').trim();
+      if (this.capture) { const f = this.capture; this.capture = null; f(text, text ? '' : '没听到内容，再按住说一次'); return; } // 建档时说的
       if (!text) { this.setStatus('没听到内容，再按住说一次', 'warn'); this.voiceMiss(); return; }
       this._misses = 0;
       this.setStatus('');
@@ -341,6 +343,7 @@
       this.state = 'idle';
       this.resetTalkUi();
       const msg = String(text || '');
+      if (this.capture) { const f = this.capture; this.capture = null; f('', msg === 'TOO_SHORT' || msg === 'NO_SPEECH' ? '没听到说话，按住再说一次' : '没认出来，再说一次，或者直接填下面'); return; }
       if (msg === 'TOO_SHORT' || msg === 'NO_SPEECH') { this.setStatus('没听到说话，按住再说一次', 'warn'); this.voiceMiss(); }
       else if (msg === 'LOCAL_NOT_READY') this.setStatus('识别模型还在加载，稍等一两秒再说', 'warn');
       else if (msg === 'MODEL_MISSING') this.setStatus('没认出来：本机识别模型还没下好，联网再说一次', 'warn');
