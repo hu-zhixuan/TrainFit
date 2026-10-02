@@ -184,45 +184,50 @@
             <button class="seg-btn" data-value="light" type="button">浅色</button>
           </div>
           <div class="field-note" id="set-theme-note"></div>
-          <div class="buddy-set">
-            <button class="buddy-preview" id="buddy-preview" type="button" aria-label="小人预览，点一下秀肌肉"></button>
-            <div class="buddy-opts">
-              <div class="buddy-top">
-                <input class="input buddy-name" id="buddy-name" type="text" maxlength="6" placeholder="小练" aria-label="小人的名字">
-                <div class="seg seg-sm" id="buddy-char">
-                  <button class="seg-btn" data-value="boy" type="button">男生</button>
-                  <button class="seg-btn" data-value="girl" type="button">女生</button>
-                </div>
+          <div class="buddy-who">
+            <div class="field-label">谁陪你记</div>
+            <div class="seg seg-sm" id="buddy-char">
+              <button class="seg-btn" data-value="boy" type="button">江叙</button>
+              <button class="seg-btn" data-value="girl" type="button">夏柚</button>
+              <button class="seg-btn" data-value="off" type="button">不要 · 极简</button>
+            </div>
+          </div>
+          <div class="buddy-on" id="buddy-on">
+            <div class="buddy-set">
+              <button class="buddy-preview" id="buddy-preview" type="button" aria-label="小人预览，点一下秀肌肉"></button>
+              <div class="buddy-opts">
+                <p class="buddy-blurb" id="buddy-blurb"></p>
+                <div class="bond-set" id="buddy-bond"></div>
               </div>
-              <div class="bond-set" id="buddy-bond"></div>
             </div>
-          </div>
-          <div class="buddy-rows">
-            <div class="buddy-opt"><span>发型</span><div class="seg seg-sm" id="buddy-style"></div></div>
-            <div class="buddy-opt"><span>发色</span><div class="swatches" id="buddy-hair"></div></div>
-            <div class="buddy-opt"><span>肤色</span><div class="swatches" id="buddy-skin"></div></div>
-            <div class="buddy-opt"><span>衣服</span><div class="swatches" id="buddy-outfit"></div></div>
-            <div class="buddy-opt"><span>身材</span><div class="seg seg-sm" id="buddy-build">
-              <button class="seg-btn" data-value="auto" type="button">跟着我练</button>
-              <button class="seg-btn" data-value="normal" type="button">普通</button>
-              <button class="seg-btn" data-value="lean" type="button">薄肌</button>
-              <button class="seg-btn" data-value="ripped" type="button">腹肌</button>
-            </div></div>
-            <div class="field-note" id="buddy-look-note"></div>
-          </div>
-          <div class="switch-row">
-            <div class="switch-text"><b>显示小人</b><small id="buddy-note"></small></div>
-            <input type="checkbox" class="switch" id="buddy-show" aria-label="显示小人">
-          </div>
-          <div class="buddy-talk-row">
-            <div class="switch-text"><b>小人话多少</b><small id="buddy-talk-note"></small></div>
-            <div class="seg seg-sm" id="buddy-talk">
-              <button class="seg-btn" data-value="quiet" type="button">安静</button>
-              <button class="seg-btn" data-value="normal" type="button">正常</button>
-              <button class="seg-btn" data-value="more" type="button">话多</button>
+            <div class="buddy-rows">
+              <div class="buddy-opt"><span>发型</span><div class="seg seg-sm" id="buddy-style"></div></div>
+              <div class="buddy-opt"><span>发色</span><div class="swatches" id="buddy-hair"></div></div>
+              <div class="buddy-opt"><span>肤色</span><div class="swatches" id="buddy-skin"></div></div>
+              <div class="buddy-opt"><span>衣服</span><div class="swatches" id="buddy-outfit"></div></div>
+              <div class="buddy-opt"><span>身材</span><div class="seg seg-sm" id="buddy-build">
+                <button class="seg-btn" data-value="auto" type="button">跟着我练</button>
+                <button class="seg-btn" data-value="normal" type="button">普通</button>
+                <button class="seg-btn" data-value="lean" type="button">薄肌</button>
+                <button class="seg-btn" data-value="ripped" type="button">腹肌</button>
+              </div></div>
+              <div class="field-note" id="buddy-look-note"></div>
             </div>
+            <div class="buddy-memories">
+              <div class="field-label">回忆 <small id="buddy-mem-note"></small></div>
+              <div class="mem-row" id="buddy-mem"></div>
+            </div>
+            <div class="buddy-talk-row">
+              <div class="switch-text"><b>话多少</b><small id="buddy-talk-note"></small></div>
+              <div class="seg seg-sm" id="buddy-talk">
+                <button class="seg-btn" data-value="quiet" type="button">安静</button>
+                <button class="seg-btn" data-value="normal" type="button">正常</button>
+                <button class="seg-btn" data-value="more" type="button">话多</button>
+              </div>
+            </div>
+            <p class="field-note" id="buddy-note"></p>
           </div>
-          <button type="button" class="btn" id="buddy-tour">让小人再带我看一遍</button>
+          <button type="button" class="btn" id="buddy-tour">再看一遍新手教程</button>
         </div>
 
         <div class="card form-card">
@@ -390,6 +395,17 @@
         <button type="button" class="btn btn-primary btn-wide" id="ob-done">开始用</button>
       </div>
     </div>
+    <div class="ob-step hidden" id="ob-step-3">
+      <h2 class="ob-title" id="ob-cast-title">最后一步：<br>要不要一个陪你记的搭子？</h2>
+      <p class="ob-sub" id="ob-cast-sub">TA 记得你说过的事，看得见你每一点进步，在对的时候说一句。不要也行，极简模式最干净。</p>
+      <div class="ob-cast" id="ob-cast">
+        <button class="ob-pal" type="button" data-cast="jx"><span class="ob-pal-art"></span><b>江叙</b><small></small></button>
+        <button class="ob-pal" type="button" data-cast="xy"><span class="ob-pal-art"></span><b>夏柚</b><small></small></button>
+      </div>
+      <p class="ob-pal-say" id="ob-pal-say">点一下，听 TA 说句话</p>
+      <button type="button" class="btn btn-primary btn-wide" id="ob-cast-done" disabled>选一个吧</button>
+      <button type="button" class="ob-min" id="ob-cast-off">不要，用极简模式<small>只记吃的练的。之后想要了，设置 → 外观里叫 TA 出来</small></button>
+    </div>
   </div>
 
   <!-- 修改一条记录 -->
@@ -451,6 +467,7 @@
   <script src="js/app/quick.js"></script>
   <script src="js/app/backup.js"></script>
   <script src="js/app/share.js"></script>
+  <script src="js/app/cast.js"></script>
   <script src="js/app/buddy.js"></script>
   <script src="js/app/chat.js"></script>
   <script src="js/app/bond.js"></script>

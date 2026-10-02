@@ -9,7 +9,7 @@ Object.assign(FitnessApp.prototype, {
     this.saveData();
     document.getElementById('onboard').classList.add('hidden');
     document.body.classList.remove('onboarding');
-    this.maybeTour();
+    if (!this.maybeCastPick()) this.maybeTour();
   },
 
   showOnboarding() {
@@ -113,18 +113,107 @@ Object.assign(FitnessApp.prototype, {
         if (h || w || a) p.customized = true;
         if (introName && this.updateMemo) this.updateMemo(['叫' + introName], []); // 说了名字：小人以后叫你
       }
-      this.needsOnboarding = false;
       this.recalculateMetabolism();
       this.saveData();
       this.applyMode();
-      $('onboard').classList.add('hidden');
-      document.body.classList.remove('onboarding');
       window.Haptics && window.Haptics.fire('success');
-      this.render();
-      this.maybeTour(); // 小人带着看三步
+      // 最后一步：选一个陪你记的（江叙 / 夏柚），或者极简模式
+      this.showCastPick(() => {
+        this.needsOnboarding = false;
+        this.saveData();
+        this.render();
+        this.maybeTour(); // 搭子带着看三步
+      });
     };
     $('ob-done').addEventListener('click', () => finish(true));
+    this.bindCastPick();
     // 「重装了？从备份恢复」在 backup.js 里绑定；恢复成功后走下面的 finishOnboardingFromBackup
     $('ob-skip').addEventListener('click', () => finish(false));
+  },
+
+  /**
+   * 选搭子（v6.0）：新用户建档的最后一步；老用户升级后第一次打开也问一次（picked 记着选过了）。
+   * 江叙 / 夏柚：点一下卡片，TA 招手、说一句自我介绍；「就选 TA」确定。「极简模式」：不要小人，界面最干净，之后设置里能叫出来。
+   */
+  showCastPick(done) {
+    const $ = (id) => document.getElementById(id);
+    this._castDone = done;
+    this._castPick = null;
+    const fresh = this.needsOnboarding;
+    $('ob-cast-title').innerHTML = fresh ? '最后一步：<br>要不要一个陪你记的搭子？' : '小人长大了：<br>选一个陪你记吧';
+    $('ob-cast-sub').textContent = fresh ? 'TA 记得你说过的事，看得见你每一点进步，在对的时候说一句。不要也行，极简模式最干净。'
+      : '以前那个像素小人，现在是两个人了。你们之前的亲密度、解锁的衣服都还在，换谁都一样。';
+    this.drawCastPick();
+    $('ob-pal-say').textContent = '点一下，听 TA 说句话';
+    $('ob-pal-say').classList.remove('said');
+    $('ob-cast-done').disabled = true;
+    $('ob-cast-done').textContent = '选一个吧';
+    ['ob-step-1', 'ob-step-2'].forEach(id => $(id).classList.add('hidden'));
+    $('ob-step-3').classList.remove('hidden');
+    $('onboard').classList.remove('hidden');
+    document.body.classList.add('onboarding');
+  },
+
+  drawCastPick() {
+    document.querySelectorAll('#ob-cast .ob-pal').forEach(b => {
+      const k = b.dataset.cast, on = this._castPick === k;
+      b.classList.toggle('on', on);
+      b.querySelector('small').textContent = TF.Cast[k].blurb;
+      b.querySelector('.ob-pal-art').innerHTML = TF.Buddy.svg({ char: k === 'xy' ? 'girl' : 'boy', outfit: 'varsity', build: 'normal', pose: on ? 'wave' : 'stand', mood: on ? 'good' : 'ok', gear: [], scale: 4 });
+    });
+  },
+
+  /** 选好了：记下来，关掉引导页 */
+  endCastPick(k) {
+    const show = k !== 'off';
+    const char = k === 'xy' ? 'girl' : 'boy';
+    const keep = (this.profile.buddy || {}).char === char; // 换了人：发型回到这个人默认的
+    this.profile.buddy = Object.assign({}, this.profile.buddy || {}, show ? Object.assign({ char, show: true, picked: 6 }, keep ? {} : { style: '' }) : { show: false, picked: 6 });
+    this.saveData();
+    document.getElementById('onboard').classList.add('hidden');
+    document.getElementById('ob-step-3').classList.add('hidden');
+    document.body.classList.remove('onboarding');
+    window.Haptics && window.Haptics.fire('success');
+    const done = this._castDone;
+    const fresh = this.needsOnboarding; // 新用户：接着是新手教程，第一步就是 TA 打招呼
+    this._castDone = null;
+    if (done) done();
+    this.renderBuddy();
+    // 老用户选了 TA：趴上去以后先说一句（TA 选你那一下）
+    if (show && !fresh) {
+      setTimeout(() => { this.buddyBang('♥'); this.sayTip && this.sayTip(TF.Cast[k].pick); }, 900);
+      // 说完再接着今天的招呼（升级的回忆、打招呼…）
+      clearTimeout(this._greetT);
+      this._greetT = setTimeout(() => { this.closeBuddyPop('tip'); this.greetOrGuide(); }, 5200);
+    }
+  },
+
+  bindCastPick() {
+    const $ = (id) => document.getElementById(id);
+    $('ob-cast').addEventListener('click', (e) => {
+      const b = e.target.closest('.ob-pal');
+      if (!b) return;
+      const k = b.dataset.cast;
+      this._castPick = k;
+      this.drawCastPick();
+      const say = $('ob-pal-say');
+      say.classList.add('said');
+      if (this.typeOut) this.typeOut(say, TF.Cast[k].intro); else say.textContent = TF.Cast[k].intro;
+      $('ob-cast-done').disabled = false;
+      $('ob-cast-done').textContent = `就选${TF.Cast[k].name}`;
+      window.Haptics && window.Haptics.fire('tap');
+      window.Sound && window.Sound.play('blip');
+    });
+    $('ob-cast-done').addEventListener('click', () => { if (this._castPick) this.endCastPick(this._castPick); });
+    $('ob-cast-off').addEventListener('click', () => this.endCastPick('off'));
+  },
+
+  /** 老用户升级到 v6.0 后第一次打开：问一次选谁（选过、在引导、在教程就不问） */
+  maybeCastPick() {
+    const b = this.profile.buddy || {};
+    if (b.picked || this.needsOnboarding || this._touring) return false;
+    if (b.show === false) { this.profile.buddy = Object.assign({}, b, { picked: 6 }); this.saveData(); return false; } // 关过小人的：不打扰，还是极简
+    this.showCastPick(null);
+    return true;
   }
 });

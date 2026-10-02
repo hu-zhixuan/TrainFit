@@ -9,8 +9,10 @@
  * 第一次用时由它带着看三步新手教程（tf_tour），设置里能再看一遍。
  * 连续记录的天数换装备：3 天头带，7 天棒球帽，30 天皇冠。点一下弹个气泡：亲密度、连续几天、今天怎么样、蛋白还差多少；
  * 长按摸摸头，连着戳三下有反应；练了一组就秀一下肌肉（亲密度、摸头这些在 bond.js）。
- * 设置 →「外观」（v5.6）：名字、角色（男生 / 女生，默认跟着性别）、发型（男：乱发 中分 背头 寸头；女：长直发 高马尾 短发 丸子头）、
- * 发色、肤色、衣服（有几件要亲密度到了才解锁）、身材（跟着我练 / 普通 / 薄肌 / 腹肌），也能关掉。存在 profile.buddy 里，跟着备份走。
+ * 设置 →「外观」（v5.6）：角色（v6.0 起男生是江叙、女生是夏柚，人设在 cast.js；也能选「不要·极简」）、发型（男：乱发 中分 背头 寸头；
+ * 女：长直发 高马尾 短发 丸子头）、发色、肤色、衣服（有几件要亲密度到了才解锁）、身材（跟着我练 / 普通 / 薄肌 / 腹肌）。
+ * 存在 profile.buddy 里，跟着备份走。
+ * v6.0 多了几个表情和动作：笑眼 ^^、脸红、闹别扭冒「💢」、托腮想事（think）；趴着一起一伏地喘气、蹦一下、你打字时看输入框。
  *
  * 画法：趴着 24×17、站着 24×25 的像素图，一层层拼（见下面 compose），自动描一圈深色边（浅色背景上也看得清）；特效单独一层（好让它动）。
  * 输出 SVG，每种颜色一条 path，shape-rendering=crispEdges；动画全在 CSS 里。
@@ -297,10 +299,15 @@
     shirt: { J: 'J', n: 'j', m: 'j', T: 'S', C: 'J', R: 'V', r: 'v', Q: 'J' }
   };
 
+  // happy：笑眼 ^^（盖第 9、10 两行）；blush：脸红（眼睛下面一行，只涂两颊）
   const CHARS = {
-    boy: { label: '男生', style: 'messy', eyeX: 7, eyes: { chill: 'SEESSSSEES', closed: 'SssSSSSssS', left: 'EESSSSEESS', right: 'SSEESSSSEE' } },
-    girl: { label: '女生', style: 'long', eyeX: 6, eyes: { chill: 'ESEESSSSEESE', closed: 'ESssSSSSssSE', left: 'EEESSSSEESSE', right: 'ESSEESSSSEEE' } }
+    boy: { label: '男生', style: 'messy', eyeX: 7, eyes: { chill: 'SEESSSSEES', closed: 'SssSSSSssS', left: 'EESSSSEESS', right: 'SSEESSSSEE' },
+      happy: ['.EE....EE.', 'ESSESSESSE'], blush: 'b........b' },
+    girl: { label: '女生', style: 'long', eyeX: 6, eyes: { chill: 'ESEESSSSEESE', closed: 'ESssSSSSssSE', left: 'EEESSSSEESSE', right: 'ESSEESSSSEEE' },
+      happy: ['..EE....EE..', 'SESSESSESSES'], blush: '.b........b.' }
   };
+  // v6.0 两个人：男生是江叙、女生是夏柚（cast.js）；草稿里存过 jx / xy 的也认
+  const CAST_CHAR = { jx: 'boy', xy: 'girl' };
   const EYE_Y = 10;
   const ART = {
     shades: { x: 6, y: 9, rows: ['KKKKKKKKKKKK', '.KkKK..KkKK.'] },
@@ -326,13 +333,14 @@
       zzz: { x: 20, y: -3, rows: ['ZZZZ', '..Z.', '.Z..', 'ZZZZ'] },
       note: { x: 20, y: -3, rows: ['.NNN', '.N.N', '.N..', 'NN..', 'NN..'] },
       sparkle: { x: 20, y: -3, rows: ['.X.', 'XXX', '.X.'] },
-      heart: { x: 19, y: -3, rows: ['II.II', 'IIIII', '.III.', '..I..'] }
+      heart: { x: 19, y: -3, rows: ['II.II', 'IIIII', '.III.', '..I..'] },
+      anger: { x: 19, y: 0, rows: ['I.I', '.I.', 'I.I'] }
     }
   };
   const AW = 24, AH = 17, AH_STAND = 25;
   const M = 3;                 // 四周留白（描边 + 特效）；底下不留：胳膊 / 鞋直接搭在下面那个框的边上
   const GW = AW + M * 2, GH = AH + M;
-  const POSES = ['lie', 'stand', 'walk', 'wave', 'stretch', 'flex'];
+  const POSES = ['lie', 'stand', 'walk', 'wave', 'stretch', 'flex', 'think'];
   const heightOf = (pose) => (pose && pose !== 'lie' ? AH_STAND : AH) + M;
 
   const HAIR = {
@@ -366,27 +374,32 @@
     E: '#241a15', K: '#141519', k: '#5b6170',
     G: '#10b981', g: '#0a7a56', A: '#e7b53c', a: '#fbe08a', Y: '#f2f1ed',
     B: '#7cc4f5', Z: '#9aa3b5', N: '#9aa3b5', X: '#ffd84d', I: '#f2557a', O: '#17120f',
-    P: '#2b2c33', p: '#1c1d22'
+    P: '#2b2c33', p: '#1c1d22', b: '#ff8fa0'
   };
   const DEFAULT_LOOK = { show: true, hair: 'black', outfit: 'varsity', skin: 'natural', build: 'auto' };
   const BUILD_CHOICES = ['auto', 'normal', 'lean', 'ripped'];
 
-  // 心情：没记 / 犯困 / 四档健康度；摸头时冒爱心
+  // 心情：没记 / 犯困 / 四档健康度；摸头时闭眼冒爱心、脸红；v6.0 健康时笑眼 ^^，害羞脸红、闹别扭冒「💢」
   const MOODS = {
     idle: { eyes: 'chill' },
     sleepy: { eyes: 'closed', fx: 'zzz' },
     bad: { eyes: 'chill', fx: 'sweat' },
     ok: { eyes: 'chill' },
-    good: { eyes: 'chill', fx: 'note' },
-    great: { eyes: 'shades', fx: 'sparkle' },
-    love: { eyes: 'closed', fx: 'heart' }
+    good: { eyes: 'happy', fx: 'note' },
+    great: { eyes: 'happy', fx: 'sparkle', blush: true },
+    love: { eyes: 'closed', fx: 'heart', blush: true },
+    shy: { eyes: 'left', blush: true },
+    pout: { eyes: 'right', fx: 'anger' }
   };
+  // 大模型、剧情给的表情 → 心情
+  const FACE_MOOD = { 开心: 'good', 害羞: 'shy', 担心: 'bad', 得意: 'great', 惊讶: 'ok', 不服: 'pout', 平静: 'ok', 心动: 'love', 困: 'sleepy', 闪亮: 'great' };
   const LEVEL_MOOD = ['bad', 'ok', 'good', 'great'];
   const GEAR_STEPS = [{ days: 3, gear: 'band', name: '头带' }, { days: 7, gear: 'cap', name: '棒球帽' }, { days: 30, gear: 'crown', name: '皇冠' }];
 
   /** 选过的样子 + 默认值；没选过角色就跟着性别；发型不是这个角色的就用这个角色默认的 */
   function look(opts, gender) {
     const l = Object.assign({}, DEFAULT_LOOK, opts || {});
+    if (CAST_CHAR[l.char]) l.char = CAST_CHAR[l.char];
     if (!CHARS[l.char]) l.char = gender === 'female' ? 'girl' : 'boy';
     if (!STYLES[l.style] || STYLES[l.style].char !== l.char) l.style = CHARS[l.char].style;
     if (!HAIR[l.hair]) l.hair = DEFAULT_LOOK.hair;
@@ -419,7 +432,7 @@
     const l = look(o);
     const ch = CHARS[l.char];
     const st = STYLES[l.style];
-    const mood = MOODS[o.mood] || MOODS.idle;
+    const mood = MOODS[o.mood] || MOODS[FACE_MOOD[o.face]] || MOODS.idle;
     const pose = POSES.includes(o.pose) ? o.pose : 'lie';
     const lie = pose === 'lie';
     const build = BUILDS[o.build] ? o.build : 'normal';
@@ -453,9 +466,12 @@
     // 长发搭在肩上
     if (lie && st.drapeLie) put(0, 12, st.drapeLie);
     if (!lie && st.drapeStand) put(0, 12, st.drapeStand);
-    const eyes = o.eyes || mood.eyes;
+    // 托腮想事：眼睛往上看
+    const eyes = o.eyes || (pose === 'think' && mood.eyes === 'chill' ? 'right' : mood.eyes);
     if (eyes === 'shades') put(ART.shades.x, ART.shades.y, ART.shades.rows);
+    else if (eyes === 'happy') put(ch.eyeX, EYE_Y - 1, ch.happy);
     else put(ch.eyeX, EYE_Y, [ch.eyes[eyes] || ch.eyes.chill]);
+    if (mood.blush) put(ch.eyeX, EYE_Y + 1, [ch.blush]);
     (o.gear || []).forEach(k => { const g = ART.gear[k]; if (g) put(g.x, g.y, g.rows); });
     if (pose === 'stretch') put(ARMS_UP.x, ARMS_UP.y, ARMS_UP.rows);
     if (pose === 'flex') put(ARMS_FLEX.x, ARMS_FLEX.y, ARMS_FLEX.rows);
@@ -494,7 +510,7 @@
 
   /** 特效单独一张（不描边），好让 CSS 让它飘、跳、闪 */
   function fxLayer(o, colors) {
-    const mood = MOODS[o.mood] || MOODS.idle;
+    const mood = MOODS[o.mood] || MOODS[FACE_MOOD[o.face]] || MOODS.idle;
     const H = heightOf(o.pose);
     const px = Array.from({ length: H }, () => Array(GW).fill('.'));
     if (mood.fx) {
@@ -535,16 +551,17 @@
     const frame = (extra) => compose(Object.assign({}, o, { pose }, extra));
     const a = frame({ frame: 0 });
     const H = a.h;
-    const mood = MOODS[o.mood] || MOODS.idle;
+    const mood = MOODS[o.mood] || MOODS[FACE_MOOD[o.face]] || MOODS.idle;
+    const scale = o.scale || 2;
     const eyeRow = (y) => y === EYE_Y + M;
     let eyesLayers = '';
-    if ((o.eyes || mood.eyes) === 'chill') {
+    if ((o.eyes || mood.eyes) === 'chill' && pose !== 'think') {
       eyesLayers = `<g class="bd-blink">${paths(frame({ eyes: 'closed' }), eyeRow)}</g>` +
         `<g class="bd-lookl">${paths(frame({ eyes: 'left' }), eyeRow)}</g>` +
         `<g class="bd-lookr">${paths(frame({ eyes: 'right' }), eyeRow)}</g>`;
     }
     const fx = fxLayer(Object.assign({}, o, { pose }), a.colors);
-    return `<svg class="buddy-svg pose-${pose}" viewBox="0 0 ${GW} ${H}" width="${GW * 2}" height="${H * 2}" shape-rendering="crispEdges" aria-hidden="true">` +
+    return `<svg class="buddy-svg pose-${pose}" viewBox="0 0 ${GW} ${H}" width="${GW * scale}" height="${H * scale}" shape-rendering="crispEdges" aria-hidden="true">` +
       `<g class="bd-fa">${paths(a)}</g><g class="bd-fb">${paths(frame({ frame: 1 }))}</g>` +
       eyesLayers +
       (fx.fx ? `<g class="bd-fx bd-fx-${fx.fx}">${paths(fx)}</g>` : '') +
@@ -618,7 +635,7 @@
   }
   TF.liftOpts = liftOpts;
 
-  const Buddy = { CHARS, STYLES, ART, HAIR, SKINS, OUTFITS, TYPES, BUILDS, BUILD_ORDER, BUILD_CHOICES, DEFAULT_LOOK, MOODS, LEVEL_MOOD, GEAR_STEPS, POSES, W: GW, H: GH, heightOf, look, buildFor, gearFor, compose, paths, svg, streakOf, bestStreak, nextGear, moodOf, liftOpts };
+  const Buddy = { CHARS, STYLES, HAIR, SKINS, ART, OUTFITS, TYPES, BUILDS, BUILD_ORDER, BUILD_CHOICES, DEFAULT_LOOK, MOODS, FACE_MOOD, LEVEL_MOOD, GEAR_STEPS, POSES, W: GW, H: GH, heightOf, look, buildFor, gearFor, compose, paths, svg, streakOf, bestStreak, nextGear, moodOf, liftOpts };
   TF.Buddy = Buddy;
   if (typeof module !== 'undefined' && module.exports) module.exports = Buddy;
 })(typeof window !== 'undefined' ? window : globalThis);
@@ -641,7 +658,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     const btn = document.getElementById('buddy');
     if (!btn) return;
     const look = this.buddyLook();
-    const show = (look.show || this._touring) && this.view === 'today' && !this.needsOnboarding;
+    const show = look.show && this.view === 'today' && !this.needsOnboarding; // 极简模式：教程也不叫它出来
     btn.classList.toggle('hidden', !show);
     document.body.classList.toggle('has-buddy', show);
     if (!show) { this.buddyStop(); return; }
@@ -662,6 +679,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     this._buddyLift = st.lifts;
     this._buddyGear = st.gear;
     btn.setAttribute('aria-label', `小人：${st.say}`);
+    btn.classList.toggle('has-note', !!(this.noteReady && this.noteReady())); // 今天的小纸条还没拆：头上挂个小信封
     this.placeBuddy();
     const pop = document.getElementById('buddy-pop');
     if (!pop.classList.contains('hidden') && !pop.dataset.mode) this.showBuddyPop();
@@ -686,7 +704,13 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     // 装备按拿到过的最长连续天数：断了也留着（v5.7，陪着你，不罚你）；生日那天戴派对帽
     const best = Math.max(streak, TF.Buddy.bestStreak(dates));
     const gear = this.isBirthday && this.isBirthday() ? ['party'] : TF.Buddy.gearFor(best);
-    return { mood: m.mood, say: m.say, level: g.hasData ? g.level : null, streak, best, days, gear, next: TF.Buddy.nextGear(best, streak), count, lifts };
+    // 闹着小别扭：头上冒「💢」；道过晚安以后（22 点半起）它也睡了
+    let mood = m.mood;
+    let night = '';
+    try { night = localStorage.getItem('tf_night') || ''; } catch (e) {}
+    if (this.sulkNow && this.sulkNow()) mood = 'pout';
+    else if (night === today && hour >= 22.5) mood = 'sleepy';
+    return { mood, say: m.say, level: g.hasData ? g.level : null, streak, best, days, gear, next: TF.Buddy.nextGear(best, streak), count, lifts };
   },
 
   /**
@@ -734,15 +758,18 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     const art = this.buddyArt();
     const st = this._buddySt || this.buddyState();
     const pose = this._pose || 'lie';
-    const mood = this._moodOver || st.mood;
-    const key = [art.char, art.style, art.hair, art.skin, art.outfit, art.build, mood, st.gear.join('+'), pose].join('|');
+    // 一小会儿的表情：心情名（love 冒爱心）或者表情名（害羞、惊讶…）
+    const over = this._moodOver;
+    const face = over && TF.Buddy.FACE_MOOD[over] ? over : '';
+    const mood = face ? st.mood : over || st.mood;
+    const key = [art.char, art.style, art.hair, art.skin, art.outfit, art.build, mood, face, st.gear.join('+'), pose].join('|');
     if (btn.dataset.key === key) return;
     const posed = btn.dataset.pose !== pose;
     btn.dataset.key = key;
     btn.dataset.pose = pose;
     let move = btn.querySelector('.bd-move');
-    if (!move) { btn.innerHTML = '<span class="bd-move"></span>'; move = btn.querySelector('.bd-move'); }
-    move.innerHTML = TF.Buddy.svg(Object.assign(art, { mood, gear: st.gear, pose }));
+    if (!move) { btn.innerHTML = '<span class="bd-move"></span><span class="bd-mail" aria-hidden="true">✉</span>'; move = btn.querySelector('.bd-move'); }
+    move.innerHTML = TF.Buddy.svg(Object.assign(art, { mood: face ? TF.Buddy.FACE_MOOD[face] : mood, gear: st.gear, pose }));
     if (posed) this.placeBuddy(); // 站起来 / 趴下高度变了，底边还贴着那个框
   },
 
@@ -798,18 +825,18 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     move.style.transform = x ? `translateX(${x}px)` : '';
   },
 
-  /** 自己动一动：隔半分钟左右，伸个懒腰，或者站起来溜达两步 */
+  /** 自己动一动（v6.0 更勤）：隔十几二十秒，伸懒腰、溜达两步、招个手、托腮想事、蹦一下；趴着时 CSS 里一直在眨眼、呼吸、晃呆毛 */
   buddyIdle() {
     clearTimeout(this._idleT);
-    this._idleT = setTimeout(() => this.buddyIdle(), 20000 + Math.random() * 25000);
+    this._idleT = setTimeout(() => this.buddyIdle(), 12000 + Math.random() * 18000);
     const btn = document.getElementById('buddy');
     const busy = document.getElementById('composer').classList.contains('recording') || document.getElementById('composer').classList.contains('busy');
     if (document.hidden || !btn || btn.classList.contains('hidden') || this._acting || this._touring || this._listening || busy ||
         this.reducedMotion() || String(btn.style.zIndex) !== '31' || !document.getElementById('buddy-pop').classList.contains('hidden')) return;
     const r = Math.random();
-    if (r < 0.4) {
-      this.buddyDo([['stand', 350], ['stretch', 1100], ['stand', 300]]);
-    } else if (r < 0.85) {
+    if (r < 0.25) {
+      this.buddyDo([['stand', 300], ['stretch', 1100], ['stand', 300]]);
+    } else if (r < 0.55) {
       // 往左溜达几步，停下来左右看看，再走回来
       this.buddyDo([
         ['stand', 300],
@@ -818,9 +845,35 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
         ['walk', 1500, () => this.buddyMove(0, 1500)],
         ['stand', 250]
       ]);
+    } else if (r < 0.7) {
+      this.buddyDo([['stand', 200], ['wave', 1200], ['stand', 300]]);
+    } else if (r < 0.82) {
+      this.buddyDo([['think', 1800], ['stand', 300]]);
+    } else if (this.buddyBuild && this.buddyBuild() !== 'normal' && r < 0.92) {
+      this.buddyDo([['stand', 200], ['flex', 1000], ['stand', 300]]); // 练出来了，偶尔自己秀一下
     } else {
-      this.buddyDo([['stand', 900]]);
+      this.buddyHop();
     }
+  },
+
+  /** 原地蹦一下（趴着也能蹦） */
+  buddyHop() {
+    const btn = document.getElementById('buddy');
+    if (!btn || this.reducedMotion()) return;
+    btn.classList.remove('hop');
+    void btn.offsetWidth;
+    btn.classList.add('hop');
+    clearTimeout(this._hopT);
+    this._hopT = setTimeout(() => btn.classList.remove('hop'), 600);
+  },
+
+  /** 你在打字、在翻：小人眼睛跟着看（往下看输入框 / 往上看你翻的东西），一会儿就回来 */
+  buddyPeek(dir) {
+    const btn = document.getElementById('buddy');
+    if (!btn || btn.classList.contains('hidden')) return;
+    btn.dataset.peek = dir;
+    clearTimeout(this._peekT);
+    this._peekT = setTimeout(() => { delete btn.dataset.peek; }, 1600);
   },
 
   /** 按住说话时站起来听着，说完趴回去 */
@@ -846,7 +899,10 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     // 偶尔冒一句隐藏台词（熟了才有，8%）
     const today = getTodayDateString();
     this._tapCount = this._tapCount && this._tapCount.date === today ? { date: today, n: this._tapCount.n + 1 } : { date: today, n: 1 };
-    const rare = this.rareLine ? this.rareLine() : '';
+    // 闹着小别扭：先哼一声（长按摸摸头就和好）
+    const sulk = this.sulkNow && this.sulkNow();
+    const tap = sulk ? this.cast().sulkTap : null;
+    const rare = sulk ? tap[Math.floor(Math.random() * tap.length)] + '（长按摸摸头哄哄）' : this.rareLine ? this.rareLine() : '';
     pop.innerHTML = `<div class="buddy-pop-head">${head}</div>` + (rare ? `<p class="buddy-rare">${esc(rare)}</p>` : '') + this.bondRow() + `<p class="buddy-say">${esc(st.say)}</p>` +
       (obs ? `<p class="buddy-obs">${esc(obs)}</p>` : '') +
       (tip ? `<p class="buddy-train">${esc(tip)}</p>` : '') + `<p class="buddy-foot">${esc(foot)}</p>`;
@@ -859,7 +915,9 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     if (!this.bond) return '';
     const b = this.bond();
     const unlock = b.next && Object.keys(TF.Buddy.OUTFITS).find(k => TF.Buddy.OUTFITS[k].lv === b.next.lv);
-    const next = b.next ? `再记 ${Math.max(1, Math.ceil(b.next.need / 10))} 天左右到「${b.next.name}」${unlock ? `，解锁${this.outfitLabel(unlock)}` : ''}` : '已经是最懂你的了';
+    // 下一级解锁什么：一段回忆（给一句预告，让人想知道后面）+ 衣服
+    const tease = b.next && this.cast().tease[b.next.lv - 1];
+    const next = b.next ? `再记 ${Math.max(1, Math.ceil(b.next.need / 10))} 天左右到「${b.next.name}」，解锁回忆「${tease}」${unlock ? `和${this.outfitLabel(unlock)}` : ''}` : '已经是最懂你的了';
     return `<div class="bond-row"><div class="bond-top"><span class="bond-name"><i aria-hidden="true">♥</i>${esc(this.buddyName())} · ${esc(b.name)}</span><span class="bond-lv">Lv${b.lv}</span></div>` +
       `<div class="bond-bar"><i style="width:${Math.round(b.pct * 100)}%"></i></div><div class="bond-next">${esc(next)} · 长按我摸摸头</div></div>`;
   },
@@ -912,7 +970,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       i = Math.min(i + 1, steps.length - 1);
       line.textContent = steps[i];
     }, 3500);
-    if (!this._touring) { this.buddyStop(); this.buddyPose('stand'); }
+    if (!this._touring) { this.buddyStop(); this.buddyPose('think'); }
   },
 
   /** 气泡弹出来的动画（每次重新弹） */
@@ -1038,7 +1096,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       if (opts.face && this.buddyFace) this.buddyFace(opts.face);
     }
     // 聊天的回答一出来就带一点对话音
-    if (fresh && opts.chat && !opts.again && window.Sound && window.Sound.babble) window.Sound.babble(String(answer || '').padEnd(14, '嗯'), this.buddyLook().char);
+    if (fresh && opts.chat && !opts.again && window.Sound && window.Sound.babble) window.Sound.babble(String(answer || '').padEnd(14, '嗯'), this.cast().sex);
   },
 
   /**
@@ -1210,7 +1268,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     text = String(text || '');
     clearInterval(this._typeT);
     if (this.reducedMotion() || !text) { el.textContent = text; return; }
-    window.Sound && window.Sound.babble && window.Sound.babble(text, this.buddyLook().char);
+    window.Sound && window.Sound.babble && window.Sound.babble(text, this.cast ? this.cast().sex : 'm');
     const chars = [...text];
     let i = 0;
     const draw = () => { el.innerHTML = esc(chars.slice(0, i).join('')) + `<span class="type-ghost">${esc(chars.slice(i).join(''))}</span>`; };
@@ -1307,7 +1365,8 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     if (!(result.meals || []).length) return false;
     const s = this.getDaySummary(today);
     const hour = new Date().getHours();
-    // 有点小脾气（熟了才这样）：这么晚还吃，嘴上嫌弃一句，还是给你记上
+    // 有点小脾气（熟了才这样）：这么晚还吃，闹个小别扭（v6.0：摸摸头或者明天好好吃饭就和好）；闹过了就嘴上嫌弃一句
+    if ((hour >= 23 || hour < 4) && this.startSulk && !said.kinds.includes('late') && this.startSulk('late')) { said.kinds.push('late'); try { localStorage.setItem('tf_coach', JSON.stringify(said)); } catch (e) {} return true; }
     if (hour >= 22 && this.bond && this.bond().lv >= 3) return fire('late', '这么晚还吃……行吧，记上了。明天晚饭早点吃，别饿到这会儿。', ['晚上饿了吃点啥好']);
     const target = this.gaugeProteinTarget ? this.gaugeProteinTarget() : 0;
     const left = Math.round(target - s.protein);
@@ -1449,6 +1508,8 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       this.buddyDo([['wave', 1800], ['stand', 400]]);
       document.getElementById('gauge-pop').classList.add('hidden');
       if (!pop.classList.contains('hidden')) { close(); return; }
+      // 每天第一次点：先拆今天的小纸条
+      if (this.noteReady && this.noteReady() && this.showNote()) return;
       // 半小时内问过问题：先给刚才的回答，里面能点去看连续记录
       const a = this._lastAnswer;
       if (a && Date.now() - a.at < 30 * 60 * 1000) this.showBuddyAnswer(a.question, a.answer, { again: true, plan: a.plan, baseDate: a.baseDate, next: a.next, chat: a.chat });
@@ -1490,20 +1551,27 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     // 逛的时候（发呆、翻以前的日子、翻记录、看趋势）有时凑过来说一句
     this.watchBrowse && this.watchBrowse();
     this.buddyIdle();
+    // 你在打字：小人低头看输入框；你在翻：抬头看你翻的东西
+    const text = document.querySelector('.cmp-text');
+    if (text) ['input', 'focus'].forEach(ev => text.addEventListener(ev, () => this.buddyPeek('down')));
+    let lastPeek = 0;
+    window.addEventListener('scroll', () => { const t = Date.now(); if (t - lastPeek > 400) { lastPeek = t; this.buddyPeek('up'); } }, { passive: true });
     this.bindTour();
   },
 
   // ================= 新手教程：小人带着看三步 =================
   tourSteps() {
     const simple = this.isSimple();
+    const pal = this.buddyLook().show;
+    const hi = pal ? '嗨，我陪你记。' : '';
     return [
       { pose: 'wave', target: () => document.querySelector('#voice-row:not(.hidden) .talk-btn') || document.querySelector('#text-row:not(.hidden) .cmp-text'),
-        text: simple ? '嗨，我陪你记。按住下面这个按钮，说说今天吃了啥，松手就记好了。' : '嗨，我陪你记。按住下面这个按钮，说说练了啥、吃了啥，一句一句说、一大段一起说都行，松手就记好了。',
+        text: simple ? `${hi}按住下面这个按钮，说说今天吃了啥，松手就记好了。` : `${hi}按住下面这个按钮，说说练了啥、吃了啥，一句一句说、一大段一起说都行，松手就记好了。`,
         eg: simple ? '「早上包子豆浆，中午黄焖鸡」' : '「卧推80公斤4组8个，中午黄焖鸡」' },
       { pose: 'stand', target: () => document.getElementById('timeline'),
         text: '说错了不用改字，再说一句「改成一碗」「删掉奶茶」就行。点开一条也能改。' },
       { pose: 'stretch', target: () => document.getElementById('thermo'),
-        text: '右上角这根温度计告诉你今天吃得健不健康。点我能看连续记了几天——连着记，我会换装备哦。' }
+        text: '右上角这根温度计告诉你今天吃得健不健康。' + (pal ? '点我能看连续记了几天——连着记，我会换装备哦。' : '想要个搭子陪你记，设置 → 外观里叫 TA 出来。') }
     ];
   },
 
@@ -1534,7 +1602,9 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       `<button type="button" class="tour-next" data-tour="next">${last ? '开始吧' : '下一步'}</button></div>`;
     pop.classList.remove('hidden');
     const place = () => {
-      const r = document.getElementById('buddy').getBoundingClientRect();
+      const bd = document.getElementById('buddy');
+      // 极简模式没有小人：对话框放在输入栏上面
+      const r = bd.classList.contains('hidden') ? document.getElementById('composer').getBoundingClientRect() : bd.getBoundingClientRect();
       pop.style.bottom = Math.round(window.innerHeight - r.top + 6) + 'px';
       pop.style.right = Math.max(12, Math.round(window.innerWidth - r.right)) + 'px';
     };
@@ -1579,21 +1649,23 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     const again = document.getElementById('buddy-tour');
     if (again) again.addEventListener('click', () => this.startTour());
     window.addEventListener('resize', () => { if (this._touring) this.showTourStep(); });
-    this.maybeTour();
+    if (!this.maybeCastPick || !this.maybeCastPick()) this.maybeTour(); // 老用户升级到 v6.0：先选谁陪你
   },
 
-  /** 设置 →「外观」里的小人：预览（站着，看得见衣服和身材）、名字、角色、发型、发色、肤色、衣服、身材、话多少 */
+  /** 设置 →「外观」里的小人：谁陪你（江叙 / 夏柚 / 不要·极简）、预览（站着，看得见衣服和身材）、亲密度、发型、发色、肤色、衣服、身材、回忆、话多少 */
   renderBuddySettings(pose) {
     const look = this.buddyLook();
     const $ = (id) => document.getElementById(id);
     if (!$('buddy-preview')) return;
     const st = this.buddyState();
     const B = TF.Buddy;
+    const c = this.cast();
+    document.querySelectorAll('#buddy-char .seg-btn').forEach(b => b.classList.toggle('active', look.show ? b.dataset.value === look.char : b.dataset.value === 'off'));
+    $('buddy-on').classList.toggle('hidden', !look.show);
+    if (!look.show) return;
     // 预览不戴连续记录的装备（帽子会把发型盖住），看得清头发和衣服
     $('buddy-preview').innerHTML = B.svg(this.buddyArt({ mood: pose === 'flex' ? 'great' : 'ok', gear: [], pose: pose || 'stand' }));
-    const name = $('buddy-name');
-    if (document.activeElement !== name) name.value = (this.profile.buddy || {}).name || '';
-    document.querySelectorAll('#buddy-char .seg-btn').forEach(b => b.classList.toggle('active', b.dataset.value === look.char));
+    $('buddy-blurb').textContent = c.blurb;
     $('buddy-style').innerHTML = Object.keys(B.STYLES).filter(k => B.STYLES[k].char === look.char)
       .map(k => `<button class="seg-btn${k === look.style ? ' active' : ''}" type="button" data-value="${k}">${B.STYLES[k].label}</button>`).join('');
     const sw = (group, list, cur, fill, locked) => {
@@ -1615,18 +1687,25 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     const built = B.BUILDS[this.buddyBuild()].label;
     $('buddy-look-note').textContent = `衣服：${this.outfitLabel(look.outfit)}。` + (look.build === 'auto'
       ? `身材跟着你练：最近 4 周练了 ${n} 天，现在是${built}${n < 10 ? `，练满 ${n < 4 ? 4 : 10} 天${n < 4 ? '薄肌' : '腹肌'}` : ''}。`
-      : '身材只在露出来的衣服（背心、敞开的外套、光膀子）上看得出来。');
+      : '身材只在露出来的衣服（背心、敞开的外套、光膀子）上看得出来，点上面的小人秀一下。');
     const b = this.bond();
     const lockNext = Object.keys(B.OUTFITS).filter(k => !this.outfitOpen(k)).map(k => B.OUTFITS[k].lv).sort()[0];
-    $('buddy-bond').innerHTML = `<div class="bond-top"><span class="bond-name"><i aria-hidden="true">♥</i>${esc(b.name)}</span><span class="bond-lv">Lv${b.lv}</span></div>` +
+    $('buddy-bond').innerHTML = `<div class="bond-top"><span class="bond-name"><i aria-hidden="true">♥</i>${esc(c.name)} · ${esc(b.name)}</span><span class="bond-lv">Lv${b.lv}</span></div>` +
       `<div class="bond-bar"><i style="width:${Math.round(b.pct * 100)}%"></i></div>` +
-      `<div class="bond-next">${b.next ? `再记 ${Math.max(1, Math.ceil(b.next.need / 10))} 天左右升级${lockNext ? `，Lv${lockNext} 解锁新衣服` : ''}` : '亲密度满了，衣服都解锁了'}</div>`;
-    $('buddy-show').checked = look.show;
+      `<div class="bond-next">${b.next ? `再记 ${Math.max(1, Math.ceil(b.next.need / 10))} 天左右升级，解锁下一段回忆${lockNext ? '和新衣服' : ''}` : '亲密度满了，回忆和衣服都解锁了'}</div>`;
+    // 回忆：每升一级解锁一段，点开重看；没解锁的给一句预告
+    $('buddy-mem').innerHTML = c.story.map((x, i) => {
+      const open = b.lv > i;
+      return `<button type="button" class="mem-card${open ? '' : ' locked'}" data-lv="${i + 1}" aria-label="${open ? `回忆 ${i + 1}：${x[0]}` : `Lv${i + 1} 解锁`}">` +
+        `<i class="mem-n">${i + 1}</i><b>${open ? esc(x[0]) : '🔒'}</b><small>${esc(TF.Bond.LEVELS[i].name)}</small></button>`;
+    }).join('');
+    const nb = (this.profile.buddy || {}).note || {};
+    $('buddy-mem-note').textContent = `${Math.min(b.lv, c.story.length)}/${c.story.length}` + (nb.n ? ` · 收到小纸条 ${nb.n} 张${nb.s ? `（珍藏 ${nb.s}）` : ''}` : '');
     const talk = this.talkLevel ? this.talkLevel() : 'normal';
-    document.querySelectorAll('#buddy-talk .seg-btn').forEach(x => { x.classList.toggle('active', x.dataset.value === talk); x.disabled = !look.show; });
+    document.querySelectorAll('#buddy-talk .seg-btn').forEach(x => x.classList.toggle('active', x.dataset.value === talk));
     $('buddy-talk-note').textContent = talk === 'quiet' ? '只在卡住了、刚记的份量要问时说话' :
-      talk === 'more' ? '打招呼、饭点、你回来了、逛的时候都会凑过来，一天十几句' : '打招呼、饭点问一句、逛的时候凑过来，一天八句以内';
-    $('buddy-note').textContent = (st.streak ? `连续记录 ${st.streak} 天。` : '') + '趴在「按住说话」上面：点它看今天，长按摸摸头。连续记 3 天戴头带，7 天棒球帽，30 天皇冠。';
+      talk === 'more' ? '打招呼、饭点、你回来了、逛的时候都会凑过来，一天十几句' : '打招呼、饭点问一句、记完说一句、逛的时候凑过来，一天十句以内';
+    $('buddy-note').textContent = (st.streak ? `连续记录 ${st.streak} 天。` : '') + `${c.name}趴在「按住说话」上面：点一下看今天（每天第一次点有张小纸条），长按摸摸头。连续记 3 天戴头带，7 天棒球帽，30 天皇冠。`;
   },
 
   bindBuddySettings() {
@@ -1642,7 +1721,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       if (!b) return;
       if (b.classList.contains('locked')) {
         const lv = TF.Buddy.OUTFITS[b.dataset.value].lv;
-        this.showToast(`和小人到 Lv${lv}（${TF.Bond.LEVELS[lv - 1].name}）解锁「${this.outfitLabel(b.dataset.value)}」，多记几天就到了`);
+        this.showToast(`和${this.buddyName()}到 Lv${lv}（${TF.Bond.LEVELS[lv - 1].name}）解锁「${this.outfitLabel(b.dataset.value)}」，多记几天就到了`);
         return;
       }
       set({ [key]: b.dataset.value }, pose);
@@ -1654,19 +1733,23 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     pick('buddy-build', 'build', 'flex');
     document.getElementById('buddy-char').addEventListener('click', (e) => {
       const b = e.target.closest('.seg-btn');
-      if (b) set({ char: b.dataset.value, style: '' });
+      if (!b) return;
+      if (b.dataset.value === 'off') set({ show: false, picked: 6 });
+      else set(Object.assign({ char: b.dataset.value, show: true, picked: 6 }, b.dataset.value !== this.buddyLook().char ? { style: '' } : {}), 'wave');
     });
     document.getElementById('buddy-preview').addEventListener('click', () => {
       this.renderBuddySettings('flex');
       clearTimeout(this._prevT);
       this._prevT = setTimeout(() => this.renderBuddySettings(), 1300);
     });
-    const name = document.getElementById('buddy-name');
-    name.addEventListener('change', () => {
-      this.setBuddy({ name: name.value.replace(/\s+/g, '').slice(0, 6) });
-      this.renderBuddySettings();
+    document.getElementById('buddy-mem').addEventListener('click', (e) => {
+      const b = e.target.closest('.mem-card');
+      if (!b) return;
+      e.stopPropagation();
+      const lv = +b.dataset.lv;
+      if (b.classList.contains('locked')) { this.showToast(`Lv${lv}「${TF.Bond.LEVELS[lv - 1].name}」解锁：${this.cast().tease[lv - 1]}`); return; }
+      this.showMemory(lv);
     });
-    document.getElementById('buddy-show').addEventListener('change', (e) => set({ show: e.target.checked }));
     document.getElementById('buddy-talk').addEventListener('click', (e) => {
       const b = e.target.closest('.seg-btn');
       if (b && !b.disabled) set({ talk: b.dataset.value, chatty: b.dataset.value !== 'quiet' });

@@ -5,6 +5,7 @@ const assert = require('node:assert');
 
 const { HealthGauge } = require('../web/js/app/gauge.js');
 const Buddy = require('../web/js/app/buddy.js');
+const Cast = require('../web/js/app/cast.js');
 
 test('连续记录：今天记了从今天数，今天还没记从昨天数，断了就停', () => {
   const days = ['2026-09-30', '2026-09-29', '2026-09-28', '2026-09-26'];
@@ -25,14 +26,14 @@ test('装备：3 天头带，7 天棒球帽，30 天皇冠（只戴最好的那�
   assert.strictEqual(Buddy.nextGear(30), null);
 });
 
-test('表情跟着健康度：没记发呆、夜里犯困、不健康冒汗、非常健康戴墨镜', () => {
+test('表情跟着健康度：没记发呆、夜里犯困、不健康冒汗、非常健康笑眼冒星星', () => {
   const g = (d) => HealthGauge.evaluate(Object.assign({ budget: 2000, targetProteinG: 144, hour: 22 }, d));
   assert.strictEqual(Buddy.moodOf(g({ intake: 0, protein: 0, fat: 0 }), 11, 144).mood, 'idle');
   assert.strictEqual(Buddy.moodOf(g({ intake: 0, protein: 0, fat: 0 }), 23, 144).mood, 'sleepy');
   assert.strictEqual(Buddy.moodOf(g({ intake: 3000, protein: 40, fat: 150 }), 22, 104).mood, 'bad');
   const great = Buddy.moodOf(g({ intake: 1900, protein: 140, fat: 65 }), 22, 4);
   assert.strictEqual(great.mood, 'great');
-  assert.strictEqual(Buddy.MOODS[great.mood].eyes, 'shades');
+  assert.strictEqual(Buddy.MOODS[great.mood].eyes, 'happy');
 });
 
 test('健康档的话不自相矛盾；蛋白差得多就说还差几克', () => {
@@ -45,7 +46,7 @@ test('健康档的话不自相矛盾；蛋白差得多就说还差几克', () =>
 });
 
 test('像素图：尺寸固定、描了边、换衣服换发色都能拼', () => {
-  const img = Buddy.compose({ mood: 'great', gear: ['crown'], hair: 'brown', outfit: 'navy' });
+  const img = Buddy.compose({ mood: 'great', eyes: 'shades', gear: ['crown'], hair: 'brown', outfit: 'navy' });
   assert.strictEqual(img.px.length, Buddy.H);
   assert.ok(img.px.every(r => r.length === Buddy.W));
   const flat = img.px.map(r => r.join('')).join('');
@@ -60,10 +61,11 @@ test('像素图：尺寸固定、描了边、换衣服换发色都能拼', () =>
   // 每个颜色代码都有颜色
   for (const c of new Set(flat.replace(/\./g, ''))) assert.ok(img.colors[c], c);
   // SVG：两帧头发、两帧招手、睁眼时的眨眼和左右看、特效单独一层
-  const svg = Buddy.svg({ mood: 'good', gear: [] });
-  for (const k of ['bd-fa', 'bd-fb', 'bd-blink', 'bd-lookl', 'bd-lookr', 'bd-fx-note', 'pose-lie']) assert.ok(svg.includes(k), k);
+  const svg = Buddy.svg({ mood: 'ok', gear: [] });
+  for (const k of ['bd-fa', 'bd-fb', 'bd-blink', 'bd-lookl', 'bd-lookr', 'pose-lie']) assert.ok(svg.includes(k), k);
+  assert.ok(Buddy.svg({ mood: 'good', gear: [] }).includes('bd-fx-note'));
   assert.ok(!Buddy.svg({ mood: 'sleepy', gear: [] }).includes('bd-blink'));
-  assert.ok(!Buddy.svg({ mood: 'great', gear: [] }).includes('bd-blink'));   // 戴墨镜不眨眼
+  assert.ok(!Buddy.svg({ mood: 'great', gear: [] }).includes('bd-blink'));   // 笑眼不眨眼
 });
 
 test('设置里没选过就是默认样子，选过的保留', () => {
@@ -168,8 +170,24 @@ test('亲密度：五级，离下一级还差多少，满级不再长', () => {
   assert.strictEqual(Bond.info(1200).pct, 1);
   // 每一级都有解锁的衣服（第 2～5 级），说的话也都有
   for (let lv = 2; lv <= 5; lv++) assert.ok(Object.values(Buddy.OUTFITS).some(o => o.lv === lv), 'Lv' + lv);
-  assert.strictEqual(Bond.PAT_LINES.length, Bond.LEVELS.length);
-  assert.strictEqual(Bond.LEVEL_UP.length, Bond.LEVELS.length);
+  // 江叙、夏柚（v6.0）：每一级都有回忆、摸头的话、升级的话、口气；小日子、悄悄话、小纸条、小别扭、记完说的话都有
+  for (const k of Object.keys(Cast)) {
+    const c = Cast[k];
+    for (const f of ['story', 'pat', 'levelUp', 'tone', 'tease']) assert.strictEqual(c[f].length, Bond.LEVELS.length, k + ' ' + f);
+    assert.ok(c.story.every(x => x[0] && x[1].length > 20), k + ' 回忆');
+    for (const f of ['morning', 'noon', 'afternoon', 'evening', 'night', 'cold', 'hot']) assert.ok(c.life[f] && c.life[f].length, k + ' life ' + f);
+    for (const f of ['wait', 'afraid', 'secret']) assert.ok(c.whisper[f], k + ' whisper ' + f);
+    for (const f of ['late', 'starve']) assert.ok(c.sulk[f], k + ' sulk ' + f);
+    for (const f of ['breakfast', 'fav', 'protein', 'lift']) assert.ok(c.react[f], k + ' react ' + f);
+    assert.ok(c.react.fav.includes('{food}') && c.night.includes('{sum}') && c.sulk.starve.includes('{kcal}'));
+    // 小纸条：每一级都有新的，三种稀有度都有
+    for (let lv = 1; lv <= 5; lv++) assert.ok(c.notes.some(x => x[0] === lv), k + ' notes lv' + lv);
+    for (const r of ['n', 'r', 's']) assert.ok(c.notes.some(x => x[1] === r), k + ' notes ' + r);
+    assert.ok(c.rare.some(x => x.includes('{n}')));
+    for (const f of ['name', 'who', 'speech', 'blurb', 'intro', 'secret', 'late', 'pick']) assert.ok(c[f], k + ' ' + f);
+    // 底线：不说让人内疚的话（「你不来我会难过」「我一直等你」）
+    assert.ok(!/不来.{0,4}(难过|伤心)|想你想|等你等|一直等你|你怎么不来/.test(JSON.stringify(c)), k);
+  }
 });
 
 test('节日：公历每年一样，农历按年份；生日写法都认得', () => {
@@ -194,4 +212,31 @@ test('装备按拿到过的最长连续天数：断了也留着，下一个按�
   assert.deepStrictEqual(Buddy.gearFor(Buddy.bestStreak(dates)), ['cap']);
   assert.deepStrictEqual(Buddy.nextGear(9, 2), { name: '皇冠', days: 28 });
   assert.ok(Buddy.compose({ mood: 'ok', gear: ['party'] }).px.flat().includes('I'), '生日派对帽');
+});
+
+test('v6.0 新表情：笑眼、脸红、闹别扭冒「💢」、托腮往上看；大模型给的表情对得上', () => {
+  const row = (img, y) => img.px[y + 3].join('');
+  const happy = Buddy.compose({ char: 'boy', mood: 'good' });
+  assert.ok(row(happy, 9).includes('E'), '笑眼盖到第 9 行');
+  const love = Buddy.compose({ char: 'girl', mood: 'love' });
+  assert.ok(row(love, 11).includes('b'), '摸头脸红');
+  assert.ok(Buddy.svg({ char: 'boy', mood: 'pout' }).includes('bd-fx-anger'));
+  assert.ok(Buddy.svg({ char: 'girl', face: '害羞' }).includes(Buddy.compose({ mood: 'ok' }).colors.b));
+  assert.ok(Buddy.svg({ char: 'boy', pose: 'think' }).includes('pose-think'));
+  assert.ok(!Buddy.svg({ char: 'boy', pose: 'think' }).includes('bd-blink'), '托腮时眼睛往上看，不眨眼');
+  for (const f of Object.keys(Buddy.FACE_MOOD)) assert.ok(Buddy.MOODS[Buddy.FACE_MOOD[f]], f);
+  // 每种发型 × 心情（含新的）× 姿势（含托腮）都拼得出来
+  for (const style of Object.keys(Buddy.STYLES)) for (const mood of Object.keys(Buddy.MOODS)) for (const pose of Buddy.POSES) {
+    const img = Buddy.compose({ char: Buddy.STYLES[style].char, style, mood, pose, gear: [] });
+    for (const c of new Set(img.px.flat().join('').replace(/\./g, ''))) assert.ok(img.colors[c], `${style} ${mood} ${pose}: ${c}`);
+  }
+  // 放大画（选人的卡片、回忆）：宽高按倍数
+  assert.ok(Buddy.svg({ char: 'girl', pose: 'stand', scale: 4 }).includes(`width="${Buddy.W * 4}"`));
+});
+
+test('v6.0 两个人：男生是江叙、女生是夏柚；草稿里存的 jx / xy 也认', () => {
+  assert.strictEqual(Buddy.look({ char: 'jx' }).char, 'boy');
+  assert.strictEqual(Buddy.look({ char: 'xy' }).char, 'girl');
+  assert.strictEqual(Cast.jx.name, '江叙');
+  assert.strictEqual(Cast.xy.name, '夏柚');
 });

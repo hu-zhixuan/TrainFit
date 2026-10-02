@@ -93,7 +93,7 @@
       const c = audio();
       if (!c) return;
       const chars = [...String(text || '')].filter(ch => !/[\s，。、！？!?,.…：:；;「」（）()\d]/.test(ch)).slice(0, 24);
-      const base = voice === 'girl' ? 640 : 430;
+      const base = voice === 'f' || voice === 'girl' ? 640 : 430;
       let t = c.currentTime + 0.02;
       try {
         chars.forEach((ch) => {

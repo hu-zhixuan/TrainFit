@@ -415,7 +415,7 @@ body.no-composer .views { padding-bottom: calc(32px + var(--sab)); }
   left: 0;
   top: 0;
   z-index: 31;
-  width: 60px;
+  width: 72px;
   padding: 0;
   display: block;
   border: none;
@@ -430,7 +430,7 @@ body.no-composer .views { padding-bottom: calc(32px + var(--sab)); }
 .bd-move { display: block; }
 .buddy-svg { display: block; overflow: visible; }
 .buddy-svg .bd-fb, .buddy-svg .bd-blink, .buddy-svg .bd-lookl, .buddy-svg .bd-lookr { opacity: 0; }
-body.has-buddy .views { padding-bottom: calc(var(--cmp-h, 110px) + 52px + var(--sab)); }
+body.has-buddy .views { padding-bottom: calc(var(--cmp-h, 110px) + 60px + var(--sab)); }
 @media (prefers-reduced-motion: no-preference) {
   /* 小动作：头发隔一会儿晃一下、眨眼、偶尔左右看一眼；特效飘、跳、闪 */
   .buddy .bd-fa { animation: bdSwayA 4.4s steps(1, end) infinite; }
@@ -464,6 +464,23 @@ body.has-buddy .views { padding-bottom: calc(var(--cmp-h, 110px) + 52px + var(--
 @keyframes bdDrip { 0% { transform: none; } 60% { transform: translateY(1px); } }
 @keyframes bdUp { from { transform: translateY(6px); } to { transform: none; } }
 @keyframes bdFlex { 0%, 100% { transform: none; } 50% { transform: translateY(-2px); } }
+/* v6.0 更灵动：趴着时一起一伏地喘气；蹦一下；你打字时看输入框、翻东西时往上看；秀肌肉放大一点，看得清身材 */
+.buddy .buddy-svg { width: 100%; height: auto; transform-origin: 50% 100%; }
+/* 今天的小纸条还没拆：头上挂个小信封，一跳一跳 */
+.bd-mail { display: none; position: absolute; top: -10px; left: 2px; padding: 0 4px; border-radius: 6px; background: var(--love); color: #fff; font: 700 11px/16px system-ui, sans-serif; box-shadow: var(--shadow); }
+.buddy.has-note .bd-mail { display: block; }
+.buddy.bang .bd-mail, .buddy.thinking .bd-mail { display: none; }
+@media (prefers-reduced-motion: no-preference) { .buddy.has-note .bd-mail { animation: mailBob 1.6s ease-in-out infinite; } }
+@keyframes mailBob { 0%, 100% { transform: translateY(0) rotate(-6deg); } 50% { transform: translateY(-3px) rotate(4deg); } }
+.buddy .buddy-svg.pose-flex { width: 125%; margin-left: -12.5%; }
+@media (prefers-reduced-motion: no-preference) {
+  .buddy .buddy-svg.pose-lie { animation: bdBreath 2.6s steps(1, end) infinite; }
+  .buddy.hop .bd-move { animation: bdHop 0.5s ease-out; }
+  .buddy[data-peek="down"] .bd-lookl, .buddy[data-peek="up"] .bd-lookr { animation: none; opacity: 1; }
+  .buddy[data-peek] .bd-blink { animation: none; }
+  .buddy .bd-fx-anger { animation: bdTwinkle 0.9s steps(1, end) infinite; }
+}
+@keyframes bdBreath { 0%, 100% { transform: none; } 55% { transform: translateY(0.5px) scaleY(0.985); } }
 
 /* ---------- 新手教程：小人头上的对话框 ---------- */
 .tour-pop {
@@ -546,16 +563,7 @@ body.has-buddy .views { padding-bottom: calc(var(--cmp-h, 110px) + 52px + var(--
 .coach-card { padding: 14px 14px 14px 10px; }
 .coach { display: flex; align-items: flex-end; gap: 10px; }
 .coach-buddy { flex: none; padding: 0; border: 0; background: none; line-height: 0; cursor: pointer; -webkit-tap-highlight-color: transparent; }
-.coach-buddy .buddy-svg { width: 52px; height: auto; }
-.coach-bubble { position: relative; flex: 1; min-width: 0; padding: 10px 12px; border-radius: var(--r-md); background: var(--surface-2); }
-.coach-bubble::before { content: ''; position: absolute; left: -6px; bottom: 14px; width: 12px; height: 12px; background: inherit; transform: rotate(45deg); border-radius: 2px; }
-.coach-bubble p { position: relative; margin: 0; font-size: 0.86rem; line-height: 1.55; color: var(--text-2); }
-.coach-bubble p + p { margin-top: 3px; }
-.coach-bubble .coach-head { font-size: 0.92rem; font-weight: 700; color: var(--text); }
-/* 在趋势页看了半天，小人补的一句 */
-.coach-bubble .coach-more { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--line); color: var(--text); }
-.coach-bubble .buddy-next { margin-top: 8px; }
-@media (prefers-reduced-motion: no-preference) { .coach-bubble .coach-more, .coach-bubble .buddy-next { animation: ppIn 0.35s ease both; } }
+.coach-buddy .buddy-svg { width: 60px; height: auto; }
 @media (prefers-reduced-motion: no-preference) {
   .coach-buddy .bd-fa { animation: bdSwayA 4.4s steps(1, end) infinite; }
   .coach-buddy .bd-fb { animation: bdSwayB 4.4s steps(1, end) infinite; }
@@ -565,6 +573,15 @@ body.has-buddy .views { padding-bottom: calc(var(--cmp-h, 110px) + 52px + var(--
   .coach-buddy .pose-wave .bd-fa { animation: bdAltA 0.34s steps(1, end) infinite; }
   .coach-buddy .pose-wave .bd-fb { animation: bdAltB 0.34s steps(1, end) infinite; }
   .coach-buddy .pose-wave { animation: bdUp 0.24s steps(2, end); }
+.coach-bubble { position: relative; flex: 1; min-width: 0; padding: 10px 12px; border-radius: var(--r-md); background: var(--surface-2); }
+.coach-bubble::before { content: ''; position: absolute; left: -6px; bottom: 14px; width: 12px; height: 12px; background: inherit; transform: rotate(45deg); border-radius: 2px; }
+.coach-bubble p { position: relative; margin: 0; font-size: 0.86rem; line-height: 1.55; color: var(--text-2); }
+.coach-bubble p + p { margin-top: 3px; }
+.coach-bubble .coach-head { font-size: 0.92rem; font-weight: 700; color: var(--text); }
+/* 在趋势页看了半天，小人补的一句 */
+.coach-bubble .coach-more { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--line); color: var(--text); }
+.coach-bubble .buddy-next { margin-top: 8px; }
+@media (prefers-reduced-motion: no-preference) { .coach-bubble .coach-more, .coach-bubble .buddy-next { animation: ppIn 0.35s ease both; } }
 }
 /* 份量问一句：几个选项，当前按哪个记的高亮 */
 .buddy-q { margin: 6px 0 0; font-size: 0.95rem; font-weight: 650; line-height: 1.5; color: var(--text); }
@@ -701,9 +718,39 @@ body.has-buddy .views { padding-bottom: calc(var(--cmp-h, 110px) + 52px + var(--
 /* 预览里站在一条边上 */
 .buddy-preview svg { flex: none; width: 90px; height: auto; border-bottom: 2px solid var(--line); box-sizing: content-box; }
 .buddy-opts { display: flex; flex-direction: column; gap: 10px; min-width: 0; flex: 1; }
-.buddy-top { display: flex; align-items: center; gap: 8px; }
-.buddy-top .buddy-name { flex: 1; min-width: 0; height: 36px; padding: 0 10px; font-size: 0.9rem; }
-.buddy-top #buddy-char { flex: none; width: 108px; }
+.buddy-who { display: flex; flex-direction: column; gap: 8px; margin: 16px 0 0; }
+.buddy-blurb { margin: 0; font-size: 0.82rem; line-height: 1.5; color: var(--text-2); }
+.buddy-memories { display: flex; flex-direction: column; gap: 8px; margin: 4px 0 0; }
+.buddy-memories small { margin-left: 4px; font-weight: 500; color: var(--text-3); }
+.mem-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.mem-card { position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; padding: 14px 2px 7px; border: 1px solid color-mix(in srgb, var(--love) 35%, var(--line)); border-radius: var(--r-sm);
+  background: linear-gradient(160deg, color-mix(in srgb, var(--love) 16%, var(--surface-2)), var(--surface-2)); color: var(--text); font: inherit; cursor: pointer; }
+.mem-card b { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.74rem; }
+.mem-card small { font-size: 0.6rem; color: var(--text-3); white-space: nowrap; }
+.mem-card .mem-n { position: absolute; top: 3px; left: 5px; font-style: normal; font-size: 0.6rem; font-weight: 700; color: var(--love); }
+.mem-card.locked { background: var(--surface-2); border-color: var(--line); opacity: 0.6; }
+/* 升级时弹出来的回忆（像收集 CG）、设置里重看的整屏卡片 */
+.buddy-pop[data-mode="story"] { width: min(320px, calc(100vw - 32px)); }
+.story-card { display: flex; align-items: flex-end; gap: 10px; margin: -2px 0 4px; }
+.story-art { flex: none; width: 92px; height: 84px; display: flex; align-items: flex-end; justify-content: center; overflow: hidden; border-radius: var(--r-sm);
+  background: radial-gradient(circle at 50% 40%, color-mix(in srgb, var(--love) 32%, transparent), transparent 70%), var(--surface-2); }
+.story-art svg { width: 92px; height: auto; margin-bottom: -2px; }
+.story-meta { display: flex; flex-direction: column; gap: 3px; min-width: 0; padding-bottom: 4px; }
+.story-tag { display: inline-flex; align-items: center; gap: 4px; font-size: 0.72rem; font-weight: 700; color: var(--love); }
+.story-tag i { font-style: normal; }
+.story-title { font-size: 1.05rem; color: var(--text); }
+.story-who { font-size: 0.72rem; color: var(--text-3); }
+.story-lead { margin: 6px 0 0; font-size: 0.84rem; color: var(--text-2); }
+.story-text { margin: 6px 0 0; font-size: 0.95rem; line-height: 1.65; color: var(--text); }
+.story-acts { flex-wrap: wrap; }
+.mem-view { position: fixed; inset: 0; z-index: 200; display: grid; place-items: center; padding: 24px; background: rgba(8, 9, 12, 0.72); }
+.mem-sheet { width: min(320px, 100%); display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 18px 18px 14px; border-radius: var(--r-lg, 18px);
+  background: radial-gradient(circle at 50% 22%, color-mix(in srgb, var(--love) 26%, transparent), transparent 62%), var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow); text-align: center; }
+.mem-art svg { width: 150px; height: auto; }
+.mem-title { font-size: 1.15rem; color: var(--text); }
+.mem-text { margin: 4px 0 0; font-size: 0.95rem; line-height: 1.7; color: var(--text); text-align: left; }
+.mem-close { margin-top: 6px; font-size: 0.72rem; color: var(--text-3); }
+@media (prefers-reduced-motion: no-preference) { .mem-sheet { animation: popSpring 0.42s cubic-bezier(0.2, 1.5, 0.4, 1); } }
 .bond-set, .bond-row { display: flex; flex-direction: column; gap: 4px; }
 .bond-row { margin: 8px 0 2px; padding: 8px 10px; border-radius: var(--r-sm); background: var(--surface-2); }
 .bond-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
@@ -1438,3 +1485,28 @@ body.onboarding .rec-panel { z-index: 210; bottom: calc(24px + var(--sab)); }
 .ob-back { align-self: flex-start; background: none; border: 0; padding: 4px 0; color: var(--text-2); font-weight: 600; }
 .ob-actions { margin-top: 10px; }
 #buddy-tour { margin-top: 10px; width: 100%; }
+/* 选搭子（v6.0）：江叙 / 夏柚 两张卡，点一下 TA 招手说一句；下面「极简模式」 */
+.ob-cast { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 4px; }
+.ob-pal { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 14px 10px 14px; border: 2px solid var(--line); border-radius: var(--r-lg); background: var(--surface); color: var(--text); font: inherit; cursor: pointer; box-shadow: var(--shadow-sm); transition: border-color 0.15s ease, transform 0.12s ease; -webkit-tap-highlight-color: transparent; }
+.ob-pal-art { display: flex; align-items: flex-end; justify-content: center; width: 100%; height: 146px; border-radius: var(--r-md); background: radial-gradient(circle at 50% 45%, color-mix(in srgb, var(--love) 18%, transparent), transparent 70%); }
+.ob-pal-art svg { width: 116px; height: auto; }
+.ob-pal b { margin-top: 2px; font-size: 1.1rem; }
+.ob-pal small { font-size: 0.74rem; line-height: 1.45; color: var(--text-3); text-align: center; }
+.ob-pal.on { border-color: var(--love); transform: translateY(-2px); box-shadow: 0 6px 18px color-mix(in srgb, var(--love) 25%, transparent); }
+.ob-pal-say { min-height: 3.2em; margin: 2px 4px 0; font-size: 0.92rem; line-height: 1.6; color: var(--text-2); text-align: center; }
+.ob-pal-say.said { color: var(--text); font-weight: 600; }
+#ob-cast-done { flex: none; }
+.ob-min { display: flex; flex-direction: column; align-items: center; gap: 2px; margin: 4px auto 0; padding: 10px 12px; border: 0; background: none; color: var(--text-2); font: inherit; font-size: 0.9rem; font-weight: 600; cursor: pointer; }
+.ob-min small { font-size: 0.74rem; font-weight: 500; color: var(--text-3); }
+/* 每天的小纸条（v6.0）：一张小卡片，少见 / 珍藏 / 限定有个角标 */
+.buddy-pop[data-mode="note"] { width: min(290px, calc(100vw - 32px)); }
+.note-card { margin: -2px; padding: 10px 12px 9px; border-radius: var(--r-sm); background: color-mix(in srgb, var(--love) 10%, var(--surface-2)); border: 1px dashed color-mix(in srgb, var(--love) 45%, var(--line)); }
+.note-card.note-s, .note-card.note-x { background: linear-gradient(150deg, color-mix(in srgb, #ffd84d 22%, var(--surface-2)), color-mix(in srgb, var(--love) 14%, var(--surface-2))); border-style: solid; border-color: color-mix(in srgb, #e7b53c 60%, var(--line)); }
+.note-head { display: flex; align-items: center; gap: 6px; font-size: 0.76rem; font-weight: 700; color: var(--love); }
+.note-head i { font-style: normal; }
+.note-rare { margin-left: auto; padding: 1px 7px; border-radius: 8px; background: var(--love); color: #fff; font-size: 0.68rem; }
+.note-s .note-rare, .note-x .note-rare { background: #e7b53c; color: #2a1f08; }
+.note-text { margin: 6px 0 0; font-size: 0.98rem; font-weight: 650; line-height: 1.6; color: var(--text); }
+.note-foot { margin-top: 6px; font-size: 0.7rem; color: var(--text-3); }
+@media (prefers-reduced-motion: no-preference) { .note-card { animation: noteOpen 0.45s cubic-bezier(0.2, 1.4, 0.4, 1); transform-origin: 50% 100%; } }
+@keyframes noteOpen { from { transform: rotateX(70deg) scale(0.9); opacity: 0; } to { transform: none; opacity: 1; } }

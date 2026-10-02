@@ -279,8 +279,9 @@
       const WK = '日一二三四五六';
       const name = b.name || '小练';
       const system = [
-        `你是「${name}」，住在「练食AI」里的像素小人${b.look ? `（${b.look}）` : ''}，每天陪用户记吃的、记练的。现在他在跟你聊天，不是在记录。`,
-        b.facts && b.facts.length ? '你是谁（前后一致，别乱编新的大设定）：' + b.facts.join('；') + '。' : '',
+        `你是「${name}」${b.who ? `（${b.who}）` : ''}，住在「练食AI」里，每天陪用户记吃的、记练的${b.look ? `；${b.look}` : ''}。现在他在跟你聊天，不是在记录。`,
+        b.speech ? `你说话的样子：${b.speech}。` : '',
+        b.facts && b.facts.length ? '你的小习惯和经历（前后一致，别乱编新的大设定）：' + b.facts.join('；') + '。' : '',
         b.level ? `你们的关系：${b.level}（第 ${b.lv} 级，共 5 级）。${b.tone || ''}` : '',
         '怎么说话：',
         '1. 先接住他的情绪，再说事。听出没说出口的：「还行」「随便」「没事」可能是累了、不开心，可以轻轻问一句。',
@@ -295,10 +296,10 @@
         '- next：他接下来最可能回你的两句（用他的口吻，10 个字以内）。',
         '- face：你说这句时的表情，开心 / 害羞 / 担心 / 不服 / 得意 / 平静 选一个。',
         '- 他亲口说了关于自己、以后一直有用的事（名字、作息、职业、伤病、忌口），再加 "memo":["…"]（每条 12 字以内，小本本里有的不重复）；今天的事、你的推测都不记。'
-      ].filter(Boolean).join('\n');
+      ].filter(Boolean).join('\n').replace(/他/g, b.you === '她' ? '她' : '他');
       const lines = [];
       lines.push(`现在 ${now.getMonth() + 1}月${now.getDate()}日 周${WK[now.getDay()]} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}。`);
-      if (b.call) lines.push(`你叫他「${b.call}」。`);
+      if (b.call) lines.push(`你叫${b.you || '他'}「${b.call}」。`);
       const memo = (ctx.memo || []).slice(0, 12);
       if (memo.length) lines.push('小本本（他说过的自己的事）：' + memo.join('；'));
       const portrait = (ctx.portrait || []).slice(0, 7);
@@ -314,8 +315,8 @@
       const past = (ctx.past || []).slice(-14);
       if (past.length) lines.push('最近两周（日期 吃了多少千卡 蛋白g 练了什么 体重kg）：\n' + past.join('\n'));
       const talk = (ctx.talk || []).slice(-3);
-      if (talk.length) lines.push('刚才在聊：\n' + talk.map(x => `他：${x.q}\n你：${x.a}`).join('\n'));
-      lines.push('他说：' + text);
+      if (talk.length) lines.push('刚才在聊：\n' + talk.map(x => `${b.you || '他'}：${x.q}\n你：${x.a}`).join('\n'));
+      lines.push((b.you || '他') + '说：' + text);
       return [
         { role: 'system', content: system },
         { role: 'user', content: lines.join('\n') }
