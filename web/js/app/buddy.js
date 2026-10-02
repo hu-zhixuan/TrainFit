@@ -771,22 +771,25 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     }
     if (!opts.streaming) this._lastAnswer = { question, answer, at: Date.now(), plan: opts.plan, baseDate: opts.baseDate };
     const plan = !opts.streaming && opts.plan;
-    let planDate = '';
+    // 一天的计划，或者排了好几天的训练（plan.days）
+    const base = opts.baseDate || getTodayDateString();
+    const days = plan ? (plan.days || [plan]).map(d => Object.assign({}, d, { date: shiftDateString(base, d.dayOffset || 0) })) : [];
+    const planDate = days.length ? days[0].date : '';
     if (plan) {
-      planDate = shiftDateString(opts.baseDate || getTodayDateString(), plan.dayOffset || 0);
       // 15 分钟内说「不要米饭换红薯」，大模型知道改的是哪份计划
-      this._planOffer = { at: Date.now(), text: this.planText(plan) };
+      this._planOffer = { at: Date.now(), text: this.planText(plan, base) };
     }
     pop.dataset.mode = 'answer';
     pop.dataset.q = q;
     pop.dataset.level = 'none';
     const dayWord = (d) => (d === getTodayDateString() ? '今天' : d === shiftDateString(getTodayDateString(), 1) ? '明天' : `${+d.slice(5, 7)}月${+d.slice(8)}日`);
     const added = plan && (this.plans || []).some(x => x.date === planDate && x.from === this._lastAnswer.at);
+    const where = days.length > 1 ? `这 ${days.length} 天` : dayWord(planDate);
     pop.innerHTML = `<div class="buddy-pop-head">${esc(q.length > 26 ? q.slice(0, 25) + '…' : q)}</div>` +
       `<p class="buddy-answer${opts.streaming && !opts.planning ? ' typing' : ''}">${esc(answer)}</p>` +
       (opts.streaming ? `<p class="buddy-wait${opts.planning ? '' : ' hidden'}">正在排成计划，好了能一键加上<span class="think-dots"><i></i><i></i><i></i></span></p>` : '') +
       (plan ? `<div class="buddy-acts"><button class="buddy-act" type="button" data-pa="edit">改一改</button>` +
-        `<button class="buddy-act primary" type="button" data-pa="add"${added ? ' disabled' : ''}>${added ? '✓ 已加到' : '加到'}${dayWord(planDate)}</button></div>` +
+        `<button class="buddy-act primary" type="button" data-pa="add"${added ? ' disabled' : ''}>${added ? '✓ 已加到' : '加到'}${where}</button></div>` +
         `<p class="buddy-tip hidden">按住下面的按钮说要改的地方，比如「不要米饭，换成红薯」「蛋白再多一点」</p>` : '') +
       (opts.streaming ? '' : '<button class="buddy-more" type="button">看看连续记录 ›</button>');
     const more = pop.querySelector('.buddy-more');
@@ -794,12 +797,13 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     pop.querySelectorAll('[data-pa]').forEach(b => b.addEventListener('click', (e) => {
       e.stopPropagation();
       if (b.dataset.pa === 'add') {
-        const n = this.addPlans(planDate, Object.assign({}, plan, { from: this._lastAnswer.at }));
+        const from = this._lastAnswer.at;
+        const n = days.reduce((t, d) => t + this.addPlans(d.date, Object.assign({}, d, { from })), 0);
         b.disabled = true;
-        b.textContent = `✓ 已加到${dayWord(planDate)}`;
+        b.textContent = `✓ 已加到${where}`;
         window.Haptics && window.Haptics.fire('success');
         window.Sound && window.Sound.play('success');
-        this.showToast(`加了 ${n} 条计划，到时候做完点 ✓ 就记上`);
+        this.showToast(days.length > 1 ? `排好了 ${days.length} 天，从${dayWord(planDate)}开始，练完点 ✓ 就记上` : `加了 ${n} 条计划，到时候做完点 ✓ 就记上`);
       } else {
         pop.querySelector('.buddy-tip').classList.remove('hidden');
         const talk = document.querySelector('#voice-row:not(.hidden) .talk-btn') || document.querySelector('#text-row:not(.hidden) .cmp-text');
@@ -956,10 +960,11 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
   },
 
   /** 计划写成几行字（给大模型看「刚才给的计划」） */
-  planText(plan) {
-    return (plan.meals || []).map(m => `${m.mealType} ${m.foodSummary} ${m.calories}kcal 蛋白${m.proteinG || 0}`)
-      .concat((plan.workouts || []).map(w => `训练 ${w.exerciseName} ${w.durationMin ? w.durationMin + '分钟' : (w.weightKg > 0 ? w.weightKg + 'kg' : '自重') + ` ${w.sets}×${w.reps}`}`))
-      .join('\n');
+  planText(plan, base) {
+    const one = (p) => (p.meals || []).map(m => `${m.mealType} ${m.foodSummary} ${m.calories}kcal 蛋白${m.proteinG || 0}`)
+      .concat((p.workouts || []).map(w => `训练 ${w.exerciseName} ${w.durationMin ? w.durationMin + '分钟' : (w.weightKg > 0 ? w.weightKg + 'kg' : '自重') + ` ${w.sets}×${w.reps}`}`));
+    if (!plan.days) return one(plan).join('\n');
+    return plan.days.map(d => { const dt = shiftDateString(base || getTodayDateString(), d.dayOffset || 0); return `${+dt.slice(5, 7)}月${+dt.slice(8)}日：${one(d).join('；')}`; }).join('\n');
   },
 
   /** 提问没整理出来：气泡里说清楚，能重试（卡片也留着） */

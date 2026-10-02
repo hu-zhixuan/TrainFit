@@ -23,7 +23,7 @@ Object.assign(FitnessApp.prototype, {
     const lifts = (plan.workouts || []).map((w, i) => ({
       id: `pl_${stamp}_w${i}`, date, kind: 'workout', ts: stamp + 50 + i, from,
       exerciseName: w.exerciseName, muscleGroup: w.muscleGroup, weightKg: w.weightKg, sets: w.sets, reps: w.reps,
-      durationMin: w.durationMin || undefined, burnedCalories: w.burnedCalories
+      durationMin: w.durationMin || undefined, burnedCalories: w.burnedCalories, tip: w.tip || undefined
     }));
     this.plans = (this.plans || []).filter(p => p.date !== date).concat(meals, lifts);
     this.saveData();
@@ -98,7 +98,8 @@ Object.assign(FitnessApp.prototype, {
           <div class="item-icon ${meal ? 'meal' : 'lift'}">${meal ? ICONS.meal : ICONS.lift}</div>
           <div class="item-main">
             <div class="item-title">${title}</div>
-            <div class="item-sub">${esc(sub)}</div>
+            <div class="item-sub">${esc(sub)}</div>${p.tip ? `
+            <div class="item-tip">${esc(p.tip)}</div>` : ''}
           </div>
           <div class="plan-acts">
             <button class="plan-drop" type="button" data-act="plan-drop" data-id="${esc(p.id)}" aria-label="不要这条计划">×</button>
