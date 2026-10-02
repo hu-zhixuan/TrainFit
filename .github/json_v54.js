@@ -10,7 +10,7 @@ const model = process.env.LLM_MODEL || 'Atria-Dawn-Preview';
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 const esc = (m) => String(m).replace(/%/g, '%25').replace(/\r/g, '').replace(/\n/g, '%0A').slice(0, 3900);
 function variant(sys) {
-  if (V === 'A') return sys;
+  if (V !== 'B') return sys;
   const a = '例 1（记吃的、练的）：{"reply":"一句短话说你做了什么，15字以内，不写热量数（下面会单独列出来）；估得比较粗的，30字以内说按什么估的","dayOffset":0,';
   const b = '"calories":260,"proteinG":11,"carbsG":10,"fatG":19}]}]}}';
   const c = '例 2（改、删已有的记录）：{"reply":"改好了","dayOffset":0,"update":[{"ref":"r2","set":{"weightKg":85}}],"delete":["r3"]}';
@@ -26,7 +26,7 @@ const CASES = [
   ['明天练什么', '明天练什么好', '21:00', {}]
 ];
 (async () => {
-  let bad = 0, n = 0;
+  let bad = 0, n = 0, rawBad = 0;
   const lines = [];
   for (let k = 0; k < Number(process.env.ROUNDS || 3); k++) {
     for (const [label, text, hhmm, extra] of CASES) {
@@ -53,9 +53,11 @@ const CASES = [
       if (!res.ok) { lines.push(`${label} #${k + 1} HTTP ${res.status}`); continue; }
       let content = '', toks = '';
       try { const j = JSON.parse(raw); content = j.choices[0].message.content; toks = j.usage && j.usage.completion_tokens; } catch (e) {}
+      let raw0 = '';
+      try { const t = content.replace(/```(?:json)?/g, ''); JSON.parse(t.slice(t.indexOf('{'), t.lastIndexOf('}') + 1)); } catch (e) { rawBad += 1; raw0 = '（原文坏了，本机修好）'; console.log(`::warning title=[${V}] ${label} #${k + 1} 原文写坏::${esc(e.message + '\n' + content)}`); }
       try {
         const r = P.normalize(P.extractJson(content), Object.assign({ said: text }, ctx));
-        lines.push(`${label} #${k + 1} OK ${(ms / 1000).toFixed(1)}s ${toks}tok plan=${r.plan ? '有' : '无'} answer=${(r.answer || '').length}字`);
+        lines.push(`${label} #${k + 1} OK${raw0} ${(ms / 1000).toFixed(1)}s ${toks}tok plan=${r.plan ? '有' : '无'} answer=${(r.answer || '').length}字 next=${JSON.stringify(r.next)}`);
       } catch (e) {
         bad += 1;
         lines.push(`${label} #${k + 1} 写坏了 ${e.message.slice(0, 80)}`);
@@ -63,6 +65,6 @@ const CASES = [
       }
     }
   }
-  console.log(`::notice title=[${V}] JSON 汇总::${esc(`写坏 ${bad}/${n}\n` + lines.join('\n'))}`);
+  console.log(`::notice title=[${V}] JSON 汇总::${esc(`原文写坏 ${rawBad}/${n}，本机修完还坏 ${bad}/${n}\n` + lines.join('\n'))}`);
   process.exit(0);
 })();
