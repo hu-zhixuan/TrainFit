@@ -124,6 +124,7 @@
         if (app.pending.some(x => x.id === p.id)) {
           app.failPending(p.id, Parser.failReason(e));
           if ((p.ask || shown) && app.showBuddyFailed) app.showBuddyFailed(p, Parser.failReason(e));
+          if (p.ask && TF.pureQuestion && TF.pureQuestion(p.text)) app.finishPending(p.id); // 只是在问：不留「没整理好」卡片
         }
         return;
       }
@@ -145,6 +146,7 @@
         }
         app.failPending(p.id, result.reply || '没认出吃了什么');
         if (p.ask && app.showBuddyFailed) app.showBuddyFailed(p, result.reply || '没听懂，换个说法试试');
+        if (p.ask && TF.pureQuestion && TF.pureQuestion(p.text)) app.finishPending(p.id);
         return;
       }
       app.finishPending(p.id);

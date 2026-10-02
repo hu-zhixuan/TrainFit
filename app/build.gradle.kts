@@ -24,16 +24,31 @@ fun llmConfig(name: String, default: String): String {
     return "\"" + v.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
 }
 
+// 固定签名：CI 从 Secrets 解出钥匙文件（SIGNING_KEYSTORE_FILE），每个版本用同一把，新版能直接覆盖安装。
+// 没配就照旧用临时的 debug 签名。钥匙和密码只在 Secrets 里，不进仓库。
+val signingFile = System.getenv("SIGNING_KEYSTORE_FILE")?.takeIf { it.isNotBlank() && file(it).exists() }
+
 android {
     namespace = "com.trainfit.app"
     compileSdk = 34
+
+    signingConfigs {
+        if (signingFile != null) {
+            create("fixed") {
+                storeFile = file(signingFile)
+                storePassword = System.getenv("SIGNING_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("SIGNING_KEY_ALIAS")?.takeIf { it.isNotBlank() } ?: "trainfit"
+                keyPassword = System.getenv("SIGNING_KEY_PASSWORD")?.takeIf { it.isNotBlank() } ?: System.getenv("SIGNING_KEYSTORE_PASSWORD")
+            }
+        }
+    }
 
     defaultConfig {
         applicationId = "com.trainfit.ai"
         minSdk = 24
         targetSdk = 34
-        versionCode = 44
-        versionName = "4.8"
+        versionCode = 45
+        versionName = "4.9"
 
         buildConfigField("String", "LLM_BASE_URL", llmConfig("LLM_BASE_URL", "https://api.atria-asi.ai/v1"))
         buildConfigField("String", "LLM_MODEL", llmConfig("LLM_MODEL", "Atria-Dawn-Preview"))
@@ -52,12 +67,14 @@ android {
 
     buildTypes {
         release {
+            signingConfigs.findByName("fixed")?.let { signingConfig = it }
             isCrunchPngs = false
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
         debug {
             isMinifyEnabled = false
+            signingConfigs.findByName("fixed")?.let { signingConfig = it }
         }
     }
 

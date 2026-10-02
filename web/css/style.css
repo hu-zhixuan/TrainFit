@@ -243,6 +243,10 @@ body.no-composer .views { padding-bottom: calc(32px + var(--sab)); }
 .hero-side span { font-size: 0.75rem; font-weight: 600; color: var(--text-3); }
 .hero-side b { font-size: 1.35rem; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.15; }
 .hero-side small { font-size: 0.7rem; color: var(--text-3); }
+.hero-side { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.hint-q { display: inline-block; width: 13px; height: 13px; margin-left: 3px; border: 1px solid var(--text-3); border-radius: 50%; font-size: 0.6rem; font-style: normal; font-weight: 700; line-height: 11px; text-align: center; vertical-align: 1px; color: var(--text-3); }
+.deficit-eq { margin: 8px 0 0; font-size: 0.86rem; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.deficit-eq b { color: var(--text); }
 .hero-side.good b { color: var(--accent-text); }
 .hero-side.bad b { color: var(--danger); }
 .hero-num {
@@ -599,6 +603,13 @@ body.has-buddy .views { padding-bottom: calc(var(--cmp-h, 110px) + 52px + var(--
 @media (prefers-reduced-motion: no-preference) { .buddy-say.reply { animation: ppIn 0.3s ease both; } }
 .buddy-pop[data-mode="chat"] { width: min(310px, calc(100vw - 32px)); }
 .buddy-pop[data-mode="chat"] .buddy-say { white-space: pre-line; }
+/* 早上打卡称体重：− 61.2 kg + */
+.weigh-row { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 12px; }
+.weigh-step { width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface-2); color: var(--text); font: inherit; font-size: 1.3rem; line-height: 1; cursor: pointer; }
+.weigh-step:active { background: var(--accent-soft); }
+.weigh-num { width: 104px; height: 44px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); color: var(--text); font: inherit; font-size: 1.5rem; font-weight: 700; text-align: center; font-variant-numeric: tabular-nums; -moz-appearance: textfield; }
+.weigh-num::-webkit-outer-spin-button, .weigh-num::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.weigh-unit { margin-left: -4px; font-size: 0.85rem; color: var(--text-3); }
 /* 「接着问」：回答下面两句能直接点的问题 */
 .buddy-next { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
 .next-chip { max-width: 100%; padding: 6px 11px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface-2); color: var(--text-2); font: inherit; font-size: 0.8rem; line-height: 1.3; text-align: left; cursor: pointer; }

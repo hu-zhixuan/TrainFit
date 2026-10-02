@@ -49,8 +49,33 @@ jobs:
       - name: Fetch on-device ASR (sherpa-onnx libs + model)
         run: bash scripts/fetch-asr.sh
 
+      # 固定签名：每个版本用同一把钥匙签，新版才能直接覆盖安装（不用卸载、数据都在）。
+      # 钥匙在 Secrets 里（SIGNING_KEYSTORE_BASE64 / SIGNING_KEYSTORE_PASSWORD / SIGNING_KEY_ALIAS），没配就照旧用临时签名。
+      - name: Decode signing key
+        env:
+          SIGNING_KEYSTORE_BASE64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
+          SIGNING_KEYSTORE_PASSWORD: ${{ secrets.SIGNING_KEYSTORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+        run: |
+          if [ -z "$SIGNING_KEYSTORE_BASE64" ]; then
+            echo "::warning::没配 SIGNING_KEYSTORE_BASE64，这一版还是临时签名（新版装不上旧版，要卸载重装）"
+            exit 0
+          fi
+          KS="$RUNNER_TEMP/trainfit.keystore"
+          printf '%s' "$SIGNING_KEYSTORE_BASE64" | tr -d ' \r\n' | base64 -d > "$KS"
+          # 先用密码打开看看，密码或别名填错了在这里就报清楚
+          if ! keytool -list -keystore "$KS" -storepass "$SIGNING_KEYSTORE_PASSWORD" -alias "${SIGNING_KEY_ALIAS:-trainfit}" > /dev/null; then
+            echo "::error::签名钥匙打不开：检查 SIGNING_KEYSTORE_PASSWORD 和 SIGNING_KEY_ALIAS（默认 trainfit）是不是和生成时一样"
+            exit 1
+          fi
+          echo "SIGNING_KEYSTORE_FILE=$KS" >> "$GITHUB_ENV"
+          echo "用固定签名"
+
       - name: Build Android Debug APK
         env:
+          SIGNING_KEYSTORE_PASSWORD: ${{ secrets.SIGNING_KEYSTORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
           # 一键记录用的大模型接口：在仓库 Settings → Secrets and variables → Actions 里配置
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
           LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
@@ -60,6 +85,13 @@ jobs:
           ASR_MODEL: ${{ vars.ASR_MODEL }}
         run: |
           ./gradlew assembleDebug --stacktrace --no-daemon
+
+      - name: Show signing certificate
+        run: |
+          APK=$(find app/build/outputs/apk/ -name "*.apk" | head -n 1)
+          SIGNER=$(ls -d "$ANDROID_HOME"/build-tools/* 2>/dev/null | sort -V | tail -1)/apksigner
+          # 每个版本这里的 SHA-256 一样，才能覆盖安装
+          [ -x "$SIGNER" ] && "$SIGNER" verify --print-certs "$APK" | grep -E "SHA-256|DN" || true
 
       - name: Read app version
         run: |

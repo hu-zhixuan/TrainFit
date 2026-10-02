@@ -64,8 +64,8 @@
                   <div class="hero-label" id="hero-label">今天还能吃</div>
                   <div class="hero-num"><span id="hero-num">0</span><small>kcal</small></div>
                 </div>
-                <div class="hero-side" id="hero-deficit">
-                  <span id="hero-deficit-l">热量赤字</span>
+                <div class="hero-side" id="hero-deficit" role="button" tabindex="0" aria-label="热量赤字是什么，点一下看解释">
+                  <span><span id="hero-deficit-l">热量赤字</span><i class="hint-q" aria-hidden="true">?</i></span>
                   <b id="hero-deficit-v">0</b>
                   <small id="hero-deficit-n"></small>
                 </div>
@@ -208,6 +208,11 @@
 
         <div class="card form-card">
           <div class="card-title">提醒、震动和音效</div>
+          <div class="switch-row">
+            <div class="switch-text"><b>早上称体重</b><small>今天还没记体重才提醒，空腹称最准</small></div>
+            <input type="time" class="time-input" id="rem-weigh-time" value="07:30">
+            <input type="checkbox" class="switch" id="rem-weigh" aria-label="早上称体重提醒">
+          </div>
           <div class="switch-row">
             <div class="switch-text"><b>午餐提醒</b><small>午饭还没记才提醒</small></div>
             <input type="time" class="time-input" id="rem-lunch-time" value="12:40">

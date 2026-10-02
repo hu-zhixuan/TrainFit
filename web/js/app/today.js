@@ -76,13 +76,42 @@ Object.assign(FitnessApp.prototype, {
     pop.classList.remove('hidden');
   },
 
+  /** 点「热量赤字」：用你今天的数说清楚它是什么（有人第一眼不知道赤字是啥） */
+  showDeficitPop() {
+    const pop = document.getElementById('gauge-pop');
+    const h = this._heroSum;
+    if (!h) return;
+    const { s, target } = h;
+    const burn = Math.round(s.totalBurn), daily = Math.round(s.totalBurn - (s.workoutBurn || 0));
+    const perMonth = round1(Math.abs(target) * 30 / 7700);
+    pop.dataset.level = 'none';
+    pop.innerHTML = `<div class="gauge-pop-head"><b>${s.deficit < 0 ? '热量盈余' : '热量赤字'}</b>是什么</div>` +
+      `<p class="deficit-eq">消耗 ${fmt(burn)} − 吃了 ${fmt(Math.round(s.intake))} = <b>${s.deficit < 0 ? '盈余 ' + fmt(-Math.round(s.deficit)) : fmt(Math.round(s.deficit))}</b></p>` +
+      `<p class="gauge-note">消耗 = 日常 ${fmt(daily)}（不动也会烧掉的）${s.workoutBurn ? ` + 训练 ${fmt(Math.round(s.workoutBurn))}` : ''}。` +
+      `吃得比消耗少，差的那部分就是热量赤字，身体会拿脂肪来补——大约 7700 kcal 是 1kg 脂肪。` +
+      (target > 0 ? `你的目标每天赤字 ${fmt(target)}，一个月大约瘦 ${perMonth}kg。` : target < 0 ? `你在增肌，目标每天多吃 ${fmt(-target)}（盈余），一个月大约长 ${perMonth}kg。` : '你的目标是保持，吃的和消耗的差不多就行。') +
+      (h.isToday && s.remaining > 0 ? `一天还没过完，吃得越多赤字越小：今天再吃 ${fmt(Math.round(s.remaining))} 正好到目标。` : '') + '</p>';
+    const r = document.getElementById('hero-deficit').getBoundingClientRect();
+    pop.style.top = Math.round(r.bottom + 8) + 'px';
+    pop.style.right = Math.max(16, Math.round(window.innerWidth - r.right - 8)) + 'px';
+    pop.classList.remove('hidden');
+  },
+
   bindGaugePop() {
     const pop = document.getElementById('gauge-pop');
     const close = () => pop.classList.add('hidden');
+    const deficit = document.getElementById('hero-deficit');
+    const openDeficit = (e) => {
+      e.stopPropagation();
+      window.Haptics && window.Haptics.fire('tick');
+      if (!pop.classList.contains('hidden') && pop.querySelector('.deficit-eq')) close(); else this.showDeficitPop();
+    };
+    deficit.addEventListener('click', openDeficit);
+    deficit.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDeficit(e); } });
     document.getElementById('thermo').addEventListener('click', (e) => {
       e.stopPropagation();
       window.Haptics && window.Haptics.fire('tick');
-      if (pop.classList.contains('hidden')) this.showGaugePop(); else close();
+      if (pop.classList.contains('hidden') || pop.querySelector('.deficit-eq')) this.showGaugePop(); else close();
     });
     // 点别的地方、滚动、切页都关掉
     document.addEventListener('click', (e) => { if (!pop.contains(e.target)) close(); });
@@ -112,6 +141,7 @@ Object.assign(FitnessApp.prototype, {
     $('hero-deficit-v').textContent = fmt(Math.abs(s.deficit));
     $('hero-deficit-n').textContent = target > 0 ? `目标 ${fmt(target)}` : target < 0 ? `目标盈余 ${fmt(-target)}` : '目标 保持';
     $('hero-deficit').className = 'hero-side ' + (s.deficit >= target ? 'good' : surplus ? 'bad' : '');
+    this._heroSum = { s, target, isToday };
     this.renderThermo(s, isToday, target);
     const simple = this.isSimple();
     if (simple) {
@@ -140,7 +170,8 @@ Object.assign(FitnessApp.prototype, {
     $('remind-banner').classList.toggle('hidden', asked || !this.hasNotifApi() || (this.workouts.length + this.diet.length) < 1);
 
     // 记录：整理中的在最上面（提问的在小人气泡里等，不占卡片；没整理出来才显示）；然后是计划；饮食按 早→午→晚→加餐，训练按先后顺序
-    const pend = this.pending.filter(p => p.date === date && !(p.ask && p.status === 'working')).sort((a, b) => b.ts - a.ts);
+    // 提问：整理中不出卡片（小人在想）；没答上来也不留卡片（小人的气泡里能重试），又记又问的才留
+    const pend = this.pending.filter(p => p.date === date && !(p.ask && (p.status === 'working' || (TF.pureQuestion && TF.pureQuestion(p.text))))).sort((a, b) => b.ts - a.ts);
     const meals = this.diet.filter(d => d.date === date)
       .sort((a, b) => (MEAL_TYPES.indexOf(a.mealType) - MEAL_TYPES.indexOf(b.mealType)) || (recordTs(a) - recordTs(b)));
     const lifts = this.workouts.filter(w => w.date === date).sort((a, b) => recordTs(a) - recordTs(b));

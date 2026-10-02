@@ -148,6 +148,8 @@ object Reminders {
             found
         }
         when (id) {
+            "weigh" -> if (!(isToday && state.optBoolean("weighed", false)))
+                show(ctx, CH_REMIND, 104, "早，称个体重", "空腹称一下，打开练食AI点一下就记上，趋势图就有了")
             "lunch" -> if (!hasMeal("午餐")) show(ctx, CH_REMIND, 101, "午饭吃了吗？", "打开练食AI，按住说一句就记好了")
             "dinner" -> if (!hasMeal("晚餐")) show(ctx, CH_REMIND, 102, "晚饭记了吗？", "按住说一句，比如「晚上一碗牛肉面加个卤蛋」")
             "night" -> {
