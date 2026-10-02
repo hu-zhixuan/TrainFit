@@ -511,12 +511,14 @@ class FitnessApp {
       const s = this.getDaySummary(today);
       const meals = [...new Set(this.diet.filter(d => d.date === today).map(d => d.mealType))];
       const count = this.diet.filter(d => d.date === today).length + this.workouts.filter(w => w.date === today).length;
-      window.TrainFitNative.updateDayState(JSON.stringify({
+      // 小人替你写好的提醒（标题是它的名字，像它发来的消息）；关了小人就用原来的
+      const lines = this.buddyPushLines ? this.buddyPushLines() : null;
+      window.TrainFitNative.updateDayState(JSON.stringify(Object.assign({
         date: today, meals, count, weighed: !!this.weightOn(today),
         remaining: Math.round(s.remaining),
         showProtein: true,
         proteinLeft: Math.max(0, Math.round(this.gaugeProteinTarget() - s.protein))
-      }));
+      }, lines || {})));
     } catch (e) {}
   }
 

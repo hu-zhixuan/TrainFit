@@ -7,6 +7,7 @@
   --surface: #141417;
   --surface-2: #1c1c21;
   --surface-3: #2a2a31;     /* 分段控件选中、按下 */
+  --love: #f2557a;          /* 小人的爱心、亲密度 */
   --line: #25252c;
   --text: #f4f4f5;
   --text-2: #a1a1aa;
@@ -49,6 +50,7 @@
   --surface: #ffffff;
   --surface-2: #ececea;
   --surface-3: #ffffff;
+  --love: #e23d68;
   --line: #e2e2e0;
   --text: #111113;
   --text-2: #52525b;
@@ -420,6 +422,9 @@ body.no-composer .views { padding-bottom: calc(32px + var(--sab)); }
   background: transparent;
   line-height: 0;
   -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;   /* 长按是摸摸头，别弹系统菜单 */
+  user-select: none;
+  touch-action: manipulation;
 }
 .buddy.placed { transition: transform 0.3s cubic-bezier(0.3, 1.3, 0.5, 1); }
 .bd-move { display: block; }
@@ -437,11 +442,14 @@ body.has-buddy .views { padding-bottom: calc(var(--cmp-h, 110px) + 52px + var(--
   .buddy .bd-fx-note { animation: bdBob 1.2s steps(1, end) infinite; }
   .buddy .bd-fx-sparkle { animation: bdTwinkle 1.8s steps(1, end) infinite; }
   .buddy .bd-fx-sweat { animation: bdDrip 1.6s steps(1, end) infinite; }
+  .buddy .bd-fx-heart { animation: bdFloat 1.8s steps(3, end) infinite; }
   /* 走路、招手：两帧换得快 */
   .buddy .pose-walk .bd-fa, .buddy .pose-wave .bd-fa { animation: bdAltA 0.34s steps(1, end) infinite; }
   .buddy .pose-walk .bd-fb, .buddy .pose-wave .bd-fb { animation: bdAltB 0.34s steps(1, end) infinite; }
   /* 站起来 / 趴下：蹦一下 */
   .buddy .pose-stand, .buddy .pose-stretch, .buddy .pose-wave { animation: bdUp 0.24s steps(2, end); }
+  /* 秀肌肉：站起来，再顿两下 */
+  .buddy .pose-flex { animation: bdUp 0.24s steps(2, end), bdFlex 0.36s steps(2, end) 0.24s 2; }
 }
 @keyframes bdSwayA { 0% { opacity: 1; } 76% { opacity: 0; } 83% { opacity: 1; } 89% { opacity: 0; } 95% { opacity: 1; } }
 @keyframes bdSwayB { 0% { opacity: 0; } 76% { opacity: 1; } 83% { opacity: 0; } 89% { opacity: 1; } 95% { opacity: 0; } }
@@ -455,6 +463,7 @@ body.has-buddy .views { padding-bottom: calc(var(--cmp-h, 110px) + 52px + var(--
 @keyframes bdTwinkle { 0% { opacity: 1; } 55% { opacity: 0.35; } 70% { opacity: 1; } }
 @keyframes bdDrip { 0% { transform: none; } 60% { transform: translateY(1px); } }
 @keyframes bdUp { from { transform: translateY(6px); } to { transform: none; } }
+@keyframes bdFlex { 0%, 100% { transform: none; } 50% { transform: translateY(-2px); } }
 
 /* ---------- 新手教程：小人头上的对话框 ---------- */
 .tour-pop {
@@ -642,6 +651,7 @@ body.has-buddy .views { padding-bottom: calc(var(--cmp-h, 110px) + 52px + var(--
   font: 700 12px/18px system-ui, sans-serif; text-align: center;
   box-shadow: var(--shadow);
 }
+.buddy.bang[data-bang="♥"]::after { background: var(--love); color: #fff; }
 @media (prefers-reduced-motion: no-preference) {
   .buddy.bang::after { animation: bangPop 1.2s ease-out both; }
   .buddy.bang .bd-move { animation: bdHop 0.45s ease-out; }
@@ -669,25 +679,53 @@ body.has-buddy .views { padding-bottom: calc(var(--cmp-h, 110px) + 52px + var(--
 @keyframes buddyPopIn { from { opacity: 0; transform: scale(0.94) translateY(4px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .buddy-pop { animation: none; } }
 
-/* 设置里的小人：预览 + 发色 + 衣服 */
+/* 设置里的小人：站着的预览（点一下秀肌肉）+ 名字 + 角色 + 亲密度；下面一行行：发型、发色、肤色、衣服、身材 */
 .buddy-set { display: flex; align-items: center; gap: 14px; margin: 14px 0 12px; }
 .buddy-preview {
   flex: none;
-  width: 88px;
-  height: 70px;
+  width: 92px;
+  height: 100px;
+  padding: 0;
+  border: none;
   display: flex;
   align-items: flex-end;
   justify-content: center;
   border-radius: var(--r-md);
   background: var(--surface-2);
   overflow: hidden;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
-/* 预览里也趴在一条边上 */
-.buddy-preview svg { flex: none; width: 90px; height: 60px; border-bottom: 2px solid var(--line); box-sizing: content-box; }
+/* 预览里站在一条边上 */
+.buddy-preview svg { flex: none; width: 90px; height: auto; border-bottom: 2px solid var(--line); box-sizing: content-box; }
 .buddy-opts { display: flex; flex-direction: column; gap: 10px; min-width: 0; flex: 1; }
-#buddy-char { align-self: flex-start; }
+.buddy-top { display: flex; align-items: center; gap: 8px; }
+.buddy-top .buddy-name { flex: 1; min-width: 0; height: 36px; padding: 0 10px; font-size: 0.9rem; }
+.buddy-top #buddy-char { flex: none; width: 108px; }
+.bond-set, .bond-row { display: flex; flex-direction: column; gap: 4px; }
+.bond-row { margin: 8px 0 2px; padding: 8px 10px; border-radius: var(--r-sm); background: var(--surface-2); }
+.bond-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.bond-name { font-size: 0.84rem; font-weight: 700; color: var(--text); }
+.bond-name i { margin-right: 4px; font-style: normal; color: var(--love); }
+.bond-lv { font-size: 0.72rem; font-weight: 700; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.bond-bar { height: 5px; border-radius: 3px; background: var(--surface-3); overflow: hidden; }
+.bond-bar i { display: block; height: 100%; border-radius: inherit; background: var(--love); }
+.bond-next { font-size: 0.72rem; line-height: 1.45; color: var(--text-3); }
+.buddy-rows { display: flex; flex-direction: column; gap: 10px; margin: 0 0 14px; }
 .buddy-opt { display: flex; align-items: center; gap: 10px; }
-.buddy-opt > span { flex: none; font-size: 0.82rem; color: var(--text-2); }
+.buddy-opt > span { flex: none; width: 2.2em; font-size: 0.82rem; color: var(--text-2); }
+.buddy-opt > .seg { flex: 1; min-width: 0; }
+.buddy-opt .seg-btn { white-space: nowrap; }
+.buddy-talk-row { display: flex; flex-direction: column; gap: 8px; margin: 14px 0 4px; }
+#buddy-outfit { gap: 6px; }
+.swatch.locked { position: relative; opacity: 0.5; }
+.swatch.locked i { position: absolute; inset: 0; display: grid; place-items: center; font-style: normal; font-size: 11px; line-height: 1; }
+/* 摸摸头、戳它：一句短话 */
+.buddy-pop[data-mode="quip"] { width: auto; max-width: min(240px, calc(100vw - 32px)); }
+/* 起名字 */
+.name-row { display: flex; gap: 8px; margin-top: 10px; }
+.name-input { flex: 1; min-width: 0; height: 36px; padding: 0 12px; border-radius: 18px; border: 1px solid var(--line); background: var(--surface-2); color: var(--text); font: inherit; font-size: 0.9rem; }
+.name-row .portion-opt { flex: none; }
 .swatches { display: flex; flex-wrap: wrap; gap: 8px; }
 .swatch {
   width: 26px;

@@ -1,23 +1,31 @@
 /**
  * 小人主动找你说话（v4.8）：陪伴类产品留得住人，是因为它记得你、会问你、每天有个小仪式、你做了什么它有反应。
- * 我们的小人也这样，但不卖萌、不烦人：主动说的话共用一个节奏（voiceBudget，tf_voice），一天最多 5 句，设置里能关（profile.buddy.chatty）。
+ * 主动说的话共用一个节奏（voiceBudget，tf_voice）。v5.6 起设置里分三档（profile.buddy.talk）：
+ * 安静（只说要紧的）/ 正常（一天 8 句以内，默认）/ 话多（一天 14 句以内，逛的时候更常凑过来）。
+ *  - 你回来了（离开 3 小时以上）：接一句今天的事（计划还剩几条、蛋白还差多少），熟了以后也会说「回来啦」；
+ *  - 接着昨天说：昨晚没睡好，今天问睡好点没；昨天歇着，今天问有劲没；
  *  - 每天第一次打开：打个招呼，接一句昨天的事，再问一句（早上问睡得怎么样，下午问练不练，晚上没记晚饭问吃了没）；
  *  - 头两周慢慢认识你：一天问一个（练多久了、有不吃的吗、有伤吗），答案记进小本本；
  *  - 练完问感受：还能加 / 刚好 / 很吃力，记在那几组上（rpe），下次加重量按这个来。
  * 都是手机自己算的，不调大模型；点的回答都是现成的选项，要说话的选项会让「按住说话」亮一下。
  */
 Object.assign(FitnessApp.prototype, {
+  /** 小人话多少：quiet 安静 / normal 正常 / more 话多（以前的「主动说话」开关关了就是安静） */
+  talkLevel() {
+    const b = this.profile.buddy || {};
+    return ['quiet', 'normal', 'more'].includes(b.talk) ? b.talk : b.chatty === false ? 'quiet' : 'normal';
+  },
+
   chatty() {
-    const look = this.buddyLook();
-    return look.show && (this.profile.buddy || {}).chatty !== false;
+    return this.buddyLook().show && this.talkLevel() !== 'quiet';
   },
 
   /**
-   * 小人主动说话的一个节奏（v5.3）：以前招呼、逛的时候、提醒、小提示各管各的次数，加起来一天能冒十几句。现在一起算：
-   *  must   —— 卡住了 / 第一条 / 刚记的份量要问：随时说，不占次数
-   *  guide  —— 打招呼、饭点空着、新手提示、练完问感受：一天一共 5 句以内
-   *  remind —— 破纪录、晚上蛋白差很多、吃超了：一样算在这 5 句里
-   *  chat   —— 逛的时候凑过来说的闲话：只在今天还没说满 3 句、离上一句 5 分钟以上时说
+   * 小人主动说话的一个节奏（v5.3，v5.6 分档）：招呼、逛的时候、提醒、小提示一起算：
+   *  must   —— 卡住了 / 第一条 / 刚记的份量要问 / 升级了 / 纪念日：随时说，不占次数
+   *  guide  —— 打招呼、饭点空着、你回来了、新手提示、练完问感受：正常一天 8 句以内，话多 14 句
+   *  remind —— 破纪录、晚上蛋白差很多、吃超了：一样算在里面
+   *  chat   —— 逛的时候凑过来说的闲话：正常今天还没说满 6 句、离上一句 4 分钟以上时说；话多 10 句、2 分钟
    * use=true 记一次；返回现在能不能说。
    */
   voiceBudget(level, use) {
@@ -25,7 +33,8 @@ Object.assign(FitnessApp.prototype, {
     let c;
     try { c = JSON.parse(localStorage.getItem('tf_voice') || '{}'); } catch (e) { c = {}; }
     if (c.date !== today) c = { date: today, n: 0, at: 0 };
-    const ok = level === 'must' || (level === 'chat' ? c.n < 3 && Date.now() - (c.at || 0) > 5 * 60000 : c.n < 5);
+    const lim = this.talkLevel() === 'more' ? { day: 14, chat: 10, gap: 2 } : { day: 8, chat: 6, gap: 4 };
+    const ok = level === 'must' || (level === 'chat' ? c.n < lim.chat && Date.now() - (c.at || 0) > lim.gap * 60000 : c.n < lim.day);
     if (use && ok) {
       if (level !== 'must') c.n += 1;
       c.at = Date.now();
@@ -55,6 +64,7 @@ Object.assign(FitnessApp.prototype, {
       const o = options[+b.dataset.i];
       window.Haptics && window.Haptics.fire('tick');
       pop.querySelectorAll('.portion-opt').forEach(x => x.classList.toggle('on', x === b));
+      if (this.bondGain) this.bondGain('answer'); // 回答了它的问题：熟一点
       if (o.pick) o.pick();
       clearTimeout(this._askT);
       if (o.ask && window.QuickLog) { window.QuickLog.submit(o.ask, { ask: true }); return; }
@@ -95,6 +105,7 @@ Object.assign(FitnessApp.prototype, {
   yesterdayLine() {
     const y = shiftDateString(getTodayDateString(), -1);
     const ws = this.workouts.filter(w => w.date === y);
+    if (this.dayNote(y).rest && !ws.length) return '昨天歇了一天，今天有劲了吧。';
     for (const w of ws) {
       const fb = this.liftFeedback(w);
       if (fb && fb.includes('新纪录')) return `昨天${w.exerciseName}破纪录了，今天让${(w.muscleGroup || '这块').replace(/部$/, '')}歇歇。`;
@@ -225,7 +236,74 @@ Object.assign(FitnessApp.prototype, {
 
   /** 打开 App / 切回来：每天第一次打招呼；还没记过的带你记第一条；饭点空着问一句 */
   greetOrGuide() {
-    return this.greetToday() || this.firstGuide() || this.mealGapNudge();
+    const away = this.awayMs ? this.awayMs() : 0;
+    return (this.bondUpNow && this.bondUpNow()) || (this.anniversary && this.anniversary()) || this.greetToday() || this.firstGuide() || (this.askName && this.askName()) ||
+      this.mealGapNudge() || this.welcomeBack(away);
+  },
+
+  /** 记几件当天的小事（睡得怎么样、歇不歇），第二天接着问；只留最近 7 天 */
+  dayNote(date, patch) {
+    let m;
+    try { m = JSON.parse(localStorage.getItem('tf_daylog') || '{}'); } catch (e) { m = {}; }
+    if (!m || typeof m !== 'object') m = {};
+    if (!patch) return m[date] || {};
+    m[date] = Object.assign({}, m[date] || {}, patch);
+    const keep = Object.keys(m).sort().slice(-7);
+    const out = {};
+    keep.forEach(k => { out[k] = m[k]; });
+    try { localStorage.setItem('tf_daylog', JSON.stringify(out)); } catch (e) {}
+    return out[date];
+  },
+
+  /** 离开了多久（切到后台 / 关掉 App 的那一刻记在 tf_seen） */
+  awayMs() {
+    let at = this._hiddenAt || 0;
+    // 刚打开 App：上次离开的时间存在 tf_seen 里（只认一次，后面每次都是切回来前刚记的 _hiddenAt）
+    if (!at && !this._seenRead) { try { at = +localStorage.getItem('tf_seen') || 0; } catch (e) {} }
+    this._seenRead = true;
+    this._hiddenAt = 0;
+    return at ? Date.now() - at : 0;
+  },
+
+  markSeen() {
+    this._hiddenAt = Date.now();
+    try { localStorage.setItem('tf_seen', String(this._hiddenAt)); } catch (e) {}
+  },
+
+  /**
+   * 离开 3 小时以上又回来：接一句今天的事（计划还剩几条、晚上蛋白还差多少、今天练了啥）；
+   * 没什么事的，熟了（Lv3 以上）或者调成「话多」才说一句「回来啦」。一天最多两次。
+   */
+  welcomeBack(away) {
+    if (!(away >= 3 * 3600 * 1000) || !this.canChat() || Date.now() - (this._popAt || 0) < 60000) return false;
+    const today = getTodayDateString();
+    let c;
+    try { c = JSON.parse(localStorage.getItem('tf_back') || '{}'); } catch (e) { c = {}; }
+    if (c.date !== today) c = { date: today, n: 0 };
+    if (c.n >= 2) return false;
+    const hour = new Date().getHours();
+    if (hour < 6) return false;
+    const name = this.userName();
+    const hi = `回来啦${name ? '，' + name : ''}。`;
+    const simple = this.isSimple();
+    const todo = this.todoPlans ? this.todoPlans(today) : [];
+    const s = this.getDaySummary(today);
+    const left = Math.round(this.gaugeProteinTarget() - s.protein);
+    const lifts = this.workouts.filter(w => w.date === today && !w.durationMin);
+    let say = '', next = [];
+    if (todo.length) { say = `${hi}今天的计划还剩 ${todo.length} 条，做完点 ✓ 就记上。`; next = ['给我排明天的']; }
+    else if (!simple && hour >= 17 && s.hasDiet && left >= 30) { say = `${hi}蛋白还差 ${left}g，晚饭多吃点肉蛋。`; next = ['晚上吃点啥能补蛋白']; }
+    else if (!simple && lifts.length) { say = `${hi}今天练了${(lifts[0].muscleGroup || '').replace(/部$/, '') || lifts[0].exerciseName}，记得多喝水、早点睡。`; next = ['明天练什么']; }
+    else if (this.bond().lv >= 3 || this.talkLevel() === 'more') {
+      const pool = hour < 11 ? ['早上吃了啥？说一句就行。', '今天打算练吗？'] : hour < 17 ? ['中午吃了啥？说一句就行。', '下午有空练一会儿吗？'] : ['晚上吃了啥？说一句就行。', '今天过得怎么样？'];
+      say = hi + pool[Math.floor(Math.random() * pool.length)];
+    }
+    if (!say) return false;
+    c.n += 1;
+    try { localStorage.setItem('tf_back', JSON.stringify(c)); } catch (e) {}
+    this.chatBudget(true);
+    this.sayTip(say, simple ? next.filter(q => !/练|蛋白/.test(q)) : next);
+    return true;
   },
 
   /** 每天第一次打开：打个招呼 + 接一句昨天的事 + 问一句 */
@@ -251,21 +329,23 @@ Object.assign(FitnessApp.prototype, {
         { label: '从今天开始', reply: '好，吃了啥说一句就行。' }]);
       return done();
     }
-    const setSleep = (v) => () => { this.profile.dayState = { date: today, sleep: v }; this.saveData(); };
+    const setSleep = (v) => () => { this.profile.dayState = { date: today, sleep: v }; this.dayNote(today, { sleep: v }); this.saveData(); };
+    // 接着昨天说：昨晚没睡好的，今天问「睡好点没」
+    const sleepQ = this.dayNote(shiftDateString(today, -1)).sleep === '没睡好' ? '昨晚睡好点了吗？' : '昨晚睡得怎么样？';
     const sleepOptions = [
       { label: '睡得不错', pick: setSleep('睡得好'), reply: '那今天可以练重一点。' },
       { label: '一般', pick: setSleep('睡得一般'), reply: '行，照常来。' },
       { label: '没睡好', pick: setSleep('没睡好'), reply: '那今天练轻点，或者歇一天也行。' }];
     // 早上打卡：先称体重（趋势图要靠它），记上了接着问睡得怎么样
     if (hour < 11 && !this.weightOn(today)) {
-      this.askWeight(`${hi}${yest ? yest + '\n' : ''}`, st ? null : (reply) => this.askUser(`${reply}\n昨晚睡得怎么样？`, sleepOptions));
+      this.askWeight(`${hi}${yest ? yest + '\n' : ''}`, st ? null : (reply) => this.askUser(`${reply}\n${sleepQ}`, sleepOptions));
       return done();
     }
     // 头两周：认识你的问题
     const know = this.knowQuestion();
     if (know) { this.askUser(`${hi}${yest ? yest + '\n' : ''}${know.text}`, know.options); return done(); }
     if (hour < 11 && !st) {
-      this.askUser(`${hi}${yest}\n昨晚睡得怎么样？`, sleepOptions);
+      this.askUser(`${hi}${yest}\n${sleepQ}`, sleepOptions);
       return done();
     }
     const trainedToday = this.workouts.some(w => w.date === today);
@@ -274,7 +354,7 @@ Object.assign(FitnessApp.prototype, {
       this.askUser(`${hi}${yest}\n已经 ${Math.round((new Date(today) - new Date(lastTrain)) / 86400000)} 天没练了，今天练不练？`, [
         { label: '练，给我排一下', ask: '给我排今天练啥' },
         { label: '练完了，我说一下', talk: true },
-        { label: '今天歇着', reply: '行，歇好了再练，休息也是练的一部分。' }]);
+        { label: '今天歇着', pick: () => this.dayNote(today, { rest: true }), reply: '行，歇好了再练，休息也是练的一部分。' }]);
       return done();
     }
     if (hour >= 19 && !this.diet.some(d => d.date === today && d.mealType === '晚餐')) {
@@ -285,7 +365,11 @@ Object.assign(FitnessApp.prototype, {
         { label: '今天不吃了', reply: '偶尔一顿没事，别饿过头就行。' }]);
       return done();
     }
+    const todo = this.todoPlans ? this.todoPlans(today) : [];
+    if (todo.length) { this.sayTip(`${hi}${yest}${yest ? '\n' : ''}今天的计划有 ${todo.length} 条，做完点 ✓ 就记上。`); return done(); }
     if (yest) { this.sayTip(`${hi}${yest}`); return done(); }
+    // 熟了以后，没什么事也打个招呼（刚认识时没事就不打扰）
+    if (this.bond && this.bond().lv >= 3) { this.sayTip(hi + (hour < 11 ? '今天也一起加油。' : hour < 18 ? '今天过得怎么样？' : '今天辛苦了。')); return done(); }
     return false;
   },
 
@@ -368,7 +452,7 @@ Object.assign(FitnessApp.prototype, {
     return true;
   },
 
-  /** 饭点过了这顿还空着：问一句吃了没（每顿一天一次，算在「逛的时候」那 4 句里） */
+  /** 饭点过了这顿还空着：问一句吃了没（每顿一天一次，算在每天说话的次数里） */
   mealGapNudge() {
     if (!this.canChat() || Date.now() - (this._popAt || 0) < 60000) return false;
     const today = getTodayDateString();
@@ -419,7 +503,7 @@ Object.assign(FitnessApp.prototype, {
 
   // ================= 逛的时候凑过来说一句（v5.0） =================
   // 你在今天页发呆、翻以前的日子、上下翻记录、在趋势页看半天，小人有时会凑过来说一句。
-  // 每种情况只掷一次骰子（6 成），一天最多 4 句、两句之间隔 4 分钟，刚说过话的 1 分钟内不说；都是手机自己算的。
+  // 每种情况只掷一次骰子（正常 6 成、话多 8 成半），次数和间隔按 voiceBudget 的 chat 那一档，刚说过话的 1 分钟内不说；都是手机自己算的。
 
   /** 开始留意你在干嘛（启动时调一次） */
   watchBrowse() {
@@ -452,11 +536,11 @@ Object.assign(FitnessApp.prototype, {
     if (where === 'trend' && stay > 8000 && idle > 3000) { kind = 'trend'; ep = this._whereAt; }
     else if (where.startsWith('past:') && stay > 4000 && idle > 2500) { kind = 'past'; ep = this._whereAt; }
     else if (where === 'today' && this._scrolled > (window.innerHeight || 700) && idle > 2000) { kind = 'scroll'; ep = this._act; }
-    else if (where === 'today' && idle > 30000) { kind = 'idle'; ep = this._act; }
+    else if (where === 'today' && idle > (this.talkLevel() === 'more' ? 20000 : 30000)) { kind = 'idle'; ep = this._act; }
     if (!kind || this._rolled[kind] === ep) return;
     this._rolled[kind] = ep; // 这一回只掷一次，没掷中就等你下次动了再说
     if (kind === 'scroll') this._scrolled = 0;
-    if (!this.canNudge(kind) || Math.random() >= (this.nudgeOdds == null ? 0.6 : this.nudgeOdds)) return;
+    if (!this.canNudge(kind) || Math.random() >= (this.nudgeOdds == null ? (this.talkLevel() === 'more' ? 0.85 : 0.6) : this.nudgeOdds)) return;
     const n = kind === 'trend' ? this.trendNudge() : kind === 'past' ? this.pastNudge(this.selectedDate) : kind === 'scroll' ? this.scrollNudge() : this.idleNudge();
     if (n) this.nudgeBudget(true, n.key);
   },

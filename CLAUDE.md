@@ -12,7 +12,7 @@
 1. **最省事**：口喷、说着改，不填表、不加页面、不逼你记全；新人和懒人第一天就能用（小人手把手带第一条、饭点问一句、断了几天不数落）。
 2. **最准**：热量、蛋白质按成分表校准，连锁店按官方，份量含糊问一句；训练按你的成绩告诉你下次练多少。
 3. **最聪明**：问啥都行。能本机算的马上答 / 马上记（`quickAnswer`、`fastLog`），要大模型的才等；它认识你（小本本 + 画像 + 最近两周），每次是一个新的短 prompt，不带聊天记录。
-4. **跟你有连接，但不吵**：最要紧的是小人跟用户的连接感——认得你、记得你的事、接着昨天说、主动问一句、能一问一答，在对的时候说对的话（2026-10 用户：「不需要酷、不卖萌，主要就是这个小人跟用户的连接感要强」，语气不用刻意装酷）；所有主动说的话共用一个节奏（`voiceBudget`，一天最多 5 句），要紧的先说。
+4. **跟你有连接，但不吵**：最要紧的是小人跟用户的连接感——认得你、记得你的事、接着昨天说、主动问一句、能一问一答，在对的时候说对的话（2026-10 用户：「不需要酷、不卖萌，主要就是这个小人跟用户的连接感要强」，语气不用刻意装酷）；所有主动说的话共用一个节奏（`voiceBudget`，v5.6 起分档：正常一天 8 句、话多 14 句、安静只说要紧的），要紧的先说。2026-10 用户又要「更主动、像乙女游戏 / 养电子宠物，能自定义成帅哥美女、腹肌薄肌」——v5.6 做了亲密度、换装、跟着练出肌肉（见原则 12），往这个方向加东西时还是先想：是不是让人觉得它认识你、在乎你。
 5. **不浪费、不出错**：省 token、省时间；不卡住（3 分钟兜底）、不丢记录、不重复发、失败不乱记。
 
 用户的做事态度：「我不控制我无法控制的，我只做好软件，去更新，去推广」。
@@ -36,6 +36,12 @@
 9. **份量含糊就问一句，但别拖慢大模型**（v4.2，用户：「AI 反应时间已经是我能接受的极限」）：提示词让大模型在说得含糊、大小热量差得多的那一项上加 `opts`（2～3 个 [文字, 克数]，一句最多 2 样；说了具体量的、记住的、低热量的不加），只多几十个 token。`sizeOpts` 整理，`save` 时不存进记录、放进 `batch.asks`，记好后 `askPortion` 让小人冒「?」问，点了 `applyPortion` 按克数比例改并 `rememberFood`，下次就不问。不要为了问份量再调一次大模型、也不要在记好之前拦着用户先选。训练建议全在本机算（`liftFeedback` 进提示条、`trainingTip` 进点小人的气泡），不走大模型。
 10. **门槛要低、跟用户有连接，但别搞复杂**（v4.3，用户的朋友是健身小白：以为必须一口气说完、不知道吃了多少、叫不出器械名字）：文案别写「一口气说完」；提示词让大模型认描述（「坐着往前推的那个机器」→ 坐姿推胸，reply 告诉他名字）；份量选项写「小碗 / 拳头大 / 一盘」不写克数。小本本 `profile.memo`（最多 12 条短句，大模型输出 `memo` / `forget`，上下文里带「小本本」，`userName()` 从「叫阿程」取名字，设置里「小人记住的」能删，`mergeBackupData` 合并两边）——只放关于这个人、以后一直有用的事，别把聊天记录、每天的事塞进去，上下文要短。新手第一周记完 `newbieTip` 最多说一句（`tf_tips` 记说过哪句），点小人的 `observation()` 和 `trainingTip()` 都是本机算的。v4.4：新手练了没记过的动作、整句没说重量（`saidWeight` 正则），记完 `askPortion` 也问「用了多重？」（`kind: 'lift'`，选项 `liftOpts` 本机算，带「记不清」），不调大模型。小人说话要有人味、简单，像朋友随口一句；重点是让人觉得它认识你、在乎你（叫名字、接着他的事说），不用刻意装酷。
 11. 用户的叫法：「口喷」（按住说一大段）、「热量赤字」（不要写「缺口」）。
+12. **小人能养成**（v5.6，用户：「像乙女游戏、养个小电子宠物；更多自定义，帅哥美女、腹肌薄肌」）：都在本机，不调大模型。
+    - 亲密度（`bond.js`）= 记过的天数 × 10 + 互动分 `profile.buddy.xp`（问它 / 回答它的问题 +2、加计划 +3、摸头 +1，一天最多 20 点、摸头 3 次，`tf_bond_day`）。五级「刚认识 → 熟起来了 → 健身搭子 → 老搭子 → 最懂你」（60 / 180 / 450 / 1000）。记录天数现算，老用户一升级就是老朋友；`profile.buddy.lv` 记说过的等级，`checkBond` 发现升级 → `bondCelebrate`（must，不占次数）说一句 + 新解锁的衣服一键换上；打开 App 时 `bondUpNow` 排在打招呼前面。点小人的气泡里有一行亲密度（`bondRow`）。
+    - 衣服按级解锁（`OUTFITS` 的 `lv`：2 敞开的外套、3 光膀子 / 女生运动内衣、4 白衬衫、5 冠军外套），没解锁的 `buddyLook` 先穿回默认。身材 `build`：auto（「跟着我练」：最近 4 周练 4 天薄肌、10 天腹肌，`buildFor`）/ normal / lean / ripped，只在露出来的衣服上看得出；练出来那天 `checkBuild` → `buildCelebrate` 秀一下（`seenBuild`），练少了悄悄变回去不数落。每记一次训练小人 `flex`（秀肌肉）。
+    - 长按小人摸头（`patBuddy`：闭眼冒爱心 `love`，话按等级 `PAT_LINES`），连戳三下 `pokeBuddy`；认识满 7 / 30 / 100… 天 `anniversary`；Lv2 起没名字问一次 `askName`（`profile.buddy.name`，默认「小练」）。
+    - 更主动（`chat.js`）：话多少 `talkLevel()`（`profile.buddy.talk`，旧的 `chatty: false` 算安静）；离开 3 小时以上回来 `welcomeBack`（`tf_seen`，一天两次）；`dayNote`（`tf_daylog`，最近 7 天睡得怎么样 / 歇不歇）让第二天接着问；熟了（Lv3）没事也打个招呼。
+    - 通知用小人的口吻：`buddyPushLines` 算好 `say`（今天）/ `sayNext`（明天没打开时）/ `away`（好几天没打开的晚上那条）放进 `pushDayState`，`Reminders.buddyLine` 有就用，标题是小人的名字。关了小人就不带，用原来的话。
 
 ## 工作流
 
@@ -44,7 +50,7 @@
 - squash 合并后，`build-apk.yml` 按 `app/build.gradle.kts` 里的 `versionName` 打包并发布 Release，说明取自 `CHANGELOG.md` 里 `## v版本号 · 标题` 那一节。**每次发版都要同时改 `versionCode`、`versionName`，并在 CHANGELOG 顶部加一节**。只改文档（`*.md`）不会触发发版。
 - 改界面只改 `web/`；`app/src/main/assets/` 是编译时从 `web/` 复制过去的，不进仓库。
 - `web/js/data/food_db.js` 是 `scripts/build-food-db.js` 生成的，不要手改。
-- 像素小人在 `web/js/app/buddy.js`：男生照着用户本人的照片画（黑色乱发、刘海压眼、黑色棒球服白袖子），另有女生角色；用户要「少年感、酷一点」，别画腮红、大嘴这种萌系。它是 `position:fixed` 的，`placeBuddy` 让它趴在最上面那一层（修改 / 分享面板 > 提示条 / 录音面板 > 输入栏）的上沿；别往顶栏、今天卡片里放。趋势页最上面另有一张小人点评卡（v4.4，用户要的：`renderTrendBuddy` 画一个站着的小人 + 对话框，`trendReview` 本机算最多 3 句大白话），其他界面保持原样。小动作都在 CSS 里，`prefers-reduced-motion` 时不动。样子存在 `profile.buddy`，跟着备份走。
+- 像素小人在 `web/js/app/buddy.js`：男生默认照着用户本人的照片画（黑色乱发、刘海压眼、黑色棒球服白袖子），另有女生角色。v5.6 起一层层拼（`compose`）：身子（`LIE_BODY` / `STAND`，用「部位」字母 J 衣服 n/m 领子 T 里面 C 胸口 R/r 胳膊 Q 趴着的肩 F 鞋）→ 发型（`STYLES`，13 行的头 + `frames` 晃的那一帧 + 长发 `drapeLie` / `drapeStand`）→ 眼睛 → 装备 → 举起的手（`ARMS_UP` / `ARMS_FLEX`），最后按衣服类型 `TYPES` 把部位换成颜色、在露出来的肚子上画 `BUILDS` 的线条。加发型 / 衣服后用 `node` 把各种组合拼成 SVG 放大截图看一眼（男女 × 发型 × 衣服 × 身材 × 姿势），`tests/buddy.test.js` 会把所有组合拼一遍、查每个颜色都有。它是 `position:fixed` 的，`placeBuddy` 让它趴在最上面那一层（修改 / 分享面板 > 提示条 / 录音面板 > 输入栏）的上沿；别往顶栏、今天卡片里放。趋势页最上面另有一张小人点评卡（v4.4，用户要的：`renderTrendBuddy` 画一个站着的小人 + 对话框，`trendReview` 本机算最多 3 句大白话），其他界面保持原样。小动作都在 CSS 里，`prefers-reduced-motion` 时不动。样子存在 `profile.buddy`，跟着备份走。
 - App 图标（深绿底 + 发光叶子 + AI 星光）由 `python3 scripts/build-icon.py` 用 Chromium 渲染成 `mipmap-*/ic_launcher*.webp`（自适应图标的前景、背景是位图，因为有光晕）和单色版 `drawable/ic_launcher_monochrome.xml`，不要手改；网页里的同款小图标是 `util.js` 的 `BRAND` / `brandIcon` / `drawBrandIcon`，改形状要两边一起改。图标和小人分开，用户明确说过图标单独设计，要像海外独立 App 那样简洁、有质感。
 - 备份（`web/js/app/backup.js`）只放 `fit_profile / fit_workouts / fit_diet / fit_weights / fit_my_foods`，**不放 AI 接口和语音识别的 key**（`tf_llm_override`、`tf_asr_override`）。新加要持久保存的数据，记得加进备份和 `mergeBackupData`。
 - 安卓原生的文件能力在 `FileShare.kt`（MediaStore 存下载 / 相册只支持 Android 10+；分享走 FileProvider，路径在 `res/xml/file_paths.xml`）。恢复备份不能让用户自己翻文件夹找文件（被骂过）：「从备份恢复」先走 `restoreFromFolder`（文件夹授权页直接停在「下载/练食AI」，授权后 `FileShare.readBestBackup` 挑**记录最多**的那份——不能挑最新的：重装后新装的 App 会另存「练食AI备份 (1).json」，只有几条，v3.7 用户恢复了个寂寞），找不到、或者那份的记录都已经有了才让选文件；微信里「用其他应用打开」也能直接恢复（MainActivity 的 intent-filter + `takeOpenedFile`）。

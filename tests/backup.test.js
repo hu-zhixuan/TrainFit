@@ -73,3 +73,14 @@ test('小本本跟着备份：已经在用的手机上恢复，身体数据不�
   const same = mergeBackupData(r.data, bak);
   assert.deepStrictEqual(same.data.fit_profile.memo, ['不吃辣', '膝盖有旧伤', '叫阿程']);
 });
+
+test('恢复备份：小人的亲密度取两边大的，没起名字的用备份里的名字，样子不动', () => {
+  const bak = parseBackup(JSON.stringify({ app: '练食AI', format: 1, data: {
+    fit_profile: { customized: true, buddy: { xp: 40, name: '阿肌', outfit: 'tank' } }, fit_diet: [], fit_workouts: [], fit_weights: [], fit_my_foods: [] } }));
+  const cur = { fit_profile: { customized: true, buddy: { xp: 12, outfit: 'varsity' } }, fit_diet: [{ id: 'd1', date: '2026-10-01' }], fit_workouts: [], fit_weights: [], fit_my_foods: [] };
+  const r = mergeBackupData(cur, bak);
+  assert.deepStrictEqual(r.data.fit_profile.buddy, { xp: 40, outfit: 'varsity', name: '阿肌' });
+  // 这边分更高、也起过名字：不动
+  const mine = { fit_profile: { customized: true, buddy: { xp: 90, name: '小练' } }, fit_diet: [{ id: 'd1' }], fit_workouts: [], fit_weights: [], fit_my_foods: [] };
+  assert.strictEqual(mergeBackupData(mine, bak).data.fit_profile, mine.fit_profile);
+});

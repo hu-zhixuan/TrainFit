@@ -7,24 +7,34 @@
  * 小动作：头发隔一会儿晃一下、眨眼、偶尔左右看一眼；隔半分钟左右自己站起来伸个懒腰、溜达两步；
  * 点一下站起来招手；按住说话时站起来听；记上一顿举手欢呼；Z 往上飘、音符一跳一跳。
  * 第一次用时由它带着看三步新手教程（tf_tour），设置里能再看一遍。
- * 连续记录的天数换装备：3 天头带，7 天棒球帽，30 天皇冠。点一下弹个气泡：连续几天、今天怎么样、蛋白还差多少。
- * 设置 →「外观」里换角色（男生 / 女生，默认跟着性别）、发色、衣服，也能关掉。存在 profile.buddy 里，跟着备份走。
+ * 连续记录的天数换装备：3 天头带，7 天棒球帽，30 天皇冠。点一下弹个气泡：亲密度、连续几天、今天怎么样、蛋白还差多少；
+ * 长按摸摸头，连着戳三下有反应；练了一组就秀一下肌肉（亲密度、摸头这些在 bond.js）。
+ * 设置 →「外观」（v5.6）：名字、角色（男生 / 女生，默认跟着性别）、发型（男：乱发 中分 背头 寸头；女：长直发 高马尾 短发 丸子头）、
+ * 发色、肤色、衣服（有几件要亲密度到了才解锁）、身材（跟着我练 / 普通 / 薄肌 / 腹肌），也能关掉。存在 profile.buddy 里，跟着备份走。
  *
- * 画法：趴着 24×17、站着 24×25 的像素图，叠上眼睛、装备，自动描一圈深色边（浅色背景上也看得清）；特效单独一层（好让它动）。
+ * 画法：趴着 24×17、站着 24×25 的像素图，一层层拼（见下面 compose），自动描一圈深色边（浅色背景上也看得清）；特效单独一层（好让它动）。
  * 输出 SVG，每种颜色一条 path，shape-rendering=crispEdges；动画全在 CSS 里。
  */
 (function (root) {
   'use strict';
   const TF = root.TF = root.TF || {};
 
-  // '.' 透明，','（只在装备里用）擦掉原来的像素。
-  // H 头发 h 头发暗部 L 头发高光；S 皮肤 s 皮肤暗部（刘海的影子）E 眼睛 / 眼线；J 外套；W 袖子 w 袖子暗部；
-  // K 墨镜 k 墨镜反光；G 绿 g 深绿；A 金 a 金高光；B 汗 Z 睡觉 N 音符 X 闪光；O 描边
-  const CHARS = {
-    boy: {
-      label: '男生',
-      body: [
-        '..........H.HH..H.......',
+  /*
+   * 一层一层拼（v5.6）：身子（衣服 + 身材）→ 头（发型）→ 头发晃的那一帧 → 搭在肩上的长发 → 眼睛 → 装备 → 举起的手。
+   * 身子用的是「部位」字母，最后按衣服换成颜色：
+   *   J 衣服 n 领子 m 领子条纹 T 里面的 T 恤 C 胸口的字母  R 胳膊 r 胳膊暗部  Q 趴着时的肩膀  F 鞋  P 裤子 p 袜子
+   * 颜色字母：S 皮肤 s 皮肤暗部 E 眼睛 / 眼线；H 头发 h 头发暗部 L 头发高光；J 衣服 j 衣服暗部 V 袖子 v 袖子暗部 U 里面那件；
+   *   Y 白（鞋、帽子上的字）K 墨镜 k 墨镜反光；G 绿 g 深绿；A 金 a 金高光；B 汗 Z 睡觉 N 音符 X 闪光 I 爱心；O 描边
+   * '.' 透明，','（只在装备里用）擦掉原来的像素。
+   */
+
+  // ---------- 发型：头 13 行（最后一行是下巴），眼睛那一行（第 10 行）由 CHARS 的 eyes 盖上 ----------
+  const STYLES = {
+    // 男生：照着用户本人画的，蓬松乱发、刘海压眼
+    messy: {
+      char: 'boy', label: '乱发',
+      head: [
+        '........................',
         '........HHHHHHHHH.......',
         '......HHHLLHHHHHHHH.....',
         '.....HHHLHHHHHHHHHHH....',
@@ -34,92 +44,79 @@
         '....HHHHhHHHhHHHHhHHHH..',
         '....HHHhSHhSSShSHhHHHH..',
         '.....HHssssssssssHHH....',
-        '.....HHSEESSSSEESHH.....',
+        '.....HHSSSSSSSSSSHH.....',
         '......HSSSSSSSSSSH......',
-        '..JJ..HsSSSSSSSSsH..JJ..',
-        '.JJJJJJwwwwwwwwwwJJJJJJ.',
-        'WWWWWWWWWWWWWWWWWWWWWWWW',
-        'wWWWWWWWWWWWWWWWWWWWWWWw',
-        'wwwwwwwwwwwwwwwwwwwwwwww'
+        '.......sSSSSSSSSs.......'
       ],
-      tufts: ['..........H.HH..H.......', '...........H.HH..H......'],
-      // 站起来：头（和趴着一样，最后一行是下巴）+ 身子 + 腿；招手两帧、伸懒腰、走路两帧
-      stand: {
-        head: [
-          '..........H.HH..H.......',
-          '........HHHHHHHHH.......',
-          '......HHHLLHHHHHHHH.....',
-          '.....HHHLHHHHHHHHHHH....',
-          '.....HHHHHHHHHHHHHLHH...',
-          '....HHHHHHHHHHHHHHHHH...',
-          '....HHHHHHHHHHHHHHHHHH..',
-          '....HHHHhHHHhHHHHhHHHH..',
-          '....HHHhSHhSSShSHhHHHH..',
-          '.....HHssssssssssHHH....',
-          '.....HHSEESSSSEESHH.....',
-          '......HSSSSSSSSSSH......',
-          '.......sSSSSSSSSs.......'
-        ],
-        body: [
-          '.........jWjjWj.........',
-          '.......WWJjWWjJWW.......',
-          '......WWWJJJJJJWWW......',
-          '......WWwJWWJJJJwWW.....',
-          '......WWwJWWJJJJwWW.....',
-          '......WWwJJJJJJJwWW.....',
-          '......SS.JJJJJJJ.SS.....',
-          '.........PPPPPPP........'
-        ],
-        wave: [
-          '.........jWjjWj.....SS..',
-          '.......WWJjWWjJWW..WW...',
-          '......WWWJJJJJJWWWWW....',
-          '......WWwJWWJJJJJWW.....',
-          '......WWwJWWJJJJJ.......',
-          '......WWwJJJJJJJJ.......',
-          '......SS.JJJJJJJJ.......',
-          '.........PPPPPPP........'
-        ],
-        wave2: [
-          '.........jWjjWj......SS.',
-          '.......WWJjWWjJWW...WW..',
-          '......WWWJJJJJJWWWWWW...',
-          '......WWwJWWJJJJJWW.....',
-          '......WWwJWWJJJJJ.......',
-          '......WWwJJJJJJJJ.......',
-          '......SS.JJJJJJJJ.......',
-          '.........PPPPPPP........'
-        ],
-        stretch: [
-          '.........jWjjWj.........',
-          '........JJjWWjJJ........',
-          '........JJJJJJJJ........',
-          '........JWWJJJJJ........',
-          '........JWWJJJJJ........',
-          '........JJJJJJJJ........',
-          '........JJJJJJJJ........',
-          '.........PPPPPPP........'
-        ],
-        legs: [
-          '.........PPP.PPP........',
-          '.........PPP.PPP........',
-          '.........PPP.PPP........',
-          '........WWWW.WWWW.......'
-        ],
-        walk: [
-          '........PPP...PPP.......',
-          '.......PPP.....PPP......',
-          '.......PPP.....PPP......',
-          '......WWWW.....WWWW.....'
-        ]
-      },
-      eyeX: 7,
-      eyes: { chill: 'SEESSSSEES', closed: 'SssSSSSssS', left: 'EESSSSEESS', right: 'SSEESSSSEE' }
+      frames: [['..........H.HH..H.......'], ['...........H.HH..H......']],
+      lie12: '......H..........H......'
     },
-    girl: {
-      label: '女生',
-      body: [
-        '...........HH...........',
+    // 中分：两边的刘海往外分开，露出一点额头
+    part: {
+      char: 'boy', label: '中分',
+      head: [
+        '........................',
+        '.........HHHHHH.........',
+        '.......HHHHHHHHHH.......',
+        '......HHLLHHHHLLHH......',
+        '.....HHLHHHhhHHHLHH.....',
+        '.....HHHHHHhhHHHHHH.....',
+        '....HHHHHHHhhHHHHHHH....',
+        '....HHHHHHHSSHHHHHHH....',
+        '....HHHHHHSSSSHHHHHH....',
+        '....HHHHssssssssHHHH....',
+        '....HHHSSSSSSSSSSHHH....',
+        '.....HHSSSSSSSSSSHH.....',
+        '.......sSSSSSSSSs.......'
+      ],
+      frames: [['........................'], ['........................']],
+      lie12: '.....HH..........HH.....'
+    },
+    // 背头：头发往后梳，额头全露出来，两边推短
+    slick: {
+      char: 'boy', label: '背头',
+      head: [
+        '........................',
+        '.........HHHHHH.........',
+        '.......HHHLLLLHHH.......',
+        '......HHLLHHHHHHHH......',
+        '.....HHLHHHHHHHHHHH.....',
+        '.....HHHHHHHHHHHHHH.....',
+        '.....hHHHHHHHHHHHHh.....',
+        '.....hhHHHHHHHHHHhh.....',
+        '......hhSSSSSSSSShh.....',
+        '......hSSSSSSSSSSh......',
+        '......hSSSSSSSSSSh......',
+        '.......SSSSSSSSSS.......',
+        '.......sSSSSSSSSs.......'
+      ],
+      frames: [['.........HH.............'], ['..........HH............']]
+    },
+    // 寸头：贴着头皮的一层
+    buzz: {
+      char: 'boy', label: '寸头',
+      head: [
+        '........................',
+        '........................',
+        '.........hhhhhhh........',
+        '.......hhHHHHHHHhh......',
+        '......hHHHLHHHHHHHh.....',
+        '......HHHLHHHHHHHHH.....',
+        '.....hHHHHHHHHHHHHHh....',
+        '.....hHHHHHHHHHHHHHh....',
+        '.....shSSSSSSSSSShs.....',
+        '.....SsssssssssssSs.....',
+        '.....sSSSSSSSSSSSSs.....',
+        '......SSSSSSSSSSSS......',
+        '.......sSSSSSSSSs.......'
+      ],
+      frames: [['........................'], ['........................']]
+    },
+    // 女生：长直发、齐刘海、头顶一根呆毛，长发搭在肩上
+    long: {
+      char: 'girl', label: '长直发',
+      head: [
+        '........................',
         '........HHHHHHHHH.......',
         '......HHHLLHHHHHHHH.....',
         '.....HHHLHHHHHHHHHHH....',
@@ -129,103 +126,193 @@
         '....HHHHHHHHHHHHHHHHHH..',
         '....HHHhHHHHhHHHHhHHHH..',
         '....HHhssssssssssHHHH...',
-        '....HHESEESSSSEESEHHH...',
         '....HHSSSSSSSSSSSSHHH...',
-        '..JJHHHsSSSSSSSSsHHHJJ..',
-        '.JJJHHHwwwwwwwwwwHHHJJJ.',
-        'WWWHHHWWWWWWWWWWWHHHWWWW',
-        'wWWWHHWWWWWWWWWWWHHWWWWw',
-        'wwwwwwwwwwwwwwwwwwwwwwww'
+        '....HHSSSSSSSSSSSSHHH...',
+        '.......sSSSSSSSSs.......'
       ],
-      // 头顶一根呆毛，两帧来回晃
-      tufts: ['...........HH...........', '............HH..........'],
-      stand: {
-        head: [
-          '...........HH...........',
-          '........HHHHHHHHH.......',
-          '......HHHLLHHHHHHHH.....',
-          '.....HHHLHHHHHHHHHHH....',
-          '.....HHHHHHHHHHHHHHHH...',
-          '....HHHHHHHHHHHHHHHHH...',
-          '....HHHHHHHHHHHHHHHHHH..',
-          '....HHHHHHHHHHHHHHHHHH..',
-          '....HHHhHHHHhHHHHhHHHH..',
-          '....HHhssssssssssHHHH...',
-          '....HHESEESSSSEESEHHH...',
-          '....HHSSSSSSSSSSSSHHH...',
-          '....HHHsSSSSSSSSsHHHH...'
-        ],
-        body: [
-          '....HHH..jWjjWj..HHH....',
-          '....HHWWJjWWjJWWHHH.....',
-          '.....HWWJJJJJJWWWH......',
-          '......WWwJWWJJJJwWW.....',
-          '......WWwJWWJJJJwWW.....',
-          '......WWwJJJJJJJwWW.....',
-          '......SS.JJJJJJJ.SS.....',
-          '........PPPPPPPPP.......'
-        ],
-        wave: [
-          '....HHH..jWjjWj....SS...',
-          '....HHWWJjWWjJWW..WW....',
-          '.....HWWJJJJJJWWWWW.....',
-          '......WWwJWWJJJJJWW.....',
-          '......WWwJWWJJJJJ.......',
-          '......WWwJJJJJJJJ.......',
-          '......SS.JJJJJJJJ.......',
-          '........PPPPPPPPP.......'
-        ],
-        wave2: [
-          '....HHH..jWjjWj.....SS..',
-          '....HHWWJjWWjJWW...WW...',
-          '.....HWWJJJJJJWWWWWW....',
-          '......WWwJWWJJJJJWW.....',
-          '......WWwJWWJJJJJ.......',
-          '......WWwJJJJJJJJ.......',
-          '......SS.JJJJJJJJ.......',
-          '........PPPPPPPPP.......'
-        ],
-        stretch: [
-          '....HHH..jWjjWj..HHH....',
-          '....HHH.JJjWWjJJHHH.....',
-          '.....HH.JJJJJJJJHH......',
-          '........JWWJJJJJ........',
-          '........JWWJJJJJ........',
-          '........JJJJJJJJ........',
-          '........JJJJJJJJ........',
-          '........PPPPPPPPP.......'
-        ],
-        legs: [
-          '.......PPPPPPPPPPP......',
-          '.........SS...SS........',
-          '.........pp...pp........',
-          '........WWWW.WWWW.......'
-        ],
-        walk: [
-          '.......PPPPPPPPPPP......',
-          '........SS.....SS.......',
-          '.......pp.......pp......',
-          '......WWWW.....WWWW.....'
-        ]
-      },
-      eyeX: 6,
-      eyes: { chill: 'ESEESSSSEESE', closed: 'ESssSSSSssSE', left: 'EEESSSSEESSE', right: 'ESSEESSSSEEE' }
+      frames: [['...........HH...........'], ['............HH..........']],
+      drapeLie: ['....HHH..........HHH....', '....HHH..........HHH....', '...HHH...........HHH....', '....HH...........HH.....'],
+      drapeStand: ['....HHH..........HHHH...', '....HHH..........HHH....', '....HH..........HHH.....', '.....H...........H......']
+    },
+    // 高马尾：额头露出来，马尾甩在右后边，一晃一晃
+    pony: {
+      char: 'girl', label: '高马尾',
+      head: [
+        '........................',
+        '.........HHHHHHH........',
+        '.......HHHHHHHHHHg......',
+        '......HHHLLHHHHHHHg.....',
+        '.....HHHLHHHHHHHHHH.....',
+        '.....HHHHHHHHHHHHHH.....',
+        '....HHHHHHHHHHHHHHH.....',
+        '....HHHHHHHHHHHHHHH.....',
+        '....HHHHHHHHHHSSShH.....',
+        '....HHHhssssssssssH.....',
+        '....HHSSSSSSSSSSSSH.....',
+        '.....HSSSSSSSSSSSS......',
+        '.......sSSSSSSSSs.......'
+      ],
+      frames: [
+        ['........................', '..................HH....', '...................HHH..', '....................HHH.', '....................HHH.', '....................HHH.', '....................HHH.', '....................HH..', '.....................H..'],
+        ['........................', '..................HH....', '...................HHH..', '....................HHH.', '.....................HHH', '.....................HHH', '.....................HHH', '.....................HH.', '......................H.']
+      ]
+    },
+    // 短发：到下巴，圆圆的，齐刘海
+    bob: {
+      char: 'girl', label: '短发',
+      head: [
+        '........................',
+        '.........HHHHHHH........',
+        '.......HHHLLHHHHHH......',
+        '......HHHLHHHHHHHHH.....',
+        '.....HHHLHHHHHHHHHHH....',
+        '.....HHHHHHHHHHHHHHH....',
+        '....HHHHHHHHHHHHHHHHH...',
+        '....HHHHHHHHHHHHHHHHH...',
+        '....HHHhHHHhHHHhHHHHH...',
+        '....HHhssssssssssHHHH...',
+        '....HHSSSSSSSSSSSSHHH...',
+        '....HHSSSSSSSSSSSSHHH...',
+        '....hHHsSSSSSSSSsHHHh...'
+      ],
+      frames: [['........................'], ['........................']],
+      lie12: '....hHH..........HHHh...'
+    },
+    // 丸子头：头顶扎一个团子，额头露出来，两边垂两缕
+    bun: {
+      char: 'girl', label: '丸子头',
+      head: [
+        '..........HHHH..........',
+        '.........HLLHHH.........',
+        '.........HHHHhH.........',
+        '.......HHHhhhhHHH.......',
+        '......HHHLHHHHHHHH......',
+        '.....HHHLHHHHHHHHHH.....',
+        '.....HHHHHHHHHHHHHH.....',
+        '....HHHHHHHHHHHHHHHH....',
+        '....HHhhSSShSSShhHHH....',
+        '....HHsssssssssssHH.....',
+        '....HHSSSSSSSSSSSSH.....',
+        '.....HSSSSSSSSSSSSH.....',
+        '.....H.sSSSSSSSSs.H.....'
+      ],
+      frames: [['........................'], ['........................']],
+      lie12: '.....H............H.....'
     }
+  };
+
+  // ---------- 身子：趴着（第 12～16 行）和站着（第 13～20 行 + 腿 4 行） ----------
+  const LIE_BODY = [
+    '..QQ..............QQ....',
+    '.QQQQQQrrrrrrrrrrQQQQQQ.',
+    'RRRRRRRRRRRRRRRRRRRRRRRR',
+    'rRRRRRRRRRRRRRRRRRRRRRRr',
+    'rrrrrrrrrrrrrrrrrrrrrrrr'
+  ];
+  const STAND = {
+    body: [
+      '..........nmTmn.........',
+      '.......RRJJnTnJJRR......',
+      '......RRRJJJJJJJRRR.....',
+      '......RRrJCCJJJJrRR.....',
+      '......RRrJCCJJJJrRR.....',
+      '......RRrJJJJJJJrRR.....',
+      '......SS.JJJJJJJ.SS.....',
+      '.........PPPPPPP........'
+    ],
+    wave: [
+      '..........nmTmn.....SS..',
+      '.......RRJJnTnJJR..RR...',
+      '......RRRJJJJJJJRRRR....',
+      '......RRrJCCJJJJJRR.....',
+      '......RRrJCCJJJJJ.......',
+      '......RRrJJJJJJJJ.......',
+      '......SS.JJJJJJJJ.......',
+      '.........PPPPPPP........'
+    ],
+    wave2: [
+      '..........nmTmn......SS.',
+      '.......RRJJnTnJJR...RR..',
+      '......RRRJJJJJJJRRRRR...',
+      '......RRrJCCJJJJJRR.....',
+      '......RRrJCCJJJJJ.......',
+      '......RRrJJJJJJJJ.......',
+      '......SS.JJJJJJJJ.......',
+      '.........PPPPPPP........'
+    ],
+    // 伸懒腰 / 欢呼：手举过头（ARMS_UP 盖上去）
+    stretch: [
+      '..........nmTmn.........',
+      '........RJJnTnJJR.......',
+      '........RJJJJJJJR.......',
+      '.........JCCJJJJ........',
+      '.........JCCJJJJ........',
+      '.........JJJJJJJ........',
+      '.........JJJJJJJ........',
+      '.........PPPPPPP........'
+    ]
+  };
+  // 秀肌肉：两只胳膊端起来（ARMS_FLEX 盖上去），身子和伸懒腰一样
+  STAND.flex = STAND.stretch;
+  const LEGS = {
+    boy: { legs: ['.........PPP.PPP........', '.........PPP.PPP........', '.........PPP.PPP........', '........FFFF.FFFF.......'],
+      walk: ['........PPP...PPP.......', '.......PPP.....PPP......', '.......PPP.....PPP......', '......FFFF.....FFFF.....'] },
+    girl: { legs: ['.......PPPPPPPPPPP......', '.........SS...SS........', '.........pp...pp........', '........FFFF.FFFF.......'],
+      walk: ['.......PPPPPPPPPPP......', '........SS.....SS.......', '.......pp.......pp......', '......FFFF.....FFFF.....'],
+      waist: '........PPPPPPPPP.......' }
+  };
+  const ARMS_UP = { x: 5, y: 0, rows: ['SS............SS'].concat(Array(10).fill('RR............RR'), ['.R............R.']) };
+  const ARMS_FLEX = {
+    x: 0, y: 9, rows: [
+      '.SSS.................SSS',
+      '.SSS.................SSS',
+      '.RRR.................RRR',
+      '.RRR.................RRR',
+      '.RRRR...............RRRR',
+      '..RRRRRRR.......RRRRRRR.',
+      '...RRRRRR.......RRRRRR..'
+    ]
+  };
+
+  // 身材：盖在露出来的肚子上（只改皮肤的格子），左上角是胸口第一行最左边那格（站着 x=9、第 14 行）
+  const BUILDS = {
+    normal: { label: '普通', boy: ['.......', '.......', '.......', '.......', '...s...', '.......'], girl: ['.......', '.......', '.......', '.......', '...s...', '.......'] },
+    lean: { label: '薄肌',
+      boy: ['.......', '.ss.ss.', '...s...', '...s...', '...s...', '.......'],
+      girl: ['.......', '.......', '.s...s.', '.s...s.', '.s...s.', '...s...'] },
+    ripped: { label: '腹肌',
+      boy: ['.......', '.ss.ss.', '...s...', '.sssss.', '...s...', '.sssss.'],
+      girl: ['.......', '.......', '.s.s.s.', '.s.s.s.', '.s.s.s.', '...s...'],
+      // 胳膊、肩膀粗一圈（男生）
+      arms: { stand: [[6, 14], [5, 15], [5, 16], [18, 14], [19, 15], [19, 16]], flex: [[4, 12], [5, 12], [19, 12], [20, 12]], lie: [[1, 12], [4, 12], [17, 12], [22, 12]] } }
+  };
+  const BUILD_ORDER = ['normal', 'lean', 'ripped'];
+
+  // 衣服类型：部位 → 颜色
+  const TYPES = {
+    jacket: { J: 'J', n: 'j', m: 'V', T: 'U', C: 'U', R: 'V', r: 'v', Q: 'J' },
+    tank: { J: 'J', n: 'S', m: 'S', T: 'S', C: 'J', R: 'S', r: 's', Q: 'S' },
+    open: { J: 'J', n: 'j', m: 'V', T: 'S', C: 'J', R: 'V', r: 'v', Q: 'J', open: [10, 14] },
+    bare: { J: 'S', n: 'S', m: 'S', T: 'S', C: 'S', R: 'S', r: 's', Q: 'S' },
+    shirt: { J: 'J', n: 'j', m: 'j', T: 'S', C: 'J', R: 'V', r: 'v', Q: 'J' }
+  };
+
+  const CHARS = {
+    boy: { label: '男生', style: 'messy', eyeX: 7, eyes: { chill: 'SEESSSSEES', closed: 'SssSSSSssS', left: 'EESSSSEESS', right: 'SSEESSSSEE' } },
+    girl: { label: '女生', style: 'long', eyeX: 6, eyes: { chill: 'ESEESSSSEESE', closed: 'ESssSSSSssSE', left: 'EEESSSSEESSE', right: 'ESSEESSSSEEE' } }
   };
   const EYE_Y = 10;
   const ART = {
     shades: { x: 6, y: 9, rows: ['KKKKKKKKKKKK', '.KkKK..KkKK.'] },
-    // 站着伸懒腰 / 欢呼：两只手举过头顶
-    armsUp: { x: 5, y: 0, rows: ['SS............SS'].concat(Array(10).fill('WW............WW'), ['.W............W.']) },
     gear: {
-      band: { x: 4, y: 5, rows: ['GGGGGGGGGGGGGGGGG', 'GGGGGGGGGGWGGGGGGG'] },
+      band: { x: 4, y: 5, rows: ['GGGGGGGGGGGGGGGGG', 'GGGGGGGGGGYGGGGGGG'] },
       cap: {
         x: 3, y: 0, rows: [
           ',,,,,,,,,,,,,,,,,,',
           '.....GGGGGGGGG....',
           '...GGGGGGGGGGGGG..',
           '..GGGGGGGGGGGGGGG.',
-          '..GGGGGGGGWGGGGGGG',
+          '..GGGGGGGGYGGGGGGG',
           '.GGGGGGGGGGGGGGGGG',
           'gggggggggggggggggggggg'
         ]
@@ -236,69 +323,80 @@
       sweat: { x: 22, y: 7, rows: ['.B', 'BB', 'BB'] },
       zzz: { x: 20, y: -3, rows: ['ZZZZ', '..Z.', '.Z..', 'ZZZZ'] },
       note: { x: 20, y: -3, rows: ['.NNN', '.N.N', '.N..', 'NN..', 'NN..'] },
-      sparkle: { x: 20, y: -3, rows: ['.X.', 'XXX', '.X.'] }
+      sparkle: { x: 20, y: -3, rows: ['.X.', 'XXX', '.X.'] },
+      heart: { x: 19, y: -3, rows: ['II.II', 'IIIII', '.III.', '..I..'] }
     }
   };
   const AW = 24, AH = 17, AH_STAND = 25;
   const M = 3;                 // 四周留白（描边 + 特效）；底下不留：胳膊 / 鞋直接搭在下面那个框的边上
   const GW = AW + M * 2, GH = AH + M;
-  const POSES = ['lie', 'stand', 'walk', 'wave', 'stretch'];
+  const POSES = ['lie', 'stand', 'walk', 'wave', 'stretch', 'flex'];
   const heightOf = (pose) => (pose && pose !== 'lie' ? AH_STAND : AH) + M;
-
-  /** 这个姿势这一帧的原图（不含眼睛、装备） */
-  function poseRows(ch, pose, frame) {
-    if (!pose || pose === 'lie') {
-      const body = ch.body.slice();
-      body[0] = ch.tufts[frame ? 1 : 0];
-      return body;
-    }
-    const st = ch.stand;
-    const head = st.head.slice();
-    head[0] = ch.tufts[frame ? 1 : 0];
-    const body = pose === 'wave' ? (frame ? st.wave2 : st.wave) : pose === 'stretch' ? st.stretch : st.body;
-    const legs = pose === 'walk' && frame ? st.walk : st.legs;
-    return head.concat(body, legs);
-  }
 
   const HAIR = {
     black: { label: '黑', H: '#3a2d27', h: '#221a16', L: '#5a4840' },
     brown: { label: '棕', H: '#6b4a32', h: '#4a3322', L: '#8c6647' },
+    wine: { label: '酒红', H: '#6e2a33', h: '#4a1a22', L: '#934550' },
     ash: { label: '灰', H: '#7d7570', h: '#5b544f', L: '#a39a93' },
-    blond: { label: '金', H: '#c9a04e', h: '#9c7a35', L: '#e2c077' }
+    blond: { label: '金', H: '#c9a04e', h: '#9c7a35', L: '#e2c077' },
+    silver: { label: '银白', H: '#c8c6cf', h: '#9e9ba7', L: '#ebe9f0' }
   };
+  const SKINS = {
+    fair: { label: '白皙', S: '#f8dcc5', s: '#e8bea0', d: '#cf9f80' },
+    natural: { label: '自然', S: '#f0c9a4', s: '#dcae8a', d: '#c08f6b' },
+    tan: { label: '小麦', S: '#dba574', s: '#bf8657', d: '#9c6a42' },
+    deep: { label: '深', S: '#a9714a', s: '#8a5837', d: '#6b4229' }
+  };
+  const WHITE = { V: '#f2f1ed', v: '#d4d3ce', U: '#f2f1ed' };
+  // lv：和小人的亲密度到几级解锁（没有就是一开始就有）
   const OUTFITS = {
-    varsity: { label: '黑白棒球服', J: '#363843', W: '#f2f1ed', w: '#d4d3ce' },
-    navy: { label: '藏青棒球服', J: '#23315c', W: '#f2f1ed', w: '#d4d3ce' },
-    green: { label: '绿白棒球服', J: '#0f8f66', W: '#f2f1ed', w: '#d4d3ce' },
-    black: { label: '全黑', J: '#2a2b32', W: '#454750', w: '#32343c' }
+    varsity: Object.assign({ label: '黑白棒球服', type: 'jacket', J: '#363843', j: '#24252c' }, WHITE),
+    navy: Object.assign({ label: '藏青棒球服', type: 'jacket', J: '#23315c', j: '#18213f' }, WHITE),
+    green: Object.assign({ label: '绿白棒球服', type: 'jacket', J: '#0f8f66', j: '#0a6649' }, WHITE),
+    black: { label: '全黑', type: 'jacket', J: '#2a2b32', j: '#1b1c21', V: '#454750', v: '#32343c', U: '#454750' },
+    tank: { label: '运动背心', type: 'tank', J: '#2b2d35', j: '#1b1c21', V: '#2b2d35', v: '#1b1c21', U: '#2b2d35' },
+    open: Object.assign({ label: '敞开的外套', type: 'open', J: '#363843', j: '#24252c', lv: 2 }, WHITE),
+    bare: { label: '光膀子', girlLabel: '运动内衣', type: 'bare', J: '#2b2d35', j: '#1b1c21', V: '#2b2d35', v: '#1b1c21', U: '#2b2d35', lv: 3 },
+    shirt: { label: '白衬衫', type: 'shirt', J: '#f4f4f1', j: '#c9ccd2', V: '#f4f4f1', v: '#d9dbe0', U: '#f4f4f1', lv: 4 },
+    champ: { label: '冠军外套', type: 'jacket', J: '#c99a33', j: '#94701f', V: '#24252c', v: '#17181c', U: '#24252c', lv: 5 }
   };
   const BASE_COLORS = {
-    S: '#f0c9a4', s: '#dcae8a', E: '#241a15', K: '#141519', k: '#5b6170',
-    G: '#10b981', g: '#0a7a56', A: '#e7b53c', a: '#fbe08a',
-    B: '#7cc4f5', Z: '#9aa3b5', N: '#9aa3b5', X: '#ffd84d', O: '#17120f',
+    E: '#241a15', K: '#141519', k: '#5b6170',
+    G: '#10b981', g: '#0a7a56', A: '#e7b53c', a: '#fbe08a', Y: '#f2f1ed',
+    B: '#7cc4f5', Z: '#9aa3b5', N: '#9aa3b5', X: '#ffd84d', I: '#f2557a', O: '#17120f',
     P: '#2b2c33', p: '#1c1d22'
   };
-  const DEFAULT_LOOK = { show: true, hair: 'black', outfit: 'varsity' };
+  const DEFAULT_LOOK = { show: true, hair: 'black', outfit: 'varsity', skin: 'natural', build: 'auto' };
+  const BUILD_CHOICES = ['auto', 'normal', 'lean', 'ripped'];
 
-  // 心情：没记 / 犯困 / 四档健康度
+  // 心情：没记 / 犯困 / 四档健康度；摸头时冒爱心
   const MOODS = {
     idle: { eyes: 'chill' },
     sleepy: { eyes: 'closed', fx: 'zzz' },
     bad: { eyes: 'chill', fx: 'sweat' },
     ok: { eyes: 'chill' },
     good: { eyes: 'chill', fx: 'note' },
-    great: { eyes: 'shades', fx: 'sparkle' }
+    great: { eyes: 'shades', fx: 'sparkle' },
+    love: { eyes: 'closed', fx: 'heart' }
   };
   const LEVEL_MOOD = ['bad', 'ok', 'good', 'great'];
   const GEAR_STEPS = [{ days: 3, gear: 'band', name: '头带' }, { days: 7, gear: 'cap', name: '棒球帽' }, { days: 30, gear: 'crown', name: '皇冠' }];
 
-  /** 选过的样子 + 默认值；没选过角色就跟着性别 */
+  /** 选过的样子 + 默认值；没选过角色就跟着性别；发型不是这个角色的就用这个角色默认的 */
   function look(opts, gender) {
     const l = Object.assign({}, DEFAULT_LOOK, opts || {});
     if (!CHARS[l.char]) l.char = gender === 'female' ? 'girl' : 'boy';
+    if (!STYLES[l.style] || STYLES[l.style].char !== l.char) l.style = CHARS[l.char].style;
     if (!HAIR[l.hair]) l.hair = DEFAULT_LOOK.hair;
     if (!OUTFITS[l.outfit]) l.outfit = DEFAULT_LOOK.outfit;
+    if (!SKINS[l.skin]) l.skin = DEFAULT_LOOK.skin;
+    if (!BUILD_CHOICES.includes(l.build)) l.build = DEFAULT_LOOK.build;
     return l;
+  }
+
+  /** 「跟着我练」：最近 4 周练了几天 → 身材（练 4 天薄肌，10 天腹肌） */
+  function buildFor(trainDays) {
+    return trainDays >= 10 ? 'ripped' : trainDays >= 4 ? 'lean' : 'normal';
   }
 
   /** 连续记录的天数 → 戴什么（只戴最好的那一样） */
@@ -309,16 +407,22 @@
 
   /**
    * 拼出一帧像素图（不含特效）。
-   * @param {{char, hair, outfit, mood, gear:string[], pose?:string, frame:0|1, eyes?:string}} o
-   *   pose：lie 趴着（默认）/ stand 站着 / walk 走路 / wave 站着招手 / stretch 伸懒腰（举手欢呼）
+   * @param {{char, style, hair, skin, outfit, build, mood, gear:string[], pose?:string, frame:0|1, eyes?:string}} o
+   *   pose：lie 趴着（默认）/ stand 站着 / walk 走路 / wave 站着招手 / stretch 伸懒腰（举手欢呼）/ flex 秀肌肉
+   *   build：normal / lean / ripped（「跟着我练」由调用的人先换算好；没给就是普通）
    * @returns {{ w, h, px: string[][], colors: Object }}  px[y][x] 是颜色代码，'.' 透明
    */
   function compose(o) {
     o = o || {};
     const l = look(o);
     const ch = CHARS[l.char];
+    const st = STYLES[l.style];
     const mood = MOODS[o.mood] || MOODS.idle;
     const pose = POSES.includes(o.pose) ? o.pose : 'lie';
+    const lie = pose === 'lie';
+    const build = BUILDS[o.build] ? o.build : 'normal';
+    const outfit = OUTFITS[l.outfit];
+    const type = TYPES[outfit.type];
     const H = heightOf(pose);
     const px = Array.from({ length: H }, () => Array(GW).fill('.'));
     const put = (x, y, rows) => rows.forEach((r, dy) => [...r].forEach((c, dx) => {
@@ -326,19 +430,63 @@
       if (c === '.' || Y < 0 || Y >= H || X < 0 || X >= GW) return;
       px[Y][X] = c === ',' ? '.' : c;
     }));
-    put(0, 0, poseRows(ch, pose, o.frame));
+    // 身子
+    if (lie) put(0, 12, LIE_BODY);
+    else {
+      const body = pose === 'wave' ? (o.frame ? STAND.wave2 : STAND.wave) : STAND[pose] || STAND.body;
+      put(0, 13, body);
+      if (l.char === 'girl') put(0, 20, [LEGS.girl.waist]);
+      put(0, 21, pose === 'walk' && o.frame ? LEGS[l.char].walk : LEGS[l.char].legs);
+    }
+    // 腹肌那一档：胳膊、肩膀粗一圈（男生）
+    if (build === 'ripped' && l.char === 'boy') {
+      const at = BUILDS.ripped.arms;
+      const pts = lie ? at.lie : pose === 'flex' ? at.flex : pose === 'stand' || pose === 'walk' ? at.stand : [];
+      pts.forEach(([x, y]) => put(x, y, [lie ? 'Q' : 'R']));
+    }
+    // 头、头发晃的那一帧、趴着时下巴旁边的鬓角
+    put(0, 0, st.head);
+    put(0, 0, st.frames[o.frame ? 1 : 0]);
+    if (lie && st.lie12) put(0, 12, [st.lie12]);
+    // 长发搭在肩上
+    if (lie && st.drapeLie) put(0, 12, st.drapeLie);
+    if (!lie && st.drapeStand) put(0, 12, st.drapeStand);
     const eyes = o.eyes || mood.eyes;
     if (eyes === 'shades') put(ART.shades.x, ART.shades.y, ART.shades.rows);
     else put(ch.eyeX, EYE_Y, [ch.eyes[eyes] || ch.eyes.chill]);
     (o.gear || []).forEach(k => { const g = ART.gear[k]; if (g) put(g.x, g.y, g.rows); });
-    if (pose === 'stretch') put(ART.armsUp.x, ART.armsUp.y, ART.armsUp.rows);
+    if (pose === 'stretch') put(ARMS_UP.x, ARMS_UP.y, ARMS_UP.rows);
+    if (pose === 'flex') put(ARMS_FLEX.x, ARMS_FLEX.y, ARMS_FLEX.rows);
+    // 部位 → 颜色：敞开的外套中间露肚子；女生光着肚子是运动内衣（胸口两行是衣服）
+    const torsoTop = 13 + M + 1;
+    for (let y = 0; y < H; y++) for (let x = 0; x < GW; x++) {
+      const c = px[y][x];
+      if (!(c in type)) continue;
+      let to = type[c];
+      if (!lie && c !== 'R' && c !== 'r' && y >= torsoTop && y < torsoTop + 6) {
+        if (type.open && x - M >= type.open[0] && x - M <= type.open[1]) to = l.char === 'girl' && y < torsoTop + 2 ? 'j' : 'S';
+        if (outfit.type === 'bare' && l.char === 'girl' && y < torsoTop + 2) to = 'J';
+      }
+      if (!lie && y === torsoTop - 1 && type.n === 'S') to = 's'; // 光膀子、背心：领口那一行是脖子的影子
+      if (lie && to === 's') to = 'd';                         // 趴着露胳膊：下巴底下、胳膊边上深一点，别和脸连成一片
+      px[y][x] = to;
+    }
+    // 身材：肚子露出来的地方画上线条
+    if (!lie) {
+      const pat = BUILDS[build][l.char];
+      pat.forEach((r, dy) => [...r].forEach((c, dx) => {
+        const X = 9 + dx + M, Y = torsoTop + dy;
+        if (c !== '.' && px[Y] && px[Y][X] === 'S') px[Y][X] = c;
+      }));
+    }
     // 描边：透明格子挨着有颜色的格子就涂深色
     const filled = (x, y) => y >= 0 && y < H && x >= 0 && x < GW && px[y][x] !== '.' && px[y][x] !== 'O';
     for (let y = 0; y < H; y++) for (let x = 0; x < GW; x++) {
       if (px[y][x] === '.' && (filled(x + 1, y) || filled(x - 1, y) || filled(x, y + 1) || filled(x, y - 1))) px[y][x] = 'O';
     }
-    const hair = HAIR[l.hair], outfit = OUTFITS[l.outfit];
-    const colors = Object.assign({}, BASE_COLORS, { H: hair.H, h: hair.h, L: hair.L, J: outfit.J, W: outfit.W, w: outfit.w });
+    const hair = HAIR[l.hair], skin = SKINS[l.skin];
+    const colors = Object.assign({}, BASE_COLORS, { H: hair.H, h: hair.h, L: hair.L, S: skin.S, s: skin.s, d: skin.d,
+      J: outfit.J, j: outfit.j, V: outfit.V, v: outfit.v, U: outfit.U, F: BASE_COLORS.Y });
     return { w: GW, h: H, px, colors };
   }
 
@@ -378,7 +526,7 @@
    * 完整的 SVG。几层叠在一起，动不动、什么时候显示全由 CSS 管：
    *  bd-fa / bd-fb 头发两帧；bd-blink 眨眼、bd-lookl / bd-lookr 左右看（只盖眼睛那一行）；
    *  bd-fx 特效。
-   *  站着的姿势（pose-stand / walk / wave / stretch）只有两帧，CSS 按姿势决定换帧快慢（走路、招手换得快）。
+   *  站着的姿势（pose-stand / walk / wave / stretch / flex）只有两帧，CSS 按姿势决定换帧快慢（走路、招手换得快）。
    */
   function svg(o) {
     const pose = POSES.includes(o.pose) ? o.pose : 'lie';
@@ -454,13 +602,18 @@
   }
   TF.liftOpts = liftOpts;
 
-  const Buddy = { CHARS, ART, HAIR, OUTFITS, DEFAULT_LOOK, MOODS, LEVEL_MOOD, GEAR_STEPS, POSES, W: GW, H: GH, heightOf, look, gearFor, compose, paths, svg, streakOf, nextGear, moodOf, liftOpts };
+  const Buddy = { CHARS, STYLES, ART, HAIR, SKINS, OUTFITS, TYPES, BUILDS, BUILD_ORDER, BUILD_CHOICES, DEFAULT_LOOK, MOODS, LEVEL_MOOD, GEAR_STEPS, POSES, W: GW, H: GH, heightOf, look, buildFor, gearFor, compose, paths, svg, streakOf, nextGear, moodOf, liftOpts };
   TF.Buddy = Buddy;
   if (typeof module !== 'undefined' && module.exports) module.exports = Buddy;
 })(typeof window !== 'undefined' ? window : globalThis);
 
 if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
-  buddyLook() { return TF.Buddy.look(this.profile.buddy, this.profile.gender); },
+  buddyLook() {
+    const l = TF.Buddy.look(this.profile.buddy, this.profile.gender);
+    // 没解锁的衣服（数据删了、恢复了旧备份）先穿回默认的
+    if (this.outfitOpen && TF.Buddy.OUTFITS[l.outfit].lv && !this.outfitOpen(l.outfit)) l.outfit = TF.Buddy.DEFAULT_LOOK.outfit;
+    return l;
+  },
 
   /** 有记录的日子（饮食、训练、体重都算） */
   recordDates() {
@@ -479,14 +632,18 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     const st = this.buddyState();
     this._buddySt = st;
     const moreFood = this._buddyCount != null && st.count > this._buddyCount;
+    const moreLift = this._buddyLift != null && st.lifts > this._buddyLift;
     const rank = (g) => TF.Buddy.GEAR_STEPS.findIndex(x => x.gear === g[0]);
     const levelUp = this._buddyGear && rank(st.gear) > rank(this._buddyGear);
     const first = !btn.dataset.key;
     this.buddyDraw();
     if (levelUp) window.Sound && window.Sound.play('unlock', 0.6); // 连续记录拿到新装备：小琶音
-    // 又记了一顿：站起来举手欢呼一下
-    if (!first && (moreFood || levelUp)) this.buddyDo([['stretch', 750], ['stand', 250]]);
+    // 又记了一顿：站起来举手欢呼一下；练了：秀一下肌肉，跟你一起练
+    if (!first && moreLift) this.buddyDo([['flex', 1000], ['stand', 250]]);
+    else if (!first && (moreFood || levelUp)) this.buddyDo([['stretch', 750], ['stand', 250]]);
+    if (!first && (moreFood || moreLift) && this.checkBond) { this.checkBond(); this.checkBuild(); }
     this._buddyCount = st.count;
+    this._buddyLift = st.lifts;
     this._buddyGear = st.gear;
     btn.setAttribute('aria-label', `小人：${st.say}`);
     this.placeBuddy();
@@ -508,8 +665,9 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     const days = new Set(dates).size;
     const proteinLeft = Math.max(0, this.gaugeProteinTarget() - s.protein);
     const m = TF.Buddy.moodOf(g, hour, proteinLeft);
-    const count = this.diet.filter(d => d.date === today).length + this.workouts.filter(w => w.date === today).length;
-    return { mood: m.mood, say: m.say, level: g.hasData ? g.level : null, streak, days, gear: TF.Buddy.gearFor(streak), next: TF.Buddy.nextGear(streak), count };
+    const lifts = this.workouts.filter(w => w.date === today).length;
+    const count = this.diet.filter(d => d.date === today).length + lifts;
+    return { mood: m.mood, say: m.say, level: g.hasData ? g.level : null, streak, days, gear: TF.Buddy.gearFor(streak), next: TF.Buddy.nextGear(streak), count, lifts };
   },
 
   /**
@@ -554,17 +712,18 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
   buddyDraw() {
     const btn = document.getElementById('buddy');
     if (!btn || btn.classList.contains('hidden')) return;
-    const look = this.buddyLook();
+    const art = this.buddyArt();
     const st = this._buddySt || this.buddyState();
     const pose = this._pose || 'lie';
-    const key = [look.char, look.hair, look.outfit, st.mood, st.gear.join('+'), pose].join('|');
+    const mood = this._moodOver || st.mood;
+    const key = [art.char, art.style, art.hair, art.skin, art.outfit, art.build, mood, st.gear.join('+'), pose].join('|');
     if (btn.dataset.key === key) return;
     const posed = btn.dataset.pose !== pose;
     btn.dataset.key = key;
     btn.dataset.pose = pose;
     let move = btn.querySelector('.bd-move');
     if (!move) { btn.innerHTML = '<span class="bd-move"></span>'; move = btn.querySelector('.bd-move'); }
-    move.innerHTML = TF.Buddy.svg({ char: look.char, hair: look.hair, outfit: look.outfit, mood: st.mood, gear: st.gear, pose });
+    move.innerHTML = TF.Buddy.svg(Object.assign(art, { mood, gear: st.gear, pose }));
     if (posed) this.placeBuddy(); // 站起来 / 趴下高度变了，底边还贴着那个框
   },
 
@@ -665,11 +824,21 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     // 一句观察（最近一周蛋白够不够、吃没吃超）和一句训练建议，都是本机算的
     const obs = this.observation ? this.observation() : '';
     const tip = this.trainingTip ? this.trainingTip() : '';
-    pop.innerHTML = `<div class="buddy-pop-head">${head}</div><p class="buddy-say">${esc(st.say)}</p>` +
+    pop.innerHTML = `<div class="buddy-pop-head">${head}</div>` + this.bondRow() + `<p class="buddy-say">${esc(st.say)}</p>` +
       (obs ? `<p class="buddy-obs">${esc(obs)}</p>` : '') +
       (tip ? `<p class="buddy-train">${esc(tip)}</p>` : '') + `<p class="buddy-foot">${esc(foot)}</p>`;
     this.positionBuddyPop();
     pop.classList.remove('hidden');
+  },
+
+  /** 点小人看到的那一行亲密度：名字、第几级、离下一级还差几天、下一级解锁什么 */
+  bondRow() {
+    if (!this.bond) return '';
+    const b = this.bond();
+    const unlock = b.next && Object.keys(TF.Buddy.OUTFITS).find(k => TF.Buddy.OUTFITS[k].lv === b.next.lv);
+    const next = b.next ? `再记 ${Math.max(1, Math.ceil(b.next.need / 10))} 天左右到「${b.next.name}」${unlock ? `，解锁${this.outfitLabel(unlock)}` : ''}` : '已经是最懂你的了';
+    return `<div class="bond-row"><div class="bond-top"><span class="bond-name"><i aria-hidden="true">♥</i>${esc(this.buddyName())} · ${esc(b.name)}</span><span class="bond-lv">Lv${b.lv}</span></div>` +
+      `<div class="bond-bar"><i style="width:${Math.round(b.pct * 100)}%"></i></div><div class="bond-next">${esc(next)} · 长按我摸摸头</div></div>`;
   },
 
   /** 气泡放在小人头顶（按小人要去的位置算，不按动画中途的位置） */
@@ -805,6 +974,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
         const from = this._lastAnswer.at;
         const n = days.reduce((t, d) => t + this.addPlans(d.date, Object.assign({}, d, { from }), true), 0);
         this.saveData();
+        if (this.bondGain) this.bondGain('plan');
         b.disabled = true;
         b.textContent = `✓ 已加到${where}`;
         window.Haptics && window.Haptics.fire('success');
@@ -837,6 +1007,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       document.getElementById('gauge-pop').classList.add('hidden');
       if (!opts.again) this.buddyBang();
     }
+    if (!opts.streaming && !opts.again && this.bondGain) this.bondGain('ask');
   },
 
   /**
@@ -1162,8 +1333,23 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     const btn = document.getElementById('buddy');
     const pop = document.getElementById('buddy-pop');
     const close = () => { pop.classList.add('hidden'); clearInterval(this._thinkT); clearTimeout(this._askT); };
+    // 长按：摸摸头（v5.6）；连着戳三下：它有反应
+    let holdT = null;
+    const unhold = () => { clearTimeout(holdT); holdT = null; };
+    btn.addEventListener('pointerdown', () => {
+      unhold();
+      this._patted = false; // 上次长按松手时小人换了图，click 可能没来：新的一下从头算
+      if (this._touring) return;
+      holdT = setTimeout(() => { holdT = null; this._patted = true; this.patBuddy && this.patBuddy(); }, 550);
+    });
+    ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => btn.addEventListener(ev, unhold));
+    btn.addEventListener('contextmenu', (e) => e.preventDefault());
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
+      if (this._patted) { this._patted = false; return; } // 刚摸完头，这一下不算点
+      const now = Date.now();
+      this._taps = (this._taps || []).filter(t => now - t < 1500).concat(now);
+      if (this._taps.length >= 3 && !this._touring && this.pokeBuddy) { this._taps = []; this.pokeBuddy(); return; }
       window.Haptics && window.Haptics.fire('tick');
       window.Sound && window.Sound.play('blip');
       if (this._touring) { this.tourNext(); return; }
@@ -1200,7 +1386,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     }
     // 过了零点、晚上犯困：回到前台时重画一下
     document.addEventListener('visibilitychange', () => {
-      if (document.hidden) { this.buddyStop(); return; }
+      if (document.hidden) { this.buddyStop(); this.markSeen && this.markSeen(); return; }
       this.renderBuddy();
       clearTimeout(this._greetT);
       this._greetT = setTimeout(() => this.greetOrGuide(), 1500);
@@ -1303,44 +1489,94 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     this.maybeTour();
   },
 
-  /** 设置 →「外观」里的小人：预览、角色、发色、衣服、显示开关 */
-  renderBuddySettings() {
+  /** 设置 →「外观」里的小人：预览（站着，看得见衣服和身材）、名字、角色、发型、发色、肤色、衣服、身材、话多少 */
+  renderBuddySettings(pose) {
     const look = this.buddyLook();
     const $ = (id) => document.getElementById(id);
     if (!$('buddy-preview')) return;
     const st = this.buddyState();
-    $('buddy-preview').innerHTML = TF.Buddy.svg({ char: look.char, hair: look.hair, outfit: look.outfit, mood: 'ok', gear: st.gear });
+    const B = TF.Buddy;
+    // 预览不戴连续记录的装备（帽子会把发型盖住），看得清头发和衣服
+    $('buddy-preview').innerHTML = B.svg(this.buddyArt({ mood: pose === 'flex' ? 'great' : 'ok', gear: [], pose: pose || 'stand' }));
+    const name = $('buddy-name');
+    if (document.activeElement !== name) name.value = (this.profile.buddy || {}).name || '';
     document.querySelectorAll('#buddy-char .seg-btn').forEach(b => b.classList.toggle('active', b.dataset.value === look.char));
-    const sw = (group, list, cur, fill) => {
-      $(group).innerHTML = Object.keys(list).map(k => `<button type="button" class="swatch${k === cur ? ' on' : ''}" data-value="${k}" aria-label="${list[k].label}" title="${list[k].label}" style="${fill(list[k])}"></button>`).join('');
+    $('buddy-style').innerHTML = Object.keys(B.STYLES).filter(k => B.STYLES[k].char === look.char)
+      .map(k => `<button class="seg-btn${k === look.style ? ' active' : ''}" type="button" data-value="${k}">${B.STYLES[k].label}</button>`).join('');
+    const sw = (group, list, cur, fill, locked) => {
+      $(group).innerHTML = Object.keys(list).map(k => {
+        const lock = locked && locked(k);
+        const label = group === 'buddy-outfit' ? this.outfitLabel(k) : list[k].label;
+        return `<button type="button" class="swatch${k === cur ? ' on' : ''}${lock ? ' locked' : ''}" data-value="${k}" aria-label="${label}${lock ? `（Lv${list[k].lv} 解锁）` : ''}" title="${label}" style="${fill(list[k])}">${lock ? '<i aria-hidden="true">🔒</i>' : ''}</button>`;
+      }).join('');
     };
-    sw('buddy-hair', TF.Buddy.HAIR, look.hair, (h) => `background:${h.H}`);
-    sw('buddy-outfit', TF.Buddy.OUTFITS, look.outfit, (o) => `background:linear-gradient(90deg, ${o.W} 0 30%, ${o.J} 30% 70%, ${o.W} 70%)`);
+    sw('buddy-hair', B.HAIR, look.hair, (h) => `background:${h.H}`);
+    sw('buddy-skin', B.SKINS, look.skin, (k) => `background:${k.S}`);
+    const fill = (o) => o.type === 'bare' ? `background:linear-gradient(90deg, ${B.SKINS[look.skin].S} 0 100%)` :
+      o.type === 'tank' ? `background:linear-gradient(90deg, ${B.SKINS[look.skin].S} 0 26%, ${o.J} 26% 74%, ${B.SKINS[look.skin].S} 74%)` :
+      o.type === 'open' ? `background:linear-gradient(90deg, ${o.V} 0 22%, ${o.J} 22% 40%, ${B.SKINS[look.skin].S} 40% 60%, ${o.J} 60% 78%, ${o.V} 78%)` :
+      `background:linear-gradient(90deg, ${o.V} 0 30%, ${o.J} 30% 70%, ${o.V} 70%)`;
+    sw('buddy-outfit', B.OUTFITS, look.outfit, fill, (k) => !this.outfitOpen(k));
+    document.querySelectorAll('#buddy-build .seg-btn').forEach(b => b.classList.toggle('active', b.dataset.value === look.build));
+    const n = this.trainDays28();
+    const built = B.BUILDS[this.buddyBuild()].label;
+    $('buddy-look-note').textContent = `衣服：${this.outfitLabel(look.outfit)}。` + (look.build === 'auto'
+      ? `身材跟着你练：最近 4 周练了 ${n} 天，现在是${built}${n < 10 ? `，练满 ${n < 4 ? 4 : 10} 天${n < 4 ? '薄肌' : '腹肌'}` : ''}。`
+      : '身材只在露出来的衣服（背心、敞开的外套、光膀子）上看得出来。');
+    const b = this.bond();
+    const lockNext = Object.keys(B.OUTFITS).filter(k => !this.outfitOpen(k)).map(k => B.OUTFITS[k].lv).sort()[0];
+    $('buddy-bond').innerHTML = `<div class="bond-top"><span class="bond-name"><i aria-hidden="true">♥</i>${esc(b.name)}</span><span class="bond-lv">Lv${b.lv}</span></div>` +
+      `<div class="bond-bar"><i style="width:${Math.round(b.pct * 100)}%"></i></div>` +
+      `<div class="bond-next">${b.next ? `再记 ${Math.max(1, Math.ceil(b.next.need / 10))} 天左右升级${lockNext ? `，Lv${lockNext} 解锁新衣服` : ''}` : '亲密度满了，衣服都解锁了'}</div>`;
     $('buddy-show').checked = look.show;
-    $('buddy-chatty').checked = (this.profile.buddy || {}).chatty !== false;
-    $('buddy-chatty').disabled = !look.show;
-    $('buddy-note').textContent = (st.streak ? `连续记录 ${st.streak} 天。` : '') + '趴在「按住说话」上面，点它会打招呼；连续记 3 天戴头带，7 天戴棒球帽，30 天戴皇冠。';
+    const talk = this.talkLevel ? this.talkLevel() : 'normal';
+    document.querySelectorAll('#buddy-talk .seg-btn').forEach(x => { x.classList.toggle('active', x.dataset.value === talk); x.disabled = !look.show; });
+    $('buddy-talk-note').textContent = talk === 'quiet' ? '只在卡住了、刚记的份量要问时说话' :
+      talk === 'more' ? '打招呼、饭点、你回来了、逛的时候都会凑过来，一天十几句' : '打招呼、饭点问一句、逛的时候凑过来，一天八句以内';
+    $('buddy-note').textContent = (st.streak ? `连续记录 ${st.streak} 天。` : '') + '趴在「按住说话」上面：点它看今天，长按摸摸头。连续记 3 天戴头带，7 天棒球帽，30 天皇冠。';
   },
 
   bindBuddySettings() {
-    const set = (patch) => {
-      this.profile.buddy = Object.assign(this.buddyLook(), patch);
-      this.saveData();
-      this.renderBuddySettings();
+    const set = (patch, pose) => {
+      this.setBuddy(Object.assign(this.buddyLook(), patch));
+      this.renderBuddySettings(pose);
       this.renderBuddy();
       window.Haptics && window.Haptics.fire('tick');
+      if (pose) { clearTimeout(this._prevT); this._prevT = setTimeout(() => this.renderBuddySettings(), 1300); }
     };
-    const pick = (id, key) => document.getElementById(id).addEventListener('click', (e) => {
-      const b = e.target.closest('.swatch');
-      if (b) set({ [key]: b.dataset.value });
+    const pick = (id, key, pose) => document.getElementById(id).addEventListener('click', (e) => {
+      const b = e.target.closest('.swatch, .seg-btn');
+      if (!b) return;
+      if (b.classList.contains('locked')) {
+        const lv = TF.Buddy.OUTFITS[b.dataset.value].lv;
+        this.showToast(`和小人到 Lv${lv}（${TF.Bond.LEVELS[lv - 1].name}）解锁「${this.outfitLabel(b.dataset.value)}」，多记几天就到了`);
+        return;
+      }
+      set({ [key]: b.dataset.value }, pose);
     });
     pick('buddy-hair', 'hair');
+    pick('buddy-skin', 'skin');
     pick('buddy-outfit', 'outfit');
+    pick('buddy-style', 'style');
+    pick('buddy-build', 'build', 'flex');
     document.getElementById('buddy-char').addEventListener('click', (e) => {
       const b = e.target.closest('.seg-btn');
-      if (b) set({ char: b.dataset.value });
+      if (b) set({ char: b.dataset.value, style: '' });
+    });
+    document.getElementById('buddy-preview').addEventListener('click', () => {
+      this.renderBuddySettings('flex');
+      clearTimeout(this._prevT);
+      this._prevT = setTimeout(() => this.renderBuddySettings(), 1300);
+    });
+    const name = document.getElementById('buddy-name');
+    name.addEventListener('change', () => {
+      this.setBuddy({ name: name.value.replace(/\s+/g, '').slice(0, 6) });
+      this.renderBuddySettings();
     });
     document.getElementById('buddy-show').addEventListener('change', (e) => set({ show: e.target.checked }));
-    document.getElementById('buddy-chatty').addEventListener('change', (e) => set({ chatty: e.target.checked }));
+    document.getElementById('buddy-talk').addEventListener('click', (e) => {
+      const b = e.target.closest('.seg-btn');
+      if (b && !b.disabled) set({ talk: b.dataset.value, chatty: b.dataset.value !== 'quiet' });
+    });
   }
 });
