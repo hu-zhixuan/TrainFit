@@ -58,8 +58,8 @@ const types = (r) => r.meals.map(m => m.mealType.replace('/补剂', '')).join(',
 const itemNames = (m) => (m.items || []).map(i => i.name).join(',') + ',' + m.foodSummary;
 
 const CASES = [
-  ['看昨天那页：瑜伽挪到前一天', '这个瑜伽记错日子了，弄到前一天去', '10:30', r => JSON.stringify({ d: r.deletes, u: r.updates, off: r.dayOffset, w: r.workouts.map(w => w.exerciseName + (w.durationMin || '')) }), { dayLabel: '2026-09-28', dayRecords: [{ ref: 'r1', kind: 'workout', id: 'w1', text: '训练 瑜伽 60分钟 消耗180' }, { ref: 'r2', kind: 'meal', id: 'd1', text: '午餐 黄焖鸡米饭 828kcal 蛋白40' }] }],
-  ['看今天那页：瑜伽挪到昨天', '瑜伽是昨天练的，挪到昨天', '10:30', r => JSON.stringify({ d: r.deletes, u: r.updates, off: r.dayOffset, w: r.workouts.map(w => w.exerciseName + (w.durationMin || '')) }), { dayRecords: [{ ref: 'r1', kind: 'workout', id: 'w1', text: '训练 瑜伽 60分钟 消耗180' }] }]
+  ['看昨天那页：瑜伽挪到前一天', '这个瑜伽记错日子了，弄到前一天去', '10:30', r => { const u = r.updates.find(x => x.ref === 'r1'); const ok = u && (u.set.dayOffset === -1 || u.set.date) && !r.deletes.length && !r.workouts.length; return ok || JSON.stringify({ d: r.deletes, u: r.updates, off: r.dayOffset, w: r.workouts.map(w => w.exerciseName + (w.durationMin || '')) }); }, { dayLabel: '2026-09-28', dayRecords: [{ ref: 'r1', kind: 'workout', id: 'w1', text: '训练 瑜伽 60分钟 消耗180' }, { ref: 'r2', kind: 'meal', id: 'd1', text: '午餐 黄焖鸡米饭 828kcal 蛋白40' }] }],
+  ['看今天那页：瑜伽挪到昨天', '瑜伽是昨天练的，挪到昨天', '10:30', r => { const u = r.updates.find(x => x.ref === 'r1'); const ok = u && (u.set.dayOffset === -1 || u.set.date) && !r.deletes.length && !r.workouts.length; return ok || JSON.stringify({ d: r.deletes, u: r.updates, off: r.dayOffset, w: r.workouts.map(w => w.exerciseName + (w.durationMin || '')) }); }, { dayRecords: [{ ref: 'r1', kind: 'workout', id: 'w1', text: '训练 瑜伽 60分钟 消耗180' }] }]
 ];
 const sumN = (items) => { const n = {}; items.forEach(i => Object.keys(i.nutrients || {}).forEach(k => { n[k] = (n[k] || 0) + i.nutrients[k]; })); return n; };
 const allItems = (r) => r.meals.map(m => `【${m.mealType}】` + m.items.map(i => i.name + (i.amount || '')).join('、')).join(' ');

@@ -11,11 +11,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: 复现：挪到前一天 ×4（只用 Atria）
+      - name: 新提示词：挪到前一天 ×4（只用 Atria）
         env:
           TZ: Asia/Shanghai
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
           LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
           LLM_MODEL: ${{ vars.LLM_MODEL }}
-          TAG: main
+          TAG: 新
         run: ROUNDS=4 node .github/api_move.js
