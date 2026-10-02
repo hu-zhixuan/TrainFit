@@ -488,7 +488,7 @@
             i -= 1; // 同一种请求再试
             continue;
           }
-          if (!/^HTTP 4\d\d/.test(msg) || /^HTTP 429/.test(msg)) break; // 只有参数被拒才换下一种写法
+          if (!/^HTTP (400|422)/.test(msg)) break; // 只有参数被拒才换下一种写法（key 不对的 401 / 403 换了也没用，别多花一次）
         }
       }
       throw lastErr || new Error('LLM_FAILED');

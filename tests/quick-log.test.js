@@ -662,3 +662,19 @@ test('画像：提问时带一行画像；问以前的事才带最近两周（�
   assert.ok(!/最近两周/.test(m[1].content));
   assert.ok(!/画像/.test(Parser.buildMessages('中午一碗面', {}).at(1).content), '记录时不带');
 });
+
+test('key 不对（401）：不再换写法多发一次', async () => {
+  const origSend = Parser.send;
+  Parser.retryWaits = [0, 0];
+  Parser.hedgeMs = 0;
+  let n = 0;
+  try {
+    Parser.send = async () => { n += 1; throw new Error('HTTP 401 invalid key'); };
+    await assert.rejects(Parser.parse('明天吃啥', {}), /HTTP 401/);
+    assert.strictEqual(n, 1);
+  } finally {
+    Parser.send = origSend;
+    delete Parser.retryWaits;
+    delete Parser.hedgeMs;
+  }
+});

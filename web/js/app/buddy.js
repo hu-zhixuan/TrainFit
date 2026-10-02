@@ -1001,11 +1001,15 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
   },
 
   bindNextChips(pop) {
-    pop.querySelectorAll('.next-chip').forEach(b => b.addEventListener('click', (e) => {
+    const chips = [...pop.querySelectorAll('.next-chip')];
+    chips.forEach(b => b.addEventListener('click', (e) => {
       e.stopPropagation();
+      if (b.disabled) return;
+      // 点了一个：这个亮起来，其他的淡掉，都不能再点（点两下会发两遍、打断回答）
+      chips.forEach(c => { c.disabled = true; c.classList.toggle('sent', c === b); });
       window.Haptics && window.Haptics.fire('tick');
       clearTimeout(this._askT);
-      if (window.QuickLog) window.QuickLog.submit(b.dataset.q);
+      if (window.QuickLog) window.QuickLog.submit(b.dataset.q, { ask: true });
     }));
   },
 
@@ -1113,7 +1117,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       e.stopPropagation();
       this.showBuddyThinking(p.text);
       if (this.pending.some(x => x.id === p.id)) this.retryPending(p.id);
-      else if (window.QuickLog) window.QuickLog.submit(p.text);
+      else if (window.QuickLog) window.QuickLog.submit(p.text, { ask: true, again: true }); // 点了「再试一次」：不算重复
     });
     this.positionBuddyPop();
     this.popIn(pop);

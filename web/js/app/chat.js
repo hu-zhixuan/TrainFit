@@ -42,7 +42,7 @@ Object.assign(FitnessApp.prototype, {
       pop.querySelectorAll('.portion-opt').forEach(x => x.classList.toggle('on', x === b));
       if (o.pick) o.pick();
       clearTimeout(this._askT);
-      if (o.ask && window.QuickLog) { window.QuickLog.submit(o.ask); return; }
+      if (o.ask && window.QuickLog) { window.QuickLog.submit(o.ask, { ask: true }); return; }
       if (o.talk) {
         const talk = document.querySelector('#voice-row:not(.hidden) .talk-btn') || document.querySelector('#text-row:not(.hidden) .cmp-text');
         if (talk) { talk.classList.add('tour-glow'); setTimeout(() => talk.classList.remove('tour-glow'), 3000); }
