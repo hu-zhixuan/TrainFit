@@ -11,15 +11,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: v5.5 改计划（点改一改 / 没点按钮）+ 计划回归（只用 Atria）
+      - name: v5.5 没点按钮也提醒一句：改计划 / 改记录别带偏（只用 Atria）
         env:
           TZ: Asia/Shanghai
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
           LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
           LLM_MODEL: ${{ vars.LLM_MODEL }}
         run: |
-          GAP=15000 node .github/api_v55.js > a.log 2>&1 &
-          sleep 7
-          GAP=15000 node .github/api_plan.js > b.log 2>&1 &
-          wait
-          cat a.log b.log
+          GAP=15000 node .github/api_v55.js
