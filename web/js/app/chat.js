@@ -108,10 +108,19 @@ Object.assign(FitnessApp.prototype, {
         { label: '刚开始', pick: add('健身新手'), reply: '好，那我排的都从轻的来，动作先练对。' },
         { label: '半年左右', pick: add('练了半年左右'), reply: '有底子了，重量可以慢慢往上加。' },
         { label: '一年以上', pick: add('练了一年以上'), reply: '老手了，那我按你的成绩排。' }] },
+      { key: 'days', skip: /一周|每周|练\d|天练/.test(memo) || this.isSimple(), text: '一周大概能练几天？我排计划按这个来。', options: [
+        { label: '2 天', pick: add('一周能练2天'), reply: '好，那我每次排全身的。' },
+        { label: '3～4 天', pick: add('一周能练3～4天'), reply: '好，那我分上下肢排。' },
+        { label: '5 天以上', pick: add('一周能练5天以上'), reply: '练得勤，那我分部位排。' },
+        { label: '说不准', reply: '没事，想练的时候叫我排。' }] },
       { key: 'food', skip: /不吃|过敏|素|忌口|都吃/.test(memo), text: '有什么不吃的吗？我排吃的时候避开。', options: [
         { label: '都吃', pick: add('什么都吃'), reply: '好养活。' },
         { label: '不吃辣', pick: add('不吃辣'), reply: '记住了，不给你排辣的。' },
         { label: '我说一下', talk: true, reply: '按住说，比如「我不吃香菜和羊肉」。' }] },
+      { key: 'eat', skip: /外卖|食堂|自己做|做饭|下馆子/.test(memo), text: '平时吃饭多是？我推荐吃的照这个来。', options: [
+        { label: '自己做', pick: add('多自己做饭'), reply: '那我推荐的都按家常菜来。' },
+        { label: '外卖食堂', pick: add('多吃外卖食堂'), reply: '那我推荐外卖、食堂能买到的。' },
+        { label: '都有', reply: '行，两种都给你想着。' }] },
       { key: 'hurt', skip: /伤|疼|痛|不好/.test(memo) || this.isSimple(), text: '有没有哪儿有伤，练的时候要注意？', options: [
         { label: '没有', reply: '那就放开练。' },
         { label: '膝盖', pick: add('膝盖有旧伤'), reply: '记住了，深蹲跳、弓步这类我少排。' },

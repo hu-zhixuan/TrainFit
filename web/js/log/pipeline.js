@@ -78,7 +78,9 @@
       const plans = app.planContext ? app.planContext(date) : [];
       const offer = app._planOffer && Date.now() - app._planOffer.at < 15 * 60 * 1000 ? app._planOffer.text : '';
       return { now: new Date(p.ts || Date.now()), history: app.workouts, dayRecords, recent, dayLabel, lastWeight: lw ? lw.kg : null, myFoods: app.myFoods || [], day, plans, lastPlan: offer,
-        memo: app.memoList ? app.memoList() : [], date, ask: !!p.ask, past: p.ask ? this.pastDays(date) : [],
+        memo: app.memoList ? app.memoList() : [], date, ask: !!p.ask,
+        // 提问：带一行画像；问以前的事才把最近两周一天一行带上（省 token）
+        portrait: p.ask && app.portrait ? app.portrait() : [], past: p.ask && TF.needsHistory(p.text) ? this.pastDays(date) : [],
         state: app.profile.dayState && app.profile.dayState.date === date ? app.profile.dayState.sleep : '' };
     },
 

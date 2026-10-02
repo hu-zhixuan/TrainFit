@@ -76,9 +76,12 @@ Object.assign(FitnessApp.prototype, {
     const el = document.getElementById('memo-list');
     if (!el) return;
     const list = this.memoList();
-    el.innerHTML = list.length
+    const pic = this.portrait ? this.portrait() : [];
+    el.innerHTML = (list.length
       ? list.map((x, i) => `<div class="myfood-row"><div class="myfood-main"><b>${esc(x)}</b></div><button type="button" class="chip" data-memo-del="${i}">删除</button></div>`).join('')
-      : '<p class="field-note">跟小人说说你自己，比如「我叫阿程，健身新手，不吃辣」，会记在这里，以后回答、估热量、排计划都照顾到。</p>';
+      : '<p class="field-note">跟小人说说你自己，比如「我叫阿程，健身新手，不吃辣」，会记在这里，以后回答、估热量、排计划都照顾到。</p>') +
+      // 画像：按记录看出来的，不用删，记录变了它跟着变
+      (pic.length ? `<div class="portrait"><b>按你的记录看出来的</b><p>${pic.map(esc).join('；')}</p><small>问小人问题时会带上这几句，记录变了它跟着变。</small></div>` : '');
   },
 
   renderMyFoods() {

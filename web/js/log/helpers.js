@@ -161,6 +161,14 @@
   }
 
   /**
+   * 问的是以前的事（「上周练了几次」「最近瘦了多少」「哪天吃得最多」）：要把最近两周一天一行带给大模型。
+   * 别的问题（「明天吃啥」「腿怎么练」）带一行画像就够了，省 token、也快。
+   */
+  function needsHistory(text) {
+    return /上(周|个?星期|个?礼拜|个?月|次|回)|这(周|星期|礼拜|个月|几天|段时间|阵子)|本(周|月)|最近|近(期|来|一周|两周|几天)|哪(天|一天|顿|次|回)|几(次|天|顿|回)|多少(天|次|回)|瘦了|胖了|轻了|重了|涨了|降了|掉了|长了|变化|趋势|以前|之前|昨天|前天|平均|一直|每天|天天|那天|连续|进步|退步|停滞|平台期|卡住|够不够|多不多/.test(String(text || ''));
+  }
+
+  /**
    * 只是在问、没在报吃了练了什么（「晚上吃点啥」「上周练了几次」）。
    * 「中午吃了牛肉面，晚上吃点啥」这种又记又问的不算——它没整理完时要留卡片，免得记录丢了。
    */
@@ -209,7 +217,7 @@
     return null;
   }
 
-  Object.assign(TF, { MUSCLES, MEAL_TYPES, num, cleanText, round1, mealTypeByHour, normMealType, mealTimes, mealSegments, NUTRIENTS, cleanNutrients, nutrientsText, toKg, quickWeight, findWeight, guessMuscle, looksLikeQuestion, pureQuestion, quickIntent });
+  Object.assign(TF, { MUSCLES, MEAL_TYPES, num, cleanText, round1, mealTypeByHour, normMealType, mealTimes, mealSegments, NUTRIENTS, cleanNutrients, nutrientsText, toKg, quickWeight, findWeight, guessMuscle, looksLikeQuestion, pureQuestion, needsHistory, quickIntent });
 
   if (typeof module !== 'undefined' && module.exports) module.exports = TF;
 })(typeof window !== 'undefined' ? window : globalThis);

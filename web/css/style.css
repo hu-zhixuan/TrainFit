@@ -1279,6 +1279,11 @@ body.no-composer .snackbar { bottom: calc(20px + var(--sab)); }
 .myfood-kcal { font-weight: 700; font-variant-numeric: tabular-nums; }
 .myfood-kcal small { font-size: 0.7rem; color: var(--text-3); margin-left: 2px; font-weight: 600; }
 .breakdown-note { font-size: 0.72rem; color: var(--text-3); line-height: 1.45; margin-top: 2px; }
+/* 小人记住的 · 按记录看出来的画像 */
+.portrait { margin-top: 4px; padding: 10px 12px; border-radius: var(--r-sm); background: var(--surface-2); }
+.portrait b { display: block; font-size: 0.78rem; font-weight: 650; color: var(--text-3); }
+.portrait p { margin: 4px 0 2px; font-size: 0.86rem; line-height: 1.55; color: var(--text); }
+.portrait small { font-size: 0.72rem; color: var(--text-3); }
 
 /* ---------- 提醒与震动 ---------- */
 .switch-row { display: flex; align-items: center; gap: 10px; }
