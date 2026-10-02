@@ -408,6 +408,54 @@ test('提示条第一行不带大模型自己估的热量数（和按库校准�
   assert.strictEqual(Parser.normalize({ reply: '还差40g蛋白，看小人', answer: '还差 40g' }, {}).reply, '还差40g蛋白，看小人');
 });
 
+test('改小人刚给的计划（v5.5）：哪些话算在改计划', () => {
+  for (const t of ['不要米饭，换成红薯', '蛋白再多一点', '晚上少吃点', '深蹲换成腿举', '能不能换成鸡胸肉', '早餐太多了', '别排深蹲，膝盖疼']) assert.ok(TF.looksLikePlanEdit(t), t);
+  for (const t of ['中午吃了牛肉面', '删掉奶茶', '体重62', '明天练什么好', '刚才那个牛奶是甜的', '早餐照计划吃了', '瑜伽挪到前一天']) assert.ok(!TF.looksLikePlanEdit(t), t);
+  // 只是在问、在改计划：没整理出来也不留卡片
+  assert.ok(TF.noCard({ ask: true, plan: 'maybe', text: '不要米饭，换成红薯' }));
+  assert.ok(TF.noCard({ ask: true, text: '晚上吃点啥好？' }));
+  assert.ok(!TF.noCard({ ask: true, text: '中午吃了牛肉面，晚上吃点啥' }));
+});
+
+test('点了「改一改」：上下文里明说在改计划；大模型只回「改好了」没给计划，说清楚再问一次', async () => {
+  const lastPlan = '10月3日的：\n早餐 燕麦50g、鸡蛋2个、牛奶1杯 490kcal 蛋白28\n午餐 米饭1碗半、鸡胸肉200g、青菜 610kcal 蛋白59';
+  const user = (ctx) => Parser.buildMessages('不要米饭，换成红薯', ctx)[1].content;
+  assert.match(user({ lastPlan, editPlan: true }), /这句是在改上面「刚才给的计划」/);
+  assert.ok(!/这句是在改上面/.test(user({ lastPlan })), '没点「改一改」不硬说');
+  assert.match(user({ lastPlan, maybeEditPlan: true }), /这句多半是在改上面「刚才给的计划」.*要是在改这天已有的记录，照常用 update/);
+  assert.ok(!/多半是在改/.test(user({ maybeEditPlan: true })), '没给过计划就不提');
+  const origSend = Parser.send;
+  Parser.retryWaits = [0, 0];
+  Parser.hedgeMs = 0;
+  const ok = (o) => JSON.stringify({ choices: [{ message: { content: JSON.stringify(o) } }] });
+  const plan = { dayOffset: 1, meals: [{ mealType: '午餐', foodSummary: '红薯300g、鸡胸肉200g', items: [{ name: '红薯', amount: '300g', grams: 300, calories: 300, proteinG: 4, carbsG: 70, fatG: 1 }, { name: '鸡胸肉', amount: '200g', grams: 200, calories: 236, proteinG: 49, carbsG: 0, fatG: 4 }] }] };
+  try {
+    const sent = [];
+    Parser.send = async (body) => {
+      sent.push(body.messages[1].content);
+      return sent.length === 1 ? ok({ reply: '好的，米饭全换成红薯，计划改好了', dayOffset: 0 })
+        : ok({ reply: '换好了', dayOffset: 0, answer: '午餐：红薯300g＋鸡胸肉200g', plan });
+    };
+    const r = await Parser.parse('不要米饭，换成红薯', { lastPlan, editPlan: true });
+    assert.strictEqual(sent.length, 2);
+    assert.match(sent[1], /上一次你只说了改好了/);
+    assert.strictEqual(r.plan.meals[0].foodSummary, '红薯300g、鸡胸肉200g');
+    // 没点「改一改」、说的也不像改计划：不多问
+    sent.length = 0;
+    await Parser.parse('嗯嗯', { lastPlan });
+    assert.strictEqual(sent.length, 1);
+    // 一次就给了计划：不多问
+    sent.length = 0;
+    Parser.send = async (body) => { sent.push(1); return ok({ reply: '换好了', dayOffset: 0, answer: '午餐：红薯', plan }); };
+    await Parser.parse('不要米饭，换成红薯', { lastPlan, editPlan: true });
+    assert.strictEqual(sent.length, 1);
+  } finally {
+    Parser.send = origSend;
+    delete Parser.retryWaits;
+    delete Parser.hedgeMs;
+  }
+});
+
 test('JSON 的小毛病本机修好，不用整份重发（v5.4 实测的写法）', () => {
   // "next" 写成几个散的字符串；字符串里的中文标点不动
   let r = Parser.extractJson('{"reply":"x","answer":"早餐：鸡蛋，牛奶","next":"鸡腿饭能换成牛肉吗","练后只喝粉够不够","plan":{"dayOffset":1}}');

@@ -171,7 +171,7 @@ Object.assign(FitnessApp.prototype, {
 
     // 记录：整理中的在最上面（提问的在小人气泡里等，不占卡片；没整理出来才显示）；然后是计划；饮食按 早→午→晚→加餐，训练按先后顺序
     // 提问：整理中不出卡片（小人在想）；没答上来也不留卡片（小人的气泡里能重试），又记又问的才留
-    const pend = this.pending.filter(p => p.date === date && !(p.ask && (p.status === 'working' || (TF.pureQuestion && TF.pureQuestion(p.text))))).sort((a, b) => b.ts - a.ts);
+    const pend = this.pending.filter(p => p.date === date && !(p.ask && (p.status === 'working' || p.plan || (TF.pureQuestion && TF.pureQuestion(p.text))))).sort((a, b) => b.ts - a.ts);
     const meals = this.diet.filter(d => d.date === date)
       .sort((a, b) => (MEAL_TYPES.indexOf(a.mealType) - MEAL_TYPES.indexOf(b.mealType)) || (recordTs(a) - recordTs(b)));
     const lifts = this.workouts.filter(w => w.date === date).sort((a, b) => recordTs(a) - recordTs(b));
@@ -264,8 +264,8 @@ Object.assign(FitnessApp.prototype, {
   },
 
   /** @param ask 听着像提问：整理时不出卡片，小人在气泡里说「我想想」 */
-  addPending(text, ask) {
-    const p = { id: 'p_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6), text, date: this.selectedDate, ts: Date.now(), status: 'working', ask: !!ask };
+  addPending(text, ask, extra) {
+    const p = Object.assign({ id: 'p_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6), text, date: this.selectedDate, ts: Date.now(), status: 'working', ask: !!ask }, extra || {});
     this.pending.unshift(p);
     this.savePending();
     this.buddyThinking && this.buddyThinking();
