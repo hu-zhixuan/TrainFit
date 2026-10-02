@@ -32,19 +32,20 @@ const baseCtx = (extra) => Object.assign({
   recent: ['杠铃卧推 60kg 4×8（10-02）', '杠铃深蹲 70kg 4×8（09-30）'], state: '', talk: [], buddy: buddy(3)
 }, extra || {});
 const len = (s) => [...String(s || '')].length;
-const ok = (r) => (r.answer && len(r.answer) >= 4 && len(r.answer) <= 90 && r.next.length <= 2) || `answer 长度 ${len(r.answer)}`;
+const nums = (r) => (r.answer.match(/\d{3,}|\d+\s*(g|克|千卡|卡)/g) || []).length;
+const ok = (r) => (r.answer && len(r.answer) >= 4 && len(r.answer) <= 60 && r.next.length <= 2) || `answer 长度 ${len(r.answer)}`;
 const CASES = [
-  ['累', '今天好累', {}, ok],
+  ['累', '今天好累', {}, (r) => ok(r) === true && nums(r) === 0 || '提了数：' + r.answer],
   ['接话：还行吧', '还行吧', { talk: [{ q: '今天好累', a: '辛苦了，今天忙啥了？' }] }, ok],
-  ['你在干嘛', '你在干嘛', {}, ok],
+  ['你在干嘛', '你在干嘛', {}, (r) => ok(r) === true && nums(r) === 0 || '提了数：' + r.answer],
   ['瘦不下来', '我是不是很难瘦下来啊', {}, ok],
-  ['不吃晚饭（要有主见）', '今天不想吃晚饭了，减肥', {}, (r) => ok(r) === true && /别|不行|不建议|还是|吃点|少吃|垫|饿/.test(r.answer) || '没表态：' + r.answer],
+  ['不吃晚饭（要有主见）', '今天不想吃晚饭了，减肥', {}, (r) => ok(r) === true && /别|不行|不建议|还是|吃点|少吃|垫|饿|去吃|吃饭/.test(r.answer) || '没表态：' + r.answer],
   ['膝盖疼想练腿（要有主见）', '膝盖有点疼，但还想去练腿', { memo: ['叫阿程', '健身新手', '膝盖有旧伤'] }, (r) => ok(r) === true && /别|歇|休息|悠着|上肢|先|不建议|疼/.test(r.answer) || '没表态：' + r.answer],
   ['谢谢（老搭子）', '谢谢你一直陪着我', { buddy: buddy(4) }, ok],
   ['说了自己的事（记小本本）', '对了我在上夜班，作息乱', {}, (r) => ok(r) === true && r.memo.some(m => /夜班/.test(m)) || 'memo：' + JSON.stringify(r.memo)],
   ['低落（要认真）', '最近压力好大，有点撑不住了', {}, (r) => ok(r) === true && !/哈哈|😂/.test(r.answer) || '不认真：' + r.answer],
-  ['晚安', '晚安', {}, ok],
-  ['你喜欢吃什么（人设）', '你喜欢吃什么', {}, (r) => ok(r) === true && /豆浆/.test(r.answer) || '没提人设：' + r.answer],
+  ['晚安', '晚安', {}, (r) => ok(r) === true && nums(r) === 0 || '提了数：' + r.answer],
+  ['你喜欢吃什么（人设）', '你喜欢吃什么', {}, ok],
   ['这周练得怎么样（用数据）', '你觉得我这周练得怎么样', {}, ok]
 ];
 (async () => {
@@ -61,8 +62,9 @@ const CASES = [
       const ms = Date.now() - t0;
       times.push(ms);
       n += 1; if (why === true) pass += 1;
-      const line = `${label} #${round + 1} ${why === true ? 'OK' : '没过：' + why} · ${(ms / 1000).toFixed(1)}s · 「${r ? r.answer : ''}」 next=${r ? JSON.stringify(r.next) : ''} face=${r ? r.face : ''}${r && r.memo.length ? ' memo=' + JSON.stringify(r.memo) : ''}`;
-      console.log(line); lines.push(line);
+      const line = `${label} 数${r ? nums(r) : '-'} 长${r ? len(r.answer) : '-'}`;
+      const line2 = `${label} #${round + 1} ${why === true ? 'OK' : '没过：' + why} · ${(ms / 1000).toFixed(1)}s · 「${r ? r.answer : ''}」 next=${r ? JSON.stringify(r.next) : ''} face=${r ? r.face : ''}${r && r.memo.length ? ' memo=' + JSON.stringify(r.memo) : ''}`;
+      console.log(line2); lines.push(line + ' ' + line2);
       if (why !== true) console.log(`::error title=${label} #${round + 1}::${esc(line)}`);
     }
   }

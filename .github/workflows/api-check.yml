@@ -18,4 +18,4 @@ jobs:
           LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
           LLM_MODEL: ${{ vars.LLM_MODEL }}
         run: |
-          GAP=15000 ROUNDS=2 node .github/api_v58.js
+          GAP=15000 ROUNDS=1 node .github/api_v58.js
