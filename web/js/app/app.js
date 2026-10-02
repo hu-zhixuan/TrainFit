@@ -202,7 +202,28 @@ class FitnessApp {
   quickAnswer(text) {
     const names = [...new Set(this.workouts.filter(w => !w.durationMin).map(w => w.exerciseName))];
     const it = TF.quickIntent(text, names);
-    if (!it) return '';
+    if (!it) return null;
+    const answer = this.quickAnswerText(it);
+    if (!answer) return null;
+    // 「接着问」：顺着这个问题，下一句最可能想问的
+    const short = (it.name || '').replace(/^(杠铃|哑铃|器械|史密斯|坐姿|站姿|绳索)/, '');
+    const NEXT = {
+      protein: ['晚上吃点啥能补蛋白', '给我定明天的食谱'], kcal: ['晚上吃点啥好', '能不能吃火锅'], deficit: ['这周热量赤字怎么样', '晚上吃点啥好'],
+      weight: ['怎么吃瘦得快一点', '最近蛋白够不够'], streak: ['这周练了几次', '最近蛋白够不够'], trains: ['明天练什么', '这周还该练哪儿'],
+      lift: [`${short}怎么练能涨`, '明天练什么']
+    };
+    return { text: answer, next: NEXT[it.kind] || [] };
+  }
+
+  /** 还差多少蛋白，吃点啥能补上（按差的多少给，别差 89g 还说「一块鸡胸就够」） */
+  proteinFix(left) {
+    if (left >= 70) return '一块鸡胸肉（约 46g）再加一勺蛋白粉（约 24g）';
+    if (left >= 40) return '一块鸡胸肉（200g 约 46g）';
+    if (left >= 20) return '一勺蛋白粉（约 24g），或者两个鸡蛋加一杯牛奶（约 21g）';
+    return '一杯牛奶加个鸡蛋';
+  }
+
+  quickAnswerText(it) {
     const today = getTodayDateString();
     const md = (d) => `${+d.slice(5, 7)}月${+d.slice(8)}日`;
     const s = this.getDaySummary(today);
@@ -212,8 +233,7 @@ class FitnessApp {
       const target = Math.round(this.gaugeProteinTarget());
       const p = Math.round(s.protein), left = target - p;
       if (left <= 0) return `今天蛋白吃了 ${p}g，够了（目标 ${target}g）。`;
-      const tip = left >= 40 ? '差不多一块鸡胸肉（200g 约 46g）' : left >= 20 ? '一勺蛋白粉（约 24g），或者两个鸡蛋加一杯牛奶（约 21g）' : '一杯牛奶加个鸡蛋就差不多';
-      return `今天蛋白吃了 ${p}g，目标 ${target}g，还差 ${left}g。\n补上的话：${tip}。`;
+      return `今天蛋白吃了 ${p}g，目标 ${target}g，还差 ${left}g。\n补上的话：${this.proteinFix(left)}。`;
     }
     if (it.kind === 'kcal') {
       const budget = Math.round(s.budget), intake = Math.round(s.intake), rem = budget - intake;

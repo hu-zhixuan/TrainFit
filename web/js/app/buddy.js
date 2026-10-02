@@ -769,7 +769,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
         return;
       }
     }
-    if (!opts.streaming) this._lastAnswer = { question, answer, at: Date.now(), plan: opts.plan, baseDate: opts.baseDate };
+    if (!opts.streaming) this._lastAnswer = { question, answer, at: Date.now(), plan: opts.plan, baseDate: opts.baseDate, next: opts.next };
     const plan = !opts.streaming && opts.plan;
     // 一天的计划，或者排了好几天的训练（plan.days）
     const base = opts.baseDate || getTodayDateString();
@@ -794,7 +794,8 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       (plan ? `<div class="buddy-acts"><button class="buddy-act" type="button" data-pa="edit">改一改</button>` +
         `<button class="buddy-act primary" type="button" data-pa="add"${added ? ' disabled' : ''}>${added ? '✓ 已加到' : '加到'}${where}</button></div>` +
         `<p class="buddy-tip hidden">按住下面的按钮说要改的地方，比如「不要米饭，换成红薯」「蛋白再多一点」</p>` : '') +
-      (opts.streaming ? '' : '<button class="buddy-more" type="button">看看连续记录 ›</button>');
+      (opts.streaming ? '' : this.nextChips(opts.next) + '<button class="buddy-more" type="button">看看连续记录 ›</button>');
+    this.bindNextChips(pop);
     const more = pop.querySelector('.buddy-more');
     if (more) more.addEventListener('click', (e) => { e.stopPropagation(); this.showBuddyPop(); });
     pop.querySelectorAll('[data-pa]').forEach(b => b.addEventListener('click', (e) => {
@@ -962,16 +963,80 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     seen.push(pick[0]);
     try { localStorage.setItem('tf_tips', JSON.stringify(seen)); } catch (e) {}
     const name = this.userName();
+    this.sayTip((name ? name + '，' : '') + pick[2]);
+    return true;
+  },
+
+  /** 小人主动说一句（新手提示、记完后的提醒）：冒「!」，招手，几秒后自己收起；next 是可以点的「接着问」 */
+  sayTip(text, next) {
+    const pop = document.getElementById('buddy-pop');
+    if (!pop || this._touring) return;
     pop.dataset.mode = 'tip';
     pop.dataset.level = 'none';
-    pop.innerHTML = `<p class="buddy-say">${esc((name ? name + '，' : '') + pick[2])}</p>`;
+    pop.innerHTML = `<p class="buddy-say">${esc(text)}</p>` + this.nextChips(next);
+    this.bindNextChips(pop);
     this.positionBuddyPop();
     this.popIn(pop);
     document.getElementById('gauge-pop').classList.add('hidden');
-    if (!this.reducedMotion()) this.buddyDo([['stand', 120], ['wave', 900], ['stand', 400]]);
+    this.buddyBang();
     clearTimeout(this._askT);
     this._askT = setTimeout(() => this.closeBuddyPop('tip'), 9000);
-    return true;
+  },
+
+  /** 「接着问」：回答下面两句可以直接点的问题，点了就跟按住说出来一样 */
+  nextChips(next) {
+    const list = (next || []).filter(Boolean).slice(0, 2);
+    return list.length ? `<div class="buddy-next">${list.map(q => `<button class="next-chip" type="button" data-q="${esc(q)}">${esc(q)}</button>`).join('')}</div>` : '';
+  },
+
+  bindNextChips(pop) {
+    pop.querySelectorAll('.next-chip').forEach(b => b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      window.Haptics && window.Haptics.fire('tick');
+      clearTimeout(this._askT);
+      if (window.QuickLog) window.QuickLog.submit(b.dataset.q);
+    }));
+  },
+
+  /**
+   * 记完以后，该提醒的时候小人说一句（本机算，不调大模型）：破纪录了、晚上了蛋白还差很多、今天第一次吃超了、
+   * 中午了蛋白还很少。每种一天最多一次（tf_coach），只看今天的记录。说了返回 true。
+   */
+  coachTip(result, batch) {
+    const today = getTodayDateString();
+    if (!batch || batch.date !== today) return false;
+    let said;
+    try { said = JSON.parse(localStorage.getItem('tf_coach') || '{}'); } catch (e) { said = {}; }
+    if (said.date !== today) said = { date: today, kinds: [] };
+    const fire = (kind, text, next) => {
+      if (said.kinds.includes(kind)) return false;
+      said.kinds.push(kind);
+      try { localStorage.setItem('tf_coach', JSON.stringify(said)); } catch (e) {}
+      const name = this.userName();
+      this.sayTip((name && !kind.startsWith('pr:') ? name + '，' : '') + text, next);
+      return true;
+    };
+    // 破纪录：这次的重量比以前都重
+    for (const id of batch.workoutIds || []) {
+      const w = this.workouts.find(x => x.id === id);
+      const fb = w && this.liftFeedback(w);
+      if (fb && fb.includes('新纪录')) return fire('pr:' + w.exerciseName, `新纪录！${w.exerciseName} ${fb.replace(/^[^：]*：新纪录\s*/, '')}`, [`${w.exerciseName.replace(/^(杠铃|哑铃)/, '')}下次练多少`, '这周练了几次']);
+    }
+    if (!(result.meals || []).length) return false;
+    const s = this.getDaySummary(today);
+    const hour = new Date().getHours();
+    const target = this.gaugeProteinTarget ? this.gaugeProteinTarget() : 0;
+    const left = Math.round(target - s.protein);
+    const rem = Math.round(s.budget - s.intake);
+    if (rem < -100) return fire('over', `今天超了 ${fmt(-rem)} kcal。没事，明天早餐清淡点就回来了。`, ['明天怎么吃', '这周热量赤字怎么样']);
+    if (this.isSimple()) return false;
+    if (hour >= 18 && target > 0 && left >= 30) {
+      return fire('protein-pm', `蛋白还差 ${left}g，睡前补上：${this.proteinFix(left)}。`, ['晚上吃点啥能补蛋白', '今天还能吃多少']);
+    }
+    if (hour >= 11 && hour < 15 && target > 0 && s.protein < target * 0.25) {
+      return fire('protein-noon', `到中午蛋白才 ${Math.round(s.protein)}g，晚上多吃点肉蛋奶。`, ['晚上吃点啥能补蛋白']);
+    }
+    return false;
   },
 
   /** 气泡里的计划清单：按天一组，每行一个勾、名字、份量 / 重量，动作下面一句要点 */
@@ -1072,7 +1137,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       if (!pop.classList.contains('hidden')) { close(); return; }
       // 半小时内问过问题：先给刚才的回答，里面能点去看连续记录
       const a = this._lastAnswer;
-      if (a && Date.now() - a.at < 30 * 60 * 1000) this.showBuddyAnswer(a.question, a.answer, { again: true, plan: a.plan, baseDate: a.baseDate });
+      if (a && Date.now() - a.at < 30 * 60 * 1000) this.showBuddyAnswer(a.question, a.answer, { again: true, plan: a.plan, baseDate: a.baseDate, next: a.next });
       else this.showBuddyPop();
     });
     // 温度计的弹窗和小人的气泡不同时开

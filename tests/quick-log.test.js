@@ -598,3 +598,9 @@ test('提问时带最近两周（问以前的事才答得上）；没有就不�
   assert.ok(m.includes('最近两周（日期 吃了多少千卡 蛋白g 练了什么 体重kg）：\n09-27周六 吃1850'));
   assert.ok(!Parser.buildMessages('一碗面', {})[1].content.includes('最近两周'));
 });
+
+test('「接着问」：回答了问题才留，最多两句、去掉句号和太短的', () => {
+  const r = Parser.normalize({ answer: '还差 60g 蛋白', next: ['晚上吃点啥能补蛋白。', '好', '给我定明天的食谱', '第三句不要'] }, {});
+  assert.deepStrictEqual(r.next, ['晚上吃点啥能补蛋白', '给我定明天的食谱']);
+  assert.deepStrictEqual(Parser.normalize({ add: { meals: [] }, next: ['晚上吃啥'] }, {}).next, []);
+});
