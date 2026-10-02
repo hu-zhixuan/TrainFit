@@ -410,7 +410,7 @@ test('提示条第一行不带大模型自己估的热量数（和按库校准�
 
 test('改小人刚给的计划（v5.5）：哪些话算在改计划', () => {
   for (const t of ['不要米饭，换成红薯', '蛋白再多一点', '晚上少吃点', '深蹲换成腿举', '能不能换成鸡胸肉', '早餐太多了', '别排深蹲，膝盖疼']) assert.ok(TF.looksLikePlanEdit(t), t);
-  for (const t of ['中午吃了牛肉面', '删掉奶茶', '体重62', '明天练什么好', '刚才那个牛奶是甜的', '早餐照计划吃了', '瑜伽挪到前一天']) assert.ok(!TF.looksLikePlanEdit(t), t);
+  for (const t of ['中午吃了牛肉面', '删掉奶茶', '体重62', '明天练什么好', '刚才那个牛奶是甜的', '早餐照计划吃了', '瑜伽挪到前一天', '今天的米饭改成两碗', '昨晚的啤酒不要了']) assert.ok(!TF.looksLikePlanEdit(t), t);
   // 只是在问、在改计划：没整理出来也不留卡片
   assert.ok(TF.noCard({ ask: true, plan: 'maybe', text: '不要米饭，换成红薯' }));
   assert.ok(TF.noCard({ ask: true, text: '晚上吃点啥好？' }));
@@ -422,8 +422,9 @@ test('点了「改一改」：上下文里明说在改计划；大模型只回�
   const user = (ctx) => Parser.buildMessages('不要米饭，换成红薯', ctx)[1].content;
   assert.match(user({ lastPlan, editPlan: true }), /这句是在改上面「刚才给的计划」/);
   assert.ok(!/这句是在改上面/.test(user({ lastPlan })), '没点「改一改」不硬说');
-  assert.match(user({ lastPlan, maybeEditPlan: true }), /这句多半是在改上面「刚才给的计划」.*要是在改这天已有的记录，照常用 update/);
-  assert.ok(!/多半是在改/.test(user({ maybeEditPlan: true })), '没给过计划就不提');
+  assert.match(user({ lastPlan, maybeEditPlan: true }), /这句是在改上面「刚才给的计划」（这天没有记录可改）/);
+  assert.ok(!/在改上面/.test(user({ maybeEditPlan: true })), '没给过计划就不提');
+  assert.ok(!/在改上面/.test(user({ lastPlan, maybeEditPlan: true, dayRecords: [{ ref: 'r1', text: '早餐 鸡蛋2个' }] })), '这天有记录：不提醒，大模型自己看（实测提醒了会把「早上的鸡蛋改成三个」当成改计划）');
   const origSend = Parser.send;
   Parser.retryWaits = [0, 0];
   Parser.hedgeMs = 0;
