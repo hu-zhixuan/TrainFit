@@ -19,7 +19,7 @@
     { xp: 450, name: '老搭子' },
     { xp: 1000, name: '最懂你' }
   ];
-  const GAIN = { ask: 2, answer: 2, plan: 3, pat: 1 };
+  const GAIN = { ask: 2, answer: 2, plan: 3, pat: 1, note: 1, makeup: 3 };
   const DAY_CAP = 20, PAT_CAP = 3;
   const ANNIVERSARY = [7, 30, 50, 100, 200, 365, 500, 730, 1000];
 
@@ -83,7 +83,7 @@
 
 if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
   /** 陪你的是谁（cast.js）：江叙 / 夏柚 */
-  cast() { return TF.Cast[this.buddyLook().char] || TF.Cast.xy; },
+  cast() { return TF.Cast[this.buddyLook().char === 'girl' ? 'xy' : 'jx']; },
 
   /** 它的名字（v6.0 起是角色本来的名字，不再自己起） */
   buddyName() { return this.cast().name; },
@@ -99,7 +99,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     const c = this.cast();
     const l = this.buddyLook();
     const b = this.bond();
-    const wear = `今天穿${this.outfitLabel(l.outfit)}，身材${this.buildLabel(this.buddyBuild())}`;
+    const wear = `样子：${TF.Buddy.STYLES[l.style].label}，今天穿${this.outfitLabel(l.outfit)}，身材${this.buildLabel(this.buddyBuild())}`;
     return { name: c.name, who: c.who, speech: c.speech, look: wear, facts: c.facts.concat(b.lv >= 4 ? [c.secret] : []),
       level: b.name, lv: b.lv, tone: c.tone[b.lv - 1], call: this.callName(), you: this.profile.gender === 'female' ? '她' : '他' };
   },
@@ -174,7 +174,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
   /** 画小人要的样子（再叠上姿势、心情这些） */
   buddyArt(extra) {
     const l = this.buddyLook();
-    return Object.assign({ char: l.char, outfit: l.outfit, build: this.buddyBuild() }, extra || {});
+    return Object.assign({ char: l.char, style: l.style, hair: l.hair, skin: l.skin, outfit: l.outfit, build: this.buddyBuild() }, extra || {});
   },
 
   /**
@@ -262,7 +262,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     pop.dataset.mode = 'story';
     pop.dataset.level = 'none';
     const outfits = opts.outfits || [];
-    pop.innerHTML = `<div class="story-card"><div class="story-art">${TF.Buddy.svg(this.buddyArt({ pose: 'lie', face, gear: [], w: 104 }))}</div>` +
+    pop.innerHTML = `<div class="story-card"><div class="story-art">${TF.Buddy.svg(this.buddyArt({ pose: 'lie', face, gear: [], scale: 3 }))}</div>` +
       `<div class="story-meta"><span class="story-tag"><i aria-hidden="true">♥</i>回忆 ${lv}/5</span><b class="story-title">${esc(st[0])}</b>` +
       `<span class="story-who">${esc(c.name)} · ${esc(TF.Bond.LEVELS[lv - 1].name)}</span></div></div>` +
       (opts.lead ? `<p class="story-lead">${esc(opts.lead)}</p>` : '') +
@@ -303,7 +303,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       document.body.appendChild(ov);
     }
     const face = lv === 4 ? '害羞' : lv === 5 ? '心动' : '开心';
-    ov.innerHTML = `<div class="mem-sheet"><div class="mem-art">${TF.Buddy.svg(this.buddyArt({ pose: lv === 1 ? 'wave' : lv === 3 ? 'flex' : 'stand', face, gear: [], w: 150 }))}</div>` +
+    ov.innerHTML = `<div class="mem-sheet"><div class="mem-art">${TF.Buddy.svg(this.buddyArt({ pose: lv === 1 ? 'wave' : lv === 3 ? 'flex' : 'stand', face, gear: [], scale: 5 }))}</div>` +
       `<span class="story-tag"><i aria-hidden="true">♥</i>回忆 ${lv}/5 · ${esc(TF.Bond.LEVELS[lv - 1].name)}</span>` +
       `<b class="mem-title">${esc(st[0])}</b><p class="mem-text">${esc(st[1])}</p><span class="mem-close">点一下关上</span></div>`;
     ov.classList.remove('hidden');
@@ -340,6 +340,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
 
   /** 长按小人：摸摸头。闭眼冒爱心，说一句（越熟越亲近），一天前三次加亲密度 */
   patBuddy() {
+    if (this.makeUp && this.makeUp('pat')) return; // 闹着小别扭：摸摸头就和好
     const b = this.bond();
     const lines = this.cast().pat[b.lv - 1] || this.cast().pat[0];
     let text = lines[Math.floor(Math.random() * lines.length)];
@@ -693,6 +694,9 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     const pool = (h < 10 ? L.morning : h < 14 ? L.noon : h < 18 ? L.afternoon : h < 23 ? L.evening : L.night).slice();
     if (m >= 11 || m <= 3) pool.push(L.cold);
     if (m >= 6 && m <= 8) pool.push(L.hot);
+    // 一半的时候说「因为你，我也…」（有的话）
+    const changed = this.changedLine ? this.changedLine() : '';
+    if (changed && Math.random() < 0.5) return changed;
     return pool[Math.floor(Math.random() * pool.length)];
   },
 
@@ -755,6 +759,222 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     const taps = (this._tapCount && this._tapCount.date === today) ? this._tapCount.n : 1;
     const lines = this.cast().rare.map(x => x.replace('{n}', taps));
     return lines[Math.floor(Math.random() * lines.length)];
+  },
+
+  // ================= v6.0 陪伴：让人想回来 =================
+  // 每天一张小纸条（不确定的小惊喜）、闹点小别扭再和好（有起伏才心动）、记完马上说一句（被回应）、
+  // 晚上道晚安（日常仪式）、下一段回忆的预告（期待）、因为你 TA 也变了一点（你对 TA 有影响）。
+  // 都在本机；不罚断签、不说「你不来我会难过」。
+
+  /** 今天的小纸条还没拆（小人头上挂个小信封） */
+  noteReady() {
+    if (!this.buddyLook().show || this.needsOnboarding) return false;
+    return ((this.profile.buddy || {}).note || {}).day !== getTodayDateString();
+  },
+
+  /** 抽一张：先抽稀有度（珍藏 6%、少见 24%），再从这一档里挑没收过的；节日、生日那天是限定的 */
+  drawNote() {
+    const c = this.cast();
+    const lv = this.bond().lv;
+    const got = (((this.profile.buddy || {}).note || {}).got) || [];
+    const today = getTodayDateString();
+    const name = this.callName();
+    if (this.isBirthday()) return { key: 'bday:' + today, rare: 'x', text: `生日快乐${name ? '，' + name : ''}。这张是限定的，只有今天有。` };
+    const fest = TF.Bond.festivalOf(today);
+    if (fest) return { key: 'fest:' + today, rare: 'x', text: fest.text.replace('{days}', new Set(this.recordDates().filter(d => d.slice(0, 4) === today.slice(0, 4))).size) };
+    const pool = c.notes.map((x, i) => ({ key: c.name + i, lv: x[0], rare: x[1], text: x[2] })).filter(x => x.lv <= lv);
+    const st = this.buddyState();
+    if (st.streak >= 3) pool.push({ key: 'streak' + st.streak, rare: 'r', text: `连着记了 ${st.streak} 天，给你盖朵小红花 🌸` });
+    const r = Math.random();
+    const want = r < 0.06 ? 's' : r < 0.3 ? 'r' : 'n';
+    const fresh = pool.filter(x => !got.includes(x.key));
+    const list = fresh.filter(x => x.rare === want).length ? fresh.filter(x => x.rare === want) : fresh.length ? fresh : pool;
+    return list[Math.floor(Math.random() * list.length)];
+  },
+
+  /** 拆今天的小纸条：气泡里一张纸条，字一个个打出来；收集的张数记在 profile.buddy.note（跟着备份走） */
+  showNote() {
+    const pop = document.getElementById('buddy-pop');
+    if (!pop) return false;
+    const note = this.drawNote();
+    const nb = Object.assign({ n: 0, got: [], s: 0 }, (this.profile.buddy || {}).note || {});
+    nb.day = getTodayDateString();
+    nb.n += 1;
+    if (note.rare === 's') nb.s += 1;
+    nb.got = nb.got.concat(note.key).slice(-80);
+    this.setBuddy({ note: nb });
+    this.bondGain('note');
+    const label = { n: '', r: '少见', s: '珍藏', x: '限定' }[note.rare];
+    pop.dataset.mode = 'note';
+    pop.dataset.level = 'none';
+    pop.innerHTML = `<div class="note-card note-${note.rare}"><div class="note-head"><i aria-hidden="true">✉</i>今天的小纸条${label ? `<span class="note-rare">${label}</span>` : ''}</div>` +
+      `<p class="note-text"></p><div class="note-foot">${esc(this.buddyName())} · 你收到的第 ${nb.n} 张${nb.s ? ` · 珍藏 ${nb.s}` : ''} · 明天还有</div></div>`;
+    this.typeOut(pop.querySelector('.note-text'), note.text);
+    this.positionBuddyPop();
+    this.popIn(pop);
+    document.getElementById('gauge-pop').classList.add('hidden');
+    document.getElementById('buddy').classList.remove('has-note');
+    window.Haptics && window.Haptics.fire(note.rare === 'n' ? 'tap' : 'success');
+    window.Sound && window.Sound.play(note.rare === 'n' ? 'blip' : 'unlock', 0.6);
+    if (note.rare !== 'n') { this.buddyBang(note.rare === 's' ? '★' : '♥'); this.buddyMood('love', 2200); } else this.buddyDo([['stand', 120], ['wave', 900], ['stand', 300]]);
+    clearTimeout(this._askT);
+    return true;
+  },
+
+  /** 闹着小别扭吗（两天没和好就自己消气，不记仇） */
+  sulkNow() {
+    const s = (this.profile.buddy || {}).sulk;
+    if (!s || !s.kind) return null;
+    if (s.date < shiftDateString(getTodayDateString(), -1)) { this.setBuddy({ sulk: null }); return null; }
+    return s;
+  },
+
+  /**
+   * 闹一点小别扭（熟了才会，三天最多一次）：看不得你熬夜吃东西、饿着自己。嘴上不高兴，心里在乎；
+   * 头上冒「💢」，点它哼一声，长按摸摸头或者你好好吃饭了就和好。
+   */
+  startSulk(kind, n) {
+    if (this.bond().lv < 2 || !this.chatty() || this._touring || this.sulkNow()) return false;
+    const today = getTodayDateString();
+    const b = this.profile.buddy || {};
+    if (b.sulkLast && b.sulkLast > shiftDateString(today, -3)) return false;
+    const text = (this.cast().sulk[kind] || '').replace('{kcal}', fmt(n || 0));
+    if (!text) return false;
+    this.setBuddy({ sulk: { kind, date: today }, sulkLast: today });
+    this.voiceBudget('remind', true);
+    this.sayTip(text, kind === 'starve' ? ['今天怎么吃比较好', '好啦，今天好好吃'] : ['晚上饿了吃点啥好']);
+    this.renderBuddy();
+    return true;
+  },
+
+  /**
+   * 早上第一次打开：昨天真的吃得太少（早中晚三顿都记了，加起来还不到预算的 55%），闹个小别扭。
+   * 只记了一两顿的不算——没记全很正常，不能冤枉人。
+   */
+  sulkGreet() {
+    const y = shiftDateString(getTodayDateString(), -1);
+    const s = this.getDaySummary(y);
+    const meals = new Set(this.diet.filter(d => d.date === y).map(d => d.mealType));
+    if (!s.hasDiet || !s.budget || s.intake >= s.budget * 0.55 || !['早餐', '午餐', '晚餐'].every(m => meals.has(m))) return false;
+    const pop = document.getElementById('buddy-pop');
+    if (!pop || !pop.classList.contains('hidden') || this.view !== 'today') return false;
+    return this.startSulk('starve', Math.round(s.intake));
+  },
+
+  /** 和好：摸摸头（pat），或者你好好吃饭了（eat）。冒爱心，加一点亲密度 */
+  makeUp(how) {
+    const s = this.sulkNow();
+    if (!s) return false;
+    this.setBuddy({ sulk: null });
+    const lines = this.cast().makeup;
+    const text = lines[Math.floor(Math.random() * lines.length)];
+    this.bondGain('makeup');
+    window.Haptics && window.Haptics.fire('success');
+    window.Sound && window.Sound.play('unlock', 0.5);
+    this.buddyMood('love', 2600);
+    this.buddyBang('♥');
+    if (how === 'pat') this.buddyQuip(text); else this.sayTip(text);
+    this.renderBuddy();
+    return true;
+  },
+
+  /** 记完以后：在闹别扭的，看看能不能和好了（白天好好吃了饭 / 今天吃够了） */
+  makeUpAfter(result, batch) {
+    const s = this.sulkNow();
+    if (!s || !batch || !(result.meals || []).length || batch.date !== getTodayDateString()) return false;
+    const h = new Date().getHours();
+    if (s.kind === 'late' && s.date < batch.date && h >= 6 && h < 21) return this.makeUp('eat');
+    const sum = this.getDaySummary(batch.date);
+    if (s.kind === 'starve' && sum.budget && sum.intake >= sum.budget * 0.8) return this.makeUp('eat');
+    return false;
+  },
+
+  /**
+   * 记完马上说一句（被回应的感觉）：早饭、又是最爱吃的那个、这顿蛋白足、练完了，别的就「记上了」。
+   * 一天最多 4 句，大概六成会说；用短气泡，两秒自己收起，不占每天说话的次数。
+   */
+  reactRecord(result, batch) {
+    if (!this.buddyLook().show || !batch || batch.date !== getTodayDateString() || this._touring) return false;
+    const pop = document.getElementById('buddy-pop');
+    if (!pop || !pop.classList.contains('hidden')) return false;
+    const today = getTodayDateString();
+    let c;
+    try { c = JSON.parse(localStorage.getItem('tf_react') || '{}'); } catch (e) { c = {}; }
+    if (c.date !== today) c = { date: today, n: 0 };
+    if (c.n >= 4 || Math.random() >= (this.reactOdds == null ? 0.6 : this.reactOdds)) return false;
+    const R = this.cast().react;
+    const meals = (batch.dietIds || []).map(id => this.diet.find(d => d.id === id)).filter(Boolean);
+    const fav = this.favFood();
+    let text;
+    if ((batch.workoutIds || []).length) text = R.lift;
+    else if (meals.some(m => m.mealType === '早餐') && new Date().getHours() < 11) text = R.breakfast;
+    else if (fav && meals.some(m => String(m.foodSummary || '').includes(fav))) text = R.fav.replace('{food}', fav);
+    else if (meals.some(m => (m.proteinG || 0) >= 30)) text = R.protein;
+    else text = R.any[Math.floor(Math.random() * R.any.length)];
+    if (!text) return false;
+    c.n += 1;
+    try { localStorage.setItem('tf_react', JSON.stringify(c)); } catch (e) {}
+    setTimeout(() => {
+      if (!pop.classList.contains('hidden')) return;
+      this.buddyQuip(text);
+      this.buddyMood('good', 1800);
+    }, 900);
+    return true;
+  },
+
+  /** 最近 4 周记得最多的那样吃的（三次以上才算） */
+  favFood() {
+    const from = shiftDateString(getTodayDateString(), -27);
+    const n = {};
+    this.diet.filter(d => d.date >= from).forEach(d => {
+      const k = String(d.foodSummary || '').split(/[、，,+＋]/)[0].replace(/[\d一两二三四五六七八九十半]+.*$/, '').trim();
+      if (k.length >= 2) n[k] = (n[k] || 0) + 1;
+    });
+    const top = Object.entries(n).sort((a, b) => b[1] - a[1])[0];
+    return top && top[1] >= 3 ? top[0] : '';
+  },
+
+  /** 晚上（21 点以后）第一次打开：道个晚安，说一句今天怎么样；之后它也睡了（一天一次） */
+  goodNight() {
+    const h = new Date().getHours();
+    if (h < 21 || h >= 23 || !this.chatty() || this._touring || this.needsOnboarding || this.view !== 'today') return false;
+    const pop = document.getElementById('buddy-pop');
+    if (!pop || !pop.classList.contains('hidden')) return false;
+    const today = getTodayDateString();
+    let d = '';
+    try { d = localStorage.getItem('tf_night') || ''; } catch (e) {}
+    if (d === today || !this.voiceBudget('guide', false)) return false;
+    try { localStorage.setItem('tf_night', today); } catch (e) {}
+    this.voiceBudget('guide', true);
+    const s = this.getDaySummary(today);
+    const target = this.gaugeProteinTarget ? this.gaugeProteinTarget() : 0;
+    const sum = !s.hasDiet ? '今天没怎么记也没关系。' :
+      `今天吃了 ${fmt(Math.round(s.intake))} 千卡${!this.isSimple() && target ? `，蛋白 ${Math.round(s.protein)}g${s.protein >= target * 0.95 ? '，够了' : ''}` : ''}。`;
+    const name = this.callName();
+    this.sayTip((name ? name + '，' : '') + this.cast().night.replace('{sum}', sum));
+    this.buddyMood('love', 2000);
+    return true;
+  },
+
+  /** 因为你，TA 也变了一点（你吃早饭它也吃、你练腿它也练）：按你最近的记录挑，没有就空 */
+  changedLine() {
+    const C = this.cast().changed;
+    const today = getTodayDateString();
+    const out = [];
+    let bf = 0;
+    for (let i = 1; i <= 7; i++) if (this.diet.some(d => d.date === shiftDateString(today, -i) && d.mealType === '早餐')) bf++;
+    if (bf >= 5) out.push(C.breakfast);
+    const from = shiftDateString(today, -13);
+    if (!this.isSimple() && new Set(this.workouts.filter(w => w.date >= from && /腿|臀/.test(w.muscleGroup || '')).map(w => w.date)).size >= 3) out.push(C.legs);
+    const fav = this.favFood();
+    if (fav) out.push(C.fav.replace('{food}', fav));
+    if (!this.isSimple()) {
+      const target = this.gaugeProteinTarget();
+      let ok = 0;
+      for (let i = 1; i <= 7; i++) { const s = this.getDaySummary(shiftDateString(today, -i)); if (s.hasDiet && s.protein >= target * 0.95) ok++; }
+      if (ok >= 4) out.push(C.protein);
+    }
+    return out.length ? out[Math.floor(Math.random() * out.length)] : '';
   },
 
   /**

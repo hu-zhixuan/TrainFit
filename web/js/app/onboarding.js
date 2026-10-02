@@ -159,14 +159,16 @@ Object.assign(FitnessApp.prototype, {
       const k = b.dataset.cast, on = this._castPick === k;
       b.classList.toggle('on', on);
       b.querySelector('small').textContent = TF.Cast[k].blurb;
-      b.querySelector('.ob-pal-art').innerHTML = TF.Buddy.svg({ char: k, outfit: 'varsity', build: 'normal', pose: on ? 'wave' : 'stand', face: on ? '开心' : '平静', gear: [], w: 116 });
+      b.querySelector('.ob-pal-art').innerHTML = TF.Buddy.svg({ char: k === 'xy' ? 'girl' : 'boy', outfit: 'varsity', build: 'normal', pose: on ? 'wave' : 'stand', mood: on ? 'good' : 'ok', gear: [], scale: 4 });
     });
   },
 
   /** 选好了：记下来，关掉引导页 */
   endCastPick(k) {
     const show = k !== 'off';
-    this.profile.buddy = Object.assign({}, this.profile.buddy || {}, show ? { char: k, show: true, picked: 6 } : { show: false, picked: 6 });
+    const char = k === 'xy' ? 'girl' : 'boy';
+    const keep = (this.profile.buddy || {}).char === char; // 换了人：发型回到这个人默认的
+    this.profile.buddy = Object.assign({}, this.profile.buddy || {}, show ? Object.assign({ char, show: true, picked: 6 }, keep ? {} : { style: '' }) : { show: false, picked: 6 });
     this.saveData();
     document.getElementById('onboard').classList.add('hidden');
     document.getElementById('ob-step-3').classList.add('hidden');

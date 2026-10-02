@@ -415,7 +415,7 @@ body.no-composer .views { padding-bottom: calc(32px + var(--sab)); }
   left: 0;
   top: 0;
   z-index: 31;
-  width: 78px;
+  width: 72px;
   padding: 0;
   display: block;
   border: none;
@@ -428,61 +428,59 @@ body.no-composer .views { padding-bottom: calc(32px + var(--sab)); }
 }
 .buddy.placed { transition: transform 0.3s cubic-bezier(0.3, 1.3, 0.5, 1); }
 .bd-move { display: block; }
-/* v6.0 Q 版小人（chibi.js）：一个部件一组，CSS 让它们动 */
-.ch-svg { display: block; overflow: visible; }
-.ch-svg g { transform-box: fill-box; }
-.ch-svg .ch-arm { transform-box: view-box; } /* 胳膊绕肩膀转（transform-origin 写在元素上，是 SVG 坐标） */
-/* 深色背景上描一圈白边（像贴纸），深色衣服、黑头发也看得清 */
-:root:not([data-theme="light"]) .ch-svg { filter: drop-shadow(0 0 0.6px rgba(255, 255, 255, 0.85)) drop-shadow(0 0 0.6px rgba(255, 255, 255, 0.85)); }
-@media (prefers-color-scheme: light) { :root:not([data-theme]) .ch-svg { filter: none; } }
+.buddy-svg { display: block; overflow: visible; }
+.buddy-svg .bd-fb, .buddy-svg .bd-blink, .buddy-svg .bd-lookl, .buddy-svg .bd-lookr { opacity: 0; }
 body.has-buddy .views { padding-bottom: calc(var(--cmp-h, 110px) + 60px + var(--sab)); }
 @media (prefers-reduced-motion: no-preference) {
-  /* 一直在的小动作：眨眼、呼吸、呆毛和马尾晃、趴着偶尔歪头；特效飘、闪 */
-  .ch-svg .ch-eyes { transform-origin: 50% 55%; animation: chBlink 4.6s infinite 0.8s; }
-  .ch-svg .ch-ahoge { transform-origin: 40% 100%; animation: chSway 2.8s ease-in-out infinite; }
-  .ch-svg .ch-tail { transform-origin: 8% 4%; animation: chTail 3.4s ease-in-out infinite; }
-  .ch-svg .ch-headwrap { transform-origin: 50% 90%; animation: chBreathe 3.6s ease-in-out infinite; }
-  .ch-svg.pose-lie .ch-headwrap { animation: chBreathe 3.6s ease-in-out infinite, chTilt 11s ease-in-out infinite 3s; }
-  .ch-svg .ch-body { transform-origin: 50% 100%; animation: chChest 3.6s ease-in-out infinite; }
-  .ch-svg .ch-fx-zzz { animation: chFloat 2.4s ease-in infinite; }
-  .ch-svg .ch-fx-note { animation: chBob 1.2s ease-in-out infinite; }
-  .ch-svg .ch-fx-sparkle { animation: chTwinkle 1.6s ease-in-out infinite; transform-origin: center; }
-  .ch-svg .ch-fx-heart { animation: chFloat 1.8s ease-out infinite; }
-  /* 招手、走路、秀肌肉、托腮、举手欢呼 */
-  .ch-svg .ch-wave { animation: chWave 0.5s ease-in-out infinite alternate; }
-  .ch-svg.pose-walk .ch-all { animation: chStep 0.36s ease-in-out infinite alternate; }
-  .ch-svg.pose-walk .ch-arm-l { animation: chSwingL 0.36s ease-in-out infinite alternate; }
-  .ch-svg.pose-walk .ch-arm-r { animation: chSwingR 0.36s ease-in-out infinite alternate; }
-  .ch-svg.pose-flex .ch-arms { transform-origin: 50% 70%; animation: chPump 0.34s ease-in-out 0.2s 3 alternate; }
-  .ch-svg.pose-stretch .ch-arm-l { animation: chCheerL 0.45s ease-in-out infinite alternate; }
-  .ch-svg.pose-stretch .ch-arm-r { animation: chCheerR 0.45s ease-in-out infinite alternate; }
-  .ch-svg.pose-think .ch-headwrap { animation: chThinkTilt 2.4s ease-in-out infinite; }
-  /* 站起来 / 换姿势：蹦一下 */
-  .buddy .pose-stand, .buddy .pose-stretch, .buddy .pose-wave, .buddy .pose-flex, .buddy .pose-think { animation: chUp 0.28s cubic-bezier(0.3, 1.6, 0.5, 1); }
-  .buddy.hop .bd-move { animation: bdHop 0.5s ease-out; }
+  /* 小动作：头发隔一会儿晃一下、眨眼、偶尔左右看一眼；特效飘、跳、闪 */
+  .buddy .bd-fa { animation: bdSwayA 4.4s steps(1, end) infinite; }
+  .buddy .bd-fb { animation: bdSwayB 4.4s steps(1, end) infinite; }
+  .buddy .bd-blink { animation: bdBlink 5.7s steps(1, end) infinite 1.3s; }
+  .buddy .bd-lookl { animation: bdLookL 13s steps(1, end) infinite 4s; }
+  .buddy .bd-lookr { animation: bdLookR 13s steps(1, end) infinite 4s; }
+  .buddy .bd-fx-zzz { animation: bdFloat 2.4s steps(3, end) infinite; }
+  .buddy .bd-fx-note { animation: bdBob 1.2s steps(1, end) infinite; }
+  .buddy .bd-fx-sparkle { animation: bdTwinkle 1.8s steps(1, end) infinite; }
+  .buddy .bd-fx-sweat { animation: bdDrip 1.6s steps(1, end) infinite; }
+  .buddy .bd-fx-heart { animation: bdFloat 1.8s steps(3, end) infinite; }
+  /* 走路、招手：两帧换得快 */
+  .buddy .pose-walk .bd-fa, .buddy .pose-wave .bd-fa { animation: bdAltA 0.34s steps(1, end) infinite; }
+  .buddy .pose-walk .bd-fb, .buddy .pose-wave .bd-fb { animation: bdAltB 0.34s steps(1, end) infinite; }
+  /* 站起来 / 趴下：蹦一下 */
+  .buddy .pose-stand, .buddy .pose-stretch, .buddy .pose-wave { animation: bdUp 0.24s steps(2, end); }
+  /* 秀肌肉：站起来，再顿两下 */
+  .buddy .pose-flex { animation: bdUp 0.24s steps(2, end), bdFlex 0.36s steps(2, end) 0.24s 2; }
 }
-/* 你在打字：低头看输入框；在翻：抬头看 */
-.ch-svg .ch-eye { transition: transform 0.25s ease; }
-.buddy[data-peek="down"] .ch-eye { transform: translateY(2.5px); }
-.buddy[data-peek="up"] .ch-eye { transform: translateY(-2px); }
-@keyframes chBlink { 0%, 93%, 100% { transform: scaleY(1); } 95% { transform: scaleY(0.08); } 97% { transform: scaleY(1); } }
-@keyframes chSway { 0%, 100% { transform: rotate(-7deg); } 50% { transform: rotate(9deg); } }
-@keyframes chTail { 0%, 100% { transform: rotate(-2deg); } 50% { transform: rotate(4deg); } }
-@keyframes chBreathe { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(1.6px); } }
-@keyframes chChest { 0%, 100% { transform: scaleY(1); } 50% { transform: scaleY(1.018); } }
-@keyframes chTilt { 0%, 80%, 100% { transform: rotate(0); } 84%, 92% { transform: rotate(-5deg); } }
-@keyframes chThinkTilt { 0%, 100% { transform: rotate(-3deg); } 50% { transform: rotate(-6deg) translateY(1px); } }
-@keyframes chFloat { from { transform: none; opacity: 1; } to { transform: translateY(-9px); opacity: 0; } }
-@keyframes chBob { 0%, 100% { transform: none; } 50% { transform: translateY(-3px); } }
-@keyframes chTwinkle { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.7); } }
-@keyframes chWave { from { transform: rotate(-10deg); } to { transform: rotate(12deg); } }
-@keyframes chStep { from { transform: translateY(0); } to { transform: translateY(-3px); } }
-@keyframes chSwingL { from { transform: rotate(-14deg); } to { transform: rotate(10deg); } }
-@keyframes chSwingR { from { transform: rotate(14deg); } to { transform: rotate(-10deg); } }
-@keyframes chPump { from { transform: none; } to { transform: translateY(-4px) scale(1.04); } }
-@keyframes chCheerL { from { transform: rotate(0); } to { transform: rotate(10deg); } }
-@keyframes chCheerR { from { transform: rotate(0); } to { transform: rotate(-10deg); } }
-@keyframes chUp { from { transform: translateY(8px) scale(0.96, 1.04); } to { transform: none; } }
+@keyframes bdSwayA { 0% { opacity: 1; } 76% { opacity: 0; } 83% { opacity: 1; } 89% { opacity: 0; } 95% { opacity: 1; } }
+@keyframes bdSwayB { 0% { opacity: 0; } 76% { opacity: 1; } 83% { opacity: 0; } 89% { opacity: 1; } 95% { opacity: 0; } }
+@keyframes bdAltA { 0% { opacity: 1; } 50% { opacity: 0; } }
+@keyframes bdAltB { 0% { opacity: 0; } 50% { opacity: 1; } }
+@keyframes bdBlink { 0% { opacity: 0; } 62% { opacity: 1; } 65% { opacity: 0; } }
+@keyframes bdLookL { 0% { opacity: 0; } 70% { opacity: 1; } 77% { opacity: 0; } }
+@keyframes bdLookR { 0% { opacity: 0; } 77% { opacity: 1; } 84% { opacity: 0; } }
+@keyframes bdFloat { from { transform: none; opacity: 1; } to { transform: translateY(-3px); opacity: 0.2; } }
+@keyframes bdBob { 0% { transform: none; } 50% { transform: translateY(-1px); } }
+@keyframes bdTwinkle { 0% { opacity: 1; } 55% { opacity: 0.35; } 70% { opacity: 1; } }
+@keyframes bdDrip { 0% { transform: none; } 60% { transform: translateY(1px); } }
+@keyframes bdUp { from { transform: translateY(6px); } to { transform: none; } }
+@keyframes bdFlex { 0%, 100% { transform: none; } 50% { transform: translateY(-2px); } }
+/* v6.0 更灵动：趴着时一起一伏地喘气；蹦一下；你打字时看输入框、翻东西时往上看；秀肌肉放大一点，看得清身材 */
+.buddy .buddy-svg { width: 100%; height: auto; transform-origin: 50% 100%; }
+/* 今天的小纸条还没拆：头上挂个小信封，一跳一跳 */
+.bd-mail { display: none; position: absolute; top: -10px; left: 2px; padding: 0 4px; border-radius: 6px; background: var(--love); color: #fff; font: 700 11px/16px system-ui, sans-serif; box-shadow: var(--shadow); }
+.buddy.has-note .bd-mail { display: block; }
+.buddy.bang .bd-mail, .buddy.thinking .bd-mail { display: none; }
+@media (prefers-reduced-motion: no-preference) { .buddy.has-note .bd-mail { animation: mailBob 1.6s ease-in-out infinite; } }
+@keyframes mailBob { 0%, 100% { transform: translateY(0) rotate(-6deg); } 50% { transform: translateY(-3px) rotate(4deg); } }
+.buddy .buddy-svg.pose-flex { width: 125%; margin-left: -12.5%; }
+@media (prefers-reduced-motion: no-preference) {
+  .buddy .buddy-svg.pose-lie { animation: bdBreath 2.6s steps(1, end) infinite; }
+  .buddy.hop .bd-move { animation: bdHop 0.5s ease-out; }
+  .buddy[data-peek="down"] .bd-lookl, .buddy[data-peek="up"] .bd-lookr { animation: none; opacity: 1; }
+  .buddy[data-peek] .bd-blink { animation: none; }
+  .buddy .bd-fx-anger { animation: bdTwinkle 0.9s steps(1, end) infinite; }
+}
+@keyframes bdBreath { 0%, 100% { transform: none; } 55% { transform: translateY(0.5px) scaleY(0.985); } }
 
 /* ---------- 新手教程：小人头上的对话框 ---------- */
 .tour-pop {
@@ -565,7 +563,16 @@ body.has-buddy .views { padding-bottom: calc(var(--cmp-h, 110px) + 60px + var(--
 .coach-card { padding: 14px 14px 14px 10px; }
 .coach { display: flex; align-items: flex-end; gap: 10px; }
 .coach-buddy { flex: none; padding: 0; border: 0; background: none; line-height: 0; cursor: pointer; -webkit-tap-highlight-color: transparent; }
-.coach-buddy .ch-svg { width: 68px; height: auto; }
+.coach-buddy .buddy-svg { width: 60px; height: auto; }
+@media (prefers-reduced-motion: no-preference) {
+  .coach-buddy .bd-fa { animation: bdSwayA 4.4s steps(1, end) infinite; }
+  .coach-buddy .bd-fb { animation: bdSwayB 4.4s steps(1, end) infinite; }
+  .coach-buddy .bd-blink { animation: bdBlink 5.7s steps(1, end) infinite 1.3s; }
+  .coach-buddy .bd-fx-note { animation: bdBob 1.2s steps(1, end) infinite; }
+  .coach-buddy .bd-fx-sparkle { animation: bdTwinkle 1.8s steps(1, end) infinite; }
+  .coach-buddy .pose-wave .bd-fa { animation: bdAltA 0.34s steps(1, end) infinite; }
+  .coach-buddy .pose-wave .bd-fb { animation: bdAltB 0.34s steps(1, end) infinite; }
+  .coach-buddy .pose-wave { animation: bdUp 0.24s steps(2, end); }
 .coach-bubble { position: relative; flex: 1; min-width: 0; padding: 10px 12px; border-radius: var(--r-md); background: var(--surface-2); }
 .coach-bubble::before { content: ''; position: absolute; left: -6px; bottom: 14px; width: 12px; height: 12px; background: inherit; transform: rotate(45deg); border-radius: 2px; }
 .coach-bubble p { position: relative; margin: 0; font-size: 0.86rem; line-height: 1.55; color: var(--text-2); }
@@ -695,8 +702,8 @@ body.has-buddy .views { padding-bottom: calc(var(--cmp-h, 110px) + 60px + var(--
 .buddy-set { display: flex; align-items: center; gap: 14px; margin: 14px 0 12px; }
 .buddy-preview {
   flex: none;
-  width: 104px;
-  height: 118px;
+  width: 92px;
+  height: 100px;
   padding: 0;
   border: none;
   display: flex;
@@ -709,7 +716,7 @@ body.has-buddy .views { padding-bottom: calc(var(--cmp-h, 110px) + 60px + var(--
   -webkit-tap-highlight-color: transparent;
 }
 /* 预览里站在一条边上 */
-.buddy-preview svg { flex: none; width: 96px; height: auto; margin-bottom: -2px; }
+.buddy-preview svg { flex: none; width: 90px; height: auto; border-bottom: 2px solid var(--line); box-sizing: content-box; }
 .buddy-opts { display: flex; flex-direction: column; gap: 10px; min-width: 0; flex: 1; }
 .buddy-who { display: flex; flex-direction: column; gap: 8px; margin: 16px 0 0; }
 .buddy-blurb { margin: 0; font-size: 0.82rem; line-height: 1.5; color: var(--text-2); }
@@ -1491,3 +1498,15 @@ body.onboarding .rec-panel { z-index: 210; bottom: calc(24px + var(--sab)); }
 #ob-cast-done { flex: none; }
 .ob-min { display: flex; flex-direction: column; align-items: center; gap: 2px; margin: 4px auto 0; padding: 10px 12px; border: 0; background: none; color: var(--text-2); font: inherit; font-size: 0.9rem; font-weight: 600; cursor: pointer; }
 .ob-min small { font-size: 0.74rem; font-weight: 500; color: var(--text-3); }
+/* 每天的小纸条（v6.0）：一张小卡片，少见 / 珍藏 / 限定有个角标 */
+.buddy-pop[data-mode="note"] { width: min(290px, calc(100vw - 32px)); }
+.note-card { margin: -2px; padding: 10px 12px 9px; border-radius: var(--r-sm); background: color-mix(in srgb, var(--love) 10%, var(--surface-2)); border: 1px dashed color-mix(in srgb, var(--love) 45%, var(--line)); }
+.note-card.note-s, .note-card.note-x { background: linear-gradient(150deg, color-mix(in srgb, #ffd84d 22%, var(--surface-2)), color-mix(in srgb, var(--love) 14%, var(--surface-2))); border-style: solid; border-color: color-mix(in srgb, #e7b53c 60%, var(--line)); }
+.note-head { display: flex; align-items: center; gap: 6px; font-size: 0.76rem; font-weight: 700; color: var(--love); }
+.note-head i { font-style: normal; }
+.note-rare { margin-left: auto; padding: 1px 7px; border-radius: 8px; background: var(--love); color: #fff; font-size: 0.68rem; }
+.note-s .note-rare, .note-x .note-rare { background: #e7b53c; color: #2a1f08; }
+.note-text { margin: 6px 0 0; font-size: 0.98rem; font-weight: 650; line-height: 1.6; color: var(--text); }
+.note-foot { margin-top: 6px; font-size: 0.7rem; color: var(--text-3); }
+@media (prefers-reduced-motion: no-preference) { .note-card { animation: noteOpen 0.45s cubic-bezier(0.2, 1.4, 0.4, 1); transform-origin: 50% 100%; } }
+@keyframes noteOpen { from { transform: rotateX(70deg) scale(0.9); opacity: 0; } to { transform: none; opacity: 1; } }

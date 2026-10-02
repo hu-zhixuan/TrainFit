@@ -23,9 +23,9 @@ Object.assign(FitnessApp.prototype, {
   /**
    * 小人主动说话的一个节奏（v5.3，v5.6 分档）：招呼、逛的时候、提醒、小提示一起算：
    *  must   —— 卡住了 / 第一条 / 刚记的份量要问 / 升级了 / 纪念日：随时说，不占次数
-   *  guide  —— 打招呼、饭点空着、你回来了、新手提示、练完问感受：正常一天 8 句以内，话多 14 句
+   *  guide  —— 打招呼、饭点空着、你回来了、新手提示、练完问感受：正常一天 10 句以内，话多 16 句（v6.0 更主动）
    *  remind —— 破纪录、晚上蛋白差很多、吃超了：一样算在里面
-   *  chat   —— 逛的时候凑过来说的闲话：正常今天还没说满 6 句、离上一句 4 分钟以上时说；话多 10 句、2 分钟
+   *  chat   —— 逛的时候凑过来说的闲话：正常今天还没说满 8 句、离上一句 3 分钟以上时说；话多 12 句、2 分钟
    * use=true 记一次；返回现在能不能说。
    */
   voiceBudget(level, use) {
@@ -33,7 +33,7 @@ Object.assign(FitnessApp.prototype, {
     let c;
     try { c = JSON.parse(localStorage.getItem('tf_voice') || '{}'); } catch (e) { c = {}; }
     if (c.date !== today) c = { date: today, n: 0, at: 0 };
-    const lim = this.talkLevel() === 'more' ? { day: 14, chat: 10, gap: 2 } : { day: 8, chat: 6, gap: 4 };
+    const lim = this.talkLevel() === 'more' ? { day: 16, chat: 12, gap: 2 } : { day: 10, chat: 8, gap: 3 };
     const ok = level === 'must' || (level === 'chat' ? c.n < lim.chat && Date.now() - (c.at || 0) > lim.gap * 60000 : c.n < lim.day);
     if (use && ok) {
       if (level !== 'must') c.n += 1;
@@ -241,7 +241,7 @@ Object.assign(FitnessApp.prototype, {
     if (document.body.classList.contains('onboarding')) return false; // 还在选谁陪你
     const away = this.awayMs ? this.awayMs() : 0;
     return (this.bondUpNow && this.bondUpNow()) || (this.anniversary && this.anniversary()) || (this.festivalGreet && this.festivalGreet()) ||
-      (this.lateNight && this.lateNight()) || this.greetToday() || this.firstGuide() || this.mealGapNudge() || this.welcomeBack(away) ||
+      (this.lateNight && this.lateNight()) || (this.goodNight && this.goodNight()) || (this.sulkGreet && this.sulkGreet()) || this.greetToday() || this.firstGuide() || this.mealGapNudge() || this.welcomeBack(away) ||
       (this.askOnce && this.askOnce()) || (this.whisper && this.whisper());
   },
 

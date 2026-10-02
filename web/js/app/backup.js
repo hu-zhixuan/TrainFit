@@ -59,8 +59,10 @@ function mergeBackupData(cur, bak) {
   const mergeBuddy = (c, b) => {
     const cb = (c && c.buddy) || {}, bb = (b && b.buddy) || {};
     const xp = Math.max(+cb.xp || 0, +bb.xp || 0);
-    if (xp === (+cb.xp || 0) && (cb.name || !bb.name)) return c;
-    return Object.assign({}, c || {}, { buddy: Object.assign({}, cb, { xp }, !cb.name && bb.name ? { name: bb.name } : {}) });
+    // 小纸条收了几张：取多的那边
+    const note = ((bb.note || {}).n || 0) > ((cb.note || {}).n || 0) ? bb.note : null;
+    if (xp === (+cb.xp || 0) && (cb.name || !bb.name) && !note) return c;
+    return Object.assign({}, c || {}, { buddy: Object.assign({}, cb, { xp }, !cb.name && bb.name ? { name: bb.name } : {}, note ? { note } : {}) });
   };
   const fresh = !(cur.fit_diet || []).length && !(cur.fit_workouts || []).length && !(cur.fit_profile && cur.fit_profile.customized);
   const profileRestored = fresh && !!bak.fit_profile;
