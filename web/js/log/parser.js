@@ -272,8 +272,18 @@
       if (a === -1 || b <= a) throw new Error('NO_JSON');
       const body = s.slice(a, b + 1);
       try { return JSON.parse(body); } catch (e) {
-        // 小毛病本机修好，不用整份重发（重发要再等十几秒到一分钟）
-        try { return JSON.parse(repairJson(body)); } catch (e2) { throw new Error('BAD_JSON ' + e.message); }
+        // 小毛病本机修好，不用整份重发（重发要再等十几秒到一分钟，一份计划要一分钟）
+        let fixed = repairJson(body);
+        for (let i = 0; i < 3; i++) {
+          try { return JSON.parse(fixed); } catch (e2) {
+            // 多了一个右括号，对象提前收尾了，后面还跟着「,"dayOffset":0}」：把那个括号去掉接着读
+            const at = Number((/position (\d+)/.exec(e2.message) || [])[1]);
+            const head = at > 0 ? fixed.slice(0, at).replace(/\s+$/, '') : '';
+            if (!head.endsWith('}') || !/^\s*,\s*"/.test(fixed.slice(at))) break;
+            fixed = head.slice(0, -1) + fixed.slice(at);
+          }
+        }
+        throw new Error('BAD_JSON ' + e.message);
       }
     },
 

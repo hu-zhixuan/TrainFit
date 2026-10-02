@@ -418,8 +418,13 @@ test('JSON 的小毛病本机修好，不用整份重发（v5.4 实测的写法�
   r = Parser.extractJson('{"reply":"x","next":["蛋白再多点","不要米饭换红薯"]，\n "plan":{"dayOffset"：1}}');
   assert.deepStrictEqual(r.next, ['蛋白再多点', '不要米饭换红薯']);
   assert.strictEqual(r.plan.dayOffset, 1);
+  // 写完计划就把整个对象收尾了，又补了「,"dayOffset":0}」（多一个右括号）：去掉那个括号接着读
+  r = Parser.extractJson('{"reply":"给了你明天的食谱","answer":"早餐：鸡蛋","plan":{"dayOffset":1,"meals":[{"mealType":"早餐","items":[{"name":"鸡蛋"}]}]}},\n "dayOffset":0}');
+  assert.strictEqual(r.plan.meals[0].mealType, '早餐');
+  assert.strictEqual(r.dayOffset, 0);
   // 真坏了还是报错（走重发）
   assert.throws(() => Parser.extractJson('{"a":1,,}'), /^Error: BAD_JSON/);
+  assert.throws(() => Parser.extractJson('{"a":1} {"b":2}'), /^Error: BAD_JSON/);
 });
 
 test('大模型回到一半就断了（JSON 不完整）：马上再发一次，不用等', async () => {
