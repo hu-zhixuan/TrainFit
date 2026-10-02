@@ -720,6 +720,10 @@ body.has-buddy .views { padding-bottom: calc(var(--cmp-h, 110px) + 52px + var(--
 #buddy-outfit { gap: 6px; }
 .swatch.locked { position: relative; opacity: 0.5; }
 .swatch.locked i { position: absolute; inset: 0; display: grid; place-items: center; font-style: normal; font-size: 11px; line-height: 1; }
+/* 小人说话一个字一个字打出来：没打出来的先透明占位，气泡不跳 */
+.type-ghost { opacity: 0; }
+.whisper-head { display: flex; align-items: center; gap: 4px; color: var(--love); }
+.whisper-head i { font-style: normal; }
 /* 摸摸头、戳它：一句短话 */
 .buddy-pop[data-mode="quip"] { width: auto; max-width: min(240px, calc(100vw - 32px)); }
 /* 起名字 */

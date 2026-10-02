@@ -317,7 +317,9 @@
           'gggggggggggggggggggggg'
         ]
       },
-      crown: { x: 9, y: -2, rows: ['A.AA.A', 'AaAAaA'] }
+      crown: { x: 9, y: -2, rows: ['A.AA.A', 'AaAAaA'] },
+      // 生日那天戴的派对帽
+      party: { x: 9, y: -4, rows: ['..X...', '..I...', '.IGI..', '.GIGI.', 'IGIGIG'] }
     },
     fx: {
       sweat: { x: 22, y: 7, rows: ['.B', 'BB', 'BB'] },
@@ -560,9 +562,23 @@
     return n;
   }
 
-  /** 离下一个装备还差几天 */
-  function nextGear(streak) {
-    const s = GEAR_STEPS.find(x => x.days > streak);
+  /** 有记录的日子里，最长连着记了几天（拿到的装备一直留着，断了也不收回去：不搞断签惩罚） */
+  function bestStreak(dates) {
+    const days = [...new Set(dates)].sort();
+    let best = 0, run = 0, prev = null;
+    days.forEach(d => {
+      const t = new Date(d + 'T12:00:00').getTime();
+      run = prev != null && Math.round((t - prev) / 86400000) === 1 ? run + 1 : 1;
+      prev = t;
+      best = Math.max(best, run);
+    });
+    return best;
+  }
+
+  /** 离下一个装备还差几天：best 是拿到过的最长连续天数，streak 是现在连着几天 */
+  function nextGear(best, streak) {
+    if (streak == null) streak = best;
+    const s = GEAR_STEPS.find(x => x.days > best);
     return s ? { name: s.name, days: s.days - streak } : null;
   }
 
@@ -602,7 +618,7 @@
   }
   TF.liftOpts = liftOpts;
 
-  const Buddy = { CHARS, STYLES, ART, HAIR, SKINS, OUTFITS, TYPES, BUILDS, BUILD_ORDER, BUILD_CHOICES, DEFAULT_LOOK, MOODS, LEVEL_MOOD, GEAR_STEPS, POSES, W: GW, H: GH, heightOf, look, buildFor, gearFor, compose, paths, svg, streakOf, nextGear, moodOf, liftOpts };
+  const Buddy = { CHARS, STYLES, ART, HAIR, SKINS, OUTFITS, TYPES, BUILDS, BUILD_ORDER, BUILD_CHOICES, DEFAULT_LOOK, MOODS, LEVEL_MOOD, GEAR_STEPS, POSES, W: GW, H: GH, heightOf, look, buildFor, gearFor, compose, paths, svg, streakOf, bestStreak, nextGear, moodOf, liftOpts };
   TF.Buddy = Buddy;
   if (typeof module !== 'undefined' && module.exports) module.exports = Buddy;
 })(typeof window !== 'undefined' ? window : globalThis);
@@ -667,7 +683,10 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     const m = TF.Buddy.moodOf(g, hour, proteinLeft);
     const lifts = this.workouts.filter(w => w.date === today).length;
     const count = this.diet.filter(d => d.date === today).length + lifts;
-    return { mood: m.mood, say: m.say, level: g.hasData ? g.level : null, streak, days, gear: TF.Buddy.gearFor(streak), next: TF.Buddy.nextGear(streak), count, lifts };
+    // 装备按拿到过的最长连续天数：断了也留着（v5.7，陪着你，不罚你）；生日那天戴派对帽
+    const best = Math.max(streak, TF.Buddy.bestStreak(dates));
+    const gear = this.isBirthday && this.isBirthday() ? ['party'] : TF.Buddy.gearFor(best);
+    return { mood: m.mood, say: m.say, level: g.hasData ? g.level : null, streak, best, days, gear, next: TF.Buddy.nextGear(best, streak), count, lifts };
   },
 
   /**
@@ -1153,20 +1172,43 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     return true;
   },
 
-  /** 小人主动说一句（新手提示、记完后的提醒）：冒「!」，招手，几秒后自己收起；next 是可以点的「接着问」 */
-  sayTip(text, next) {
+  /** 小人主动说一句（新手提示、记完后的提醒）：冒「!」，招手，几秒后自己收起；next 是可以点的「接着问」，head 是上面一行小字（「悄悄话」） */
+  sayTip(text, next, head) {
     const pop = document.getElementById('buddy-pop');
     if (!pop || this._touring) return;
     pop.dataset.mode = 'tip';
     pop.dataset.level = 'none';
-    pop.innerHTML = `<p class="buddy-say">${esc(text)}</p>` + this.nextChips(next);
+    pop.innerHTML = (head ? `<div class="buddy-pop-head whisper-head"><i aria-hidden="true">♥</i>${esc(head)}</div>` : '') + `<p class="buddy-say"></p>` + this.nextChips(next);
     this.bindNextChips(pop);
+    this.typeOut(pop.querySelector('.buddy-say'), text);
     this.positionBuddyPop();
     this.popIn(pop);
     document.getElementById('gauge-pop').classList.add('hidden');
-    this.buddyBang();
+    this.buddyBang(head ? '♥' : '!');
     clearTimeout(this._askT);
     this._askT = setTimeout(() => this.closeBuddyPop('tip'), 9000);
+  },
+
+  /**
+   * 小人说的话一个字一个字打出来，配上对话音（v5.7，像游戏里角色在跟你说话）。
+   * 没打出来的字先透明占着位置，气泡不会边打边变大；减少动态效果时直接显示、不出声。
+   */
+  typeOut(el, text) {
+    if (!el) return;
+    text = String(text || '');
+    clearInterval(this._typeT);
+    if (this.reducedMotion() || !text) { el.textContent = text; return; }
+    window.Sound && window.Sound.babble && window.Sound.babble(text, this.buddyLook().char);
+    const chars = [...text];
+    let i = 0;
+    const draw = () => { el.innerHTML = esc(chars.slice(0, i).join('')) + `<span class="type-ghost">${esc(chars.slice(i).join(''))}</span>`; };
+    draw();
+    this._typeT = setInterval(() => {
+      i = Math.min(chars.length, i + 2);
+      if (!el.isConnected) { clearInterval(this._typeT); return; }
+      if (i >= chars.length) { clearInterval(this._typeT); el.textContent = text; return; }
+      draw();
+    }, 45);
   },
 
   /** 「接着问」：回答下面两句可以直接点的问题，点了就跟按住说出来一样 */
@@ -1186,6 +1228,42 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       clearTimeout(this._askT);
       if (window.QuickLog) window.QuickLog.submit(b.dataset.q, { ask: true });
     }));
+  },
+
+  /**
+   * 你说过有伤（小本本里「膝盖有旧伤」「腰不太好」）：练到那儿时提醒一句。记得你说过的话比什么功能都暖，
+   * 也关系到安全，所以排在新手提示前面（v5.7）。每种一天一次，占 remind 的次数。
+   */
+  memoTip(result, batch) {
+    const today = getTodayDateString();
+    if (!batch || batch.date !== today || !(batch.workoutIds || []).length) return false;
+    const memo = this.memoList ? this.memoList().join('；') : '';
+    if (!/膝|腰|肩/.test(memo)) return false;
+    let said;
+    try { said = JSON.parse(localStorage.getItem('tf_coach') || '{}'); } catch (e) { said = {}; }
+    if (said.date !== today || !Array.isArray(said.kinds)) said = { date: today, kinds: [] };
+    const fire = (kind, text, next) => {
+      if (said.kinds.includes(kind) || (this.voiceBudget && !this.voiceBudget('remind', true))) return false;
+      said.kinds.push(kind);
+      try { localStorage.setItem('tf_coach', JSON.stringify(said)); } catch (e) {}
+      const name = this.userName();
+      this.sayTip((name ? name + '，' : '') + text, next);
+      return true;
+    };
+    for (const id of batch.workoutIds) {
+      const w = this.workouts.find(x => x.id === id);
+      if (!w || w.durationMin) continue;
+      if (/膝/.test(memo) && (w.muscleGroup === '腿部' || /蹲|弓步|腿举|跳/.test(w.exerciseName))) {
+        return fire('memo:knee', '你说过膝盖有旧伤，今天练腿悠着点，蹲别太低、别弹，疼就停。', ['膝盖不好怎么练腿']);
+      }
+      if (/腰/.test(memo) && /硬拉|划船|早安|山羊/.test(w.exerciseName)) {
+        return fire('memo:back', '你说过腰不太好，硬拉、划船背挺直，重量别急着加。', ['腰不好怎么练背']);
+      }
+      if (/肩/.test(memo) && (w.muscleGroup === '肩部' || /推举|卧推|飞鸟/.test(w.exerciseName))) {
+        return fire('memo:shoulder', '你说过肩膀不太好，推的时候别太宽、别锁死，疼就停。', ['肩不好怎么练胸']);
+      }
+    }
+    return false;
   },
 
   /**
