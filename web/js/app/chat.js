@@ -282,5 +282,262 @@ Object.assign(FitnessApp.prototype, {
   /** 记完东西接着问（不看「在今天页、没别的气泡」，因为刚记完气泡肯定是空的） */
   canChatNow() {
     return this.chatty() && !this._touring && this.chatBudget(false);
+  },
+
+  // ================= 逛的时候凑过来说一句（v5.0） =================
+  // 你在今天页发呆、翻以前的日子、上下翻记录、在趋势页看半天，小人有时会凑过来说一句。
+  // 每种情况只掷一次骰子（6 成），一天最多 4 句、两句之间隔 4 分钟，刚说过话的 1 分钟内不说；都是手机自己算的。
+
+  /** 开始留意你在干嘛（启动时调一次） */
+  watchBrowse() {
+    if (this._browseT) return;
+    const act = () => { this._act = Date.now(); };
+    ['pointerdown', 'keydown', 'wheel', 'touchstart'].forEach(ev => document.addEventListener(ev, act, { passive: true, capture: true }));
+    let lastY = window.scrollY;
+    window.addEventListener('scroll', () => {
+      const y = window.scrollY;
+      this._scrolled = (this._scrolled || 0) + Math.abs(y - lastY);
+      lastY = y;
+      act();
+    }, { passive: true });
+    act();
+    this._rolled = {};
+    this._browseT = setInterval(() => this.browseTick(), 2000);
+  },
+
+  browseTick() {
+    if (document.hidden) return;
+    const now = Date.now();
+    const today = getTodayDateString();
+    const where = this.view === 'today' ? (this.selectedDate === today ? 'today' : this.selectedDate < today ? 'past:' + this.selectedDate : 'plan') : this.view;
+    if (where !== this._where) {
+      if (this._where === 'trend') this._trendExtra = null; // 离开趋势页，补的那句收起来
+      this._where = where; this._whereAt = now; this._scrolled = 0;
+    }
+    const idle = now - (this._act || now), stay = now - this._whereAt;
+    let kind = null, ep = '';
+    if (where === 'trend' && stay > 8000 && idle > 3000) { kind = 'trend'; ep = this._whereAt; }
+    else if (where.startsWith('past:') && stay > 4000 && idle > 2500) { kind = 'past'; ep = this._whereAt; }
+    else if (where === 'today' && this._scrolled > (window.innerHeight || 700) && idle > 2000) { kind = 'scroll'; ep = this._act; }
+    else if (where === 'today' && idle > 30000) { kind = 'idle'; ep = this._act; }
+    if (!kind || this._rolled[kind] === ep) return;
+    this._rolled[kind] = ep; // 这一回只掷一次，没掷中就等你下次动了再说
+    if (kind === 'scroll') this._scrolled = 0;
+    if (!this.canNudge(kind) || Math.random() >= (this.nudgeOdds == null ? 0.6 : this.nudgeOdds)) return;
+    const n = kind === 'trend' ? this.trendNudge() : kind === 'past' ? this.pastNudge(this.selectedDate) : kind === 'scroll' ? this.scrollNudge() : this.idleNudge();
+    if (n) this.nudgeBudget(true, n.key);
+  },
+
+  /** 一天最多 4 句、隔 4 分钟；key 是今天说过的（同一句不说两遍） */
+  nudgeBudget(use, key) {
+    const today = getTodayDateString();
+    let c;
+    try { c = JSON.parse(localStorage.getItem('tf_nudge') || '{}'); } catch (e) { c = {}; }
+    if (c.date !== today) c = { date: today, n: 0, at: 0, said: [] };
+    if (!use) return c.n < 4 && Date.now() - (c.at || 0) > 4 * 60000;
+    c.n += 1;
+    c.at = Date.now();
+    if (key) c.said.push(key);
+    try { localStorage.setItem('tf_nudge', JSON.stringify(c)); } catch (e) {}
+    return true;
+  },
+
+  nudgeSaid(key) {
+    try { const c = JSON.parse(localStorage.getItem('tf_nudge') || '{}'); return c.date === getTodayDateString() && (c.said || []).includes(key); } catch (e) { return false; }
+  },
+
+  /** 现在凑过去合不合适：没在录音、打字、改记录、看别的弹窗，小人那边也没在说话 */
+  canNudge(kind) {
+    if (!this.chatty() || this._touring || this.needsOnboarding || !this.nudgeBudget(false)) return false;
+    if (Date.now() - (this._popAt || 0) < 60000) return false;
+    if ((this.pending || []).some(p => p.status === 'working')) return false;
+    const shown = (id) => { const el = document.getElementById(id); return el && !el.classList.contains('hidden'); };
+    if (['edit-overlay', 'share-overlay', 'rec-panel', 'ql-snackbar', 'gauge-pop'].some(shown)) return false;
+    const cmp = document.getElementById('composer');
+    if (cmp && cmp.classList.contains('recording')) return false;
+    const ae = document.activeElement;
+    if (ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)) return false;
+    if (kind === 'trend') return !!document.querySelector('#trend-buddy .coach-buddy');
+    return !shown('buddy-pop') && !!document.getElementById('buddy') && !document.getElementById('buddy').classList.contains('hidden');
+  },
+
+  /** 翻到以前的某天：那天的事和现在比一比（涨了多少、轻了多少、是不是这两周最好的一天）；那天空着就告诉你能补 */
+  pastNudge(date) {
+    const today = getTodayDateString();
+    const key = 'past:' + date;
+    if (date >= today || this.nudgeSaid(key)) return null;
+    const simple = this.isSimple();
+    const lifts = simple ? [] : this.workouts.filter(w => w.date === date && !w.durationMin && w.weightKg > 0);
+    const meals = this.diet.filter(d => d.date === date);
+    let text = '', next = ['这周练了几次', '这个月瘦了多少'];
+    const pr = lifts.find(w => (this.liftFeedback(w) || '').includes('新纪录'));
+    let gain = null;
+    lifts.forEach(w => {
+      const best = this.workouts.filter(x => x.exerciseName === w.exerciseName && !x.durationMin && x.date > date).reduce((m, x) => Math.max(m, x.weightKg || 0), 0);
+      if (best > w.weightKg && (!gain || best - w.weightKg > gain.up)) gain = { w, best, up: best - w.weightKg };
+    });
+    const wt = this.weightOn(date), latest = this.latestWeight();
+    const recent = [];
+    for (let i = 0; i < 14; i++) { const d = shiftDateString(today, -i); const s = this.getDaySummary(d); if (s.hasDiet) recent.push({ d, s }); }
+    const me = recent.find(x => x.d === date);
+    const top = (arr, f) => arr.reduce((m, x) => (!m || f(x) > f(m) ? x : m), null);
+    if (gain) text = `这天${gain.w.exerciseName} ${round1(gain.w.weightKg)}kg，现在练到 ${round1(gain.best)}kg 了，涨了 ${round1(gain.up)}kg。`;
+    else if (pr) text = `这天${pr.exerciseName}破了纪录，${round1(pr.weightKg)}kg ${pr.sets}×${pr.reps}。`;
+    else if (wt && latest && latest.date > date && Math.abs(latest.kg - wt.kg) >= 0.5) {
+      const d = round1(latest.kg - wt.kg);
+      text = `这天你 ${round1(wt.kg)}kg，现在 ${round1(latest.kg)}kg，${d < 0 ? `轻了 ${-d}` : `重了 ${d}`}kg。`;
+    } else if (me && recent.length >= 4 && !simple && top(recent, x => x.s.protein).d === date) {
+      const best = top(meals, m => m.proteinG || 0);
+      text = `这天蛋白吃了 ${Math.round(me.s.protein)}g，是这两周最多的一天${best ? `，主要靠${String(best.foodSummary).slice(0, 12)}` : ''}。`;
+      next = ['还差多少蛋白', '晚上吃点啥能补蛋白'];
+    } else if (me && recent.length >= 4 && top(recent, x => x.s.intake).d === date) {
+      text = `这天吃了 ${fmt(me.s.intake)} kcal，是这两周吃得最多的一天。`;
+      next = ['还能吃多少', '这周练了几次'];
+    } else if (!meals.length && !this.workouts.some(w => w.date === date) && date >= shiftDateString(today, -7)) {
+      text = '这天还空着。想补的话就在这页按住说，记在这天。';
+      next = [];
+    }
+    if (!text) return null;
+    this.sayTip(text, simple ? next.filter(q => !/练|蛋白/.test(q)) : next);
+    return { key };
+  },
+
+  /** 上下翻今天的记录：今天的热量 / 蛋白主要是哪一顿来的 */
+  scrollNudge() {
+    const today = getTodayDateString();
+    const meals = this.diet.filter(d => d.date === today);
+    if (meals.length < 2) return null;
+    const s = this.getDaySummary(today);
+    const big = meals.reduce((m, x) => (!m || x.calories > m.calories ? x : m), null);
+    const pro = meals.reduce((m, x) => (!m || (x.proteinG || 0) > (m.proteinG || 0) ? x : m), null);
+    const name = (x) => String(x.foodSummary || '').slice(0, 12);
+    const left = Math.round(this.gaugeProteinTarget() - s.protein);
+    const cands = [];
+    if (s.intake >= 600 && big.calories / s.intake >= 0.35) cands.push({ key: 'scroll:kcal', text: `今天热量大头是${name(big)}，${fmt(big.calories)} kcal，占了 ${Math.round(big.calories / s.intake * 100)}%。`, next: ['还能吃多少', '晚上吃点啥好'] });
+    if (!this.isSimple() && (pro.proteinG || 0) >= 15) cands.push({ key: 'scroll:protein', text: `今天蛋白主要靠${name(pro)}，${round1(pro.proteinG)}g。` + (left >= 20 ? `还差 ${left}g，${this.proteinFix(left)}。` : '已经差不多够了。'), next: ['还差多少蛋白', '晚上吃点啥能补蛋白'] });
+    const c = cands.filter(x => !this.nudgeSaid(x.key));
+    if (!c.length) return null;
+    const pick = c[Math.floor(Math.random() * c.length)];
+    this.sayTip(pick.text, pick.next);
+    return pick;
+  },
+
+  /** 今天页上发呆：问一句、给个建议，实在没有就说个有用的小知识 */
+  idleNudge() {
+    const today = getTodayDateString();
+    const hour = new Date().getHours();
+    const simple = this.isSimple();
+    const s = this.getDaySummary(today);
+    const opts = []; // 认识你的问题只在打招呼时问，免得一天问两个
+    if (hour >= 17 && hour < 21 && !this.diet.some(d => d.date === today && d.mealType === '晚餐')) {
+      opts.push({ key: 'idle:dinner', ask: ['晚饭想好吃啥了吗？', [
+        { label: '帮我想想', ask: '晚上吃点啥好' },
+        { label: '想好了', reply: '吃完说一声就行。' }]] });
+    }
+    const tomorrow = shiftDateString(today, 1);
+    if (!simple && hour >= 20 && !(this.plans || []).some(p => p.date === tomorrow)) {
+      opts.push({ key: 'idle:plan', ask: ['明天练啥，要我先排好吗？', [
+        { label: '排一下', ask: '给我排明天练啥' },
+        { label: '不用', reply: '行，想练了随时叫我。' }]] });
+    }
+    const tip = !simple && hour < 20 && this.trainingTip ? this.trainingTip() : '';
+    if (tip) opts.push({ key: 'idle:train', say: tip + '。', next: ['给我排今天练啥', '这周练了几次'] });
+    const obs = this.observation ? this.observation() : '';
+    if (obs) opts.push({ key: 'idle:obs', say: obs + '。', next: simple ? ['还能吃多少'] : ['还差多少蛋白', '晚上吃点啥能补蛋白'] });
+    const left = Math.round(this.gaugeProteinTarget() - s.protein);
+    if (!simple && hour >= 14 && s.hasDiet && left >= 30) opts.push({ key: 'idle:protein', say: `今天蛋白还差 ${left}g。补的话：${this.proteinFix(left)}。`, next: ['晚上吃点啥能补蛋白'] });
+    const st = this.buddyState ? this.buddyState() : null;
+    if (st && st.streak >= 3) opts.push({ key: 'idle:streak', say: `连续记了 ${st.streak} 天了。${st.next ? `再 ${st.next.days} 天拿${st.next.name}。` : ''}`, next: simple ? ['还能吃多少', '这个月瘦了多少'] : ['这周练了几次', '这个月瘦了多少'] });
+    const fact = this.buddyFact();
+    if (fact) opts.push({ key: 'idle:fact', say: fact, fact: true });
+    // 跟你有关的优先，小知识垫底
+    const mine = opts.filter(o => !o.fact && !this.nudgeSaid(o.key));
+    const pick = mine.length ? mine[Math.floor(Math.random() * mine.length)] : opts.find(o => o.fact && !this.nudgeSaid(o.key));
+    if (!pick) return null;
+    if (pick.fact) this.useFact(pick.say);
+    if (pick.ask) this.askUser(pick.ask[0], pick.ask[1]);
+    else this.sayTip(pick.say, pick.next);
+    return pick;
+  },
+
+  /** 有用的小知识（没说过的挑一句；说完一轮再从头） */
+  BUDDY_FACTS: [
+    { t: '蛋黄别扔，一个鸡蛋的蛋白有四成在蛋黄里。' },
+    { t: '牛奶 100ml 才 3g 蛋白，一杯也就 8g 左右，补蛋白主要还得靠肉、蛋、豆制品。' },
+    { t: '没睡够的第二天更容易饿、更想吃甜的，今晚早点睡也算减脂。' },
+    { t: '一碗米饭 200 来 kcal，一杯全糖奶茶常常 300 往上。' },
+    { t: '一瓶 500ml 的啤酒大概 200 kcal，喝酒的热量别忘了说一声。' },
+    { t: '体重一天能差 1～2kg，多半是水和肚子里的东西，看一周的趋势就行。' },
+    { t: '练完不用急着半小时内吃蛋白，一天的总量够了更要紧。', fit: true },
+    { t: '同一个重量多做一两个，也是进步，不一定非得加重。', fit: true },
+    { t: '减脂时蛋白吃够（每公斤体重 1.6g 左右），掉的才更多是脂肪不是肌肉。', fit: true },
+    { t: '深蹲蹲不下去，常常是脚踝太紧，蹲之前拉拉小腿。', fit: true },
+    { t: '力量保肌肉，有氧多烧点热量，两样都做比只做一样好。', fit: true },
+    { t: '饿得慌的时候先喝杯水、吃点高蛋白的，比硬扛好扛。' }
+  ],
+
+  buddyFact() {
+    let used;
+    try { used = JSON.parse(localStorage.getItem('tf_facts') || '[]'); } catch (e) { used = []; }
+    const pool = this.BUDDY_FACTS.filter(f => !(f.fit && this.isSimple()));
+    const left = pool.filter(f => !used.includes(f.t));
+    const list = left.length ? left : pool;
+    return list.length ? list[Math.floor(Math.random() * list.length)].t : '';
+  },
+
+  useFact(t) {
+    let used;
+    try { used = JSON.parse(localStorage.getItem('tf_facts') || '[]'); } catch (e) { used = []; }
+    const pool = this.BUDDY_FACTS.filter(f => !(f.fit && this.isSimple())).map(f => f.t);
+    used = used.filter(x => pool.includes(x));
+    if (pool.every(x => used.includes(x))) used = [];
+    used.push(t);
+    try { localStorage.setItem('tf_facts', JSON.stringify(used)); } catch (e) {}
+  },
+
+  /** 在趋势页看了半天：小人招招手，对话框里多一句（上面那几句没说到的） */
+  trendNudge() {
+    const n = this.trendDays || 7;
+    const key = 'trend:' + n;
+    if (this.nudgeSaid(key)) return null;
+    const today = getTodayDateString();
+    const simple = this.isSimple();
+    const range = n === 7 ? '这一周' : `这 ${n} 天`;
+    const days = (from, len) => Array.from({ length: len }, (_, i) => shiftDateString(from, -i)).map(d => ({ d, s: this.getDaySummary(d) })).filter(x => x.s.hasDiet);
+    const cur = days(today, n), prev = days(shiftDateString(today, -n), n);
+    const avg = (arr) => arr.reduce((a, x) => a + x.s.intake, 0) / arr.length;
+    const WK = '日一二三四五六';
+    const cands = [];
+    if (cur.length >= 3 && prev.length >= 3) {
+      const d = Math.round(avg(cur) - avg(prev));
+      if (Math.abs(d) >= 100) cands.push(`比前${n === 7 ? '一周' : ` ${n} 天`}平均每天${d < 0 ? '少' : '多'}吃 ${fmt(Math.abs(d))} kcal。`);
+    }
+    if (!simple) {
+      const from = shiftDateString(today, -(n - 1));
+      const parts = new Set(this.workouts.filter(w => w.date >= from && w.date <= today && w.muscleGroup).map(w => w.muscleGroup));
+      const miss = ['胸部', '背部', '腿部', '肩部'].filter(p => !parts.has(p));
+      if (parts.size >= 2 && miss.length && miss.length <= 2) cands.push({ t: `${range}${miss.map(p => p.replace(/部$/, '')).join('、')}一次没练，下次可以排上。`, next: [`给我排个练${miss[0].replace(/部$/, '')}的`] });
+      if (cur.length >= 3) {
+        const best = cur.reduce((m, x) => (!m || x.s.protein > m.s.protein ? x : m), null);
+        cands.push(`${range}蛋白吃得最好的是${best.d === today ? '今天' : '周' + WK[new Date(best.d + 'T00:00:00').getDay()]}，${Math.round(best.s.protein)}g。`);
+      }
+    }
+    if (n >= 14 && cur.length >= 8) {
+      const we = cur.filter(x => [0, 6].includes(new Date(x.d + 'T00:00:00').getDay())), wd = cur.filter(x => ![0, 6].includes(new Date(x.d + 'T00:00:00').getDay()));
+      if (we.length >= 2 && wd.length >= 4) {
+        const d = Math.round(avg(we) - avg(wd));
+        if (d >= 250) cands.push(`周末比平时平均多吃 ${fmt(d)} kcal，减脂卡住多半在这儿。`);
+      }
+    }
+    if (!cands.length) return null;
+    const c = cands[Math.floor(Math.random() * cands.length)];
+    this._trendExtra = { days: n, text: typeof c === 'string' ? c : c.t, next: typeof c === 'string' ? [] : c.next || [] };
+    this._coachWave = true;
+    this._popAt = Date.now();
+    this.renderTrendBuddy();
+    window.Haptics && window.Haptics.fire('tick');
+    clearTimeout(this._coachT);
+    this._coachT = setTimeout(() => { this._coachWave = false; if (this.view === 'trend') this.renderTrendBuddy(); }, 1500);
+    return { key };
   }
 });

@@ -82,8 +82,17 @@ Object.assign(FitnessApp.prototype, {
     const look = this.buddyLook();
     const st = this.buddyState();
     const art = look.show ? TF.Buddy.svg({ char: look.char, hair: look.hair, outfit: look.outfit, mood: st.mood, gear: st.gear, pose: this._coachWave ? 'wave' : 'stand' }) : '';
+    // 在这页看了半天，小人补的那一句（trendNudge）
+    const x = this._trendExtra && this._trendExtra.days === this.trendDays ? this._trendExtra : null;
+    const more = x ? `<p class="coach-more">${esc(x.text)}</p>` + (x.next.length ? `<div class="buddy-next">${x.next.map(q => `<button class="next-chip" type="button" data-q="${esc(q)}">${esc(q)}</button>`).join('')}</div>` : '') : '';
     el.innerHTML = `<div class="coach">${art ? `<button type="button" class="coach-buddy" aria-label="小人">${art}</button>` : ''}` +
-      `<div class="coach-bubble"><p class="coach-head">${esc(r.head)}</p>${r.lines.map(l => `<p>${esc(l)}</p>`).join('')}</div></div>`;
+      `<div class="coach-bubble"><p class="coach-head">${esc(r.head)}</p>${r.lines.map(l => `<p>${esc(l)}</p>`).join('')}${more}</div></div>`;
+    el.querySelectorAll('.next-chip').forEach(b => b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      window.Haptics && window.Haptics.fire('tick');
+      this.switchView('today');
+      if (window.QuickLog) window.QuickLog.submit(b.dataset.q);
+    }));
   },
 
   renderTrend() {

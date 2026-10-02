@@ -543,6 +543,10 @@ body.has-buddy .views { padding-bottom: calc(var(--cmp-h, 110px) + 52px + var(--
 .coach-bubble p { position: relative; margin: 0; font-size: 0.86rem; line-height: 1.55; color: var(--text-2); }
 .coach-bubble p + p { margin-top: 3px; }
 .coach-bubble .coach-head { font-size: 0.92rem; font-weight: 700; color: var(--text); }
+/* 在趋势页看了半天，小人补的一句 */
+.coach-bubble .coach-more { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--line); color: var(--text); }
+.coach-bubble .buddy-next { margin-top: 8px; }
+@media (prefers-reduced-motion: no-preference) { .coach-bubble .coach-more, .coach-bubble .buddy-next { animation: ppIn 0.35s ease both; } }
 @media (prefers-reduced-motion: no-preference) {
   .coach-buddy .bd-fa { animation: bdSwayA 4.4s steps(1, end) infinite; }
   .coach-buddy .bd-fb { animation: bdSwayB 4.4s steps(1, end) infinite; }
