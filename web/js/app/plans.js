@@ -68,6 +68,8 @@ Object.assign(FitnessApp.prototype, {
     };
     const fb = p.kind === 'workout' ? this.liftFeedback(rec) : '';
     if (window.QuickLog && window.QuickLog.showUndo) window.QuickLog.showUndo('✓ 照计划记上了', fb ? [line, fb] : [line], undo);
+    // 吃的是图鉴里没吃过的：小人举着照片说「图鉴点亮」（v6.2）
+    if (p.kind === 'meal' && this.dexUnlock) this.dexUnlock({ date: p.date, dietIds: [rec.id] });
   },
 
   /** 点 ✓：这一行先打勾、划掉、滑走，再变成记录 */

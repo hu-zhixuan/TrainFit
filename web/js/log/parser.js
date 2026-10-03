@@ -256,7 +256,7 @@
       const mine = (ctx.myFoods || []).slice(0, 40);
       if (mine.length) lines.push('记住的食物（用户确认过，优先用）：\n' + mine.map(f => MyFoods.line(f)).join('\n'));
       const cands = FoodDB.candidates(text, 18);
-      if (cands.length) lines.push('参考营养数据（每100g可食部，只用于单一食材；来自中国食物成分表和常见菜品库）：\n' + cands.map(e => FoodDB.line(e)).join('\n'));
+      if (cands.length) lines.push('参考营养数据（每100g可食部，只用于单一食材；来自中国食物成分表、USDA 和常见菜品库）：\n' + cands.map(e => FoodDB.line(e)).join('\n'));
       const times = mealTimes(text);
       if (times.length > 1) lines.push(`注意：这句话说到了不同的时间（${times.map(t => `${t.word}→${t.type}`).join('、')}），不同时间吃的东西分成不同的 meal。`);
       lines.push('用户说：' + text);

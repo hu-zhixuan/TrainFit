@@ -84,3 +84,14 @@ test('恢复备份：小人的亲密度取两边大的，没起名字的用备�
   const mine = { fit_profile: { customized: true, buddy: { xp: 90, name: '小练' } }, fit_diet: [{ id: 'd1' }], fit_workouts: [], fit_weights: [], fit_my_foods: [] };
   assert.strictEqual(mergeBackupData(mine, bak).data.fit_profile, mine.fit_profile);
 });
+
+test('恢复备份：图鉴点亮过的两边合在一起，庆祝到第几档取大的（v6.2）', () => {
+  const bak = parseBackup(JSON.stringify({ app: '练食AI', format: 1, data: {
+    fit_profile: { customized: true, buddy: { xp: 10, dexSeen: ['米饭', '鸡蛋', '鳕鱼'], dexMile: 5, dexOpened: true } }, fit_diet: [], fit_workouts: [], fit_weights: [], fit_my_foods: [] } }));
+  const cur = { fit_profile: { customized: true, buddy: { xp: 20, dexSeen: ['米饭', '苹果'] } }, fit_diet: [{ id: 'd1', date: '2026-10-01' }], fit_workouts: [], fit_weights: [], fit_my_foods: [] };
+  const b = mergeBackupData(cur, bak).data.fit_profile.buddy;
+  assert.deepStrictEqual(b.dexSeen.sort(), ['米饭', '苹果', '鸡蛋', '鳕鱼'].sort());
+  assert.strictEqual(b.dexMile, 5);
+  assert.strictEqual(b.dexOpened, true);
+  assert.strictEqual(b.xp, 20);
+});
