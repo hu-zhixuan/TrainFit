@@ -23,9 +23,9 @@ Object.assign(FitnessApp.prototype, {
   /**
    * 小人主动说话的一个节奏（v5.3，v5.6 分档）：招呼、逛的时候、提醒、小提示一起算：
    *  must   —— 卡住了 / 第一条 / 刚记的份量要问 / 升级了 / 纪念日：随时说，不占次数
-   *  guide  —— 打招呼、饭点空着、你回来了、新手提示、练完问感受：正常一天 10 句以内，话多 16 句（v6.0 更主动）
+   *  guide  —— 打招呼、饭点空着、你回来了、新手提示、练完问感受：正常一天 12 句以内，话多 18 句（v6.0 / 6.1 更主动）
    *  remind —— 破纪录、晚上蛋白差很多、吃超了：一样算在里面
-   *  chat   —— 逛的时候凑过来说的闲话：正常今天还没说满 8 句、离上一句 3 分钟以上时说；话多 12 句、2 分钟
+   *  chat   —— 逛的时候凑过来说的闲话、猜热量：正常今天还没说满 10 句、离上一句 2 分钟以上时说；话多 14 句、1.5 分钟
    * use=true 记一次；返回现在能不能说。
    */
   voiceBudget(level, use) {
@@ -33,7 +33,7 @@ Object.assign(FitnessApp.prototype, {
     let c;
     try { c = JSON.parse(localStorage.getItem('tf_voice') || '{}'); } catch (e) { c = {}; }
     if (c.date !== today) c = { date: today, n: 0, at: 0 };
-    const lim = this.talkLevel() === 'more' ? { day: 16, chat: 12, gap: 2 } : { day: 10, chat: 8, gap: 3 };
+    const lim = this.talkLevel() === 'more' ? { day: 18, chat: 14, gap: 1.5 } : { day: 12, chat: 10, gap: 2 };
     const ok = level === 'must' || (level === 'chat' ? c.n < lim.chat && Date.now() - (c.at || 0) > lim.gap * 60000 : c.n < lim.day);
     if (use && ok) {
       if (level !== 'must') c.n += 1;
@@ -241,8 +241,9 @@ Object.assign(FitnessApp.prototype, {
     if (document.body.classList.contains('onboarding')) return false; // 还在选谁陪你
     const away = this.awayMs ? this.awayMs() : 0;
     return (this.bondUpNow && this.bondUpNow()) || (this.anniversary && this.anniversary()) || (this.festivalGreet && this.festivalGreet()) ||
-      (this.lateNight && this.lateNight()) || (this.goodNight && this.goodNight()) || (this.sulkGreet && this.sulkGreet()) || this.greetToday() || this.firstGuide() || this.mealGapNudge() || this.welcomeBack(away) ||
-      (this.askOnce && this.askOnce()) || (this.whisper && this.whisper());
+      (this.lateNight && this.lateNight()) || (this.goodNight && this.goodNight()) || (this.sulkGreet && this.sulkGreet()) || this.greetToday() || this.firstGuide() ||
+      (this.mealPick && this.mealPick()) || this.mealGapNudge() || this.welcomeBack(away) ||
+      (this.askOnce && this.askOnce()) || (this.whisper && this.whisper()) || (this.quizNudge && this.quizNudge());
   },
 
   /** 记几件当天的小事（睡得怎么样、歇不歇），第二天接着问；只留最近 7 天 */
@@ -543,11 +544,11 @@ Object.assign(FitnessApp.prototype, {
     if (where === 'trend' && stay > 8000 && idle > 3000) { kind = 'trend'; ep = this._whereAt; }
     else if (where.startsWith('past:') && stay > 4000 && idle > 2500) { kind = 'past'; ep = this._whereAt; }
     else if (where === 'today' && this._scrolled > (window.innerHeight || 700) && idle > 2000) { kind = 'scroll'; ep = this._act; }
-    else if (where === 'today' && idle > (this.talkLevel() === 'more' ? 20000 : 30000)) { kind = 'idle'; ep = this._act; }
+    else if (where === 'today' && idle > (this.talkLevel() === 'more' ? 12000 : 20000)) { kind = 'idle'; ep = this._act; } // v6.1：发呆 20 秒就凑过来
     if (!kind || this._rolled[kind] === ep) return;
     this._rolled[kind] = ep; // 这一回只掷一次，没掷中就等你下次动了再说
     if (kind === 'scroll') this._scrolled = 0;
-    if (!this.canNudge(kind) || Math.random() >= (this.nudgeOdds == null ? (this.talkLevel() === 'more' ? 0.85 : 0.6) : this.nudgeOdds)) return;
+    if (!this.canNudge(kind) || Math.random() >= (this.nudgeOdds == null ? (this.talkLevel() === 'more' ? 0.9 : 0.75) : this.nudgeOdds)) return;
     const n = kind === 'trend' ? this.trendNudge() : kind === 'past' ? this.pastNudge(this.selectedDate) : kind === 'scroll' ? this.scrollNudge() : this.idleNudge();
     if (n) this.nudgeBudget(true, n.key);
   },
@@ -682,6 +683,9 @@ Object.assign(FitnessApp.prototype, {
     if (this.bond && this.bond().lv >= 2) opts.push({ key: 'idle:life', say: this.buddyLife(), next: [] });
     const fact = this.buddyFact();
     if (fact) opts.push({ key: 'idle:fact', say: fact, fact: true });
+    // 饭前帮你挑一顿、考考你一份多少千卡（v6.1，图鉴那边算）
+    if (this.mealPick && !this.nudgeSaid('idle:pick') && this.mealPick(true)) return { key: 'idle:pick' };
+    if (this.quizNudge && !this.nudgeSaid('idle:quiz') && Math.random() < 0.5 && this.quizNudge(true)) return { key: 'idle:quiz' };
     // 发呆的时候也是说悄悄话的好时候（两天最多一条）
     if (this.whisper && this.whisper(true)) return { key: 'idle:whisper' };
     // 跟你有关的优先，小知识垫底

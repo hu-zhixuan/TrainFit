@@ -447,6 +447,16 @@
   <div class="gauge-pop hidden" id="gauge-pop" role="dialog" aria-label="今天吃得怎么样"></div>
   <button class="buddy hidden" id="buddy" type="button" aria-label="小人"></button>
   <div class="buddy-pop hidden" id="buddy-pop" role="dialog" aria-label="小人"></div>
+  <!-- 食物图鉴（v6.1）：从小人的气泡进，挑食物搭一顿，小人在旁边说 -->
+  <div class="sheet-overlay hidden" id="dex-overlay">
+    <div class="sheet dex-sheet" role="dialog" aria-label="食物图鉴">
+      <div class="dex-head"><b class="sheet-title">食物图鉴</b><span class="dex-count" id="dex-count"></span><button type="button" class="icon-btn dex-close" id="dex-close" aria-label="关上">×</button></div>
+      <div class="dex-buddy" id="dex-buddy"></div>
+      <div class="seg seg-sm dex-tabs" id="dex-tabs"></div>
+      <div class="dex-body" id="dex-body"></div>
+      <div class="dex-tray" id="dex-tray"></div>
+    </div>
+  </div>
   <div class="tour-pop hidden" id="tour-pop" role="dialog" aria-label="新手教程"></div>
 
   <!-- 食物营养库 -->
@@ -471,6 +481,7 @@
   <script src="js/app/buddy.js"></script>
   <script src="js/app/chat.js"></script>
   <script src="js/app/bond.js"></script>
+  <script src="js/app/dex.js"></script>
 
   <!-- 一键记录：按住说话 → 大模型整理 → 保存（顺序有依赖） -->
   <script src="js/log/helpers.js"></script>
