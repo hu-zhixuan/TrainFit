@@ -15,6 +15,11 @@
 
   // 什么时候出：lv 几级起；when(c) 看今天的情况。按顺序挑第一个能出的（记了东西触发的排前面）
   const EVENTS = [
+    // v6.4 跟着记录来的（react.js 发现大的反应时问一下）：第一次破纪录、第一次吃得很撑、一周练满五天、比刚开始轻了一公斤
+    { id: 'firstpr', lv: 1, when: (c) => c.trigger === 'record' && c.moment === 'pr' },
+    { id: 'stuffed', lv: 1, when: (c) => c.trigger === 'record' && c.moment === 'over' && c.over >= 300 },
+    { id: 'trainweek', lv: 1, when: (c) => c.trigger === 'record' && c.moment === 'week' && c.week >= 5 },
+    { id: 'lighter', lv: 1, when: (c) => c.trigger === 'record' && c.moment === 'lighter' && c.drop >= 1 },
     { id: 'hotpot', lv: 1, when: (c) => c.trigger === 'record' && /火锅|烧烤|串串|麻辣烫|冒菜|香锅/.test(c.food) },
     { id: 'sweet', lv: 2, when: (c) => c.trigger === 'record' && /奶茶|蛋糕|甜品|冰淇淋|冰激凌|巧克力|甜点|雪糕|蛋挞|布丁/.test(c.food) },
     { id: 'night', lv: 3, when: (c) => c.trigger === 'night' && (c.hour >= 23 || c.hour < 2) },
@@ -28,7 +33,8 @@
 
   /**
    * 现在能出哪一段：c = { trigger: 'open' | 'record' | 'night', lv, hour, weekend, days（记了几天）, lvDays（到这一级几天了）,
-   *   food（刚记的吃的）, roll（0～1 的骰子）, today, seen: [id], romance, confessAfter }
+   *   food（刚记的吃的）, roll（0～1 的骰子）, today, seen: [id], romance, confessAfter,
+   *   moment / over / week / drop（记录的大反应：pr 破纪录 / over 吃超了多少 / week 这周第几练 / lighter 比刚开始轻了多少，v6.4） }
    */
   function pick(c) {
     const seen = new Set(c.seen || []);
@@ -52,24 +58,31 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     return Math.round((new Date(getTodayDateString() + 'T00:00:00') - new Date(at + 'T00:00:00')) / 86400000);
   },
 
-  /** 能不能出一段剧情、出哪段（trigger：open 打开 / night 深夜打开 / record 刚记了吃的） */
+  /**
+   * 能不能出一段剧情、出哪段（trigger：open 打开 / night 深夜打开 / record 刚记了东西）。
+   * info：{ food }（记了火锅奶茶）或者 { moment, over, week, drop, must: true }（记录的大反应，安静档也演，不占每天说话的次数）
+   */
   storyEvent(trigger, info) {
-    if (!this.chatty() || this._touring || this.needsOnboarding || !this.cast().events) return false;
+    info = info || {};
+    if (!(info.must ? this.buddyLook().show : this.chatty()) || this._touring || this.needsOnboarding || !this.cast().events) return false;
     if (trigger !== 'record' && (!this.canChat() || Date.now() - (this._popAt || 0) < 60000)) return false;
     const pop = document.getElementById('buddy-pop');
     if (!pop || !pop.classList.contains('hidden')) return false;
     const today = getTodayDateString();
     let last = '';
     try { last = localStorage.getItem('tf_story') || ''; } catch (e) {}
-    if (last === today || !this.voiceBudget('guide', false)) return false;
+    const level = info.must ? 'must' : 'guide';
+    if (last === today || !this.voiceBudget(level, false)) return false;
     const st = this.storyData();
     const now = new Date();
     const ev = TF.Story.pick({ trigger, lv: this.bond().lv, hour: now.getHours(), weekend: [0, 6].includes(now.getDay()),
-      days: new Set(this.recordDates()).size, lvDays: this.storyLvDays(), food: (info && info.food) || '', roll: Math.random(), today,
-      seen: st.seen || [], romance: st.romance, confessAfter: st.confessAfter });
+      days: new Set(this.recordDates()).size, lvDays: this.storyLvDays(), food: info.food || '', roll: Math.random(), today,
+      seen: st.seen || [], romance: st.romance, confessAfter: st.confessAfter,
+      moment: info.moment || '', over: info.over || 0, week: info.week || 0, drop: info.drop || 0 });
     if (!ev || !this.cast().events[ev.id]) return false;
+    if (info.moment && !ev.id.match(/^(firstpr|stuffed|trainweek|lighter)$/)) return false; // 大反应只演跟它有关的那段，别的照旧出卡片
     try { localStorage.setItem('tf_story', today); } catch (e) {}
-    this.voiceBudget('guide', true);
+    this.voiceBudget(level, true);
     if (trigger === 'record') setTimeout(() => this.showStoryEvent(ev.id), 900);
     else this.showStoryEvent(ev.id);
     return true;
@@ -121,10 +134,15 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       const c = E.choices[+b.dataset.k];
       if (!c) return;
       this.storyChoose(id, +b.dataset.k);
-      face(c[2]);
+      if (c[4] !== 'flex') face(c[2]);
       text.classList.add('reply');
       this.typeOut(text, c[1]);
       const talk = c[4] === 'talk';
+      // 「让我看看」：给你看跟着你练出来的样子（秀肌肉，露一下身材）
+      if (c[4] === 'flex') {
+        pop.querySelector('.story-art').innerHTML = TF.Buddy.svg(this.buddyArt({ pose: 'flex', face: c[2], gear: [], scale: 3, outfit: this.showOffOutfit ? this.showOffOutfit() : 'tank' }));
+        this.buddyDo([['stand', 150], ['flex', 1600], ['stand', 300]]);
+      }
       acts.innerHTML = `<button class="buddy-act primary" type="button" data-done="1">${talk ? '嗯，我说' : '嗯'}</button>`;
       if (/害羞|心动/.test(c[2])) { this.buddyMood('love', 2400); this.buddyBang('♥'); }
       else this.buddyMood(TF.Buddy.FACE_MOOD[c[2]] || 'good', 2000);

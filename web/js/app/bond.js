@@ -894,42 +894,6 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     return false;
   },
 
-  /**
-   * 记完马上说一句（被回应的感觉）：早饭、又是最爱吃的那个、这顿蛋白足、练完了，别的就「记上了」。
-   * 一天最多 5 句，大概七成会说（v6.2 从 4 句、六成放宽）；用短气泡，两秒自己收起，不占每天说话的次数。
-   * 点亮了食物图鉴里新的一样，先说这个（举着照片，「图鉴点亮：鳕鱼 · 第 23 样」），不算在 5 句里。
-   */
-  reactRecord(result, batch) {
-    if (!this.buddyLook().show || !batch || batch.date !== getTodayDateString() || this._touring) return false;
-    const pop = document.getElementById('buddy-pop');
-    if (!pop || !pop.classList.contains('hidden')) return false;
-    if ((batch.dietIds || []).length && this.dexUnlock && this.dexUnlock(batch)) return true;
-    if ((batch.dietIds || []).length && this.storyAfterRecord && this.storyAfterRecord(batch)) return true; // 记了火锅、奶茶：一段小剧情（v6.3）
-    const today = getTodayDateString();
-    let c;
-    try { c = JSON.parse(localStorage.getItem('tf_react') || '{}'); } catch (e) { c = {}; }
-    if (c.date !== today) c = { date: today, n: 0 };
-    if (c.n >= 5 || Math.random() >= (this.reactOdds == null ? 0.7 : this.reactOdds)) return false;
-    const R = this.cast().react;
-    const meals = (batch.dietIds || []).map(id => this.diet.find(d => d.id === id)).filter(Boolean);
-    const fav = this.favFood();
-    let text;
-    if ((batch.workoutIds || []).length) text = R.lift;
-    else if (meals.some(m => m.mealType === '早餐') && new Date().getHours() < 11) text = R.breakfast;
-    else if (fav && meals.some(m => String(m.foodSummary || '').includes(fav))) text = R.fav.replace('{food}', fav);
-    else if (meals.some(m => (m.proteinG || 0) >= 30)) text = R.protein;
-    else text = R.any[Math.floor(Math.random() * R.any.length)];
-    if (!text) return false;
-    c.n += 1;
-    try { localStorage.setItem('tf_react', JSON.stringify(c)); } catch (e) {}
-    setTimeout(() => {
-      if (!pop.classList.contains('hidden')) return;
-      this.buddyQuip(text);
-      this.buddyMood('good', 1800);
-    }, 900);
-    return true;
-  },
-
   /** 最近 4 周记得最多的那样吃的（三次以上才算） */
   favFood() {
     const from = shiftDateString(getTodayDateString(), -27);

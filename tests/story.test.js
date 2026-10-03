@@ -57,3 +57,22 @@ test('江叙、夏柚：每段剧情都有、三个选项、表情都认得；�
     H.miss.concat(H.low.busy, H.saved).forEach(t => assert.doesNotMatch(t, /去哪|怎么不来|难过|只有你|等了你|不理我/, t));
   }
 });
+
+test('跟着记录来的剧情（v6.4）：第一次破纪录、吃超 300 以上、一周练满五天、比刚开始轻了一公斤；看过了就不再出', () => {
+  const rec = (c) => pick(Object.assign({ trigger: 'record', lv: 1 }, c));
+  assert.strictEqual(rec({ moment: 'pr' }), 'firstpr');
+  assert.strictEqual(rec({ moment: 'over', over: 180 }), undefined, '吃超一点不演');
+  assert.strictEqual(rec({ moment: 'over', over: 420 }), 'stuffed');
+  assert.strictEqual(rec({ moment: 'week', week: 3 }), undefined);
+  assert.strictEqual(rec({ moment: 'week', week: 5 }), 'trainweek');
+  assert.strictEqual(rec({ moment: 'lighter', drop: 0.4 }), undefined);
+  assert.strictEqual(rec({ moment: 'lighter', drop: 1.2 }), 'lighter');
+  assert.strictEqual(rec({ moment: 'pr', seen: ['firstpr'] }), undefined, '演过的不再演，之后是卡片');
+  assert.strictEqual(rec({ moment: 'over', over: 500, food: '火锅' }), 'stuffed', '吃撑的火锅先演吃撑');
+  for (const k of ['jx', 'xy']) for (const id of ['firstpr', 'stuffed', 'trainweek', 'lighter']) {
+    const e = CAST[k].events[id];
+    assert.ok(e && e.lines.length >= 2 && e.choices.length === 3, k + ' ' + id);
+    assert.ok(e.choices.every(c => FACE_MOOD[c[2]] && c[3]), k + ' ' + id + ' 表情和记住的话');
+  }
+  assert.ok(CAST.jx.events.trainweek.choices.some(c => c[4] === 'flex'), '「让我看看」秀一下练出来的样子');
+});

@@ -176,6 +176,8 @@ Object.assign(FitnessApp.prototype, {
         this.render();
       });
     }
+    // 小人回应这一条（v6.4：吃超了、蛋白够了、破纪录…）
+    if (this.reactRecord) this.reactRecord(null, { date: rec.date, dietIds: q.kind === 'workout' ? [] : [rec.id], workoutIds: q.kind === 'workout' ? [rec.id] : [], asks: [] });
   },
 
   /** 「≈ 1.5 碗米饭，走路约 50 分钟」 */

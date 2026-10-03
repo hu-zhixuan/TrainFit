@@ -6,7 +6,7 @@
  * 底线照旧（v5.8 定的「不情感勒索」）：想你可以说，但只在你回来时、开心地说；不怪你没来、不说它难过、不说「只有你」，
  * 鼓励你好好吃饭、睡觉、有自己的朋友和生活。
  *  - 心情 heartState：闹别扭 > 深夜困了 > 它自己今天有点低落（Lv3 起几天一次，陪它聊 / 摸摸头就好了）> 担心你（你一天内说过累、
- *    压力大）> 想你（离开快一天回来、今天还没跟它说上话）> 开心（今天跟它说过话）> 平常。点小人的气泡里写着，聊天时也告诉大模型。
+ *    压力大，tf_moodnote）> 想你（离开快一天回来、今天还没跟它说上话）> 开心（今天跟它说过话）> 平常。点小人的气泡里写着，聊天时也告诉大模型。
  *  - 想你：离开 18 小时～3 天回来，打招呼的第一句换成想你（missLine）；之后找个空当说「攒了件事想跟你说」（savedTale）。
  *  - 低落 lowDay：它偶尔也需要你（对等的脆弱）：「今天有点不在状态……陪我聊两句？」能聊、能摸头，也能说在忙（它说没事）。
  *  - 近况 life：聊天时大模型记下你说的最近的事和几天后问（「周五面试」3 天后），到了日子小人主动问「上次你说的面试怎么样了」；
@@ -17,12 +17,12 @@ Object.assign(FitnessApp.prototype, {
   noteFeeling(text) {
     const t = String(text || '');
     if (!/累|困|烦|压力|难受|不舒服|郁闷|焦虑|emo|失眠|睡不着|难过|伤心|生气|委屈|崩溃|孤单|孤独|寂寞|想哭|哭了|丧|紧张|害怕|担心|撑不住|不想活|好胖|好丑|自卑|讨厌自己/i.test(t)) return;
-    try { localStorage.setItem('tf_feel', JSON.stringify({ at: Date.now(), t: t.slice(0, 20) })); } catch (e) {}
+    try { localStorage.setItem('tf_moodnote', JSON.stringify({ at: Date.now(), t: t.slice(0, 20) })); } catch (e) {}
   },
 
   recentFeeling() {
     try {
-      const f = JSON.parse(localStorage.getItem('tf_feel') || 'null');
+      const f = JSON.parse(localStorage.getItem('tf_moodnote') || 'null');
       return f && Date.now() - f.at < 24 * 3600 * 1000 ? f : null;
     } catch (e) { return null; }
   },

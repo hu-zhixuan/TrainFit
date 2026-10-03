@@ -23,9 +23,10 @@ Object.assign(FitnessApp.prototype, {
   /**
    * 小人主动说话的一个节奏（v5.3，v5.6 分档）：招呼、逛的时候、提醒、小提示一起算：
    *  must   —— 卡住了 / 第一条 / 刚记的份量要问 / 升级了 / 纪念日：随时说，不占次数
-   *  guide  —— 打招呼、饭点空着、你回来了、新手提示、练完问感受：正常一天 14 句以内，话多 20 句（v6.0 / 6.1 / 6.2 更主动）
-   *  remind —— 破纪录、晚上蛋白差很多、吃超了：一样算在里面
-   *  chat   —— 逛的时候凑过来说的闲话、猜热量：正常今天还没说满 12 句、离上一句 2 分钟以上时说；话多 16 句、1.5 分钟
+   *  guide  —— 打招呼、饭点空着、新手提示、练完问感受、小剧情：正常一天 8 句以内，话多 20 句
+   *  remind —— 深夜还吃、晚上蛋白差很多：一样算在里面
+   *  chat   —— 逛的时候凑过来说的闲话、猜热量：只在话多档（16 句、隔 1.5 分钟）
+   * v6.4 起记完东西的回应（react.js）不算在这里：那是你刚做了事、它在回应你，要每次都有；不该有存在感的是逛的时候的闲话。
    * use=true 记一次；返回现在能不能说。
    */
   voiceBudget(level, use) {
@@ -33,7 +34,7 @@ Object.assign(FitnessApp.prototype, {
     let c;
     try { c = JSON.parse(localStorage.getItem('tf_voice') || '{}'); } catch (e) { c = {}; }
     if (c.date !== today) c = { date: today, n: 0, at: 0 };
-    const lim = this.talkLevel() === 'more' ? { day: 20, chat: 16, gap: 1.5 } : { day: 14, chat: 12, gap: 2 };
+    const lim = this.talkLevel() === 'more' ? { day: 20, chat: 16, gap: 1.5 } : { day: 8, chat: 0, gap: 2 }; // v6.4 正常档收回到 8 句，逛的时候不凑过来
     const ok = level === 'must' || (level === 'chat' ? c.n < lim.chat && Date.now() - (c.at || 0) > lim.gap * 60000 : c.n < lim.day);
     if (use && ok) {
       if (level !== 'must') c.n += 1;
@@ -247,15 +248,18 @@ Object.assign(FitnessApp.prototype, {
   /** 打开 App / 切回来：每天第一次打招呼；还没记过的带你记第一条；饭点空着问一句 */
   greetOrGuide() {
     if (document.body.classList.contains('onboarding')) return false; // 还在选谁陪你
+    if (Date.now() - (this._recAt || 0) < 15000) return false; // 刚记了东西，小人正在回应，招呼别来抢（v6.4）
     const away = this.awayMs ? this.awayMs() : 0;
     if (away) this._lastAway = away; // 离开了多久：打招呼时说不说「想你」（heart.js）
+    // v6.4：饭前帮你挑一顿、图鉴介绍、你回来了、考题这些跟你刚做的事无关的，只在「话多」档说
+    const more = this.talkLevel() === 'more';
     // v6.3：深夜的剧情排在「这么晚还没睡」前面；近况追问、小剧情、它低落、攒着的事排在饭点之后
     return (this.bondUpNow && this.bondUpNow()) || (this.anniversary && this.anniversary()) || (this.festivalGreet && this.festivalGreet()) ||
       (this.storyEvent && this.storyEvent('night')) ||
       (this.lateNight && this.lateNight()) || (this.goodNight && this.goodNight()) || (this.sulkGreet && this.sulkGreet()) || this.greetToday() || this.firstGuide() ||
-      (this.mealPick && this.mealPick()) || this.mealGapNudge() || (this.dexIntro && this.dexIntro()) ||
+      (more && this.mealPick && this.mealPick()) || this.mealGapNudge() || (more && this.dexIntro && this.dexIntro()) ||
       (this.lifeFollowUp && this.lifeFollowUp()) || (this.storyEvent && this.storyEvent('open')) || (this.lowDay && this.lowDay()) || (this.savedTale && this.savedTale()) ||
-      this.welcomeBack(away) || (this.askOnce && this.askOnce()) || (this.whisper && this.whisper()) || (this.quizNudge && this.quizNudge());
+      (more && this.welcomeBack(away)) || (this.askOnce && this.askOnce()) || (this.whisper && this.whisper()) || (more && this.quizNudge && this.quizNudge());
   },
 
   /** 记几件当天的小事（睡得怎么样、歇不歇），第二天接着问；只留最近 7 天 */
@@ -566,7 +570,8 @@ Object.assign(FitnessApp.prototype, {
   },
 
   browseTick() {
-    if (document.hidden) return;
+    // v6.4 用户：「在不应该太有存在感的地方太有存在感了」——逛的时候、发呆的时候凑过来说闲话，只在「话多」档
+    if (document.hidden || this.talkLevel() !== 'more') return;
     const now = Date.now();
     const today = getTodayDateString();
     const where = this.view === 'today' ? (this.selectedDate === today ? 'today' : this.selectedDate < today ? 'past:' + this.selectedDate : 'plan') : this.view;
