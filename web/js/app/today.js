@@ -188,15 +188,9 @@ Object.assign(FitnessApp.prototype, {
       html += lifts.map(w => this.renderRow({ kind: 'workout', ts: recordTs(w), rec: w })).join('');
     }
     if (!html) {
-      const usual = isToday ? this.quickSuggestions().filter(q => q.kind === 'meal' && q.usual) : [];
-      // 不想说话、也不想打字：点照片记（v6.2，打开食物图鉴的「记一顿」）
-      const dexLink = isToday && this.openDex ? `<button type="button" class="empty-dex" data-dex-log="1">不想说话？点图片记 ›</button>` : '';
+      // 空着的时候只说一句（v6.3.1 用户：「空白页太复杂了，最多一句话」）。老样子、点图片记都交给小人饭点时问
       html = !isToday ? `<div class="empty">这天没有记录</div>`
-        : usual.length
-          ? `<div class="empty"><b>还是老样子？</b>点一下就记好<br>吃了别的，按住下面的按钮说一句<br><button type="button" class="empty-quick" data-quick-key="${esc(usual[0].key)}"><span class="qplus">+</span>${esc(usual[0].label)} · ${fmt(usual[0].kcal)} kcal</button>${dexLink}</div>`
-        : simple
-          ? `<div class="empty"><div class="empty-icon">${ICONS.mic}</div><b>按住下面的按钮</b>，说说今天吃了啥<br>吃一顿说一句就行，松手自动算好热量<br>说不准多少也没事，我会问你<br><span class="empty-example">「早上包子豆浆，中午黄焖鸡，体重61.5」</span>${dexLink}</div>`
-          : `<div class="empty"><div class="empty-icon">${ICONS.mic}</div><b>按住下面的按钮</b>，说说练了啥、吃了啥<br>想到一句说一句，一大段一起说也行<br>说不准多少、叫不出名字也没事，我会问你<br><span class="empty-example">「中午一碗牛肉面」「坐着推胸的那个机器，三组」</span>${dexLink}</div>`;
+        : `<div class="empty"><div class="empty-icon">${ICONS.mic}</div>按住下面，说说今天${simple ? '吃了啥' : '吃了啥、练了啥'}</div>`;
     }
     tl.innerHTML = html;
     this.growPlanBar && this.growPlanBar();
