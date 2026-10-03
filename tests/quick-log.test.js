@@ -121,11 +121,12 @@ test('兜底：大模型把早上和晚上吃的记成一条时，按原话拆�
   ] }] } };
   const night = new Date('2026-09-29T21:22:00');
   const r = Parser.normalize(merged, { said, now: night });
+  // v6.2 起整份说的单一食物（茶叶蛋、香蕉、蛋白粉、牛奶）也按库算，只有荷叶鸡这种成品用大模型的估算
   assert.deepStrictEqual(r.meals.map(m => [m.mealType, m.foodSummary, m.calories]), [
-    ['早餐', '荷叶鸡1小份、茶叶蛋2个', 670],
-    ['晚餐', '香蕉2根、蛋白粉2勺、牛奶700ml', 894]
+    ['早餐', '荷叶鸡1小份、茶叶蛋2个', 663],
+    ['晚餐', '香蕉2根、蛋白粉2勺、牛奶700ml', 885]
   ]);
-  assert.strictEqual(r.meals[1].proteinG, 72);
+  assert.strictEqual(r.meals[1].proteinG, 71.8); // 蛋白粉按乳清 78% 算 46.8g（大模型写的 48g）
   assert.strictEqual(r.reply, '分开记了早餐、晚餐');
   // 大模型已经分好了：不动
   const ok = Parser.normalize({ add: { meals: [

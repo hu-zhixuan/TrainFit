@@ -19,7 +19,7 @@
     { xp: 450, name: '老搭子' },
     { xp: 1000, name: '最懂你' }
   ];
-  const GAIN = { ask: 2, answer: 2, plan: 3, pat: 1, note: 1, makeup: 3 };
+  const GAIN = { ask: 2, answer: 2, plan: 3, pat: 1, feed: 1, note: 1, makeup: 3 };
   const DAY_CAP = 20, PAT_CAP = 3;
   const ANNIVERSARY = [7, 30, 50, 100, 200, 365, 500, 730, 1000];
 
@@ -178,8 +178,8 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
   },
 
   /**
-   * 跟小人互动了一下，加一点亲密度：问它（ask）、回答它的问题（answer）、把计划加上（plan）、摸摸头（pat）。
-   * 一天最多 20 点，摸头一天只算 3 次（别让人靠狂点刷）。
+   * 跟小人互动了一下，加一点亲密度：问它（ask）、回答它的问题（answer）、把计划加上（plan）、摸摸头（pat）、在图鉴里喂它一口（feed）。
+   * 一天最多 20 点，摸头和喂它加起来一天只算 3 次（别让人靠狂点刷）。
    */
   bondGain(kind) {
     const add = TF.Bond.GAIN[kind] || 0;
@@ -188,9 +188,10 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     let c;
     try { c = JSON.parse(localStorage.getItem('tf_bond_day') || '{}'); } catch (e) { c = {}; }
     if (c.date !== today) c = { date: today, n: 0, pat: 0 };
-    if (c.n + add > TF.Bond.DAY_CAP || (kind === 'pat' && c.pat >= TF.Bond.PAT_CAP)) return;
+    const touch = kind === 'pat' || kind === 'feed';
+    if (c.n + add > TF.Bond.DAY_CAP || (touch && c.pat >= TF.Bond.PAT_CAP)) return;
     c.n += add;
-    if (kind === 'pat') c.pat += 1;
+    if (touch) c.pat += 1;
     try { localStorage.setItem('tf_bond_day', JSON.stringify(c)); } catch (e) {}
     this.setBuddy({ xp: Math.max(0, +(this.profile.buddy || {}).xp || 0) + add });
     this.checkBond();
@@ -364,19 +365,20 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     this.buddyDo([['stand', 120], ['wave', 500], ['stand', 200]]);
   },
 
-  /** 一句短话（摸头、戳它的反应），两秒后自己收起 */
-  buddyQuip(text) {
+  /** 一句短话（摸头、戳它的反应），两秒后自己收起。extra：{ pics: [图鉴里的名字]（举着照片，v6.2）, ms: 多久收起 } */
+  buddyQuip(text, extra) {
     const pop = document.getElementById('buddy-pop');
     if (!pop) return;
+    extra = extra || {};
     pop.dataset.mode = 'quip';
     pop.dataset.level = 'none';
-    pop.innerHTML = `<p class="buddy-say"></p>`;
+    pop.innerHTML = `<p class="buddy-say"></p>` + (extra.pics && this.dexPicsHtml ? this.dexPicsHtml(extra.pics) : '');
     this.typeOut(pop.querySelector('.buddy-say'), text);
     this.positionBuddyPop();
     this.popIn(pop);
     document.getElementById('gauge-pop').classList.add('hidden');
     clearTimeout(this._askT);
-    this._askT = setTimeout(() => this.closeBuddyPop('quip'), 2200);
+    this._askT = setTimeout(() => this.closeBuddyPop('quip'), extra.ms || 2200);
   },
 
   /** 一小会儿换个表情（摸头时闭眼冒爱心） */
@@ -891,17 +893,19 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
 
   /**
    * 记完马上说一句（被回应的感觉）：早饭、又是最爱吃的那个、这顿蛋白足、练完了，别的就「记上了」。
-   * 一天最多 4 句，大概六成会说；用短气泡，两秒自己收起，不占每天说话的次数。
+   * 一天最多 5 句，大概七成会说（v6.2 从 4 句、六成放宽）；用短气泡，两秒自己收起，不占每天说话的次数。
+   * 点亮了食物图鉴里新的一样，先说这个（举着照片，「图鉴点亮：鳕鱼 · 第 23 样」），不算在 5 句里。
    */
   reactRecord(result, batch) {
     if (!this.buddyLook().show || !batch || batch.date !== getTodayDateString() || this._touring) return false;
     const pop = document.getElementById('buddy-pop');
     if (!pop || !pop.classList.contains('hidden')) return false;
+    if ((batch.dietIds || []).length && this.dexUnlock && this.dexUnlock(batch)) return true;
     const today = getTodayDateString();
     let c;
     try { c = JSON.parse(localStorage.getItem('tf_react') || '{}'); } catch (e) { c = {}; }
     if (c.date !== today) c = { date: today, n: 0 };
-    if (c.n >= 4 || Math.random() >= (this.reactOdds == null ? 0.6 : this.reactOdds)) return false;
+    if (c.n >= 5 || Math.random() >= (this.reactOdds == null ? 0.7 : this.reactOdds)) return false;
     const R = this.cast().react;
     const meals = (batch.dietIds || []).map(id => this.diet.find(d => d.id === id)).filter(Boolean);
     const fav = this.favFood();

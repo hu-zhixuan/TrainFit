@@ -450,8 +450,11 @@
   <!-- 食物图鉴（v6.1）：从小人的气泡进，挑食物搭一顿，小人在旁边说 -->
   <div class="sheet-overlay hidden" id="dex-overlay">
     <div class="sheet dex-sheet" role="dialog" aria-label="食物图鉴">
-      <div class="dex-head"><b class="sheet-title">食物图鉴</b><span class="dex-count" id="dex-count"></span><button type="button" class="icon-btn dex-close" id="dex-close" aria-label="关上">×</button></div>
+      <div class="dex-head"><b class="sheet-title">食物图鉴</b><span class="dex-count" id="dex-count"></span>
+        <button type="button" class="icon-btn dex-find" id="dex-find" aria-label="搜一下"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg></button>
+        <button type="button" class="icon-btn dex-close" id="dex-close" aria-label="关上">×</button></div>
       <div class="dex-buddy" id="dex-buddy"></div>
+      <div class="dex-search hidden" id="dex-search"><input type="search" id="dex-q" placeholder="搜一下：鸡蛋、米饭、牛油果…" enterkeyhint="search" autocomplete="off"><button type="button" class="dex-q-cancel" id="dex-q-cancel">取消</button></div>
       <div class="seg seg-sm dex-tabs" id="dex-tabs"></div>
       <div class="dex-body" id="dex-body"></div>
       <div class="dex-tray" id="dex-tray"></div>
@@ -481,6 +484,7 @@
   <script src="js/app/buddy.js"></script>
   <script src="js/app/chat.js"></script>
   <script src="js/app/bond.js"></script>
+  <script src="js/data/food_img.js"></script>
   <script src="js/app/dex.js"></script>
 
   <!-- 一键记录：按住说话 → 大模型整理 → 保存（顺序有依赖） -->

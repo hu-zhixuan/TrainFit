@@ -61,8 +61,13 @@ function mergeBackupData(cur, bak) {
     const xp = Math.max(+cb.xp || 0, +bb.xp || 0);
     // 小纸条收了几张：取多的那边
     const note = ((bb.note || {}).n || 0) > ((cb.note || {}).n || 0) ? bb.note : null;
-    if (xp === (+cb.xp || 0) && (cb.name || !bb.name) && !note) return c;
-    return Object.assign({}, c || {}, { buddy: Object.assign({}, cb, { xp }, !cb.name && bb.name ? { name: bb.name } : {}, note ? { note } : {}) });
+    // 图鉴点亮过的：两边合在一起，庆祝到第几档取大的（v6.2）
+    const seen = Array.isArray(cb.dexSeen) || Array.isArray(bb.dexSeen) ? [...new Set([].concat(cb.dexSeen || [], bb.dexSeen || []))] : null;
+    const dex = seen && seen.length !== (cb.dexSeen || []).length ? { dexSeen: seen } : {};
+    if ((+bb.dexMile || 0) > (+cb.dexMile || 0)) dex.dexMile = +bb.dexMile;
+    if (bb.dexOpened && !cb.dexOpened) dex.dexOpened = true;
+    if (xp === (+cb.xp || 0) && (cb.name || !bb.name) && !note && !Object.keys(dex).length) return c;
+    return Object.assign({}, c || {}, { buddy: Object.assign({}, cb, { xp }, !cb.name && bb.name ? { name: bb.name } : {}, note ? { note } : {}, dex) });
   };
   const fresh = !(cur.fit_diet || []).length && !(cur.fit_workouts || []).length && !(cur.fit_profile && cur.fit_profile.customized);
   const profileRestored = fresh && !!bak.fit_profile;

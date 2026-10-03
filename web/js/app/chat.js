@@ -23,9 +23,9 @@ Object.assign(FitnessApp.prototype, {
   /**
    * 小人主动说话的一个节奏（v5.3，v5.6 分档）：招呼、逛的时候、提醒、小提示一起算：
    *  must   —— 卡住了 / 第一条 / 刚记的份量要问 / 升级了 / 纪念日：随时说，不占次数
-   *  guide  —— 打招呼、饭点空着、你回来了、新手提示、练完问感受：正常一天 12 句以内，话多 18 句（v6.0 / 6.1 更主动）
+   *  guide  —— 打招呼、饭点空着、你回来了、新手提示、练完问感受：正常一天 14 句以内，话多 20 句（v6.0 / 6.1 / 6.2 更主动）
    *  remind —— 破纪录、晚上蛋白差很多、吃超了：一样算在里面
-   *  chat   —— 逛的时候凑过来说的闲话、猜热量：正常今天还没说满 10 句、离上一句 2 分钟以上时说；话多 14 句、1.5 分钟
+   *  chat   —— 逛的时候凑过来说的闲话、猜热量：正常今天还没说满 12 句、离上一句 2 分钟以上时说；话多 16 句、1.5 分钟
    * use=true 记一次；返回现在能不能说。
    */
   voiceBudget(level, use) {
@@ -33,7 +33,7 @@ Object.assign(FitnessApp.prototype, {
     let c;
     try { c = JSON.parse(localStorage.getItem('tf_voice') || '{}'); } catch (e) { c = {}; }
     if (c.date !== today) c = { date: today, n: 0, at: 0 };
-    const lim = this.talkLevel() === 'more' ? { day: 18, chat: 14, gap: 1.5 } : { day: 12, chat: 10, gap: 2 };
+    const lim = this.talkLevel() === 'more' ? { day: 20, chat: 16, gap: 1.5 } : { day: 14, chat: 12, gap: 2 };
     const ok = level === 'must' || (level === 'chat' ? c.n < lim.chat && Date.now() - (c.at || 0) > lim.gap * 60000 : c.n < lim.day);
     if (use && ok) {
       if (level !== 'must') c.n += 1;
@@ -51,13 +51,14 @@ Object.assign(FitnessApp.prototype, {
   /**
    * 小人问一句，下面几个现成的回答。options: [{ label, reply?, talk?, ask?, pick?() }]
    *  reply —— 小人接着说的话；talk —— 让「按住说话」亮一下（要你自己说）；ask —— 当成你问了这句；pick —— 点了要做的事
+   * extra：{ pics: [图鉴里的名字] } —— 在话下面放一排实物照片（饭前帮你挑的、考题，v6.2）
    */
-  askUser(text, options) {
+  askUser(text, options, extra) {
     const pop = document.getElementById('buddy-pop');
     if (!pop || this._touring) return false;
     pop.dataset.mode = 'chat';
     pop.dataset.level = 'none';
-    pop.innerHTML = `<p class="buddy-say"></p>` +
+    pop.innerHTML = `<p class="buddy-say"></p>` + (extra && extra.pics && this.dexPicsHtml ? this.dexPicsHtml(extra.pics) : '') +
       `<div class="portion-opts chat-opts">${options.map((o, i) => `<button class="portion-opt" type="button" data-i="${i}">${esc(o.label)}</button>`).join('')}</div>`;
     this.typeOut(pop.querySelector('.buddy-say'), text);
     pop.querySelectorAll('.portion-opt').forEach(b => b.addEventListener('click', (e) => {
@@ -97,7 +98,8 @@ Object.assign(FitnessApp.prototype, {
   canChat() {
     const pop = document.getElementById('buddy-pop');
     const cmp = document.getElementById('composer');
-    return this.chatty() && this.view === 'today' && this.selectedDate === getTodayDateString() && !this._touring && !this.needsOnboarding &&
+    const dex = document.getElementById('dex-overlay');
+    return this.chatty() && this.view === 'today' && !(dex && !dex.classList.contains('hidden')) && this.selectedDate === getTodayDateString() && !this._touring && !this.needsOnboarding &&
       !(this.quietNow && this.quietNow()) && // 正在练、深夜：安静陪着
       pop && pop.classList.contains('hidden') && !cmp.classList.contains('recording') && !(this.pending || []).some(p => p.status === 'working') &&
       (this.diet.length + this.workouts.length > 0) && this.chatBudget(false);
@@ -242,7 +244,7 @@ Object.assign(FitnessApp.prototype, {
     const away = this.awayMs ? this.awayMs() : 0;
     return (this.bondUpNow && this.bondUpNow()) || (this.anniversary && this.anniversary()) || (this.festivalGreet && this.festivalGreet()) ||
       (this.lateNight && this.lateNight()) || (this.goodNight && this.goodNight()) || (this.sulkGreet && this.sulkGreet()) || this.greetToday() || this.firstGuide() ||
-      (this.mealPick && this.mealPick()) || this.mealGapNudge() || this.welcomeBack(away) ||
+      (this.mealPick && this.mealPick()) || this.mealGapNudge() || (this.dexIntro && this.dexIntro()) || this.welcomeBack(away) ||
       (this.askOnce && this.askOnce()) || (this.whisper && this.whisper()) || (this.quizNudge && this.quizNudge());
   },
 
@@ -276,11 +278,11 @@ Object.assign(FitnessApp.prototype, {
   },
 
   /**
-   * 离开 3 小时以上又回来：接一句今天的事（计划还剩几条、晚上蛋白还差多少、今天练了啥）；
+   * 离开 2 小时以上又回来（v6.2 从 3 小时改成 2 小时）：接一句今天的事（计划还剩几条、晚上蛋白还差多少、今天练了啥）；
    * 没什么事的，熟了（Lv3 以上）或者调成「话多」才说一句「回来啦」。一天最多两次。
    */
   welcomeBack(away) {
-    if (!(away >= 3 * 3600 * 1000) || !this.canChat() || Date.now() - (this._popAt || 0) < 60000) return false;
+    if (!(away >= 2 * 3600 * 1000) || !this.canChat() || Date.now() - (this._popAt || 0) < 60000) return false;
     const today = getTodayDateString();
     let c;
     try { c = JSON.parse(localStorage.getItem('tf_back') || '{}'); } catch (e) { c = {}; }
@@ -433,10 +435,11 @@ Object.assign(FitnessApp.prototype, {
     return { meal: '', word: '今天', eg: '一碗米饭一个鸡蛋' };
   },
 
-  /** 不知道吃了多少、不想出声、还没吃：几个现成的回答 */
+  /** 不知道吃了多少、不想出声、还没吃：几个现成的回答（v6.2 多了「点图片记」：不想说也不想打字，点照片就行） */
   firstOptions(m) {
     return [
       { label: '我说一下', talk: true, reply: `按住下面的按钮，说「${m.eg}」这样就行，说完松手。` },
+      { label: '点图片记', pick: () => this.openDex && setTimeout(() => this.openDex({ log: true, date: getTodayDateString(), meal: m.meal || mealSlotByHour(new Date().getHours()) }), 60) },
       { label: '不知道吃了多少', talk: true, reply: '说个大概就行，「一碗」「一盘」「一个拳头大」都行，我按常见的份量算，算不准会问你。' },
       { label: '打字行吗', pick: () => window.QuickLog && window.QuickLog.setMode('text', true), reply: '行，在下面打字，打完点发送。' },
       { label: '还没吃', reply: `那吃完说一句。想吃啥也能问我，比如「${m.word === '今天' ? '' : m.word}吃点啥好」。` }];
@@ -460,7 +463,10 @@ Object.assign(FitnessApp.prototype, {
     return true;
   },
 
-  /** 饭点过了这顿还空着：问一句吃了没（每顿一天一次，算在每天说话的次数里） */
+  /**
+   * 饭点过了这顿还空着：问一句吃了没（每顿一天一次，算在每天说话的次数里）。
+   * v6.2 更省事：这顿有计划 →「照计划吃了」一键记上；这个钟点有常吃的 →「对，老样子」一键记上；不想说话 →「点图片选」。
+   */
   mealGapNudge() {
     if (!this.canChat() || Date.now() - (this._popAt || 0) < 60000) return false;
     const today = getTodayDateString();
@@ -470,11 +476,24 @@ Object.assign(FitnessApp.prototype, {
     if (!slot || this.diet.some(x => x.date === today && x.mealType === slot[0])) return false;
     const key = 'meal:' + slot[0];
     if (this.nudgeSaid(key)) return false;
-    this.askUser(`${slot[1]}吃了吗？`, [
-      { label: '吃了，我说一下', talk: true },
-      { label: '记不清吃了啥', talk: true, reply: '说个大概就行，比如「一份盖浇饭」，量我按常见的算，不准再改。' },
-      { label: '还没', reply: '吃完说一声。' },
-      { label: '不吃了', reply: '行，别饿过头就好。' }]);
+    const short = (s) => { const x = String(s || ''); return x.length > 16 ? x.slice(0, 15) + '…' : x; };
+    const dex = { label: '点图片选', pick: () => this.openDex && setTimeout(() => this.openDex({ log: true, date: today, meal: slot[0] }), 60) };
+    const later = { label: '还没', reply: '吃完说一声。' };
+    const plan = (this.todoPlans ? this.todoPlans(today) : []).find(p => p.kind === 'meal' && p.mealType === slot[0]);
+    const usual = !plan && this.quickSuggestions ? this.quickSuggestions(slot[0]).find(q => q.kind === 'meal' && q.usual && !q.done) : null;
+    if (plan) {
+      this.askUser(`${slot[1]}吃了吗？计划的是「${short(plan.foodSummary)}」。`, [
+        { label: '照计划吃了', pick: () => this.donePlan(plan.id), reply: '记上了。' },
+        { label: '吃了别的', talk: true, reply: '按住说一下吃了啥，量说个大概就行。' }, dex, later]);
+    } else if (usual) {
+      this.askUser(`${slot[1]}吃了吗？还是老样子「${short(usual.label)}」？`, [
+        { label: '对，记上', pick: () => this.quickRepeatKey(usual.key, slot[0]), reply: '记上了。' },
+        { label: '吃了别的', talk: true, reply: '按住说一下吃了啥，量说个大概就行。' }, dex, later]);
+    } else {
+      this.askUser(`${slot[1]}吃了吗？`, [
+        { label: '吃了，我说一下', talk: true, reply: '按住说就行，记不清就说个大概，比如「一份盖浇饭」，量我按常见的算。' },
+        dex, later, { label: '不吃了', reply: '行，别饿过头就好。' }]);
+    }
     this.nudgeMark(key);
     this.chatBudget(true);
     return true;
@@ -581,7 +600,7 @@ Object.assign(FitnessApp.prototype, {
     if (Date.now() - (this._popAt || 0) < 60000) return false;
     if ((this.pending || []).some(p => p.status === 'working')) return false;
     const shown = (id) => { const el = document.getElementById(id); return el && !el.classList.contains('hidden'); };
-    if (['edit-overlay', 'share-overlay', 'rec-panel', 'ql-snackbar', 'gauge-pop'].some(shown)) return false;
+    if (['edit-overlay', 'share-overlay', 'rec-panel', 'ql-snackbar', 'gauge-pop', 'dex-overlay'].some(shown)) return false;
     const cmp = document.getElementById('composer');
     if (cmp && cmp.classList.contains('recording')) return false;
     const ae = document.activeElement;
@@ -686,6 +705,8 @@ Object.assign(FitnessApp.prototype, {
     // 饭前帮你挑一顿、考考你一份多少千卡（v6.1，图鉴那边算）
     if (this.mealPick && !this.nudgeSaid('idle:pick') && this.mealPick(true)) return { key: 'idle:pick' };
     if (this.quizNudge && !this.nudgeSaid('idle:quiz') && Math.random() < 0.5 && this.quizNudge(true)) return { key: 'idle:quiz' };
+    // 推荐一样你没吃过的（带照片，「看看」直接打开图鉴那一样，v6.2）
+    if (this.dexNudge && !this.nudgeSaid('idle:dex') && Math.random() < 0.4 && this.dexNudge()) return { key: 'idle:dex' };
     // 发呆的时候也是说悄悄话的好时候（两天最多一条）
     if (this.whisper && this.whisper(true)) return { key: 'idle:whisper' };
     // 跟你有关的优先，小知识垫底

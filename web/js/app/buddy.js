@@ -906,7 +906,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     pop.innerHTML = `<div class="buddy-pop-head">${head}</div>` + (rare ? `<p class="buddy-rare">${esc(rare)}</p>` : '') + this.bondRow() + `<p class="buddy-say">${esc(st.say)}</p>` +
       (obs ? `<p class="buddy-obs">${esc(obs)}</p>` : '') +
       (tip ? `<p class="buddy-train">${esc(tip)}</p>` : '') +
-      `<button class="buddy-dex" type="button"><i aria-hidden="true">📖</i>食物图鉴 · 自己搭一顿<span aria-hidden="true">›</span></button>` +
+      (this.dexEntryHtml ? this.dexEntryHtml() : '') +
       `<p class="buddy-foot">${esc(foot)}</p>`;
     pop.querySelector('.buddy-dex').addEventListener('click', (e) => { e.stopPropagation(); this.openDex && this.openDex(); });
     this.positionBuddyPop();

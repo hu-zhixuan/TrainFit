@@ -1,0 +1,974 @@
+{
+ "燕麦片": {
+  "file": "oatmeal",
+  "url": "https://live.staticflickr.com/7060/6835999820_ab1d0a905a_b.jpg",
+  "page": "https://www.flickr.com/photos/8174757@N02/6835999820",
+  "author": "emmadiscovery",
+  "license": "by",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "杂粮饭": {
+  "file": "multigrain-rice",
+  "url": "https://live.staticflickr.com/2880/12145989143_ecc71ed933_b.jpg",
+  "page": "https://www.flickr.com/photos/34003965@N00/12145989143",
+  "author": "Azchael",
+  "license": "by",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "玉米": {
+  "file": "corn-on-the-cob",
+  "url": "https://live.staticflickr.com/2378/1728461908_57a92b9789_b.jpg",
+  "page": "https://www.flickr.com/photos/41894170049@N01/1728461908",
+  "author": "andrewmalone",
+  "license": "by",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "红薯": {
+  "file": "baked-sweet-potato",
+  "url": "https://live.staticflickr.com/129/347746898_a82cc4516a_b.jpg",
+  "page": "https://www.flickr.com/photos/35468134321@N01/347746898",
+  "author": "Micah Sittig",
+  "license": "by",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "贝贝南瓜": {
+  "file": "kabocha",
+  "url": "https://live.staticflickr.com/1221/5112078128_c56cb4b869_b.jpg",
+  "page": "https://www.flickr.com/photos/51004712@N08/5112078128",
+  "author": "wikioticsIan",
+  "license": "by-sa",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "土豆": {
+  "file": "potatoes",
+  "url": "https://live.staticflickr.com/4141/4806353660_9219d04f34_b.jpg",
+  "page": "https://www.flickr.com/photos/13803858@N05/4806353660",
+  "author": "lisibo",
+  "license": "by-sa",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "山药": {
+  "file": "chinese-yam",
+  "url": "https://live.staticflickr.com/7283/8743652434_a3871466cb_b.jpg",
+  "page": "https://www.flickr.com/photos/87117631@N00/8743652434",
+  "author": "Gary Soup",
+  "license": "by",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "全麦面包": {
+  "file": "whole-wheat-bread",
+  "url": "https://live.staticflickr.com/5268/5656956353_1c9d92e194_b.jpg",
+  "page": "https://www.flickr.com/photos/31104779@N02/5656956353",
+  "author": "Veganbaking.net",
+  "license": "by-sa",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "荞麦面": {
+  "file": "soba-noodles",
+  "url": "https://upload.wikimedia.org/wikipedia/commons/9/9a/Dried_soba_noodles_by_FotoosVanRobin.jpg",
+  "page": "https://commons.wikimedia.org/w/index.php?curid=3904609",
+  "author": "FotoosVanRobin",
+  "license": "by-sa",
+  "version": "2.0",
+  "provider": "wikimedia"
+ },
+ "米饭": {
+  "file": "rice",
+  "url": "https://upload.wikimedia.org/wikipedia/commons/f/fe/HK_%E4%B8%AD%E7%92%B0_Central_L-Place_%E5%A4%A7%E6%88%B6%E5%B1%8B%E6%97%A5%E6%9C%AC%E9%A4%90%E5%BB%B3_Ootoya_Japanese_style_Restaurant_food_dinner_%E7%99%BD%E9%A3%AF_white_rice_bowl_May_2019_SSG_01.jpg",
+  "page": "https://commons.wikimedia.org/w/index.php?curid=78866862",
+  "author": "LP3567 886023",
+  "license": "by-sa",
+  "version": "4.0",
+  "provider": "wikimedia"
+ },
+ "馒头": {
+  "file": "mantou",
+  "url": "https://live.staticflickr.com/209/504401035_9eb62bc177.jpg",
+  "page": "https://www.flickr.com/photos/10559879@N00/504401035",
+  "author": "avlxyz",
+  "license": "by-sa",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "面条": {
+  "file": "noodle-soup",
+  "url": "https://live.staticflickr.com/1376/894126031_59530cb62a_b.jpg",
+  "page": "https://www.flickr.com/photos/10559879@N00/894126031",
+  "author": "avlxyz",
+  "license": "by-sa",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "水饺": {
+  "file": "jiaozi",
+  "url": "https://live.staticflickr.com/5212/5387244778_f00eda6cb0.jpg",
+  "page": "https://www.flickr.com/photos/13849712@N00/5387244778",
+  "author": "johnsember",
+  "license": "by",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "馄饨": {
+  "file": "wonton",
+  "url": "https://live.staticflickr.com/4138/4863078698_7600019887_b.jpg",
+  "page": "https://www.flickr.com/photos/72949902@N00/4863078698",
+  "author": "TheCulinaryGeek",
+  "license": "by",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "肉包": {
+  "file": "baozi",
+  "url": "https://upload.wikimedia.org/wikipedia/commons/f/f4/Baozi_Chengdu.JPG",
+  "page": "https://commons.wikimedia.org/w/index.php?curid=48462841",
+  "author": "Popo le Chien",
+  "license": "cc0",
+  "version": "1.0",
+  "provider": "wikimedia"
+ },
+ "白粥": {
+  "file": "congee",
+  "url": "https://upload.wikimedia.org/wikipedia/commons/5/58/Chinese_rice_congee.jpg",
+  "page": "https://commons.wikimedia.org/w/index.php?curid=567814",
+  "author": "Daiju Azuma",
+  "license": "by-sa",
+  "version": "2.5",
+  "provider": "wikimedia"
+ },
+ "手抓饼": {
+  "file": "scallion-pancake",
+  "url": "https://live.staticflickr.com/3656/3657103392_73fa4c3f52_b.jpg",
+  "page": "https://www.flickr.com/photos/10815162@N07/3657103392",
+  "author": "atlai",
+  "license": "by",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "苹果": {
+  "file": "red-apple",
+  "url": "https://upload.wikimedia.org/wikipedia/commons/1/15/Red_Apple.jpg",
+  "page": "https://commons.wikimedia.org/w/index.php?curid=7823406",
+  "author": "Abhijit Tembhekar from Mumbai, India",
+  "license": "by",
+  "version": "2.0",
+  "provider": "wikimedia"
+ },
+ "香蕉": {
+  "file": "bananas",
+  "url": "https://live.staticflickr.com/7013/6612824761_3f66a93c71_b.jpg",
+  "page": "https://www.flickr.com/photos/30091649@N06/6612824761",
+  "author": "24oranges.nl",
+  "license": "by-sa",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "橙子": {
+  "file": "oranges-fruit",
+  "url": "https://upload.wikimedia.org/wikipedia/commons/c/c4/Orange-Fruit-Pieces.jpg",
+  "page": "https://commons.wikimedia.org/w/index.php?curid=19304008",
+  "author": "Evan-Amos",
+  "license": "by-sa",
+  "version": "3.0",
+  "provider": "wikimedia"
+ },
+ "梨": {
+  "file": "pear-fruit",
+  "url": "https://live.staticflickr.com/4100/4900266558_8140df0b7e.jpg",
+  "page": "https://www.flickr.com/photos/28958738@N06/4900266558",
+  "author": "Public Domain Photos",
+  "license": "by",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "草莓": {
+  "file": "strawberries",
+  "url": "https://live.staticflickr.com/7314/11902390455_9f492dba2c_b.jpg",
+  "page": "https://www.flickr.com/photos/26782864@N00/11902390455",
+  "author": "wwarby",
+  "license": "by",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "猕猴桃": {
+  "file": "kiwi-fruit",
+  "url": "https://live.staticflickr.com/6012/5941766050_c251e9473b_b.jpg",
+  "page": "https://www.flickr.com/photos/60417477@N00/5941766050",
+  "author": "whologwhy",
+  "license": "by",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "西瓜": {
+  "file": "watermelon",
+  "url": "https://live.staticflickr.com/5161/5330763573_6f133e610b_b.jpg",
+  "page": "https://www.flickr.com/photos/78624494@N00/5330763573",
+  "author": "gianouts",
+  "license": "by",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "葡萄": {
+  "file": "grapes",
+  "url": "https://live.staticflickr.com/8440/8011959622_00580844ba_b.jpg",
+  "page": "https://www.flickr.com/photos/82088316@N05/8011959622",
+  "author": "tribp",
+  "license": "by",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "芒果": {
+  "file": "mango",
+  "url": "https://live.staticflickr.com/2413/2480549843_90151652c8_b.jpg",
+  "page": "https://www.flickr.com/photos/9887084@N04/2480549843",
+  "author": "~ Abdulhai A. Al-Abdulhai~",
+  "license": "by-sa",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "樱桃": {
+  "file": "cherries",
+  "url": "https://live.staticflickr.com/3599/3621839233_e79b1f53b1_b.jpg",
+  "page": "https://www.flickr.com/photos/15181848@N02/3621839233",
+  "author": "amandabhslater",
+  "license": "by-sa",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "榴莲": {
+  "file": "durian",
+  "url": "https://live.staticflickr.com/1224/1298527252_96af61efd5_b.jpg",
+  "page": "https://www.flickr.com/photos/80335855@N00/1298527252",
+  "author": "irrational_cat",
+  "license": "by-sa",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "奶茶": {
+  "file": "bubble-tea",
+  "url": "https://live.staticflickr.com/2653/4000461186_aa159096b3_b.jpg",
+  "page": "https://www.flickr.com/photos/10559879@N00/4000461186",
+  "author": "avlxyz",
+  "license": "by-sa",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "可乐": {
+  "file": "cola",
+  "url": "https://live.staticflickr.com/5245/5207436325_ff6362826a_b.jpg",
+  "page": "https://www.flickr.com/photos/44613506@N07/5207436325",
+  "author": "(vincent desjardins)",
+  "license": "by",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "生椰拿铁": {
+  "file": "latte",
+  "url": "https://live.staticflickr.com/6108/6290762275_0dfef41f80.jpg",
+  "page": "https://www.flickr.com/photos/15679785@N00/6290762275",
+  "author": "mcmurrak",
+  "license": "by",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "油条": {
+  "file": "youtiao",
+  "url": "https://upload.wikimedia.org/wikipedia/commons/7/78/Youtiao.jpg",
+  "page": "https://commons.wikimedia.org/w/index.php?curid=44707117",
+  "author": "Popo le Chien",
+  "license": "cc0",
+  "version": "1.0",
+  "provider": "wikimedia"
+ },
+ "葡萄干": {
+  "file": "raisins",
+  "url": "https://live.staticflickr.com/5498/11067185396_2e9fc12cfe_b.jpg",
+  "page": "https://www.flickr.com/photos/69668444@N03/11067185396",
+  "author": "Migle Seikyte",
+  "license": "by-sa",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "啤酒": {
+  "file": "beer-glass",
+  "url": "https://live.staticflickr.com/7246/7693256504_691b74fc06_b.jpg",
+  "page": "https://www.flickr.com/photos/49889671@N03/7693256504",
+  "author": "Didriks",
+  "license": "by",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "鸡胸肉": {
+  "file": "chicken-breast",
+  "url": "https://live.staticflickr.com/3940/14997215303_3066be102d.jpg",
+  "page": "https://www.flickr.com/photos/32031278@N03/14997215303",
+  "author": "debbietingzon",
+  "license": "by",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "瘦牛肉": {
+  "file": "beef",
+  "url": "https://live.staticflickr.com/8236/8554684354_355125918d.jpg",
+  "page": "https://www.flickr.com/photos/66172503@N00/8554684354",
+  "author": "IchStyle",
+  "license": "by",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "猪里脊": {
+  "file": "pork-tenderloin",
+  "url": "https://live.staticflickr.com/3535/3774412385_ba0c5cd7d4_b.jpg",
+  "page": "https://www.flickr.com/photos/22198928@N00/3774412385",
+  "author": "thebittenword.com",
+  "license": "by",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "鸡腿肉": {
+  "file": "drumstick",
+  "url": "https://live.staticflickr.com/3744/12425734214_7e62b87762_b.jpg",
+  "page": "https://www.flickr.com/photos/91188380@N05/12425734214",
+  "author": "elsie.hui",
+  "license": "by",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "羊肉": {
+  "file": "lamb",
+  "url": "https://live.staticflickr.com/3252/3153837015_38667d6749_b.jpg",
+  "page": "https://www.flickr.com/photos/10559879@N00/3153837015",
+  "author": "avlxyz",
+  "license": "by-sa",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "鸡爪": {
+  "file": "chicken-feet",
+  "url": "https://live.staticflickr.com/2497/4190099954_92e5838fb4_b.jpg",
+  "page": "https://www.flickr.com/photos/10559879@N00/4190099954",
+  "author": "avlxyz",
+  "license": "by-sa",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "虾仁": {
+  "file": "shrimp",
+  "url": "https://live.staticflickr.com/4130/5020563209_34e9e3f224_b.jpg",
+  "page": "https://www.flickr.com/photos/27086907@N04/5020563209",
+  "author": "2KoP",
+  "license": "by-sa",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "三文鱼": {
+  "file": "salmon-fillet",
+  "url": "https://upload.wikimedia.org/wikipedia/commons/4/40/Halibut_and_salmon_fillets.jpg",
+  "page": "https://commons.wikimedia.org/w/index.php?curid=15449673",
+  "author": "gran",
+  "license": "by",
+  "version": "3.0",
+  "provider": "wikimedia"
+ },
+ "鳕鱼": {
+  "file": "cod-fillet",
+  "url": "https://upload.wikimedia.org/wikipedia/commons/f/f3/Baked_cod_fillet.jpg",
+  "page": "https://commons.wikimedia.org/w/index.php?curid=67251573",
+  "author": "Tiia Monto",
+  "license": "by-sa",
+  "version": "4.0",
+  "provider": "wikimedia"
+ },
+ "金枪鱼": {
+  "file": "canned-tuna",
+  "url": "https://live.staticflickr.com/65535/53411302463_4ecf463219_b.jpg",
+  "page": "https://www.flickr.com/photos/93839835@N04/53411302463",
+  "author": "eamathe",
+  "license": "by",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "鱿鱼": {
+  "file": "grilled-squid",
+  "url": "https://live.staticflickr.com/4109/4997841338_86f3aaa01e_b.jpg",
+  "page": "https://www.flickr.com/photos/60417477@N00/4997841338",
+  "author": "whologwhy",
+  "license": "by",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "鲈鱼": {
+  "file": "steamed-fish",
+  "url": "https://live.staticflickr.com/5097/5403389312_4a63c2774f_b.jpg",
+  "page": "https://www.flickr.com/photos/60417477@N00/5403389312",
+  "author": "whologwhy",
+  "license": "by",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "蛤蜊": {
+  "file": "clams",
+  "url": "https://live.staticflickr.com/2062/2461258704_03d5d227ef_b.jpg",
+  "page": "https://www.flickr.com/photos/10559879@N00/2461258704",
+  "author": "avlxyz",
+  "license": "by-sa",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "鸡蛋": {
+  "file": "egg",
+  "url": "https://live.staticflickr.com/6006/5931056506_908129f8ed_b.jpg",
+  "page": "https://www.flickr.com/photos/39107352@N08/5931056506",
+  "author": "Rameshng",
+  "license": "by-sa",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "蛋白": {
+  "file": "egg-white",
+  "url": "https://live.staticflickr.com/3277/2862928062_b9351549f0_b.jpg",
+  "page": "https://www.flickr.com/photos/21309047@N00/2862928062",
+  "author": "Annie Mole",
+  "license": "by",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "牛奶": {
+  "file": "milk",
+  "url": "https://live.staticflickr.com/6102/6331771638_4bf2593829_b.jpg",
+  "page": "https://www.flickr.com/photos/52743784@N05/6331771638",
+  "author": "Marina Shemesh",
+  "license": "by-sa",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "脱脂牛奶": {
+  "file": "skim-milk",
+  "url": "https://live.staticflickr.com/227/513371114_f048acf9c3_b.jpg",
+  "page": "https://www.flickr.com/photos/93656595@N00/513371114",
+  "author": "NickPiggott",
+  "license": "by",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "酸奶": {
+  "file": "plain-yogurt",
+  "url": "https://upload.wikimedia.org/wikipedia/commons/1/1b/Plain_Yogurt.jpg",
+  "page": "https://commons.wikimedia.org/w/index.php?curid=102658527",
+  "author": "Alabama Extension",
+  "license": "cc0",
+  "version": "1.0",
+  "provider": "wikimedia"
+ },
+ "奶酪": {
+  "file": "cheese",
+  "url": "https://live.staticflickr.com/5050/5383384526_19ae18883b_b.jpg",
+  "page": "https://www.flickr.com/photos/66419320@N00/5383384526",
+  "author": "julesjulesjules m",
+  "license": "by",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "蛋白粉": {
+  "file": "whey-protein",
+  "url": "https://live.staticflickr.com/1672/25430213512_ea0df270af_b.jpg",
+  "page": "https://www.flickr.com/photos/92854661@N07/25430213512",
+  "author": "Christos Pontikis",
+  "license": "pdm",
+  "version": "1.0",
+  "provider": "flickr"
+ },
+ "豆腐": {
+  "file": "tofu",
+  "url": "https://live.staticflickr.com/3246/3122542562_59d249b293_b.jpg",
+  "page": "https://www.flickr.com/photos/10559879@N00/3122542562",
+  "author": "avlxyz",
+  "license": "by-sa",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "豆浆": {
+  "file": "soy-milk",
+  "url": "https://live.staticflickr.com/973/26994257677_b306e52239_b.jpg",
+  "page": "https://www.flickr.com/photos/146966953@N02/26994257677",
+  "author": "Kjokkenutstyr.net",
+  "license": "by-sa",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "毛豆": {
+  "file": "edamame",
+  "url": "https://live.staticflickr.com/1172/829877544_8c4508220f_b.jpg",
+  "page": "https://www.flickr.com/photos/58246614@N00/829877544",
+  "author": "mdid",
+  "license": "by",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "腐竹": {
+  "file": "yuba",
+  "url": "https://upload.wikimedia.org/wikipedia/commons/d/dd/Bean_curd_sticks.jpg",
+  "page": "https://commons.wikimedia.org/w/index.php?curid=152308492",
+  "author": "Fumikas Sagisavas",
+  "license": "cc0",
+  "version": "1.0",
+  "provider": "wikimedia"
+ },
+ "西兰花": {
+  "file": "broccoli",
+  "url": "https://live.staticflickr.com/3192/2579890315_b942ef67e0_b.jpg",
+  "page": "https://www.flickr.com/photos/26226522@N08/2579890315",
+  "author": "[puamelia]",
+  "license": "by-sa",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "菠菜": {
+  "file": "spinach-leaves",
+  "url": "https://upload.wikimedia.org/wikipedia/commons/5/5e/Spinach_leaves.png",
+  "page": "https://commons.wikimedia.org/w/index.php?curid=67222979",
+  "author": "Tiia Monto",
+  "license": "by-sa",
+  "version": "4.0",
+  "provider": "wikimedia"
+ },
+ "生菜": {
+  "file": "lettuce",
+  "url": "https://live.staticflickr.com/6137/5956351688_c5fe55a455_b.jpg",
+  "page": "https://www.flickr.com/photos/60417477@N00/5956351688",
+  "author": "whologwhy",
+  "license": "by",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "大白菜": {
+  "file": "napa-cabbage",
+  "url": "https://live.staticflickr.com/2125/2081381890_0bd6b5b0f9_b.jpg",
+  "page": "https://www.flickr.com/photos/9027562@N05/2081381890",
+  "author": "Leeks 'N' Bounds",
+  "license": "by-sa",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "油麦菜": {
+  "file": "a-choy",
+  "url": "https://live.staticflickr.com/7157/6551785923_1c09eed986_b.jpg",
+  "page": "https://www.flickr.com/photos/71266843@N03/6551785923",
+  "author": "C John Thompson",
+  "license": "by-sa",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "芹菜": {
+  "file": "celery-stalks",
+  "url": "https://live.staticflickr.com/4069/4249693470_934f132fa7.jpg",
+  "page": "https://www.flickr.com/photos/33715728@N05/4249693470",
+  "author": "TheDeliciousLife",
+  "license": "by",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "黄瓜": {
+  "file": "cucumber",
+  "url": "https://live.staticflickr.com/4116/4782586685_b997acf358_b.jpg",
+  "page": "https://www.flickr.com/photos/44124390461@N01/4782586685",
+  "author": "David Davies",
+  "license": "by-sa",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "番茄": {
+  "file": "tomatoes",
+  "url": "https://live.staticflickr.com/3043/2694720316_4693c8051a_b.jpg",
+  "page": "https://www.flickr.com/photos/27429206@N02/2694720316",
+  "author": "Vladimir Morozov",
+  "license": "by-sa",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "茄子": {
+  "file": "eggplant",
+  "url": "https://live.staticflickr.com/7035/6769358683_f679b8bef1_b.jpg",
+  "page": "https://www.flickr.com/photos/47696637@N03/6769358683",
+  "author": "AsianLifestyleDesign",
+  "license": "by-sa",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "西葫芦": {
+  "file": "zucchini",
+  "url": "https://live.staticflickr.com/2308/5717094450_3c26e0a3d5_b.jpg",
+  "page": "https://www.flickr.com/photos/68552389@N00/5717094450",
+  "author": "cbb4104",
+  "license": "by",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "冬瓜": {
+  "file": "winter-melon",
+  "url": "https://live.staticflickr.com/2944/15439476812_2367615b09_b.jpg",
+  "page": "https://www.flickr.com/photos/62295966@N07/15439476812",
+  "author": "Plant pests and diseases",
+  "license": "cc0",
+  "version": "1.0",
+  "provider": "flickr"
+ },
+ "香菇": {
+  "file": "shiitake",
+  "url": "https://live.staticflickr.com/6223/6337152519_2ca73ae8f1_b.jpg",
+  "page": "https://www.flickr.com/photos/53194155@N00/6337152519",
+  "author": "fishermansdaughter",
+  "license": "by",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "金针菇": {
+  "file": "enoki",
+  "url": "https://live.staticflickr.com/8367/8596583039_ae590c33bc_b.jpg",
+  "page": "https://www.flickr.com/photos/71837271@N00/8596583039",
+  "author": "Phoebe Lim",
+  "license": "by-sa",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "海带": {
+  "file": "kelp",
+  "url": "https://live.staticflickr.com/3846/15272102411_53c3e984de_b.jpg",
+  "page": "https://www.flickr.com/photos/88123769@N02/15272102411",
+  "author": "Bernard Spragg",
+  "license": "cc0",
+  "version": "1.0",
+  "provider": "flickr"
+ },
+ "胡萝卜": {
+  "file": "carrots",
+  "url": "https://live.staticflickr.com/22/35819369_3dfa63642b_b.jpg",
+  "page": "https://www.flickr.com/photos/36131061@N00/35819369",
+  "author": "color line",
+  "license": "by",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "南瓜": {
+  "file": "pumpkin",
+  "url": "https://live.staticflickr.com/8455/7986311191_53cfbe68a7_b.jpg",
+  "page": "https://www.flickr.com/photos/53133240@N00/7986311191",
+  "author": "Muffet",
+  "license": "by",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "洋葱": {
+  "file": "onions",
+  "url": "https://live.staticflickr.com/3195/2990656711_a7a3860b5b_b.jpg",
+  "page": "https://www.flickr.com/photos/31797858@N00/2990656711",
+  "author": "Alexandre Dulaunoy",
+  "license": "by-sa",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "黄豆芽": {
+  "file": "bean-sprouts",
+  "url": "https://live.staticflickr.com/4040/4253053211_0860e7a8f5.jpg",
+  "page": "https://www.flickr.com/photos/87232391@N00/4253053211",
+  "author": "Charles Haynes",
+  "license": "by-sa",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "豆角": {
+  "file": "green-beans",
+  "url": "https://live.staticflickr.com/5560/14947740937_8d2a3f113b_b.jpg",
+  "page": "https://www.flickr.com/photos/39160147@N03/14947740937",
+  "author": "JeepersMedia",
+  "license": "by",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "坚果": {
+  "file": "mixed-nuts",
+  "url": "https://live.staticflickr.com/4024/4415406430_d8433ae034_b.jpg",
+  "page": "https://www.flickr.com/photos/45032885@N04/4415406430",
+  "author": "s58y",
+  "license": "by",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "杏仁": {
+  "file": "almonds",
+  "url": "https://live.staticflickr.com/3188/3060935008_1b3a0af8ec_b.jpg",
+  "page": "https://www.flickr.com/photos/27526538@N07/3060935008",
+  "author": "mynameisharsha",
+  "license": "by-sa",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "腰果": {
+  "file": "cashews",
+  "url": "https://live.staticflickr.com/2584/4208655591_4d72abdef7_b.jpg",
+  "page": "https://www.flickr.com/photos/13144581@N00/4208655591",
+  "author": "Razor512",
+  "license": "by",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "开心果": {
+  "file": "pistachios",
+  "url": "https://live.staticflickr.com/4771/39799740255_c3280c5a57_b.jpg",
+  "page": "https://www.flickr.com/photos/141324643@N05/39799740255",
+  "author": "Theo Crazzolara",
+  "license": "by",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "南瓜子": {
+  "file": "pumpkin-seeds",
+  "url": "https://live.staticflickr.com/4024/5129464808_57dc32e38c_b.jpg",
+  "page": "https://www.flickr.com/photos/87903774@N00/5129464808",
+  "author": "jaxzin",
+  "license": "by",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "炒菜油": {
+  "file": "cooking-oil",
+  "url": "https://live.staticflickr.com/4145/5090504707_7d7b1852f6_b.jpg",
+  "page": "https://www.flickr.com/photos/8831683@N05/5090504707",
+  "author": "mrbichel",
+  "license": "by",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "橄榄油": {
+  "file": "olive-oil",
+  "url": "https://live.staticflickr.com/7006/6825479819_404ec65b1d_b.jpg",
+  "page": "https://www.flickr.com/photos/10413717@N08/6825479819",
+  "author": "Smabs Sputzer (1956-2017)",
+  "license": "by",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "黄油": {
+  "file": "butter",
+  "url": "https://live.staticflickr.com/20/71922825_32c10588c2_b.jpg",
+  "page": "https://www.flickr.com/photos/94953676@N00/71922825",
+  "author": "jessicafm",
+  "license": "by",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "红烧肉": {
+  "file": "hongshaorou",
+  "url": "https://upload.wikimedia.org/wikipedia/commons/f/f9/Red_braised_pork_belly_%E7%BA%A2%E7%83%A7%E8%82%89_h%C3%B3ngsh%C4%81or%C3%B2u_23_January_2025_Filipinas4.jpg",
+  "page": "https://commons.wikimedia.org/w/index.php?curid=158616627",
+  "author": "",
+  "license": "by-sa",
+  "version": "4.0",
+  "provider": "wikimedia"
+ },
+ "回锅肉": {
+  "file": "huiguorou",
+  "url": "https://live.staticflickr.com/2393/1648213963_a866e8a23a_b.jpg",
+  "page": "https://www.flickr.com/photos/10559879@N00/1648213963",
+  "author": "avlxyz",
+  "license": "by-sa",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "糖醋里脊": {
+  "file": "sweet-sour-pork",
+  "url": "https://upload.wikimedia.org/wikipedia/commons/8/81/Sweet-and-sour_pork.jpg",
+  "page": "https://commons.wikimedia.org/w/index.php?curid=166499",
+  "author": "",
+  "license": "by-sa",
+  "version": "3.0",
+  "provider": "wikimedia"
+ },
+ "炸鸡块": {
+  "file": "fried-chicken",
+  "url": "https://live.staticflickr.com/3267/2887427240_f52c12c69d.jpg",
+  "page": "https://www.flickr.com/photos/22198928@N00/2887427240",
+  "author": "thebittenword.com",
+  "license": "by",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "汉堡": {
+  "file": "hamburger",
+  "url": "https://live.staticflickr.com/175/408384716_52cde3b4f1_b.jpg",
+  "page": "https://www.flickr.com/photos/18244673@N00/408384716",
+  "author": "pointnshoot",
+  "license": "by",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "番茄炒蛋": {
+  "file": "tomato-egg",
+  "url": "https://live.staticflickr.com/3201/2898954637_8fd1e66ea9_b.jpg",
+  "page": "https://www.flickr.com/photos/35034346243@N01/2898954637",
+  "author": "stu_spivack",
+  "license": "by-sa",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "蒜蓉西兰花": {
+  "file": "garlic-broccoli",
+  "url": "https://upload.wikimedia.org/wikipedia/commons/4/4d/Stir-fried_broccoli.jpg",
+  "page": "https://commons.wikimedia.org/w/index.php?curid=153276960",
+  "author": "Fumikas Sagisavas",
+  "license": "cc0",
+  "version": "1.0",
+  "provider": "wikimedia"
+ },
+ "麻婆豆腐": {
+  "file": "mapo-tofu",
+  "url": "https://live.staticflickr.com/4108/5007261302_6087cdd8cd_b.jpg",
+  "page": "https://www.flickr.com/photos/61324768@N00/5007261302",
+  "author": "crd!",
+  "license": "by",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "宫保鸡丁": {
+  "file": "kungpao-chicken",
+  "url": "https://live.staticflickr.com/5336/7192503632_9962c4085c_b.jpg",
+  "page": "https://www.flickr.com/photos/41942551@N02/7192503632",
+  "author": "SodanieChea",
+  "license": "by",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "水煮牛肉": {
+  "file": "shuizhu-beef",
+  "url": "https://live.staticflickr.com/2846/33383244921_f40cc86feb_b.jpg",
+  "page": "https://www.flickr.com/photos/22539273@N00/33383244921",
+  "author": "*_*",
+  "license": "by",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "牛肉拉面": {
+  "file": "beef-noodles",
+  "url": "https://upload.wikimedia.org/wikipedia/commons/b/b6/SZ_%E6%B7%B1%E5%9C%B3_Shenzhen_%E9%B9%BD%E7%94%B0_Yantian_%E6%B7%B1%E9%B9%BD%E8%B7%AF_Shenyan_Road_%E5%A3%B9%E6%B5%B7%E5%9F%8E%E9%81%93_One_City_Blvd_Mall_%E6%B8%85%E7%9C%9F%E8%98%AD%E5%B7%9E%E7%89%9B%E8%82%89%E9%BA%B5_Qingzhen_Lanzhou_Beef_Noodle_Restaurant_July_2023_Px3_09.jpg",
+  "page": "https://commons.wikimedia.org/w/index.php?curid=134004097",
+  "author": "ZHAJOOWMC Hroapwcua",
+  "license": "by-sa",
+  "version": "4.0",
+  "provider": "wikimedia"
+ },
+ "皮蛋瘦肉粥": {
+  "file": "century-egg-congee",
+  "url": "https://live.staticflickr.com/4132/5049732373_9323bebf72_b.jpg",
+  "page": "https://www.flickr.com/photos/10559879@N00/5049732373",
+  "author": "avlxyz",
+  "license": "by-sa",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "麻辣烫": {
+  "file": "malatang",
+  "url": "https://upload.wikimedia.org/wikipedia/commons/8/8f/Malatang_from_Hope_Tree_%2820220226172344%29.jpg",
+  "page": "https://commons.wikimedia.org/w/index.php?curid=115578229",
+  "author": "N509FZ",
+  "license": "by-sa",
+  "version": "4.0",
+  "provider": "wikimedia"
+ },
+ "黄焖鸡米饭": {
+  "file": "huangmenji",
+  "url": "https://live.staticflickr.com/3533/3232841326_5bd3687c87_b.jpg",
+  "page": "https://www.flickr.com/photos/35034346243@N01/3232841326",
+  "author": "stu_spivack",
+  "license": "by-sa",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "麻辣香锅": {
+  "file": "mala-xiangguo",
+  "url": "https://live.staticflickr.com/4363/36519585276_7e4a8f715e_b.jpg",
+  "page": "https://www.flickr.com/photos/92055321@N08/36519585276",
+  "author": "Mark Koester",
+  "license": "by",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "猪脚饭": {
+  "file": "pork-knuckle-rice",
+  "url": "https://upload.wikimedia.org/wikipedia/commons/d/de/Longjiang_pork_knuckle_rice_at_A_Sein_Teochew_Restaurant%2C_Beijing_%2820220116132546%29.jpg",
+  "page": "https://commons.wikimedia.org/w/index.php?curid=114355549",
+  "author": "N509FZ",
+  "license": "by-sa",
+  "version": "4.0",
+  "provider": "wikimedia"
+ },
+ "螺蛳粉": {
+  "file": "luosifen",
+  "url": "https://upload.wikimedia.org/wikipedia/commons/1/16/Luosifen_at_Guangya%2C_Liuzhou_%2820190420141814%29.jpg",
+  "page": "https://commons.wikimedia.org/w/index.php?curid=78240458",
+  "author": "N509FZ",
+  "license": "by-sa",
+  "version": "4.0",
+  "provider": "wikimedia"
+ },
+ "鱼香肉丝": {
+  "file": "yuxiang-pork",
+  "url": "https://live.staticflickr.com/7010/6747206829_0360d78a0f_b.jpg",
+  "page": "https://www.flickr.com/photos/87117631@N00/6747206829",
+  "author": "Gary Soup",
+  "license": "by",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "地三鲜": {
+  "file": "disanxian",
+  "url": "https://live.staticflickr.com/2897/14152031408_c460481640_b.jpg",
+  "page": "https://www.flickr.com/photos/27294954@N07/14152031408",
+  "author": "kmnyman",
+  "license": "by",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "沙县拌面": {
+  "file": "peanut-noodles",
+  "url": "https://live.staticflickr.com/5214/5386639907_c0815fab83.jpg",
+  "page": "https://www.flickr.com/photos/13849712@N00/5386639907",
+  "author": "johnsember",
+  "license": "by",
+  "version": "2.0",
+  "provider": "flickr"
+ },
+ "柚子": {
+  "file": "pomelo",
+  "url": "https://upload.wikimedia.org/wikipedia/commons/5/51/Pomelo_flesh.jpg",
+  "page": "https://commons.wikimedia.org/w/index.php?curid=98359406",
+  "author": "Ivar Leidus",
+  "license": "by-sa",
+  "version": "4.0",
+  "provider": "wikimedia"
+ },
+ "牛油果": {
+  "file": "avocado",
+  "url": "https://upload.wikimedia.org/wikipedia/commons/a/af/Liat_Portal_for_Foodie_Disorder_-_Avocado_Halves.jpg",
+  "page": "https://commons.wikimedia.org/w/index.php?curid=179433173",
+  "author": "HaJunkiyada",
+  "license": "by-sa",
+  "version": "4.0",
+  "provider": "wikimedia"
+ },
+ "希腊酸奶": {
+  "file": "greek-yogurt",
+  "url": "https://live.staticflickr.com/3677/9435325594_f6efde8f92_b.jpg",
+  "page": "https://www.flickr.com/photos/69668444@N03/9435325594",
+  "author": "Migle Seikyte",
+  "license": "by-sa",
+  "version": "2.0",
+  "provider": "flickr"
+ }
+}
