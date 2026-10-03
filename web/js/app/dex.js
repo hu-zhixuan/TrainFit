@@ -166,13 +166,30 @@
     ] }
   ];
   const TONE = { good: '放心吃', ok: '看份量', treat: '少量吃' };
+  // 实物照片（v6.2，维基共享资源，scripts/build-food-photos.py 生成 web/img/food/<key>.webp 和出处 FOOD_PHOTOS）：显示名 → 文件名
+  const PHOTO_KEY = {
+    燕麦片: 'oatmeal', 杂粮饭: 'multigrain-rice', 玉米: 'corn', 红薯: 'sweet-potato', 贝贝南瓜: 'kabocha', 土豆: 'potato', 山药: 'yam', 全麦面包: 'wholewheat-bread',
+    荞麦面: 'soba', 米饭: 'rice', 馒头: 'mantou', 面条: 'noodles', 水饺: 'jiaozi', 馄饨: 'wonton', 肉包: 'baozi', 白粥: 'congee', 手抓饼: 'shouzhuabing', 苹果: 'apple',
+    香蕉: 'banana', 橙子: 'orange', 梨: 'pear', 草莓: 'strawberry', 猕猴桃: 'kiwi', 西瓜: 'watermelon', 葡萄: 'grape', 芒果: 'mango', 樱桃: 'cherry', 榴莲: 'durian',
+    奶茶: 'bubble-tea', 可乐: 'cola', 生椰拿铁: 'coconut-latte', 油条: 'youtiao', 葡萄干: 'raisin', 啤酒: 'beer', 鸡胸肉: 'chicken-breast', 瘦牛肉: 'beef',
+    猪里脊: 'pork-loin', 鸡腿肉: 'chicken-leg', 羊肉: 'lamb', 鸡爪: 'chicken-feet', 虾仁: 'shrimp', 三文鱼: 'salmon', 鳕鱼: 'cod', 金枪鱼: 'tuna', 鱿鱼: 'squid',
+    鲈鱼: 'seabass', 蛤蜊: 'clam', 鸡蛋: 'egg', 蛋白: 'egg-white', 牛奶: 'milk', 脱脂牛奶: 'skim-milk', 酸奶: 'yogurt', 奶酪: 'cheese', 蛋白粉: 'whey', 豆腐: 'tofu',
+    豆浆: 'soymilk', 毛豆: 'edamame', 腐竹: 'yuba', 西兰花: 'broccoli', 菠菜: 'spinach', 生菜: 'lettuce', 大白菜: 'napa', 油麦菜: 'youmaicai', 芹菜: 'celery',
+    黄瓜: 'cucumber', 番茄: 'tomato', 茄子: 'eggplant', 西葫芦: 'zucchini', 冬瓜: 'winter-melon', 香菇: 'shiitake', 金针菇: 'enoki', 海带: 'kelp', 胡萝卜: 'carrot',
+    南瓜: 'pumpkin', 洋葱: 'onion', 黄豆芽: 'bean-sprout', 豆角: 'green-bean', 坚果: 'nuts', 杏仁: 'almond', 腰果: 'cashew', 开心果: 'pistachio', 南瓜子: 'pumpkin-seed',
+    炒菜油: 'oil', 橄榄油: 'olive-oil', 黄油: 'butter', 红烧肉: 'hongshaorou', 回锅肉: 'huiguorou', 糖醋里脊: 'tangcu', 炸鸡块: 'fried-chicken', 汉堡: 'burger',
+    番茄炒蛋: 'tomato-egg', 蒜蓉西兰花: 'garlic-broccoli', 麻婆豆腐: 'mapo-tofu', 宫保鸡丁: 'kungpao', 水煮牛肉: 'shuizhu-beef', 牛肉拉面: 'lanzhou-noodles',
+    皮蛋瘦肉粥: 'pidan-congee', 麻辣烫: 'malatang', 黄焖鸡米饭: 'huangmenji', 麻辣香锅: 'xiangguo', 猪脚饭: 'zhujiaofan', 螺蛳粉: 'luosifen', 鱼香肉丝: 'yuxiang',
+    地三鲜: 'disanxian', 沙县拌面: 'shaxian-noodles'
+  };
+
 
   /** 所有条目（带上属于哪一栏、哪一组），同一样出现两次的（三文鱼）各算一个 */
   function all() {
     const out = [];
     TABS.forEach(t => t.sections.forEach((s, si) => s.items.forEach((x, i) => out.push({
       id: `${t.key}.${si}.${i}`, tab: t.key, section: s.title, tone: s.tone,
-      name: x[0], db: x[1], icon: x[2], grams: x[3], portion: x[4], tip: x[5]
+      name: x[0], db: x[1], icon: x[2], grams: x[3], portion: x[4], tip: x[5], photo: PHOTO_KEY[x[0]] || ''
     }))));
     return out;
   }
@@ -293,7 +310,13 @@
     return { id: it.id, name: it.name, portion: it.portion, right, opts };
   }
 
-  TF.Dex = { TABS, TONE, items, byId, per100, portion, amountText, totals, advice, toMeal, eatenIds, quiz };
+  /** 这一样的实物照片出处（没有照片返回 null） */
+  function photoOf(item) {
+    const P = root.FOOD_PHOTOS || {};
+    return item && item.photo && P[item.photo] ? Object.assign({ src: `img/food/${item.photo}.webp` }, P[item.photo]) : null;
+  }
+
+  TF.Dex = { TABS, TONE, PHOTO_KEY, photoOf, items, byId, per100, portion, amountText, totals, advice, toMeal, eatenIds, quiz };
   if (typeof module !== 'undefined' && module.exports) module.exports = TF.Dex;
 })(typeof window !== 'undefined' ? window : globalThis);
 
@@ -364,7 +387,10 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     $('dex-tray').innerHTML = this.dexTrayHtml();
   },
 
+  /** 图标：有实物照片用照片（圆的），没有就用 emoji / 名字第一个字 */
   dexIcon(it, big) {
+    const ph = TF.Dex.photoOf(it);
+    if (ph) return `<span class="dex-icon photo${big ? ' big' : ''}"><img src="${ph.src}" alt="" loading="lazy" decoding="async"></span>`;
     return `<span class="dex-icon tone-${it.tone}${big ? ' big' : ''}">${it.icon ? it.icon : `<b>${esc(it.name.slice(0, 1))}</b>`}</span>`;
   },
 
@@ -379,7 +405,8 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
         const e = D.per100(it);
         return `<button type="button" class="dex-item${eaten.has(it.id) ? ' eaten' : ''}${inTray.has(it.id) ? ' picked' : ''}" data-id="${it.id}">` +
           `${this.dexIcon(it)}<b>${esc(it.name)}</b><small>${e ? e.k : '?'} 千卡</small></button>`;
-      }).join('') + '</div></section>').join('') + '<p class="dex-foot">数字是每 100 克的千卡（中国食物成分表 / 常见做法）。点一样看详情，打勾的是你吃过的。</p>';
+      }).join('') + '</div></section>').join('') + '<p class="dex-foot">数字是每 100 克的千卡（中国食物成分表 / 常见做法）。点一样看详情，打勾的是你吃过的。' +
+      (Object.keys(root.FOOD_PHOTOS || {}).length ? '照片来自维基共享资源（Wikimedia Commons），作者和授权写在每样的详情里。' : '') + '</p>';
   },
 
   dexDetailHtml(it) {
@@ -393,6 +420,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       `<span class="dex-tag tone-${it.tone}">${D.TONE[it.tone]}</span>${eatenN ? `<span class="dex-tag">你吃过 ${eatenN} 次</span>` : ''}</div></div>` +
       `<div class="dex-per">每 100 克</div><div class="dex-cells">${cell(e.k, '千卡', '热量')}${cell(e.p, 'g', '蛋白')}${cell(e.c, 'g', '碳水')}${cell(e.f, 'g', '脂肪')}</div>` +
       `<p class="dex-portion">${esc(it.portion)}大约 ${one.grams} 克：<b>${one.calories} 千卡</b>${this.isSimple() ? '' : `，蛋白 ${one.proteinG}g`}</p>` +
+      (D.photoOf(it) ? `<p class="dex-credit">照片：${esc(D.photoOf(it).author || '佚名')} · ${esc(D.photoOf(it).license)} · 维基共享资源</p>` : '') +
       `<div class="dex-detail-acts"><button type="button" class="btn btn-primary btn-wide" data-put="${it.id}">放进${esc(this.dexMealLabel())}</button></div></div>`;
   },
 

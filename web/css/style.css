@@ -1581,3 +1581,7 @@ body.onboarding .rec-panel { z-index: 210; bottom: calc(24px + var(--sab)); }
 .dex-acts .btn { flex: 1; min-width: 0; padding: 0 8px; font-size: 0.86rem; }
 .dex-empty { margin: 0 0 2px; font-size: 0.8rem; color: var(--text-3); }
 .dex-detail-acts .btn { width: 100%; }
+/* 实物照片图标（v6.2）：圆形裁好的照片，白底一圈 */
+.dex-icon.photo { overflow: hidden; padding: 0; background: #fff; border: 1px solid var(--line); }
+.dex-icon.photo img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.dex-credit { margin: -4px 0 0; font-size: 0.68rem; line-height: 1.4; color: var(--text-3); }
