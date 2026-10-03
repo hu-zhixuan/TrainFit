@@ -927,15 +927,6 @@ body.has-buddy .views { padding-bottom: calc(var(--cmp-h, 110px) + 60px + var(--
   background: var(--accent-soft);
   color: var(--accent-text);
 }
-.empty-example {
-  display: inline-block;
-  margin-top: 10px;
-  padding: 6px 12px;
-  border-radius: 999px;
-  background: var(--surface-2);
-  color: var(--text-2);
-  font-size: 0.8rem;
-}
 
 /* ---------- 趋势 ---------- */
 .seg {
@@ -1221,10 +1212,6 @@ body.no-composer .snackbar { bottom: calc(20px + var(--sab)); }
 .qchip small { flex: none; font-size: 0.72rem; font-weight: 600; color: var(--text-3); font-variant-numeric: tabular-nums; }
 .weight-head-right { display: flex; align-items: center; gap: 10px; }
 .said { margin-top: -6px; font-size: 0.78rem; color: var(--text-3); line-height: 1.45; overflow-wrap: anywhere; }
-.empty-quick { display: inline-flex; align-items: center; gap: 6px; margin-top: 12px; padding: 10px 16px; border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--line)); background: var(--accent-soft); color: var(--text); font-weight: 700; font-size: 0.9rem; }
-.empty-quick .qplus { background: var(--accent); color: var(--accent-ink); }
-.empty-quick:active { transform: scale(0.97); }
 .cmp-row { display: flex; align-items: flex-end; gap: 8px; }
 .cmp-text {
   flex: 1;
@@ -1524,7 +1511,6 @@ body.onboarding .rec-panel { z-index: 210; bottom: calc(24px + var(--sab)); }
 .buddy-pic { display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 0; }
 .buddy-pic small { max-width: 60px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.7rem; font-weight: 600; color: var(--text-2); }
 /* 今天页空着时：不想说话，点图片记 */
-.empty-dex { display: block; margin: 12px auto 0; padding: 4px 8px; border: 0; background: none; color: var(--accent-text); font: inherit; font-size: 0.86rem; font-weight: 700; cursor: pointer; }
 
 /* ---------- 食物图鉴（v6.1，v6.2 换实拍照片）：底部面板，上面小人说话，中间分栏的食物格子，下面「搭一顿」 ---------- */
 .dex-sheet { height: min(88vh, 760px); max-height: none; overflow: hidden; gap: 10px; padding-bottom: calc(12px + var(--sab)); }

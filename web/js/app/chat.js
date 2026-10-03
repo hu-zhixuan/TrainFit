@@ -496,7 +496,7 @@ Object.assign(FitnessApp.prototype, {
     const dex = { label: '点图片选', pick: () => this.openDex && setTimeout(() => this.openDex({ log: true, date: today, meal: slot[0] }), 60) };
     const later = { label: '还没', reply: '吃完说一声。' };
     const plan = (this.todoPlans ? this.todoPlans(today) : []).find(p => p.kind === 'meal' && p.mealType === slot[0]);
-    const usual = !plan && this.quickSuggestions ? this.quickSuggestions(slot[0]).find(q => q.kind === 'meal' && q.usual && !q.done) : null;
+    const usual = !plan && this.quickSuggestions ? this.quickSuggestions(slot[0]).find(q => q.kind === 'meal' && q.usual && !q.done && !isSuppOnly(q.src)) : null; // 维生素、鱼油这种补剂不算一顿饭
     if (plan) {
       this.askUser(`${slot[1]}吃了吗？计划的是「${short(plan.foodSummary)}」。`, [
         { label: '照计划吃了', pick: () => this.donePlan(plan.id), reply: '记上了。' },

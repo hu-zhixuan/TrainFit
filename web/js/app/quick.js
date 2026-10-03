@@ -125,7 +125,7 @@ Object.assign(FitnessApp.prototype, {
     });
   },
 
-  /** 空白页上那个「老样子」按钮；mealType：记到哪一顿（小人饭点过了问「还是老样子？」时是那一顿，不按现在的钟点） */
+  /** 小人饭点过了问「还是老样子？」，点「对，记上」；mealType：记到哪一顿（是问的那一顿，不按现在的钟点） */
   quickRepeatKey(key, mealType) {
     this._quick = this.quickSuggestions(mealType);
     this._quickFromTyping = false;

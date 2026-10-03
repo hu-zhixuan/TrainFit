@@ -423,9 +423,6 @@ class FitnessApp {
         else if (act.dataset.act === 'plan-drop') this.dropPlan(id);
         return;
       }
-      const quick = e.target.closest('[data-quick-key]');
-      if (quick) { this.quickRepeatKey(quick.dataset.quickKey); return; }
-      if (e.target.closest('[data-dex-log]')) { this.openDex({ log: true, date: getTodayDateString(), meal: mealSlotByHour(new Date().getHours()) }); return; }
       const item = e.target.closest('.item[data-kind]');
       if (item) this.openEditor(item.dataset.kind, item.dataset.id);
     });
