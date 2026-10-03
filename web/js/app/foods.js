@@ -84,6 +84,15 @@ Object.assign(FitnessApp.prototype, {
       (pic.length ? `<div class="portrait"><b>按你的记录看出来的</b><p>${pic.map(esc).join('；')}</p><small>问小人问题时会带上这几句，记录变了它跟着变。</small></div>` : '');
   },
 
+  /** 「最近的事」：聊天时小人记下的（面试、考试…），到日子它会问；能删 */
+  renderLife() {
+    const el = document.getElementById('life-list');
+    if (!el) return;
+    const list = ((this.profile.buddy || {}).life || []).slice().reverse();
+    el.innerHTML = list.length ? list.map(x => `<div class="myfood-row"><div class="myfood-main"><b>${esc(x.t)}</b><small>${+x.at.slice(5, 7)}月${+x.at.slice(8)}日说的${x.due ? (x.asked ? ' · 问过了' : ` · ${+x.due.slice(5, 7)}月${+x.due.slice(8)}日问你`) : ''}</small></div><button type="button" class="chip" data-life-del="${esc(x.t)}">删除</button></div>`).join('')
+      : '<p class="field-note">跟小人聊聊最近的事（「周五要面试」「下周考试」），它会记在这里，到了日子主动问你怎么样了。</p>';
+  },
+
   renderMyFoods() {
     const el = document.getElementById('my-foods');
     if (!el) return;

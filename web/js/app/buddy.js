@@ -921,7 +921,11 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     // 下一级解锁什么：一段回忆（给一句预告，让人想知道后面）+ 衣服
     const tease = b.next && this.cast().tease[b.next.lv - 1];
     const next = b.next ? `再记 ${Math.max(1, Math.ceil(b.next.need / 10))} 天左右到「${b.next.name}」，解锁回忆「${tease}」${unlock ? `和${this.outfitLabel(unlock)}` : ''}` : '已经是最懂你的了';
-    return `<div class="bond-row"><div class="bond-top"><span class="bond-name"><i aria-hidden="true">♥</i>${esc(this.buddyName())} · ${esc(b.name)}</span><span class="bond-lv">Lv${b.lv}</span></div>` +
+    // v6.3：它现在的心情（有点想你 / 有点低落 / 担心你…），恋人线显示「恋人」
+    const heart = this.heartLabel ? this.heartLabel() : '';
+    const love = this.storyData && this.storyData().romance === true;
+    return `<div class="bond-row"><div class="bond-top"><span class="bond-name"><i aria-hidden="true">♥</i>${esc(this.buddyName())} · ${esc(love ? '恋人' : b.name)}</span>` +
+      `${heart ? `<span class="bond-heart">${esc(heart)}</span>` : ''}<span class="bond-lv">Lv${b.lv}</span></div>` +
       `<div class="bond-bar"><i style="width:${Math.round(b.pct * 100)}%"></i></div><div class="bond-next">${esc(next)} · 长按我摸摸头</div></div>`;
   },
 
@@ -1704,6 +1708,10 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     }).join('');
     const nb = (this.profile.buddy || {}).note || {};
     $('buddy-mem-note').textContent = `${Math.min(b.lv, c.story.length)}/${c.story.length}` + (nb.n ? ` · 收到小纸条 ${nb.n} 张${nb.s ? `（珍藏 ${nb.s}）` : ''}` : '');
+    // v6.3：你们现在的关系、看过几段小剧情；恋人可以改回搭子，选过搭子的可以让它再问一次
+    const rel = this.storyData ? this.storyData() : {};
+    $('buddy-rel').innerHTML = this.relationNote ? `<span>${esc(this.relationNote())}</span>` +
+      (rel.romance != null ? `<button type="button" class="chip" data-rel-reset="1">${rel.romance ? '改回搭子' : '让 TA 再问一次'}</button>` : '') : '';
     const talk = this.talkLevel ? this.talkLevel() : 'normal';
     document.querySelectorAll('#buddy-talk .seg-btn').forEach(x => x.classList.toggle('active', x.dataset.value === talk));
     $('buddy-talk-note').textContent = talk === 'quiet' ? '只在卡住了、刚记的份量要问时说话' :
@@ -1744,6 +1752,13 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       this.renderBuddySettings('flex');
       clearTimeout(this._prevT);
       this._prevT = setTimeout(() => this.renderBuddySettings(), 1300);
+    });
+    document.getElementById('buddy-rel').addEventListener('click', (e) => {
+      if (!e.target.closest('[data-rel-reset]')) return;
+      const love = this.storyData().romance === true;
+      this.resetRelation();
+      this.renderBuddySettings();
+      this.showToast(love ? '改回搭子了。到了晚上，TA 也许还会再说一次那句话' : '好，过几天晚上 TA 会再问一次');
     });
     document.getElementById('buddy-mem').addEventListener('click', (e) => {
       const b = e.target.closest('.mem-card');

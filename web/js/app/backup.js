@@ -66,6 +66,16 @@ function mergeBackupData(cur, bak) {
     const dex = seen && seen.length !== (cb.dexSeen || []).length ? { dexSeen: seen } : {};
     if ((+bb.dexMile || 0) > (+cb.dexMile || 0)) dex.dexMile = +bb.dexMile;
     if (bb.dexOpened && !cb.dexOpened) dex.dexOpened = true;
+    // 最近的事、小剧情（v6.3）：两边合在一起；关系以这边选过的为准，这边没选过用备份的
+    const lifeC = Array.isArray(cb.life) ? cb.life : [], lifeB = Array.isArray(bb.life) ? bb.life : [];
+    const moreLife = lifeB.filter(x => x && x.t && !lifeC.some(y => y.t === x.t));
+    if (moreLife.length) dex.life = lifeC.concat(moreLife).sort((a, b) => (a.at > b.at ? 1 : -1)).slice(-12);
+    const sc = cb.story || {}, sb = bb.story || {};
+    const seenAll = [...new Set([].concat(sc.seen || [], sb.seen || []))];
+    if (seenAll.length !== (sc.seen || []).length || (sc.romance == null && sb.romance != null)) {
+      dex.story = Object.assign({}, sb, sc, { seen: seenAll, picks: Object.assign({}, sb.picks || {}, sc.picks || {}) });
+      if (sc.romance == null && sb.romance != null) dex.story.romance = sb.romance;
+    }
     if (xp === (+cb.xp || 0) && (cb.name || !bb.name) && !note && !Object.keys(dex).length) return c;
     return Object.assign({}, c || {}, { buddy: Object.assign({}, cb, { xp }, !cb.name && bb.name ? { name: bb.name } : {}, note ? { note } : {}, dex) });
   };

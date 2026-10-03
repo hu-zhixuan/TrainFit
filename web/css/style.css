@@ -1637,3 +1637,27 @@ body.onboarding .rec-panel { z-index: 210; bottom: calc(24px + var(--sab)); }
 .dex-acts { display: flex; gap: 8px; }
 .dex-acts .btn { flex: 1; min-width: 0; padding: 0 8px; font-size: 0.86rem; }
 .dex-empty { margin: 0 0 2px; font-size: 0.8rem; color: var(--text-3); }
+
+/* ---------- v6.3 小剧情、心情、关系 ---------- */
+/* 小剧情：一句一句打出来，「▸」下一句，最后三个选项（竖着排，像 galgame 的选项） */
+.story-tag.ev { color: var(--accent-text); }
+.ev-acts { flex-direction: column; }
+.ev-acts .buddy-act { flex: none; width: 100%; height: auto; min-height: 38px; padding: 8px 14px; text-align: left; line-height: 1.35; }
+.ev-acts .ev-choice { border-color: color-mix(in srgb, var(--love) 40%, var(--line)); background: color-mix(in srgb, var(--love) 8%, var(--surface-2)); }
+.ev-acts .ev-next { width: auto; align-self: flex-end; min-height: 32px; padding: 0 16px; text-align: center; font-size: 1rem; }
+.ev-acts .buddy-act.primary { text-align: center; }
+.ev-text.reply { color: var(--accent-text); }
+@media (prefers-reduced-motion: no-preference) {
+  .ev-acts .ev-choice { animation: evIn 0.28s ease-out backwards; }
+  .ev-acts .ev-choice:nth-child(2) { animation-delay: 0.06s; }
+  .ev-acts .ev-choice:nth-child(3) { animation-delay: 0.12s; }
+  .ev-acts .ev-next { animation: evBlink 1.2s ease-in-out infinite; }
+}
+@keyframes evIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes evBlink { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+/* 点小人的气泡：它现在的心情 */
+.bond-heart { margin-left: auto; padding: 1px 8px; border-radius: 9px; background: color-mix(in srgb, var(--love) 14%, var(--surface)); color: var(--love); font-size: 0.7rem; font-weight: 700; white-space: nowrap; }
+/* 设置「回忆」下面：你们现在的关系 */
+.rel-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; font-size: 0.78rem; color: var(--text-2); }
+.rel-row:empty { display: none; }
+.story-card.ev .story-art svg { width: auto; height: 78px; margin-bottom: 0; }

@@ -907,7 +907,8 @@ test('聊天的提示词：小人是谁、多熟、刚才聊的都带上；回�
     buddy: { name: '阿肌', look: '男生，中分', facts: ['只喝无糖豆浆'], level: '健身搭子', lv: 3, tone: '像搭子', call: '阿程' }
   });
   assert.ok(m[0].content.includes('阿肌') && m[0].content.includes('无糖豆浆') && m[0].content.includes('健身搭子'));
-  assert.ok(m[0].content.includes('不拿「你不来我会难过」'));
+  // v6.3：可以说想他，但底线照旧：不怪他没来、不说难过、不说只有你、不吃醋
+  assert.ok(m[0].content.includes('可以想他') && m[0].content.includes('不怪他没来') && m[0].content.includes('不说「只有你」') && m[0].content.includes('不吃醋'));
   const u = m[1].content;
   assert.ok(u.includes('你叫他「阿程」') && u.includes('刚才在聊') && u.includes('他：今天好累') && u.endsWith('他说：还行吧'), u);
   assert.ok(!u.includes('（黄焖鸡') && !u.includes('700kcal'), '今天记的只要一句，不带明细和热量');
@@ -922,3 +923,29 @@ test('聊天的提示词：小人是谁、多熟、刚才聊的都带上；回�
   assert.ok(r.chat && !r.meals.length && !r.workouts.length);
   assert.strictEqual(TF.Parser.normalizeChat({ answer: 'x', face: '大笑' }).face, '');
 });
+
+test('v6.3 聊什么都行：工作、学习、感情、随便问的问题走聊天；吃了练了照样记；正在聊时不是记录的都接着聊', () => {
+  for (const t of ['明天要面试了好紧张', '你觉得我该不该辞职', '地球为什么是圆的？', '我男朋友今天惹我生气了', '面试官问了好多算法题', '周末去看了电影'])
+    assert.ok(TF.looksLikeChat(t, '江叙', false), t);
+  for (const t of ['中午吃了牛肉面', '和同事吃了火锅', '卧推60公斤4组8个', '还差多少蛋白', '明天吃什么？', '给我排个练腿的', '加班到十点没吃晚饭'])
+    assert.ok(!TF.looksLikeChat(t, '江叙', false), t);
+  assert.ok(TF.looksLikeChat('过了一面，下周二面', '江叙', true));
+  assert.ok(!TF.looksLikeChat('晚上吃了两碗饭', '江叙', true), '正在聊也不能把记录吃掉');
+  for (const t of ['删掉刚才那条', '改成昨天的', '帮我记一下'])
+    assert.ok(!TF.looksLikeChat(t, '江叙', true), '正在聊时改记录也交给整理：' + t);
+  assert.ok(TF.looksLikeChat('推荐一本睡前看的书', '江叙', false));
+  assert.ok(!TF.looksLikeChat('推荐个早餐', '江叙', false));
+});
+
+test('v6.3 聊天提示词带上心情、关系、一起经历的事、他最近的事；回答里的 life 记成近况（几天后问）', () => {
+  const m = TF.Parser.chatMessages('面试过了！', {
+    life: ['周五面试（10月3日说的）'],
+    buddy: { name: '江叙', level: '老搭子', lv: 4, tone: '很熟', relation: '你们之间有点暧昧：你在乎他', mood: '有点想他（2 天没见了）', shared: ['他答应下次带你去吃火锅'] }
+  });
+  assert.ok(m[0].content.includes('他可以跟你聊任何事') && m[0].content.includes('有点暧昧') && m[0].content.includes('有点想他') && m[0].content.includes('吃火锅'));
+  assert.ok(m[0].content.includes('"life"'));
+  assert.ok(m[1].content.includes('他最近的事') && m[1].content.includes('周五面试'));
+  const r = TF.Parser.normalizeChat({ answer: '过了？……我就知道。', life: [{ t: '下周二终面', d: 5 }, { t: '周五面试', d: 3 }, { t: 'x', d: 99 }] }, { life: ['周五面试（10月3日说的）'] });
+  assert.deepStrictEqual(r.life, [{ t: '下周二终面', d: 5 }, { t: 'x', d: 14 }]);
+});
+
