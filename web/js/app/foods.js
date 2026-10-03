@@ -33,6 +33,7 @@ Object.assign(FitnessApp.prototype, {
     if (food.supp) entry.supp = true;
     this.myFoods = [entry].concat(this.myFoods.filter(f => f !== prev)).slice(0, MY_FOODS_MAX);
     store(MY_FOODS_KEY, this.myFoods);
+    this._backupDirty = true;
     return prev ? Object.assign({}, prev) : null;
   },
 
@@ -42,12 +43,54 @@ Object.assign(FitnessApp.prototype, {
     this.myFoods = this.myFoods.filter(f => this.normFoodName(f.name) !== k);
     if (prev) this.myFoods.unshift(prev);
     store(MY_FOODS_KEY, this.myFoods);
+    this._backupDirty = true;
   },
 
   forgetFood(name) {
     const k = this.normFoodName(name);
     this.myFoods = this.myFoods.filter(f => this.normFoodName(f.name) !== k);
     store(MY_FOODS_KEY, this.myFoods);
+    this._backupDirty = true;
+  },
+
+  // ===== 小本本：用户说过的关于自己的事（「叫阿程」「不吃辣」「膝盖有旧伤」），每次整理都带给大模型，最多 12 条 =====
+  memoList() { return Array.isArray(this.profile.memo) ? this.profile.memo : []; },
+
+  /** 加几条、去掉几条，返回原来的（撤销用） */
+  updateMemo(add, forget) {
+    const prev = this.memoList().slice();
+    const drop = new Set(forget || []);
+    const next = prev.filter(x => !drop.has(x));
+    (add || []).forEach(x => { if (x && !next.includes(x)) next.push(x); });
+    this.profile.memo = next.slice(-12);
+    return prev;
+  },
+
+  /** 小本本里的名字：「叫阿程」→ 阿程 */
+  userName() {
+    const m = this.memoList().map(x => /^我?(?:叫|名字是?|昵称是?)\s*([^\s，,。；;、]{1,8})$/.exec(x)).find(Boolean);
+    return m ? m[1] : '';
+  },
+
+  renderMemo() {
+    const el = document.getElementById('memo-list');
+    if (!el) return;
+    const list = this.memoList();
+    const pic = this.portrait ? this.portrait() : [];
+    el.innerHTML = (list.length
+      ? list.map((x, i) => `<div class="myfood-row"><div class="myfood-main"><b>${esc(x)}</b></div><button type="button" class="chip" data-memo-del="${i}">删除</button></div>`).join('')
+      : '<p class="field-note">跟小人说说你自己，比如「我叫阿程，健身新手，不吃辣」，会记在这里，以后回答、估热量、排计划都照顾到。</p>') +
+      // 画像：按记录看出来的，不用删，记录变了它跟着变
+      (pic.length ? `<div class="portrait"><b>按你的记录看出来的</b><p>${pic.map(esc).join('；')}</p><small>问小人问题时会带上这几句，记录变了它跟着变。</small></div>` : '');
+  },
+
+  /** 「最近的事」：聊天时小人记下的（面试、考试…），到日子它会问；能删 */
+  renderLife() {
+    const el = document.getElementById('life-list');
+    if (!el) return;
+    const list = ((this.profile.buddy || {}).life || []).slice().reverse();
+    el.innerHTML = list.length ? list.map(x => `<div class="myfood-row"><div class="myfood-main"><b>${esc(x.t)}</b><small>${+x.at.slice(5, 7)}月${+x.at.slice(8)}日说的${x.due ? (x.asked ? ' · 问过了' : ` · ${+x.due.slice(5, 7)}月${+x.due.slice(8)}日问你`) : ''}</small></div><button type="button" class="chip" data-life-del="${esc(x.t)}">删除</button></div>`).join('')
+      : '<p class="field-note">跟小人聊聊最近的事（「周五要面试」「下周考试」），它会记在这里，到了日子主动问你怎么样了。</p>';
   },
 
   renderMyFoods() {

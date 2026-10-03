@@ -8,12 +8,14 @@ Object.assign(FitnessApp.prototype, {
     const md = `${d.getMonth() + 1}月${d.getDate()}日`;
     if (dateStr === today) return '今天 · ' + md;
     if (dateStr === shiftDateString(today, -1)) return '昨天 · ' + md;
+    if (dateStr === shiftDateString(today, 1)) return '明天 · ' + md;
     return `${md} 周${WEEKDAYS[d.getDay()]}`;
   },
 
-  /** 只记吃的时，蛋白质目标按每公斤 1.2g 算（健身的用设置里的目标） */
+  /** 每天蛋白质目标：自己设过就用设的；没设过，健身按设置里的（默认体重×2），只记吃的按每公斤 1.2g */
   gaugeProteinTarget() {
-    return this.isSimple() ? Math.round((this.profile.weightKg || 60) * 1.2) : (this.profile.targetProteinG || 0);
+    if (this.isSimple() && !this.profile.proteinTouched) return Math.round((this.profile.weightKg || 60) * 1.2);
+    return this.profile.targetProteinG || 0;
   },
 
   /** 健康度温度计：水银涨到哪一档，点一下看三项各怎么样 */
@@ -74,13 +76,42 @@ Object.assign(FitnessApp.prototype, {
     pop.classList.remove('hidden');
   },
 
+  /** 点「热量赤字」：用你今天的数说清楚它是什么（有人第一眼不知道赤字是啥） */
+  showDeficitPop() {
+    const pop = document.getElementById('gauge-pop');
+    const h = this._heroSum;
+    if (!h) return;
+    const { s, target } = h;
+    const burn = Math.round(s.totalBurn), daily = Math.round(s.totalBurn - (s.workoutBurn || 0));
+    const perMonth = round1(Math.abs(target) * 30 / 7700);
+    pop.dataset.level = 'none';
+    pop.innerHTML = `<div class="gauge-pop-head"><b>${s.deficit < 0 ? '热量盈余' : '热量赤字'}</b>是什么</div>` +
+      `<p class="deficit-eq">消耗 ${fmt(burn)} − 吃了 ${fmt(Math.round(s.intake))} = <b>${s.deficit < 0 ? '盈余 ' + fmt(-Math.round(s.deficit)) : fmt(Math.round(s.deficit))}</b></p>` +
+      `<p class="gauge-note">消耗 = 日常 ${fmt(daily)}（不动也会烧掉的）${s.workoutBurn ? ` + 训练 ${fmt(Math.round(s.workoutBurn))}` : ''}。` +
+      `吃得比消耗少，差的那部分就是热量赤字，身体会拿脂肪来补——大约 7700 kcal 是 1kg 脂肪。` +
+      (target > 0 ? `你的目标每天赤字 ${fmt(target)}，一个月大约瘦 ${perMonth}kg。` : target < 0 ? `你在增肌，目标每天多吃 ${fmt(-target)}（盈余），一个月大约长 ${perMonth}kg。` : '你的目标是保持，吃的和消耗的差不多就行。') +
+      (h.isToday && s.remaining > 0 ? `一天还没过完，吃得越多赤字越小：今天再吃 ${fmt(Math.round(s.remaining))} 正好到目标。` : '') + '</p>';
+    const r = document.getElementById('hero-deficit').getBoundingClientRect();
+    pop.style.top = Math.round(r.bottom + 8) + 'px';
+    pop.style.right = Math.max(16, Math.round(window.innerWidth - r.right - 8)) + 'px';
+    pop.classList.remove('hidden');
+  },
+
   bindGaugePop() {
     const pop = document.getElementById('gauge-pop');
     const close = () => pop.classList.add('hidden');
+    const deficit = document.getElementById('hero-deficit');
+    const openDeficit = (e) => {
+      e.stopPropagation();
+      window.Haptics && window.Haptics.fire('tick');
+      if (!pop.classList.contains('hidden') && pop.querySelector('.deficit-eq')) close(); else this.showDeficitPop();
+    };
+    deficit.addEventListener('click', openDeficit);
+    deficit.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDeficit(e); } });
     document.getElementById('thermo').addEventListener('click', (e) => {
       e.stopPropagation();
       window.Haptics && window.Haptics.fire('tick');
-      if (pop.classList.contains('hidden')) this.showGaugePop(); else close();
+      if (pop.classList.contains('hidden') || pop.querySelector('.deficit-eq')) this.showGaugePop(); else close();
     });
     // 点别的地方、滚动、切页都关掉
     document.addEventListener('click', (e) => { if (!pop.contains(e.target)) close(); });
@@ -95,7 +126,7 @@ Object.assign(FitnessApp.prototype, {
     const s = this.getDaySummary(date);
 
     $('date-label').textContent = this.dateLabel(date);
-    $('date-next').disabled = isToday;
+    $('date-next').disabled = date >= this.lastPlanDate();
 
     const over = s.remaining < 0;
     $('hero').classList.toggle('over', over);
@@ -110,22 +141,25 @@ Object.assign(FitnessApp.prototype, {
     $('hero-deficit-v').textContent = fmt(Math.abs(s.deficit));
     $('hero-deficit-n').textContent = target > 0 ? `目标 ${fmt(target)}` : target < 0 ? `目标盈余 ${fmt(-target)}` : '目标 保持';
     $('hero-deficit').className = 'hero-side ' + (s.deficit >= target ? 'good' : surplus ? 'bad' : '');
+    this._heroSum = { s, target, isToday };
     this.renderThermo(s, isToday, target);
     const simple = this.isSimple();
     if (simple) {
       const perMonth = Math.abs(target) * 30 / 7700;
-      $('hero-foot').textContent = target > 0 ? `每天少吃 ${fmt(target)} kcal，一个月大约瘦 ${perMonth.toFixed(1)} kg`
-        : target < 0 ? `每天多吃 ${fmt(-target)} kcal，一个月大约长 ${perMonth.toFixed(1)} kg` : '按保持现在的体重算';
+      // 只记吃的也看蛋白质；运动消耗有才写在底下那行
+      $('hero-foot').textContent = (target > 0 ? `每天少吃 ${fmt(target)} kcal，一个月大约瘦 ${perMonth.toFixed(1)} kg`
+        : target < 0 ? `每天多吃 ${fmt(-target)} kcal，一个月大约长 ${perMonth.toFixed(1)} kg` : '按保持现在的体重算') +
+        (s.workoutBurn ? ` · 运动 +${fmt(s.workoutBurn)}` : '');
       $('st-burn-l').textContent = '今天预算';
       $('st-burn').textContent = fmt(s.budget);
-      $('st-protein-l').textContent = '运动消耗';
-      $('st-protein').textContent = s.workoutBurn ? '+' + fmt(s.workoutBurn) : '0';
+      $('st-protein-l').textContent = '蛋白质';
+      $('st-protein').innerHTML = `${fmt(s.protein)}<small> / ${fmt(this.gaugeProteinTarget())}g</small>`;
     } else {
       $('hero-foot').textContent = `预算 ${fmt(s.budget)} = 消耗 ${fmt(s.totalBurn)} ${target >= 0 ? '− 目标赤字 ' + fmt(target) : '+ 目标盈余 ' + fmt(-target)}`;
       $('st-burn-l').textContent = '训练消耗';
       $('st-burn').textContent = s.workoutBurn ? '+' + fmt(s.workoutBurn) : '0';
       $('st-protein-l').textContent = '蛋白质';
-      $('st-protein').textContent = `${fmt(s.protein)} / ${fmt(this.profile.targetProteinG)}g`;
+      $('st-protein').innerHTML = `${fmt(s.protein)}<small> / ${fmt(this.gaugeProteinTarget())}g</small>`;
     }
     $('st-intake').textContent = fmt(s.intake);
 
@@ -135,16 +169,18 @@ Object.assign(FitnessApp.prototype, {
     // 有过记录后再问，别一打开就弹
     $('remind-banner').classList.toggle('hidden', asked || !this.hasNotifApi() || (this.workouts.length + this.diet.length) < 1);
 
-    // 记录：整理中的在最上面；饮食按 早→午→晚→加餐，训练按先后顺序
-    const pend = this.pending.filter(p => p.date === date).sort((a, b) => b.ts - a.ts);
+    // 记录：整理中的在最上面（提问的在小人气泡里等，不占卡片；没整理出来才显示）；然后是计划；饮食按 早→午→晚→加餐，训练按先后顺序
+    // 提问：整理中不出卡片（小人在想）；没答上来也不留卡片（小人的气泡里能重试），又记又问的才留
+    const pend = this.pending.filter(p => p.date === date && !(p.ask && (p.status === 'working' || p.plan || p.chat || (TF.pureQuestion && TF.pureQuestion(p.text))))).sort((a, b) => b.ts - a.ts);
     const meals = this.diet.filter(d => d.date === date)
       .sort((a, b) => (MEAL_TYPES.indexOf(a.mealType) - MEAL_TYPES.indexOf(b.mealType)) || (recordTs(a) - recordTs(b)));
     const lifts = this.workouts.filter(w => w.date === date).sort((a, b) => recordTs(a) - recordTs(b));
 
     const tl = $('timeline');
     let html = pend.map(p => this.renderRow({ kind: 'pending', ts: p.ts, rec: p })).join('');
+    html += this.renderPlanRows ? this.renderPlanRows(date) : '';
     if (meals.length) {
-      html += `<div class="group-head"><span>饮食</span><b>${fmt(s.intake)} kcal${simple ? '' : ` · 蛋白 ${fmt(s.protein)}g`}</b></div>`;
+      html += `<div class="group-head"><span>饮食</span><b>${fmt(s.intake)} kcal · 蛋白 ${fmt(s.protein)}g</b></div>`;
       html += meals.map(d => this.renderRow({ kind: 'meal', ts: recordTs(d), rec: d })).join('');
     }
     if (lifts.length) {
@@ -153,14 +189,17 @@ Object.assign(FitnessApp.prototype, {
     }
     if (!html) {
       const usual = isToday ? this.quickSuggestions().filter(q => q.kind === 'meal' && q.usual) : [];
+      // 不想说话、也不想打字：点照片记（v6.2，打开食物图鉴的「记一顿」）
+      const dexLink = isToday && this.openDex ? `<button type="button" class="empty-dex" data-dex-log="1">不想说话？点图片记 ›</button>` : '';
       html = !isToday ? `<div class="empty">这天没有记录</div>`
         : usual.length
-          ? `<div class="empty"><b>还是老样子？</b>点一下就记好<br>吃了别的，按住下面的按钮说一句<br><button type="button" class="empty-quick" data-quick-key="${esc(usual[0].key)}"><span class="qplus">+</span>${esc(usual[0].label)} · ${fmt(usual[0].kcal)} kcal</button></div>`
+          ? `<div class="empty"><b>还是老样子？</b>点一下就记好<br>吃了别的，按住下面的按钮说一句<br><button type="button" class="empty-quick" data-quick-key="${esc(usual[0].key)}"><span class="qplus">+</span>${esc(usual[0].label)} · ${fmt(usual[0].kcal)} kcal</button>${dexLink}</div>`
         : simple
-          ? `<div class="empty"><div class="empty-icon">${ICONS.mic}</div><b>按住下面的按钮</b>，说说今天吃了啥<br>松手自动算好热量、记下来<br>说错了再说一句「改成…」「删掉…」<br><span class="empty-example">「早上包子豆浆，中午黄焖鸡，体重61.5」</span></div>`
-          : `<div class="empty"><div class="empty-icon">${ICONS.mic}</div><b>按住下面的按钮</b>，一口气说完今天练了啥、吃了啥<br>松手就自动整理、记好<br>说错了再说一句「改成…」「删掉…」<br><span class="empty-example">「卧推80公斤4组8个，中午吃了黄焖鸡米饭」</span></div>`;
+          ? `<div class="empty"><div class="empty-icon">${ICONS.mic}</div><b>按住下面的按钮</b>，说说今天吃了啥<br>吃一顿说一句就行，松手自动算好热量<br>说不准多少也没事，我会问你<br><span class="empty-example">「早上包子豆浆，中午黄焖鸡，体重61.5」</span>${dexLink}</div>`
+          : `<div class="empty"><div class="empty-icon">${ICONS.mic}</div><b>按住下面的按钮</b>，说说练了啥、吃了啥<br>想到一句说一句，一大段一起说也行<br>说不准多少、叫不出名字也没事，我会问你<br><span class="empty-example">「中午一碗牛肉面」「坐着推胸的那个机器，三组」</span>${dexLink}</div>`;
     }
     tl.innerHTML = html;
+    this.growPlanBar && this.growPlanBar();
 
     this.renderChips();
     const tip = $('cmp-tip');
@@ -175,7 +214,7 @@ Object.assign(FitnessApp.prototype, {
         <div class="item pending ${failed ? 'failed' : ''}">
           <div class="item-icon">${failed ? ICONS.alert : '<div class="spinner"></div>'}</div>
           <div class="item-main">
-            <div class="item-title">${failed ? esc(x.error || '没整理出来') : '正在整理…'}</div>
+            <div class="item-title">${failed ? esc(x.error || '没整理出来') : `正在整理…<span class="pending-slow" style="animation-delay:${Math.max(0, 15000 - (Date.now() - (x.startedAt || x.ts)))}ms">有点慢，稍等</span>`}</div>
             <div class="item-sub">「${esc(x.text)}」</div>
           </div>
           ${failed ? `<div class="pending-actions">
@@ -189,7 +228,8 @@ Object.assign(FitnessApp.prototype, {
       // 只有补剂的一条：标「补剂」，下面写含的营养素
       const suppOnly = isSuppOnly(x);
       const macro = suppOnly ? TF.nutrientsText(sumNutrients(x.items), 3)
-        : this.isSimple() ? '' : [x.proteinG ? `蛋白 ${round1(x.proteinG)}g` : '', x.carbsG ? `碳水 ${round1(x.carbsG)}g` : '', x.fatG ? `脂肪 ${round1(x.fatG)}g` : ''].filter(Boolean).join(' · ');
+        : this.isSimple() ? (x.proteinG ? `蛋白 ${round1(x.proteinG)}g` : '')
+        : [x.proteinG ? `蛋白 ${round1(x.proteinG)}g` : '', x.carbsG ? `碳水 ${round1(x.carbsG)}g` : '', x.fatG ? `脂肪 ${round1(x.fatG)}g` : ''].filter(Boolean).join(' · ');
       return `
         <button class="item" data-kind="meal" data-id="${esc(x.id)}" type="button">
           <div class="item-icon meal">${ICONS.meal}</div>
@@ -225,10 +265,12 @@ Object.assign(FitnessApp.prototype, {
       </button>`;
   },
 
-  addPending(text) {
-    const p = { id: 'p_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6), text, date: this.selectedDate, ts: Date.now(), status: 'working' };
+  /** @param ask 听着像提问：整理时不出卡片，小人在气泡里说「我想想」 */
+  addPending(text, ask, extra) {
+    const p = Object.assign({ id: 'p_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6), text, date: this.selectedDate, ts: Date.now(), status: 'working', ask: !!ask }, extra || {});
     this.pending.unshift(p);
     this.savePending();
+    this.buddyThinking && this.buddyThinking();
     if (this.view !== 'today') this.switchView('today'); else this.render();
     return p;
   },
@@ -236,15 +278,18 @@ Object.assign(FitnessApp.prototype, {
   finishPending(id) {
     this.pending = this.pending.filter(p => p.id !== id);
     this.savePending();
+    this.buddyThinking && this.buddyThinking();
   },
 
   failPending(id, message) {
     const p = this.pending.find(x => x.id === id);
     if (!p) return;
     window.Haptics && window.Haptics.fire('error');
+    window.Sound && window.Sound.play('error');
     p.status = 'failed';
     p.error = message || '没整理出来';
     this.savePending();
+    this.buddyThinking && this.buddyThinking();
     this.render();
   },
 
@@ -253,6 +298,9 @@ Object.assign(FitnessApp.prototype, {
     if (!p || !window.QuickLog) return;
     p.status = 'working';
     p.error = null;
+    p.startedAt = Date.now();
+    if (p.ask && this.showBuddyThinking) this.showBuddyThinking(p.text, p.chat ? 'chat' : '');
+    this.buddyThinking && this.buddyThinking();
     this.render();
     window.QuickLog.process(p);
   },

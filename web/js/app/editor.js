@@ -69,7 +69,7 @@ Object.assign(FitnessApp.prototype, {
             </div>
           </div>`).join('')}
           <div class="bd-total" id="bd-total"></div>
-          <div class="breakdown-note">吃的量不一样就改份量（比如 2个 改成 1个），按比例重算；这东西本身的热量、蛋白质不一样（比如包装上写的）就改数，会记住，下次说到同样的东西就用你的数；热量填 0 去掉这一样。「成分表」来自《中国食物成分表（第6版）》，「估算」是 AI 按常见大小估的；肉按生重算。</div>
+          <div class="breakdown-note">吃的量不一样就改份量（比如 2个 改成 1个），按比例重算；这东西本身的热量、蛋白质不一样（比如包装上写的）就改数，会记住，下次说到同样的东西就用你的数；热量填 0 去掉这一样。「成分表」来自《中国食物成分表（第6版）》，「USDA」来自美国农业部食物数据库（成分表里没有的），「估算」是 AI 按常见大小估的；肉按生重算。</div>
         </div>` : `<div class="field-grid field-grid-2">
           ${input('calories', '热量 kcal', rec.calories)}
           ${input('proteinG', '蛋白质 g', rec.proteinG || 0)}

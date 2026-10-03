@@ -2,6 +2,7 @@
  * 设置页：身体数据、用途和目标、外观，以及提醒与震动（提醒由安卓端排闹钟，见 Reminders.kt）。
  */
 const REMINDER_DEFAULTS = [
+  { id: 'weigh', enabled: true, time: '07:30' },
   { id: 'lunch', enabled: true, time: '12:40' },
   { id: 'dinner', enabled: true, time: '19:30' },
   { id: 'night', enabled: true, time: '21:30' }
@@ -10,6 +11,21 @@ const REMINDER_DEFAULTS = [
 Object.assign(FitnessApp.prototype, {
   bindSettings() {
     const $ = (id) => document.getElementById(id);
+    $('memo-list').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-memo-del]');
+      if (!b) return;
+      const line = this.memoList()[+b.dataset.memoDel];
+      const prev = this.updateMemo([], [line]);
+      this.saveData();
+      this.renderMemo();
+      if (window.QuickLog) window.QuickLog.showUndo(`已删除「${line}」`, [], () => { this.profile.memo = prev; this.saveData(); this.renderMemo(); });
+    });
+    $('life-list').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-life-del]');
+      if (!b) return;
+      this.setBuddy({ life: ((this.profile.buddy || {}).life || []).filter(x => x.t !== b.dataset.lifeDel) });
+      this.renderLife();
+    });
     $('my-foods').addEventListener('click', (e) => {
       const b = e.target.closest('[data-forget]');
       if (!b) return;
@@ -93,22 +109,27 @@ Object.assign(FitnessApp.prototype, {
     $('set-goal-note').textContent = simple
       ? '想增重时填负数，比如 -250 表示每天多吃 250 kcal。改完自动保存。'
       : '增肌时赤字填负数，比如 -250 表示每天多吃 250 kcal。改完自动保存。';
-    $('set-mode-note').textContent = simple ? '只显示吃了多少、还能吃多少和体重。说了运动也会记。' : '训练、蛋白质、热量赤字和动作进步都会显示。';
-    $('rem-night-desc').textContent = simple ? '今天还能吃多少' : '今天还能吃多少、蛋白还差多少';
+    $('set-mode-note').textContent = simple ? '只显示吃了多少、还能吃多少、蛋白质和体重。说了运动也会记。' : '训练、蛋白质、热量赤字和动作进步都会显示。';
+    $('rem-night-desc').textContent = '今天还能吃多少、蛋白还差多少';
     setSeg('set-theme', this.theme);
     $('set-theme-note').textContent = this.theme === 'system' ? `手机现在是${this.systemIsLight() ? '浅色' : '深色'}模式，App 跟着变` : '';
+    this.renderBuddySettings();
+    if (window.QuickLog && window.QuickLog.refreshAsrHint) window.QuickLog.refreshAsrHint();
     const setVal = (id, v) => { if (document.activeElement !== $(id)) $(id).value = v; };
     setVal('set-height', p.heightCm);
     setVal('set-weight', p.weightKg);
     setVal('set-age', p.age);
     setVal('set-deficit', p.targetDeficitKcal);
-    setVal('set-protein', p.targetProteinG);
+    setVal('set-protein', this.gaugeProteinTarget());
     const budget = p.tdee - (p.targetDeficitKcal || 0);
     $('set-tdee-note').textContent = `每天日常消耗约 ${fmt(p.tdee)} kcal（不含训练）。按目标，不训练的日子大约吃 ${fmt(budget)} kcal。`;
     this.renderReminders();
+    this.renderMemo();
+    if (this.renderLife) this.renderLife();
     this.renderMyFoods();
     const ql = window.QuickLog;
     const days = new Set([...this.workouts, ...this.diet].map(r => r.date)).size;
+    $('set-backup-note').textContent = this.backupNote();
     $('set-data-note').textContent = `共 ${this.diet.length} 条饮食、${this.workouts.length} 条${simple ? '运动' : '训练'}、${this.weights.length} 次体重，覆盖 ${days} 天。`;
   },
 
@@ -155,7 +176,7 @@ Object.assign(FitnessApp.prototype, {
       this.render();
     });
 
-    ['lunch', 'dinner', 'night'].forEach(id => {
+    ['weigh', 'lunch', 'dinner', 'night'].forEach(id => {
       const box = $('rem-' + id), time = $('rem-' + id + '-time');
       const save = (enabled, granted) => {
         const list = this.loadReminders().map(r => r.id === id ? Object.assign(r, { enabled, time: time.value || r.time }) : r);
@@ -181,6 +202,10 @@ Object.assign(FitnessApp.prototype, {
       try { localStorage.setItem('tf_haptics', $('set-haptics').checked ? 'on' : 'off'); } catch (e) {}
       if ($('set-haptics').checked && window.Haptics) window.Haptics.fire('success');
     });
+    $('set-sound').addEventListener('change', () => {
+      try { localStorage.setItem('tf_sound', $('set-sound').checked ? 'on' : 'off'); } catch (e) {}
+      if ($('set-sound').checked && window.Sound) window.Sound.play('success');
+    });
   },
 
   renderReminders() {
@@ -195,6 +220,7 @@ Object.assign(FitnessApp.prototype, {
     let hap = true;
     try { hap = localStorage.getItem('tf_haptics') !== 'off'; } catch (e) {}
     $('set-haptics').checked = hap;
+    $('set-sound').checked = !window.Sound || window.Sound.on();
     $('rem-note').textContent = !this.hasNotifApi() ? '提醒只在安卓 App 里可用。' :
       (!granted && localStorage.getItem('tf_remind_asked') ? '通知权限没打开，提醒不会响。打开任意一个开关会请求权限。' : '');
   }

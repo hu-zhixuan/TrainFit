@@ -110,7 +110,8 @@
         portrait: p.ask && app.portrait ? app.portrait() : [], past: p.ask && TF.needsHistory(p.text) ? this.pastDays(date) : [],
         state: app.profile.dayState && app.profile.dayState.date === date ? app.profile.dayState.sleep : '',
         // 聊天：小人是谁、你们多熟、刚才聊了啥（最多 3 轮，15 分钟内）
-        chat: !!p.chat, buddy: p.chat && app.buddyPersona ? app.buddyPersona() : null, talk: p.chat && app.chatThread ? app.chatThread() : [] };
+        chat: !!p.chat, buddy: p.chat && app.buddyPersona ? app.buddyPersona() : null, talk: p.chat && app.chatThread ? app.chatThread() : [],
+        life: p.chat && app.lifeList ? app.lifeList() : [] }; // v6.3：他最近说过的事（「周五面试」），小人接着上次聊
     },
 
     /**
@@ -190,11 +191,21 @@
         const byRef = new Map((ctx.plans || []).map(x => [x.ref, x.id]));
         app.markPlansDone(result.donePlans.map(ref => byRef.get(ref)).filter(Boolean));
       }
-      // 聊天：不记录；他说了自己的事悄悄记进小本本，小人接话（带表情、两句你可能回的）
+      // 记录的提示词回了「这个我帮不上，我只管吃和练」，问的又不是吃和练（「怎么跟老板提加薪」）：交给小人用聊天的方式接（v6.3 聊什么都行）
+      if (!p.chat && !p.rerouted && result.answer && /帮不上/.test(result.answer) && !Parser.ABOUT_FIT.test(p.text) &&
+          !(result.meals || []).length && !(result.workouts || []).length && !(result.updates || []).length && !result.bodyWeight) {
+        Object.assign(p, { chat: true, ask: true, rerouted: true });
+        if (app.showBuddyThinking) app.showBuddyThinking(p.text, 'chat');
+        this.process(p);
+        return;
+      }
+      // 聊天：不记录；他说了自己的事悄悄记进小本本，最近的事记下来过几天问，小人接话（带表情、两句你可能回的）
       if (p.chat) {
         if (!result.answer) { fail(new Error('EMPTY_RESPONSE')); return; }
         app.finishPending(p.id);
         if (((result.memo || []).length || (result.forget || []).length) && app.updateMemo) { app.updateMemo(result.memo, result.forget); app.saveData(); }
+        if ((result.life || []).length && app.addLife) app.addLife(result.life);
+        if (app.noteFeeling) app.noteFeeling(p.text);
         if (app.showBuddyAnswer) app.showBuddyAnswer(p.text, result.answer, { next: result.next, chat: true, face: result.face });
         return;
       }
@@ -221,11 +232,15 @@
       this.showSnack(batch, result);
       if (result.answer && app.showBuddyAnswer) app.showBuddyAnswer(p.text, result.answer, answerOpts); // 又记又问
       else if (batch.asks.length && app.askPortion) app.askPortion(batch.asks); // 份量含糊：小人问一句，点一下就改
+      else if (app.makeUpAfter && app.makeUpAfter(result, batch)) { /* 闹着小别扭：好好吃饭了就和好 */ }
       else if (app.memoTip && app.memoTip(result, batch)) { /* 你说过有伤：练到那儿提醒一句 */ }
       else if (app.newbieTip && app.newbieTip(result)) { /* 新手第一周：小人说一句小提示 */ }
       else if (app.coachTip && app.coachTip(result, batch)) { /* 该提醒的时候说一句：破纪录、晚上蛋白还差很多、吃超了 */ }
       else if (app.askFeeling && app.askFeeling(result, batch)) { /* 练完问一句感受，下次加重量按这个来 */ }
-      else if (app.closeBuddyPop) app.closeBuddyPop('thinking'); // 猜成提问其实是记录：把「我想想」收起来
+      else {
+        if (app.closeBuddyPop) app.closeBuddyPop('thinking'); // 猜成提问其实是记录：把「我想想」收起来
+        if (app.reactRecord) app.reactRecord(result, batch); // 记完马上说一句（被回应）
+      }
     },
 
     save(result, baseDate, ctx) {

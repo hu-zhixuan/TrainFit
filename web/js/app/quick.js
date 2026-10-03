@@ -67,9 +67,9 @@ Object.assign(FitnessApp.prototype, {
     return [...map.values()];
   },
 
-  /** 「老样子」候选：这个钟点常吃的在前，再按次数和最近；今天已经记过的排后面 */
-  quickSuggestions() {
-    const slot = this.quickMealType();
+  /** 「老样子」候选：这个钟点（或指定的那一顿）常吃的在前，再按次数和最近；今天已经记过的排后面 */
+  quickSuggestions(slotFor) {
+    const slot = slotFor || this.quickMealType();
     const date = this.selectedDate;
     const doneToday = new Set([
       ...this.diet.filter(d => d.date === date).map(d => 'm|' + this.normFoodName(d.foodSummary)),
@@ -125,16 +125,16 @@ Object.assign(FitnessApp.prototype, {
     });
   },
 
-  /** 空白页上那个「老样子」按钮 */
-  quickRepeatKey(key) {
-    this._quick = this.quickSuggestions();
+  /** 空白页上那个「老样子」按钮；mealType：记到哪一顿（小人饭点过了问「还是老样子？」时是那一顿，不按现在的钟点） */
+  quickRepeatKey(key, mealType) {
+    this._quick = this.quickSuggestions(mealType);
     this._quickFromTyping = false;
     const i = this._quick.findIndex(q => q.key === key);
-    if (i >= 0) this.quickRepeat(i);
+    if (i >= 0) this.quickRepeat(i, mealType);
   },
 
   /** 点「常吃」或联想：直接记一条 */
-  quickRepeat(i) {
+  quickRepeat(i, mealType) {
     const q = this._quick && this._quick[i];
     if (!q) return;
     const ts = Date.now();
@@ -144,7 +144,7 @@ Object.assign(FitnessApp.prototype, {
       rec = Object.assign({}, q.src, { id: 'w_' + uid, ts, date: this.selectedDate });
       this.workouts.unshift(rec);
     } else if (q.kind === 'meal') {
-      rec = Object.assign({}, q.src, { id: 'd_' + uid, ts, date: this.selectedDate, mealType: isSuppOnly(q.src) ? '加餐/补剂' : this.quickMealType(q.src.mealType) });
+      rec = Object.assign({}, q.src, { id: 'd_' + uid, ts, date: this.selectedDate, mealType: isSuppOnly(q.src) ? '加餐/补剂' : mealType || this.quickMealType(q.src.mealType) });
       if (Array.isArray(rec.items)) rec.items = rec.items.map(x => Object.assign({}, x));
       this.diet.unshift(rec);
     } else {
@@ -159,6 +159,7 @@ Object.assign(FitnessApp.prototype, {
       this.diet.unshift(rec);
     }
     window.Haptics && window.Haptics.fire('success');
+    window.Sound && window.Sound.play('success');
     if (this._quickFromTyping && window.QuickLog && window.QuickLog.clearText) window.QuickLog.clearText();
     this._typing = '';
     this.saveData();

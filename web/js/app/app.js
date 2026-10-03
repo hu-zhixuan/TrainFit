@@ -26,6 +26,7 @@ class FitnessApp {
     this.diet = load('fit_diet', []);
     this.weights = load('fit_weights', []);   // [{date, kg, ts}]，一天一条
     this.myFoods = load('fit_my_foods', []);  // 记住的食物，见 foods.js
+    this.plans = load('fit_plans', []);       // 小人给的计划（明天的食谱、训练），做完点 ✓ 变成记录，见 plans.js
     // 模式：eat = 只记吃的（想瘦 / 随便记记），fit = 吃和练都记（健身）
     // 老用户（已经有记录或改过身体数据）默认 fit，不打扰；新用户第一次打开先问
     this.needsOnboarding = false;
@@ -35,8 +36,9 @@ class FitnessApp {
     }
     this.recalculateMetabolism();
 
-    // 上次没整理完就关了 App 的，恢复成「失败，可重试」
-    this.pending = load(PENDING_KEY, []).map(p => Object.assign(p, { status: 'failed', error: '上次没整理完' }));
+    // 上次没整理完就关了 App 的，恢复成「失败，可重试」；只是在问的就算了（旧版存的没有 ask 标记，按字判断）
+    this.pending = load(PENDING_KEY, []).filter(p => !p.plan && !p.chat && !(TF.pureQuestion && TF.pureQuestion(p.text)))
+      .map(p => Object.assign(p, { status: 'failed', error: '上次没整理完' }));
 
     this.bindEvents();
     this.applyTheme(load('trainfit_theme_v2', null) || this.legacyTheme());
@@ -58,14 +60,16 @@ class FitnessApp {
   }
 
   saveData() {
+    this._backupDirty = true; // 切到后台时自动备份一份（见 backup.js）
     store('fit_profile', this.profile);
     store('fit_workouts', this.workouts);
     store('fit_diet', this.diet);
     store('fit_weights', this.weights);
+    store('fit_plans', this.plans);
   }
 
   savePending() {
-    store(PENDING_KEY, this.pending.map(p => ({ id: p.id, text: p.text, date: p.date, ts: p.ts })));
+    store(PENDING_KEY, this.pending.map(p => ({ id: p.id, text: p.text, date: p.date, ts: p.ts, ask: p.ask || undefined, plan: p.plan || undefined, chat: p.chat || undefined })));
   }
 
   /** 只记吃的模式：藏起训练、蛋白质、赤字这些健身词 */
@@ -77,7 +81,7 @@ class FitnessApp {
     const t = document.getElementById('cmp-text');
     if (t) t.placeholder = simple ? '今天吃了啥？' : '今天练了啥、吃了啥？';
     const tip = document.getElementById('cmp-tip');
-    if (tip) tip.textContent = simple ? '按住说今天吃了啥，松手自动算好热量' : '按住把练了啥、吃了啥一口气说完，松手自动记好';
+    if (tip) tip.textContent = simple ? '按住说今天吃了啥，松手自动算好热量' : '按住说练了啥、吃了啥，一句一大段都行，松手自动记好';
   }
 
   recalculateMetabolism() {
@@ -132,8 +136,13 @@ class FitnessApp {
     const cap = compound ? 8 : 12;
     const step = compound ? 2.5 : 1;
     let next;
-    if (last.weightKg > 0 && last.reps >= cap && last.sets >= 3) {
-      next = { kind: 'weight', text: `下次试 ${round1(last.weightKg + step)}kg`, weightKg: round1(last.weightKg + step), reps: Math.max(6, last.reps - 2) };
+    // 练完说的感受（小人问的）：很吃力就先保持，还能加就多加一档
+    const easy = last.rpe && last.rpe <= 7, hard = last.rpe && last.rpe >= 9.5;
+    if (hard) {
+      next = { kind: 'keep', text: `保持 ${last.weightKg > 0 ? round1(last.weightKg) + 'kg' : '这个'}，练扎实了再加`, weightKg: last.weightKg, reps: last.reps };
+    } else if (last.weightKg > 0 && (last.reps >= cap || (easy && last.reps >= cap - 2)) && last.sets >= 3) {
+      const up = easy ? step * 2 : step;
+      next = { kind: 'weight', text: `下次${easy ? '直接' : ''}试 ${round1(last.weightKg + up)}kg`, weightKg: round1(last.weightKg + up), reps: Math.max(6, last.reps - 2) };
     } else if (last.reps < cap) {
       next = { kind: 'reps', text: `下次冲 ${last.reps + 1} 次`, weightKg: last.weightKg, reps: last.reps + 1 };
     } else {
@@ -141,6 +150,236 @@ class FitnessApp {
     }
     const best = logs.reduce((m, w) => Math.max(m, w.weightKg || 0), 0);
     return { last, next, count: logs.length, best, isLatest: (id) => id === last.id };
+  }
+
+  /**
+   * 刚记的这组和以前比：「杠铃卧推：比上次多 1 次 · 下次冲 9 次」「新纪录 85kg（以前最多 82.5kg）」。
+   * 有氧、数字是估的、第一次练的不说。
+   */
+  liftFeedback(rec) {
+    if (!rec || rec.durationMin || /估计/.test(rec.notes || '')) return '';
+    const t = recordTs(rec);
+    const earlier = this.workouts
+      .filter(w => w.id !== rec.id && w.exerciseName === rec.exerciseName && !w.durationMin && (w.date < rec.date || (w.date === rec.date && recordTs(w) < t)))
+      .sort((a, b) => (b.date === a.date ? recordTs(b) - recordTs(a) : (b.date > a.date ? 1 : -1)));
+    if (!earlier.length) return '';
+    const prev = earlier[0];
+    const best = earlier.reduce((m, w) => Math.max(m, w.weightKg || 0), 0);
+    const w = rec.weightKg || 0, pw = prev.weightKg || 0;
+    let how;
+    if (best > 0 && w > best) how = `新纪录 ${round1(w)}kg（以前最多 ${round1(best)}kg）`;
+    else if (w > pw) how = `比上次重 ${round1(w - pw)}kg`;
+    else if (w === pw && rec.reps > prev.reps) how = `比上次多 ${rec.reps - prev.reps} 次`;
+    else if (w === pw && rec.reps === prev.reps && rec.sets > prev.sets) how = `比上次多 ${rec.sets - prev.sets} 组`;
+    else if (w === pw && rec.reps === prev.reps && rec.sets === prev.sets) how = '和上次一样';
+    else how = `上次 ${pw > 0 ? round1(pw) + 'kg' : '自重'} ${prev.sets}×${prev.reps}`;
+    const p = this.exerciseProgress(rec.exerciseName);
+    const next = p && p.isLatest(rec.id) ? p.next.text : '';
+    return `${rec.exerciseName}：${how}${next ? ' · ' + next : ''}`;
+  }
+
+  /**
+   * 点小人时给一句训练建议：今天还没练，就挑最近三周里隔得最久没练的部位，
+   * 「今天可以练腿：上次是 4 天前，杠铃深蹲下次试 102.5kg」。今天练过了、都练得很近、从没记过训练的，不说。
+   */
+  trainingTip() {
+    const today = getTodayDateString();
+    const lifts = this.workouts.filter(w => !w.durationMin && w.muscleGroup && w.muscleGroup !== '有氧' && w.date <= today);
+    if (!lifts.length || lifts.some(w => w.date === today)) return '';
+    const since = shiftDateString(today, -21);
+    const last = {};
+    lifts.filter(w => w.date >= since).forEach(w => {
+      const cur = last[w.muscleGroup];
+      if (!cur || w.date > cur.date || (w.date === cur.date && recordTs(w) > recordTs(cur))) last[w.muscleGroup] = w;
+    });
+    const pick = Object.values(last).sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))[0];
+    if (!pick) return '';
+    const days = Math.round((new Date(today + 'T00:00:00') - new Date(pick.date + 'T00:00:00')) / 86400000);
+    if (days < 2) return '';
+    const p = this.exerciseProgress(pick.exerciseName);
+    const part = pick.muscleGroup.replace(/部$/, '');
+    return `今天可以练${part}：上次是 ${days} 天前${p && p.next.kind !== 'keep' ? `，${pick.exerciseName}${p.next.text}` : ''}`;
+  }
+
+  /**
+   * 手机自己就能答的问题，马上答，不问大模型（「还差多少蛋白」「还能吃多少」「卧推最好多少」「这周练了几次」）。
+   * 认不出来就返回 ''，交给大模型。
+   */
+  quickAnswer(text) {
+    const names = [...new Set(this.workouts.filter(w => !w.durationMin).map(w => w.exerciseName))];
+    const it = TF.quickIntent(text, names);
+    if (!it) return null;
+    const answer = this.quickAnswerText(it);
+    if (!answer) return null;
+    // 「接着问」：顺着这个问题，下一句最可能想问的
+    const short = (it.name || '').replace(/^(杠铃|哑铃|器械|史密斯|坐姿|站姿|绳索)/, '');
+    const NEXT = {
+      protein: ['晚上吃点啥能补蛋白', '给我定明天的食谱'], kcal: ['晚上吃点啥好', '能不能吃火锅'], deficit: ['这周热量赤字怎么样', '晚上吃点啥好'],
+      weight: ['怎么吃瘦得快一点', '最近蛋白够不够'], streak: ['这周练了几次', '最近蛋白够不够'], trains: ['明天练什么', '这周还该练哪儿'],
+      lift: [`${short}怎么练能涨`, '明天练什么']
+    };
+    return { text: answer, next: NEXT[it.kind] || [] };
+  }
+
+  /** 还差多少蛋白，吃点啥能补上（按差的多少给，别差 89g 还说「一块鸡胸就够」） */
+  proteinFix(left) {
+    if (left >= 70) return '一块鸡胸肉（约 46g）再加一勺蛋白粉（约 24g）';
+    if (left >= 40) return '一块鸡胸肉（200g 约 46g）';
+    if (left >= 20) return '一勺蛋白粉（约 24g），或者两个鸡蛋加一杯牛奶（约 21g）';
+    return '一杯牛奶加个鸡蛋';
+  }
+
+  quickAnswerText(it) {
+    const today = getTodayDateString();
+    const md = (d) => `${+d.slice(5, 7)}月${+d.slice(8)}日`;
+    const s = this.getDaySummary(today);
+    const simple = this.isSimple();
+    if (it.kind === 'protein') {
+      if (simple) return '';
+      const target = Math.round(this.gaugeProteinTarget());
+      const p = Math.round(s.protein), left = target - p;
+      if (left <= 0) return `今天蛋白吃了 ${p}g，够了（目标 ${target}g）。`;
+      return `今天蛋白吃了 ${p}g，目标 ${target}g，还差 ${left}g。\n补上的话：${this.proteinFix(left)}。`;
+    }
+    if (it.kind === 'kcal') {
+      const budget = Math.round(s.budget), intake = Math.round(s.intake), rem = budget - intake;
+      if (rem < 0) return `今天吃了 ${fmt(intake)} kcal，超了 ${fmt(-rem)}（预算 ${fmt(budget)}）。\n别慌，明天少吃一口就回来了。`;
+      const b = rem / RICE_BOWL_KCAL;
+      return `今天预算 ${fmt(budget)}，吃了 ${fmt(intake)}，还能吃 ${fmt(rem)} kcal。\n大概是 ${b < 0.75 ? '小半碗' : Math.round(b * 2) / 2 + ' 碗'}米饭的量。`;
+    }
+    if (it.kind === 'deficit') {
+      if (simple) return '';
+      // 一天还没过完，「现在的赤字」会越吃越小：直接说按目标还能吃多少
+      const d = Math.round(s.deficit), tgt = Math.round(this.profile.targetDeficitKcal || 0), rem = Math.round(s.budget - s.intake);
+      if (!s.intake) return `今天还没记吃的。按目标赤字 ${fmt(tgt)}，今天能吃 ${fmt(Math.round(s.budget))} kcal。`;
+      return `现在热量赤字 ${fmt(d)}，目标 ${fmt(tgt)}。\n` + (rem >= 0 ? `按目标今天还能吃 ${fmt(rem)} kcal，吃到这儿正好。` : `已经比目标多吃了 ${fmt(-rem)} kcal，明天少吃一口就回来了。`);
+    }
+    if (it.kind === 'weight') {
+      const ws = this.weights.slice().sort((a, b) => (a.date > b.date ? 1 : -1));
+      if (!ws.length) return '还没记过体重。说一句「体重 62.5」就记上了。';
+      const last = ws[ws.length - 1];
+      const since = shiftDateString(today, -it.span);
+      const base = ws.filter(w => w.date <= since).pop() || ws.find(w => w.date >= since && w.date < last.date);
+      const lines = [`最新体重 ${round1(last.kg)}kg（${md(last.date)}）。`];
+      if (base) {
+        const diff = round1(last.kg - base.kg);
+        lines.push(`比 ${md(base.date)} 的 ${round1(base.kg)}kg ${diff < 0 ? `轻了 ${-diff}kg` : diff > 0 ? `重了 ${diff}kg` : '没变'}${diff > 0 && (this.profile.goalType || 'fat_loss') === 'fat_loss' ? '，一两天的起伏正常，看一周的趋势' : ''}。`);
+      } else lines.push('再记几天，我就能告诉你变化。');
+      return lines.join('\n');
+    }
+    if (it.kind === 'streak') {
+      const st = this.buddyState();
+      return `${st.streak ? `连续记了 ${st.streak} 天` : '今天还没记'}，一共记了 ${st.days} 天。${st.next ? `\n再连续 ${st.next.days} 天拿${st.next.name}。` : ''}`;
+    }
+    if (it.kind === 'trains') {
+      const since = shiftDateString(today, -(it.span - 1));
+      const ws = this.workouts.filter(w => w.date >= since && w.date <= today);
+      const days = [...new Set(ws.map(w => w.date))].sort();
+      if (!days.length) return `${it.span === 30 ? '这 30 天' : '这一周'}还没练。找一天动一动，说一句我就帮你记上。`;
+      const WK = '日一二三四五六';
+      const what = days.map(d => {
+        const parts = [...new Set(ws.filter(w => w.date === d).map(w => (w.durationMin ? w.exerciseName : (w.muscleGroup || '').replace(/部$/, ''))))].filter(Boolean);
+        return `周${WK[new Date(d + 'T00:00:00').getDay()]} ${parts.join('、')}`;
+      });
+      return `${it.span === 30 ? '这 30 天' : '这一周'}练了 ${days.length} 天${it.span === 7 ? '：' + what.join('；') : ''}。`;
+    }
+    if (it.kind === 'lift') {
+      const p = this.exerciseProgress(it.name);
+      if (!p) return '';
+      const logs = this.workouts.filter(w => w.exerciseName === it.name && !w.durationMin);
+      const best = logs.reduce((m, w) => (!m || w.weightKg > m.weightKg || (w.weightKg === m.weightKg && w.reps > m.reps) ? w : m), null);
+      const fmtSet = (w) => `${w.weightKg > 0 ? round1(w.weightKg) + 'kg' : '自重'} ${w.sets}×${w.reps}`;
+      return `${it.name}：上次 ${fmtSet(p.last)}（${md(p.last.date)}）` +
+        (best && best.id !== p.last.id ? `，最重 ${fmtSet(best)}（${md(best.date)}）` : '，就是你目前最重的') + `。\n${p.next.text}。`;
+    }
+    return '';
+  }
+
+  /**
+   * 点小人时的一句观察（本机算）：最近 7 天（不算今天）里蛋白质没吃够的天数、早餐蛋白太少；
+   * 只记吃的模式看吃没吃超。记的天数少于 3 天不说。
+   */
+  observation() {
+    const today = getTodayDateString();
+    const days = [1, 2, 3, 4, 5, 6, 7].map(i => shiftDateString(today, -i)).filter(d => this.diet.some(x => x.date === d));
+    if (days.length < 3) return '';
+    const half = Math.max(2, Math.ceil(days.length / 2));
+    const target = this.gaugeProteinTarget ? this.gaugeProteinTarget() : (this.profile.targetProteinG || 0);
+    if (!this.isSimple() && target > 0) {
+      const sums = days.map(d => this.getDaySummary(d));
+      const low = sums.filter(s => s.protein < target * 0.8);
+      if (low.length >= half) {
+        const bfDays = days.map(d => this.diet.filter(x => x.date === d && x.mealType === '早餐')).filter(l => l.length);
+        const bf = bfDays.length ? bfDays.reduce((a, l) => a + l.reduce((s, x) => s + (x.proteinG || 0), 0), 0) / bfDays.length : null;
+        const gap = Math.round(low.reduce((a, s) => a + (target - s.protein), 0) / low.length);
+        return (low.length === days.length ? `最近 ${days.length} 天蛋白都没吃够` : `最近 ${days.length} 天有 ${low.length} 天蛋白没吃够`) +
+          (bf !== null && bf < 12 ? `，早餐平均才 ${Math.round(bf)}g，加个鸡蛋、一杯牛奶就好很多` : `，平均差 ${gap}g`);
+      }
+    }
+    const over = days.filter(d => { const s = this.getDaySummary(d); return s.intake > s.budget + 200; });
+    if (over.length >= half) return over.length === days.length ? `最近 ${days.length} 天都吃超了预算` : `最近 ${days.length} 天有 ${over.length} 天吃超了预算`;
+    return '';
+  }
+
+  /**
+   * 用户画像：手机按最近 4 周的记录算（不调大模型），几句短话——用了多久、常吃什么、早饭习惯、平均吃多少、蛋白够不够、
+   * 一周练几天练哪儿、体重往哪走。提问时一行带给大模型，比把两周的记录一天一行全塞进去省 token、也快；
+   * 设置里「小人记住的」下面能看到。小本本是你说的，画像是记录看出来的。
+   */
+  portrait() {
+    const today = getTodayDateString();
+    const since = shiftDateString(today, -27);
+    const simple = this.isSimple();
+    const out = [];
+    const all = this.recordDates();
+    if (!all.length) return out;
+    const first = all.reduce((m, d) => (d < m ? d : m), today);
+    const used = Math.round((new Date(today + 'T00:00:00') - new Date(first + 'T00:00:00')) / 86400000) + 1;
+    if (used <= 7) out.push(`刚开始用（第 ${used} 天）`);
+    const diet = this.diet.filter(d => d.date >= since && d.date <= today);
+    // 常吃：一样东西 4 周里吃过 2 次以上
+    const cnt = {};
+    diet.forEach(d => (Array.isArray(d.items) && d.items.length ? d.items.map(i => i.name) : [d.foodSummary]).forEach(n => {
+      n = String(n || '').replace(/[\d一二两三四五六七八九十半]+\s*(个|碗|杯|份|片|块|根|勺|盒|瓶|袋|颗|串|g|克|ml|毫升).*$/i, '').trim();
+      if (n && n.length <= 12 && !/^(水|白开水|温水|米饭)$/.test(n)) cnt[n] = (cnt[n] || 0) + 1;
+    }));
+    const top = Object.entries(cnt).filter(([, c]) => c >= 2).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([n]) => n);
+    if (top.length) out.push('常吃' + top.join('、'));
+    // 只算这一天吃的记全了的日子（三顿里记了两顿以上），不然平均数会偏低
+    const days = [...new Set(diet.map(d => d.date))].filter(d => d < today);
+    const full = days.filter(d => new Set(diet.filter(x => x.date === d && x.mealType !== '加餐/补剂').map(x => x.mealType)).size >= 2);
+    if (days.length >= 4) {
+      const bf = days.filter(d => diet.some(x => x.date === d && x.mealType === '早餐'));
+      if (bf.length / days.length < 0.4) out.push('常不吃早饭（或者没记）');
+      else if (!simple) {
+        const p = bf.reduce((a, d) => a + diet.filter(x => x.date === d && x.mealType === '早餐').reduce((s, x) => s + (x.proteinG || 0), 0), 0) / bf.length;
+        if (p < 12) out.push(`早饭蛋白少（平均 ${Math.round(p)}g）`);
+      }
+    }
+    if (full.length >= 3) {
+      const sums = full.map(d => this.getDaySummary(d));
+      const avg = (f) => Math.round(sums.reduce((a, s) => a + f(s), 0) / sums.length);
+      out.push(`记全的日子平均吃 ${avg(s => s.intake)} 千卡（预算 ${avg(s => s.budget)}）`);
+      if (!simple) {
+        const target = Math.round(this.gaugeProteinTarget());
+        const p = avg(s => s.protein);
+        if (target > 0) out.push(`蛋白平均 ${p}g（目标 ${target}g）`);
+      }
+    }
+    if (!simple) {
+      const lifts = this.workouts.filter(w => w.date >= since && w.date <= today);
+      const tdays = [...new Set(lifts.map(w => w.date))];
+      if (tdays.length) {
+        const parts = {};
+        tdays.forEach(d => new Set(lifts.filter(w => w.date === d && w.muscleGroup).map(w => w.muscleGroup.replace(/部$/, ''))).forEach(m => { parts[m] = (parts[m] || 0) + 1; }));
+        const main = Object.entries(parts).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([m]) => m);
+        const weeks = Math.min(4, used / 7);
+        out.push((weeks >= 1.5 ? `一周练 ${Math.round(tdays.length / weeks * 10) / 10} 天左右` : `这些天练了 ${tdays.length} 天`) + (main.length ? `，常练${main.join('、')}` : ''));
+      } else if (used >= 10) out.push('最近 4 周没记训练');
+    }
+    const ws = this.weights.filter(w => w.date >= since && w.date <= today).sort((a, b) => (a.date > b.date ? 1 : -1));
+    if (ws.length >= 2 && ws[0].date !== ws[ws.length - 1].date) out.push(`体重 ${round1(ws[0].kg)} → ${round1(ws[ws.length - 1].kg)}kg（${+ws[0].date.slice(5, 7)}月${+ws[0].date.slice(8)}日到现在）`);
+    return out.slice(0, 7);
   }
 
   bindEvents() {
@@ -152,6 +391,11 @@ class FitnessApp {
     $('date-prev').addEventListener('click', () => this.shiftDate(-1));
     $('date-next').addEventListener('click', () => this.shiftDate(1));
     this.bindGaugePop();
+    this.bindBackup();
+    this.bindShare();
+    this.bindBuddy();
+    this.bindBuddySettings();
+    this.bindDex && this.bindDex();
     $('date-label').addEventListener('click', () => { this.selectedDate = getTodayDateString(); this.render(); });
     $('setup-hint').addEventListener('click', () => this.switchView('settings'));
     $('weight-log').addEventListener('click', () => this.openWeightEditor(getTodayDateString()));
@@ -175,10 +419,13 @@ class FitnessApp {
         if (act.dataset.act === 'retry') this.retryPending(id);
         else if (act.dataset.act === 'drop') this.dropPending(id);
         else if (act.dataset.act === 'edit-text') this.editPendingText(id);
+        else if (act.dataset.act === 'plan-done') this.checkPlan(act, id);
+        else if (act.dataset.act === 'plan-drop') this.dropPlan(id);
         return;
       }
       const quick = e.target.closest('[data-quick-key]');
       if (quick) { this.quickRepeatKey(quick.dataset.quickKey); return; }
+      if (e.target.closest('[data-dex-log]')) { this.openDex({ log: true, date: getTodayDateString(), meal: mealSlotByHour(new Date().getHours()) }); return; }
       const item = e.target.closest('.item[data-kind]');
       if (item) this.openEditor(item.dataset.kind, item.dataset.id);
     });
@@ -189,6 +436,16 @@ class FitnessApp {
       if (!b) return;
       this.trendDays = Number(b.dataset.range);
       this.renderTrend();
+    });
+    // 点趋势页上的小人：招招手
+    $('trend-buddy').addEventListener('click', (e) => {
+      if (!e.target.closest('.coach-buddy')) return;
+      window.Haptics && window.Haptics.fire('tap');
+      window.Sound && window.Sound.play('blip');
+      this._coachWave = true;
+      this.renderTrendBuddy();
+      clearTimeout(this._coachT);
+      this._coachT = setTimeout(() => { this._coachWave = false; if (this.view === 'trend') this.renderTrendBuddy(); }, 1500);
     });
 
     // 设置
@@ -205,7 +462,8 @@ class FitnessApp {
     window.addEventListener('popstate', () => {
       // 保存 / 取消弹层时自己调的 history.back()：只关弹层，别跟着回到今天页
       if (this._editorBack) { this._editorBack = false; return; }
-      if (!$('edit-overlay').classList.contains('hidden')) this.closeEditor(true);
+      if (!$('share-overlay').classList.contains('hidden')) this.closeShare(true);
+      else if (!$('edit-overlay').classList.contains('hidden')) this.closeEditor(true);
       else if (this.view !== 'today') this.switchView('today', true);
     });
   }
@@ -222,6 +480,7 @@ class FitnessApp {
     title.classList.toggle('hidden', !isSettings);
     title.textContent = isSettings ? '设置' : '';
     document.getElementById('composer').classList.toggle('hidden', view !== 'today');
+    document.getElementById('btn-share').classList.toggle('hidden', view !== 'today');
     document.body.classList.toggle('no-composer', view !== 'today');
     const sb = document.getElementById('btn-settings');
     sb.innerHTML = isSettings ? ICON_CLOSE : ICON_SETTINGS;
@@ -234,10 +493,16 @@ class FitnessApp {
 
   shiftDate(delta) {
     const next = shiftDateString(this.selectedDate, delta);
-    if (next > getTodayDateString()) return;
+    if (next > this.lastPlanDate()) return; // 以后的日子只有排了计划才能翻过去看
     window.Haptics && window.Haptics.fire('tick');
     this.selectedDate = next;
     this.render();
+  }
+
+  /** 最远能翻到哪天：今天，或者计划排到的那天 */
+  lastPlanDate() {
+    const today = getTodayDateString();
+    return (this.plans || []).reduce((m, p) => (p.date > m ? p.date : m), today);
   }
 
   /** 把今天的状态告诉安卓，提醒时用（午饭记了就不提醒午饭；晚间小结写还能吃多少） */
@@ -248,12 +513,14 @@ class FitnessApp {
       const s = this.getDaySummary(today);
       const meals = [...new Set(this.diet.filter(d => d.date === today).map(d => d.mealType))];
       const count = this.diet.filter(d => d.date === today).length + this.workouts.filter(w => w.date === today).length;
-      window.TrainFitNative.updateDayState(JSON.stringify({
-        date: today, meals, count,
+      // 小人替你写好的提醒（标题是它的名字，像它发来的消息）；关了小人就用原来的
+      const lines = this.buddyPushLines ? this.buddyPushLines() : null;
+      window.TrainFitNative.updateDayState(JSON.stringify(Object.assign({
+        date: today, meals, count, weighed: !!this.weightOn(today),
         remaining: Math.round(s.remaining),
-        showProtein: !this.isSimple(),
-        proteinLeft: Math.max(0, Math.round((this.profile.targetProteinG || 0) - s.protein))
-      }));
+        showProtein: true,
+        proteinLeft: Math.max(0, Math.round(this.gaugeProteinTarget() - s.protein))
+      }, lines || {})));
     } catch (e) {}
   }
 
@@ -263,6 +530,7 @@ class FitnessApp {
     if (this.view === 'today') this.renderToday();
     else if (this.view === 'trend') this.renderTrend();
     else if (this.view === 'settings') this.renderSettings();
+    this.renderBuddy();
   }
 
   /** 系统当前是不是浅色：安卓 App 问原生，浏览器看 prefers-color-scheme */
