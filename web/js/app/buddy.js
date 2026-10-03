@@ -326,7 +326,12 @@
       },
       crown: { x: 9, y: -2, rows: ['A.AA.A', 'AaAAaA'] },
       // 生日那天戴的派对帽
-      party: { x: 9, y: -4, rows: ['..X...', '..I...', '.IGI..', '.GIGI.', 'IGIGIG'] }
+      party: { x: 9, y: -4, rows: ['..X...', '..I...', '.IGI..', '.GIGI.', 'IGIGIG'] },
+      // 今天练过：肩上搭条毛巾（v6.4，趴着搭在左肩上，站着挂在脖子上）
+      towel: {
+        lie: { x: 0, y: 11, rows: ['...YYY', '..YYY.', '.YYY..', 'YYY...', 'gYg...'] },
+        stand: { x: 9, y: 13, rows: ['YY...YY', 'YY...YY', 'Yg...gY', 'YY...YY', 'g.....g'] }
+      }
     },
     fx: {
       sweat: { x: 22, y: 7, rows: ['.B', 'BB', 'BB'] },
@@ -334,7 +339,9 @@
       note: { x: 20, y: -3, rows: ['.NNN', '.N.N', '.N..', 'NN..', 'NN..'] },
       sparkle: { x: 20, y: -3, rows: ['.X.', 'XXX', '.X.'] },
       heart: { x: 19, y: -3, rows: ['II.II', 'IIIII', '.III.', '..I..'] },
-      anger: { x: 19, y: 0, rows: ['I.I', '.I.', 'I.I'] }
+      anger: { x: 19, y: 0, rows: ['I.I', '.I.', 'I.I'] },
+      // 吃撑了：脸边冒一团热气
+      puff: { x: 20, y: 7, rows: ['..ZZ.', '.ZZZZ', 'ZZZZZ', '.ZZZ.', '.....', 'ZZ...'] }
     }
   };
   const AW = 24, AH = 17, AH_STAND = 25;
@@ -389,10 +396,12 @@
     great: { eyes: 'happy', fx: 'sparkle', blush: true },
     love: { eyes: 'closed', fx: 'heart', blush: true },
     shy: { eyes: 'left', blush: true },
-    pout: { eyes: 'right', fx: 'anger' }
+    pout: { eyes: 'right', fx: 'anger' },
+    // 吃撑了（v6.4）：眯着眼、脸红、冒热气
+    full: { eyes: 'content', fx: 'puff', blush: true }
   };
   // 大模型、剧情给的表情 → 心情
-  const FACE_MOOD = { 开心: 'good', 害羞: 'shy', 担心: 'bad', 得意: 'great', 惊讶: 'ok', 不服: 'pout', 平静: 'ok', 心动: 'love', 困: 'sleepy', 闪亮: 'great' };
+  const FACE_MOOD = { 开心: 'good', 害羞: 'shy', 担心: 'bad', 得意: 'great', 惊讶: 'ok', 不服: 'pout', 平静: 'ok', 心动: 'love', 困: 'sleepy', 闪亮: 'great', 撑: 'full' };
   const LEVEL_MOOD = ['bad', 'ok', 'good', 'great'];
   const GEAR_STEPS = [{ days: 3, gear: 'band', name: '头带' }, { days: 7, gear: 'cap', name: '棒球帽' }, { days: 30, gear: 'crown', name: '皇冠' }];
 
@@ -470,9 +479,10 @@
     const eyes = o.eyes || (pose === 'think' && mood.eyes === 'chill' ? 'right' : mood.eyes);
     if (eyes === 'shades') put(ART.shades.x, ART.shades.y, ART.shades.rows);
     else if (eyes === 'happy') put(ch.eyeX, EYE_Y - 1, ch.happy);
+    else if (eyes === 'content') put(ch.eyeX, EYE_Y - 1, [ch.happy[1], ch.happy[0]]); // ∪∪：吃饱了眯着眼
     else put(ch.eyeX, EYE_Y, [ch.eyes[eyes] || ch.eyes.chill]);
     if (mood.blush) put(ch.eyeX, EYE_Y + 1, [ch.blush]);
-    (o.gear || []).forEach(k => { const g = ART.gear[k]; if (g) put(g.x, g.y, g.rows); });
+    (o.gear || []).forEach(k => { let g = ART.gear[k]; if (g && g.lie) g = lie ? g.lie : g.stand; if (g) put(g.x, g.y, g.rows); });
     if (pose === 'stretch') put(ARMS_UP.x, ARMS_UP.y, ARMS_UP.rows);
     if (pose === 'flex') put(ARMS_FLEX.x, ARMS_FLEX.y, ARMS_FLEX.rows);
     // 部位 → 颜色：敞开的外套中间露肚子；女生光着肚子是运动内衣（胸口两行是衣服）
@@ -710,6 +720,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     try { night = localStorage.getItem('tf_night') || ''; } catch (e) {}
     if (this.sulkNow && this.sulkNow()) mood = 'pout';
     else if (night === today && hour >= 22.5) mood = 'sleepy';
+    else if (s.budget > 0 && s.intake > s.budget + 100) mood = 'full'; // 今天吃超了：撑着的样子（v6.4，跟着你的记录变）
     return { mood, say: m.say, level: g.hasData ? g.level : null, streak, best, days, gear, next: TF.Buddy.nextGear(best, streak), count, lifts };
   },
 
@@ -755,21 +766,23 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
   buddyDraw() {
     const btn = document.getElementById('buddy');
     if (!btn || btn.classList.contains('hidden')) return;
-    const art = this.buddyArt();
+    const day = this.dayLook ? this.dayLook() : { gear: [] }; // 今天练过：运动背心 + 毛巾（v6.4）
+    const art = this.buddyArt(day.outfit ? { outfit: day.outfit } : null);
     const st = this._buddySt || this.buddyState();
+    const gear = st.gear.concat(day.gear || []);
     const pose = this._pose || 'lie';
     // 一小会儿的表情：心情名（love 冒爱心）或者表情名（害羞、惊讶…）
     const over = this._moodOver;
     const face = over && TF.Buddy.FACE_MOOD[over] ? over : '';
     const mood = face ? st.mood : over || st.mood;
-    const key = [art.char, art.style, art.hair, art.skin, art.outfit, art.build, mood, face, st.gear.join('+'), pose].join('|');
+    const key = [art.char, art.style, art.hair, art.skin, art.outfit, art.build, mood, face, gear.join('+'), pose].join('|');
     if (btn.dataset.key === key) return;
     const posed = btn.dataset.pose !== pose;
     btn.dataset.key = key;
     btn.dataset.pose = pose;
     let move = btn.querySelector('.bd-move');
     if (!move) { btn.innerHTML = '<span class="bd-move"></span><span class="bd-mail" aria-hidden="true">✉</span>'; move = btn.querySelector('.bd-move'); }
-    move.innerHTML = TF.Buddy.svg(Object.assign(art, { mood: face ? TF.Buddy.FACE_MOOD[face] : mood, gear: st.gear, pose }));
+    move.innerHTML = TF.Buddy.svg(Object.assign(art, { mood: face ? TF.Buddy.FACE_MOOD[face] : mood, gear, pose }));
     if (posed) this.placeBuddy(); // 站起来 / 趴下高度变了，底边还贴着那个框
   },
 
@@ -1363,12 +1376,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       this.sayTip((name && !kind.startsWith('pr:') ? name + '，' : '') + text, next);
       return true;
     };
-    // 破纪录：这次的重量比以前都重
-    for (const id of batch.workoutIds || []) {
-      const w = this.workouts.find(x => x.id === id);
-      const fb = w && this.liftFeedback(w);
-      if (fb && fb.includes('新纪录')) return fire('pr:' + w.exerciseName, `新纪录！${w.exerciseName} ${fb.replace(/^[^：]*：新纪录\s*/, '')}`, [`${w.exerciseName.replace(/^(杠铃|哑铃)/, '')}下次练多少`, '这周练了几次']);
-    }
+    // 破纪录、吃超了 v6.4 起是小人的反应（react.js 的 recordMoment），这里只管深夜和蛋白
     if (!(result.meals || []).length) return false;
     const s = this.getDaySummary(today);
     const hour = new Date().getHours();
@@ -1377,8 +1385,6 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     if (hour >= 22 && this.bond && this.bond().lv >= 3) return fire('late', '这么晚还吃……行吧，记上了。明天晚饭早点吃，别饿到这会儿。', ['晚上饿了吃点啥好']);
     const target = this.gaugeProteinTarget ? this.gaugeProteinTarget() : 0;
     const left = Math.round(target - s.protein);
-    const rem = Math.round(s.budget - s.intake);
-    if (rem < -100) return fire('over', `今天超了 ${fmt(-rem)} kcal。没事，明天早餐清淡点就回来了。`, ['明天怎么吃', '这周热量赤字怎么样']);
     if (this.isSimple()) return false;
     if (hour >= 18 && target > 0 && left >= 30) {
       return fire('protein-pm', `蛋白还差 ${left}g，睡前补上：${this.proteinFix(left)}。`, ['晚上吃点啥能补蛋白', '今天还能吃多少']);
@@ -1714,8 +1720,8 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       (rel.romance != null ? `<button type="button" class="chip" data-rel-reset="1">${rel.romance ? '改回搭子' : '让 TA 再问一次'}</button>` : '') : '';
     const talk = this.talkLevel ? this.talkLevel() : 'normal';
     document.querySelectorAll('#buddy-talk .seg-btn').forEach(x => x.classList.toggle('active', x.dataset.value === talk));
-    $('buddy-talk-note').textContent = talk === 'quiet' ? '只在卡住了、刚记的份量要问时说话' :
-      talk === 'more' ? '打招呼、饭点、你回来了、逛的时候都会凑过来，一天十几句' : '打招呼、饭点问一句、记完说一句、逛的时候凑过来，一天十句以内';
+    $('buddy-talk-note').textContent = talk === 'quiet' ? '记完只做个动作（破纪录、吃撑这种还会说），卡住了才开口' :
+      talk === 'more' ? '再加上你逛的时候、发呆的时候凑过来聊几句，一天二十句以内' : '你记了什么它都有反应，打招呼、饭点问一句；你逛的时候不打扰';
     $('buddy-note').textContent = (st.streak ? `连续记录 ${st.streak} 天。` : '') + `${c.name}趴在「按住说话」上面：点一下看今天（每天第一次点有张小纸条），长按摸摸头。连续记 3 天戴头带，7 天棒球帽，30 天皇冠。`;
   },
 

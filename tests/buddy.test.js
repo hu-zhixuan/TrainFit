@@ -178,8 +178,14 @@ test('亲密度：五级，离下一级还差多少，满级不再长', () => {
     for (const f of ['morning', 'noon', 'afternoon', 'evening', 'night', 'cold', 'hot']) assert.ok(c.life[f] && c.life[f].length, k + ' life ' + f);
     for (const f of ['wait', 'afraid', 'secret']) assert.ok(c.whisper[f], k + ' whisper ' + f);
     for (const f of ['late', 'starve']) assert.ok(c.sulk[f], k + ' sulk ' + f);
-    for (const f of ['breakfast', 'fav', 'protein', 'lift']) assert.ok(c.react[f], k + ' react ' + f);
-    assert.ok(c.react.fav.includes('{food}') && c.night.includes('{sum}') && c.sulk.starve.includes('{kcal}'));
+    // 记完的反应（v6.4）：每种情况都有话，要填的数都带着
+    for (const f of ['pr', 'back', 'up', 'lift', 'over', 'over2', 'protein', 'treat', 'breakfast', 'fav', 'meat', 'green', 'any', 'lighter', 'down', 'heavier', 'weight'])
+      assert.ok(Array.isArray(c.moment[f]) && c.moment[f].length, k + ' moment ' + f);
+    for (const n of [3, 5, 7]) assert.ok(c.moment.week[n] && c.moment.week[n].length, k + ' moment week ' + n);
+    assert.ok(c.moment.pr.every(x => x.includes('{kg}') || x.includes('新纪录')) && c.moment.over.some(x => x.includes('{n}')) && c.moment.fav.every(x => x.includes('{food}')));
+    assert.ok(c.night.includes('{sum}') && c.sulk.starve.includes('{kcal}'));
+    // 吃多了不数落
+    assert.ok(!/胖|自律|管不住|又吃|别再吃|罚/.test(c.moment.over.concat(c.moment.over2, c.moment.heavier).join('')), k + ' 吃多了不数落');
     // 小纸条：每一级都有新的，三种稀有度都有
     for (let lv = 1; lv <= 5; lv++) assert.ok(c.notes.some(x => x[0] === lv), k + ' notes lv' + lv);
     for (const r of ['n', 'r', 's']) assert.ok(c.notes.some(x => x[1] === r), k + ' notes ' + r);
