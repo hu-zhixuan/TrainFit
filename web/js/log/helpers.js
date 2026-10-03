@@ -226,6 +226,56 @@
   }
 
   /**
+   * 聊天里说到的「过几天会有结果的事」（v6.3）：「周五我有个面试」→ { t: '周五面试', d: 4 }（事情过后一天问问）。
+   * 大模型聊天时会输出 life，但真实 Atria 实测「周五我有个面试，有点紧张」2/2 没给，所以本机也认一遍，没给就用这个。
+   * 已经过去的（「昨天面试了」「刚考完」）过三天问结果；没说哪天的过两天问。认不出返回 null。
+   * now：现在（测试用）
+   */
+  const LIFE_EVENT = /面试|笔试|复试|考试|考研|考公|期末|四六级|答辩|体检|复查|看病|手术|拔牙|出差|旅游|旅行|约会|相亲|见家长|比赛|马拉松|演出|汇报|述职|搬家|入职|报到|开学|婚礼|deadline|ddl/i;
+  function lifeEvent(text, now) {
+    const raw = String(text || '');
+    const m = raw.match(LIFE_EVENT);
+    if (!m) return null;
+    const ev = m[0];
+    now = now || new Date();
+    const WK = '日一二三四五六天';
+    let when = '', days = -1;
+    const past = /昨天|前天|上周|上个?星期|刚刚?|已经|完了|过了|结束了|考完|面完/.test(raw);
+    let w;
+    if ((w = raw.match(/(下+)?(个)?(周|星期|礼拜)([一二三四五六日天])/))) {
+      // 按自然周算（周一开头）：「周五」今天已经过了就是下周五；「下周三」是下一个自然周的周三
+      const mon = (x) => (x + 6) % 7;
+      const target = mon(WK.indexOf(w[4]) % 7), today = mon(now.getDay());
+      const next = (w[1] || '').length;
+      days = next ? 7 * next - today + target : target >= today ? target - today : target - today + 7;
+      when = `${w[1] || ''}${w[3] === '周' ? '周' : w[3]}${w[4]}`;
+    } else if ((w = raw.match(/(\d{1,2}|[一二三四五六七八九十]{1,3})\s*[号日]/))) {
+      const n = /\d/.test(w[1]) ? +w[1] : cnDay(w[1]);
+      if (n >= 1 && n <= 31) {
+        const d = new Date(now.getFullYear(), now.getMonth(), n);
+        if (d < new Date(now.getFullYear(), now.getMonth(), now.getDate())) d.setMonth(d.getMonth() + 1);
+        days = Math.round((d - new Date(now.getFullYear(), now.getMonth(), now.getDate())) / 86400000);
+        when = `${d.getMonth() + 1}月${d.getDate()}日`;
+      }
+    } else if ((w = raw.match(/大后天|后天|明天|明早|明晚|今天|今晚|下午|晚上|下周|下个?星期|下个月|月底/))) {
+      days = { 大后天: 3, 后天: 2, 明天: 1, 明早: 1, 明晚: 1, 今天: 0, 今晚: 0, 下午: 0, 晚上: 0, 下周: 7, 下星期: 7, 下个星期: 7, 下个月: 14, 下月: 14, 月底: 10 }[w[0]];
+      if (/下周|下个?星期|下个?月|月底/.test(w[0])) when = w[0];
+    }
+    const t = (when + ev).slice(0, 12);
+    if (past) return { t, d: 3 };
+    return { t, d: days < 0 ? 2 : Math.max(1, Math.min(14, days + 1)) };
+  }
+
+  function cnDay(s) {
+    const D = { 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9 };
+    if (s === '十') return 10;
+    if (s[0] === '十') return 10 + (D[s[1]] || 0);
+    if (s.length === 3 && s[1] === '十') return D[s[0]] * 10 + (D[s[2]] || 0);
+    if (s.length === 2 && s[1] === '十') return D[s[0]] * 10;
+    return D[s] || 0;
+  }
+
+  /**
    * 只是在问、没在报吃了练了什么（「晚上吃点啥」「上周练了几次」）。
    * 「中午吃了牛肉面，晚上吃点啥」这种又记又问的不算——它没整理完时要留卡片，免得记录丢了。
    */
@@ -274,7 +324,7 @@
     return null;
   }
 
-  Object.assign(TF, { MUSCLES, MEAL_TYPES, num, cleanText, round1, mealTypeByHour, normMealType, mealTimes, mealSegments, NUTRIENTS, cleanNutrients, nutrientsText, toKg, quickWeight, findWeight, guessMuscle, looksLikeQuestion, looksLikePlanEdit, looksLikeChat, pureQuestion, noCard, needsHistory, saidWeight, quickIntent });
+  Object.assign(TF, { MUSCLES, MEAL_TYPES, num, cleanText, round1, mealTypeByHour, normMealType, mealTimes, mealSegments, NUTRIENTS, cleanNutrients, nutrientsText, toKg, quickWeight, findWeight, guessMuscle, looksLikeQuestion, looksLikePlanEdit, looksLikeChat, lifeEvent, LIFE_EVENT, pureQuestion, noCard, needsHistory, saidWeight, quickIntent });
 
   if (typeof module !== 'undefined' && module.exports) module.exports = TF;
 })(typeof window !== 'undefined' ? window : globalThis);

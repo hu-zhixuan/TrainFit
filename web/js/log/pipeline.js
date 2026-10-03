@@ -204,7 +204,9 @@
         if (!result.answer) { fail(new Error('EMPTY_RESPONSE')); return; }
         app.finishPending(p.id);
         if (((result.memo || []).length || (result.forget || []).length) && app.updateMemo) { app.updateMemo(result.memo, result.forget); app.saveData(); }
-        if ((result.life || []).length && app.addLife) app.addLife(result.life);
+        // 最近的事：大模型没给的话本机认一遍（实测「周五我有个面试」它常忘了给）
+        const life = (result.life || []).length ? result.life : [TF.lifeEvent && TF.lifeEvent(p.text)].filter(Boolean);
+        if (life.length && app.addLife) app.addLife(life);
         if (app.noteFeeling) app.noteFeeling(p.text);
         if (app.showBuddyAnswer) app.showBuddyAnswer(p.text, result.answer, { next: result.next, chat: true, face: result.face });
         return;

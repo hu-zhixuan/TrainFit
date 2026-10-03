@@ -118,13 +118,18 @@ Object.assign(FitnessApp.prototype, {
 
   // ---------- 近况：你说过的最近的事，过几天主动问 ----------
 
-  /** 大模型记下的近况 [{t, d}] → profile.buddy.life [{t, at, due, asked}]，同一件不重复，留最近 12 件 */
+  /**
+   * 大模型记下的近况 [{t, d}] → profile.buddy.life [{t, at, due, asked}]，留最近 12 件。
+   * 同一件不重复：一样的字，或者两周内记过同一类事（「周五面试」之后又说「面试好紧张」、问过结果后他说「面试没过」）
+   */
   addLife(list) {
     const today = getTodayDateString();
+    const from = shiftDateString(today, -14);
+    const kind = (t) => (String(t).match(TF.LIFE_EVENT || /$^/) || [])[0] || '';
     const cur = Array.isArray((this.profile.buddy || {}).life) ? this.profile.buddy.life.slice() : [];
     (list || []).forEach(x => {
       const t = String(x && x.t || '').trim().slice(0, 16);
-      if (!t || cur.some(y => y.t === t)) return;
+      if (!t || cur.some(y => y.t === t || (kind(t) && kind(y.t) === kind(t) && y.at >= from))) return;
       const d = Math.max(0, Math.min(14, Math.round(+x.d || 0)));
       cur.push({ t, at: today, due: d ? shiftDateString(today, d) : '', asked: false });
     });

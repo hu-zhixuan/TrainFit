@@ -949,3 +949,15 @@ test('v6.3 聊天提示词带上心情、关系、一起经历的事、他最近
   assert.deepStrictEqual(r.life, [{ t: '下周二终面', d: 5 }, { t: 'x', d: 14 }]);
 });
 
+
+test('v6.3 本机认「过几天有结果的事」：大模型没给 life 时用（实测「周五我有个面试」2/2 没给）', () => {
+  const sat = new Date(2026, 9, 3, 21, 0); // 周六
+  assert.deepStrictEqual(TF.lifeEvent('周五我有个面试，有点紧张', sat), { t: '周五面试', d: 7 }, '周五已经过了，是下周五，过后一天问');
+  assert.deepStrictEqual(TF.lifeEvent('下周三出差', sat), { t: '下周三出差', d: 5 });
+  assert.deepStrictEqual(TF.lifeEvent('明天要考试了', sat), { t: '考试', d: 2 });
+  assert.deepStrictEqual(TF.lifeEvent('15号体检', sat), { t: '10月15日体检', d: 13 });
+  assert.deepStrictEqual(TF.lifeEvent('昨天面试了，感觉一般', sat), { t: '面试', d: 3 }, '已经过去的过三天问结果');
+  assert.deepStrictEqual(TF.lifeEvent('有个面试好紧张', sat), { t: '面试', d: 2 });
+  assert.strictEqual(TF.lifeEvent('今天好累', sat), null);
+  assert.strictEqual(TF.lifeEvent('我跟我妈吵架了', sat), null);
+});
