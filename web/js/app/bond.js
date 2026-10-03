@@ -100,8 +100,10 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     const l = this.buddyLook();
     const b = this.bond();
     const wear = `样子：${TF.Buddy.STYLES[l.style].label}，今天穿${this.outfitLabel(l.outfit)}，身材${this.buildLabel(this.buddyBuild())}`;
+    // v6.3：它现在的心情（想他、担心他、自己有点低落…）、你们的关系（暧昧 / 恋人 / 好搭子）、剧情里一起经历过的事
     return { name: c.name, who: c.who, speech: c.speech, look: wear, facts: c.facts.concat(b.lv >= 4 ? [c.secret] : []),
-      level: b.name, lv: b.lv, tone: c.tone[b.lv - 1], call: this.callName(), you: this.profile.gender === 'female' ? '她' : '他' };
+      level: b.name, lv: b.lv, tone: c.tone[b.lv - 1], call: this.callName(), you: this.profile.gender === 'female' ? '她' : '他',
+      mood: this.heartPrompt ? this.heartPrompt() : '', relation: this.relationPrompt ? this.relationPrompt() : '', shared: this.storyFacts ? this.storyFacts() : [] };
   },
 
   /** 身材叫法：女生的薄肌叫马甲线 */
@@ -238,7 +240,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     this._bondUp = null;
     const b = this.bond();
     const build = this.buddyBuild();
-    this.setBuddy({ lv: b.lv, seenBuild: build });
+    this.setBuddy({ lv: b.lv, seenBuild: build, lvAt: getTodayDateString() }); // lvAt：到这一级的日子（剧情「那句话」要到老搭子几天后才出）
     const opened = Object.keys(TF.Buddy.OUTFITS).filter(k => { const lv = TF.Buddy.OUTFITS[k].lv; return lv && lv > up.from && lv <= b.lv; });
     let lead = up.first ? `我们已经是「${b.name}」了。` : this.cast().levelUp[b.lv - 1] || `我们是「${b.name}」了。`;
     if (up.first && this.buddyLook().build === 'auto' && build !== 'normal') lead += `跟着你练了这么久，我也练出${this.buildLabel(build)}了。`;
@@ -343,7 +345,8 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
   patBuddy() {
     if (this.makeUp && this.makeUp('pat')) return; // 闹着小别扭：摸摸头就和好
     const b = this.bond();
-    const lines = this.cast().pat[b.lv - 1] || this.cast().pat[0];
+    const love = this.storyData && this.storyData().romance === true && this.cast().heart;
+    const lines = love && Math.random() < 0.5 ? this.cast().heart.patLove : this.cast().pat[b.lv - 1] || this.cast().pat[0];
     let text = lines[Math.floor(Math.random() * lines.length)];
     const name = this.callName();
     if (name && b.lv >= 3 && Math.random() < 0.4) text = `${name}，${text}`;
@@ -901,6 +904,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     const pop = document.getElementById('buddy-pop');
     if (!pop || !pop.classList.contains('hidden')) return false;
     if ((batch.dietIds || []).length && this.dexUnlock && this.dexUnlock(batch)) return true;
+    if ((batch.dietIds || []).length && this.storyAfterRecord && this.storyAfterRecord(batch)) return true; // 记了火锅、奶茶：一段小剧情（v6.3）
     const today = getTodayDateString();
     let c;
     try { c = JSON.parse(localStorage.getItem('tf_react') || '{}'); } catch (e) { c = {}; }

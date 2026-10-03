@@ -110,7 +110,8 @@
         portrait: p.ask && app.portrait ? app.portrait() : [], past: p.ask && TF.needsHistory(p.text) ? this.pastDays(date) : [],
         state: app.profile.dayState && app.profile.dayState.date === date ? app.profile.dayState.sleep : '',
         // 聊天：小人是谁、你们多熟、刚才聊了啥（最多 3 轮，15 分钟内）
-        chat: !!p.chat, buddy: p.chat && app.buddyPersona ? app.buddyPersona() : null, talk: p.chat && app.chatThread ? app.chatThread() : [] };
+        chat: !!p.chat, buddy: p.chat && app.buddyPersona ? app.buddyPersona() : null, talk: p.chat && app.chatThread ? app.chatThread() : [],
+        life: p.chat && app.lifeList ? app.lifeList() : [] }; // v6.3：他最近说过的事（「周五面试」），小人接着上次聊
     },
 
     /**
@@ -190,11 +191,23 @@
         const byRef = new Map((ctx.plans || []).map(x => [x.ref, x.id]));
         app.markPlansDone(result.donePlans.map(ref => byRef.get(ref)).filter(Boolean));
       }
-      // 聊天：不记录；他说了自己的事悄悄记进小本本，小人接话（带表情、两句你可能回的）
+      // 记录的提示词回了「这个我帮不上，我只管吃和练」，问的又不是吃和练（「怎么跟老板提加薪」）：交给小人用聊天的方式接（v6.3 聊什么都行）
+      if (!p.chat && !p.rerouted && result.answer && /帮不上/.test(result.answer) && !Parser.ABOUT_FIT.test(p.text) &&
+          !(result.meals || []).length && !(result.workouts || []).length && !(result.updates || []).length && !result.bodyWeight) {
+        Object.assign(p, { chat: true, ask: true, rerouted: true });
+        if (app.showBuddyThinking) app.showBuddyThinking(p.text, 'chat');
+        this.process(p);
+        return;
+      }
+      // 聊天：不记录；他说了自己的事悄悄记进小本本，最近的事记下来过几天问，小人接话（带表情、两句你可能回的）
       if (p.chat) {
         if (!result.answer) { fail(new Error('EMPTY_RESPONSE')); return; }
         app.finishPending(p.id);
         if (((result.memo || []).length || (result.forget || []).length) && app.updateMemo) { app.updateMemo(result.memo, result.forget); app.saveData(); }
+        // 最近的事：大模型没给的话本机认一遍（实测「周五我有个面试」它常忘了给）
+        const life = (result.life || []).length ? result.life : [TF.lifeEvent && TF.lifeEvent(p.text)].filter(Boolean);
+        if (life.length && app.addLife) app.addLife(life);
+        if (app.noteFeeling) app.noteFeeling(p.text);
         if (app.showBuddyAnswer) app.showBuddyAnswer(p.text, result.answer, { next: result.next, chat: true, face: result.face });
         return;
       }

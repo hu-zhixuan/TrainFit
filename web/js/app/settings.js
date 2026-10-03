@@ -20,6 +20,12 @@ Object.assign(FitnessApp.prototype, {
       this.renderMemo();
       if (window.QuickLog) window.QuickLog.showUndo(`已删除「${line}」`, [], () => { this.profile.memo = prev; this.saveData(); this.renderMemo(); });
     });
+    $('life-list').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-life-del]');
+      if (!b) return;
+      this.setBuddy({ life: ((this.profile.buddy || {}).life || []).filter(x => x.t !== b.dataset.lifeDel) });
+      this.renderLife();
+    });
     $('my-foods').addEventListener('click', (e) => {
       const b = e.target.closest('[data-forget]');
       if (!b) return;
@@ -119,6 +125,7 @@ Object.assign(FitnessApp.prototype, {
     $('set-tdee-note').textContent = `每天日常消耗约 ${fmt(p.tdee)} kcal（不含训练）。按目标，不训练的日子大约吃 ${fmt(budget)} kcal。`;
     this.renderReminders();
     this.renderMemo();
+    if (this.renderLife) this.renderLife();
     this.renderMyFoods();
     const ql = window.QuickLog;
     const days = new Set([...this.workouts, ...this.diet].map(r => r.date)).size;

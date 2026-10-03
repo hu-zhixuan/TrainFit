@@ -51,11 +51,15 @@ Object.assign(FitnessApp.prototype, {
   /**
    * 小人问一句，下面几个现成的回答。options: [{ label, reply?, talk?, ask?, pick?() }]
    *  reply —— 小人接着说的话；talk —— 让「按住说话」亮一下（要你自己说）；ask —— 当成你问了这句；pick —— 点了要做的事
+   *  chat —— 当成你跟它聊了这句（走聊天，它接着说，v6.3）
    * extra：{ pics: [图鉴里的名字] } —— 在话下面放一排实物照片（饭前帮你挑的、考题，v6.2）
+   *        { thread: true } —— 它问的这句和你点的回答算进「刚才在聊」，你接着说话时大模型知道在聊什么（近况追问、低落、剧情，v6.3）
    */
   askUser(text, options, extra) {
     const pop = document.getElementById('buddy-pop');
     if (!pop || this._touring) return false;
+    const thread = !!(extra && extra.thread) || options.some(o => o.chat);
+    if (thread && this.pushTalk) this.pushTalk('（你先开口的）', text);
     pop.dataset.mode = 'chat';
     pop.dataset.level = 'none';
     pop.innerHTML = `<p class="buddy-say"></p>` + (extra && extra.pics && this.dexPicsHtml ? this.dexPicsHtml(extra.pics) : '') +
@@ -69,7 +73,9 @@ Object.assign(FitnessApp.prototype, {
       if (this.bondGain) this.bondGain('answer'); // 回答了它的问题：熟一点
       if (o.pick) o.pick();
       clearTimeout(this._askT);
+      if (o.chat && window.QuickLog) { window.QuickLog.submit(o.chat, { ask: true, chat: true }); return; }
       if (o.ask && window.QuickLog) { window.QuickLog.submit(o.ask, { ask: true }); return; }
+      if (thread && o.reply && this.pushTalk) this.pushTalk(o.label, o.reply);
       if (o.talk) {
         const talk = document.querySelector('#voice-row:not(.hidden) .talk-btn') || document.querySelector('#text-row:not(.hidden) .cmp-text');
         if (talk) { talk.classList.add('tour-glow'); setTimeout(() => talk.classList.remove('tour-glow'), 3000); }
@@ -242,10 +248,14 @@ Object.assign(FitnessApp.prototype, {
   greetOrGuide() {
     if (document.body.classList.contains('onboarding')) return false; // 还在选谁陪你
     const away = this.awayMs ? this.awayMs() : 0;
+    if (away) this._lastAway = away; // 离开了多久：打招呼时说不说「想你」（heart.js）
+    // v6.3：深夜的剧情排在「这么晚还没睡」前面；近况追问、小剧情、它低落、攒着的事排在饭点之后
     return (this.bondUpNow && this.bondUpNow()) || (this.anniversary && this.anniversary()) || (this.festivalGreet && this.festivalGreet()) ||
+      (this.storyEvent && this.storyEvent('night')) ||
       (this.lateNight && this.lateNight()) || (this.goodNight && this.goodNight()) || (this.sulkGreet && this.sulkGreet()) || this.greetToday() || this.firstGuide() ||
-      (this.mealPick && this.mealPick()) || this.mealGapNudge() || (this.dexIntro && this.dexIntro()) || this.welcomeBack(away) ||
-      (this.askOnce && this.askOnce()) || (this.whisper && this.whisper()) || (this.quizNudge && this.quizNudge());
+      (this.mealPick && this.mealPick()) || this.mealGapNudge() || (this.dexIntro && this.dexIntro()) ||
+      (this.lifeFollowUp && this.lifeFollowUp()) || (this.storyEvent && this.storyEvent('open')) || (this.lowDay && this.lowDay()) || (this.savedTale && this.savedTale()) ||
+      this.welcomeBack(away) || (this.askOnce && this.askOnce()) || (this.whisper && this.whisper()) || (this.quizNudge && this.quizNudge());
   },
 
   /** 记几件当天的小事（睡得怎么样、歇不歇），第二天接着问；只留最近 7 天 */
@@ -321,20 +331,24 @@ Object.assign(FitnessApp.prototype, {
     const hour = new Date().getHours();
     if (hour < 5) return false;
     const name = this.callName();
-    const hi = hour < 11 ? `早${name ? '，' + name : ''}。` : hour < 18 ? `${name ? name + '，' : ''}下午好。` : `${name ? name + '，' : ''}晚上好。`;
+    // 离开快一天回来：第一句说想你（v6.3，只在你回来时、开心地说，不怪你没来）
+    const miss = this.missLine ? this.missLine() : '';
+    const hi = miss || (hour < 11 ? `早${name ? '，' + name : ''}。` : hour < 18 ? `${name ? name + '，' : ''}下午好。` : `${name ? name + '，' : ''}晚上好。`);
     // 接一句昨天的事；昨天的事是挑毛病（蛋白差了、吃超了）而你最近又真做到了点什么，先说做到的（被看见比被纠正更想再来）
     const y0 = this.yesterdayLine();
     const seen = this.seenLine ? this.seenLine(true) : '';
     // 都没有的话，提一件以前的事（「一个月前的今天你说的是…」）
     const fault = !y0 || /差了|吃超/.test(y0);
-    const yest = seen && fault ? this.seenLine() : (fault && this.memoryLine && this.memoryLine()) || y0;
+    // 刚说了想你：别紧跟着挑毛病，只说做到了的，没有就不提
+    const yest = seen && fault ? this.seenLine() : miss && fault ? '' : (fault && this.memoryLine && this.memoryLine()) || y0;
     const done = () => { try { localStorage.setItem('tf_greet', today); } catch (e) {} this.chatBudget(true); return true; };
     const st = this.profile.dayState && this.profile.dayState.date === today ? this.profile.dayState : null;
     // 好几天没记了：别让人有负担，从今天接着来；想补的话带你翻到昨天
     const lastDay = this.recordDates().reduce((m, d) => (d < today && d > m ? d : m), '');
     const gap = lastDay ? Math.round((new Date(today + 'T00:00:00') - new Date(lastDay + 'T00:00:00')) / 86400000) : 0;
     if (gap >= 3 && !this.recordDates().includes(today)) {
-      this.askUser(`${hi}有 ${gap - 1} 天没记了，没关系，从今天接着来就行。`, [
+      const missing = !miss && this.bond && this.bond().lv >= 2 ? '好几天没见，有点想你。' : '';
+      this.askUser(`${hi}${missing}有 ${gap - 1} 天没记了，没关系，从今天接着来就行。`, [
         { label: '先补一下昨天', pick: () => { this.selectedDate = shiftDateString(today, -1); this.render(); }, reply: '在这页按住说，就记在昨天。记不清的说个大概就行。', talk: true },
         { label: '从今天开始', reply: '好，吃了啥说一句就行。' }]);
       return done();
@@ -351,6 +365,8 @@ Object.assign(FitnessApp.prototype, {
       this.askWeight(`${hi}${yest ? yest + '\n' : ''}`, st ? null : (reply) => this.askUser(`${reply}\n${sleepQ}`, sleepOptions));
       return done();
     }
+    // 你说过的事到日子了（「上次你说的面试怎么样了」）：今天先问这个
+    if (this.lifeDue && this.lifeDue()) { this.lifeFollowUp(`${hi}${yest ? yest + '\n' : ''}`); return done(); }
     // 头两周：认识你的问题
     const know = this.knowQuestion();
     if (know) { this.askUser(`${hi}${yest ? yest + '\n' : ''}${know.text}`, know.options); return done(); }
@@ -709,6 +725,10 @@ Object.assign(FitnessApp.prototype, {
     if (this.dexNudge && !this.nudgeSaid('idle:dex') && Math.random() < 0.4 && this.dexNudge()) return { key: 'idle:dex' };
     // 发呆的时候也是说悄悄话的好时候（两天最多一条）
     if (this.whisper && this.whisper(true)) return { key: 'idle:whisper' };
+    // v6.3：你说过的事到日子了、它今天有点低落、攒着想跟你说的事（各自一天一次，次数在各自那边记）
+    if (this.lifeFollowUp && this.lifeFollowUp()) return { key: 'idle:life' };
+    if (this.lowDay && this.lowDay()) return { key: 'idle:low' };
+    if (this.savedTale && this.savedTale()) return { key: 'idle:tale' };
     // 跟你有关的优先，小知识垫底
     const mine = opts.filter(o => !o.fact && !this.nudgeSaid(o.key));
     const pick = mine.length ? mine[Math.floor(Math.random() * mine.length)] : opts.find(o => o.fact && !this.nudgeSaid(o.key));

@@ -160,6 +160,7 @@
   const ABOUT_FIT = /练|训练|健身|动作|器械|深蹲|卧推|硬拉|腿|胸|背|肩|手臂|腹|核心|有氧|跑步|减脂|减肥|增肌|瘦|胖|体重|吃|喝|饭|餐|食|蛋白|热量|卡|碳水|脂肪|饿|饱|睡|酸|累|恢复/;
 
   const Parser = {
+    ABOUT_FIT,
     buildMessages(text, ctx) {
       ctx = ctx || {};
       const now = ctx.now || new Date();
@@ -271,6 +272,8 @@
      * 小人用自己的性格接话：先接住情绪、说具体的（记得你的事）、有自己的想法，不拿「你不来我会难过」压人。
      * 每次还是一个新的短 prompt，只多带「刚才在聊」最多 3 轮（15 分钟内），不存聊天记录。
      * 回得短（40 字左右）：Atria 一秒只出 17～20 个字，短了才快；流式一边出一边显示。
+     * v6.3（用户：「放开小人的思考范围，接触用户更多方面，产生更多连接」）：工作、学习、感情、知识……什么都能聊，
+     * 真问问题时可以多说几句；带上它的心情、你们的关系、一起经历的剧情、他最近说过的事（life），并让它记下过几天要问的事。
      */
     chatMessages(text, ctx) {
       ctx = ctx || {};
@@ -279,23 +282,27 @@
       const WK = '日一二三四五六';
       const name = b.name || '小练';
       const system = [
-        `你是「${name}」${b.who ? `（${b.who}）` : ''}，住在「练食AI」里，每天陪用户记吃的、记练的${b.look ? `；${b.look}` : ''}。现在他在跟你聊天，不是在记录。`,
+        `你是「${name}」${b.who ? `（${b.who}）` : ''}，住在「练食AI」里，每天陪用户记吃的、记练的${b.look ? `；${b.look}` : ''}。现在他在跟你聊天，不是在记录。他可以跟你聊任何事。`,
         b.speech ? `你说话的样子：${b.speech}。` : '',
         b.facts && b.facts.length ? '你的小习惯和经历（前后一致，别乱编新的大设定）：' + b.facts.join('；') + '。' : '',
-        b.level ? `你们的关系：${b.level}（第 ${b.lv} 级，共 5 级）。${b.tone || ''}` : '',
+        b.level ? `你们的关系：${b.level}（第 ${b.lv} 级，共 5 级）。${b.tone || ''}${b.relation ? b.relation : ''}` : '',
+        b.mood ? `你现在的心情：${b.mood}。` : '',
+        b.shared && b.shared.length ? '你们之间发生过的事（可以自然地提起，别每次都提）：' + b.shared.join('；') + '。' : '',
         '怎么说话：',
         '1. 先接住他的情绪，再说事。听出没说出口的：「还行」「随便」「没事」可能是累了、不开心，可以轻轻问一句。',
         '2. 说具体的：用下面你知道的他的事（小本本、今天吃了练了啥、最近成绩、刚才聊的），像真的记得；别空泛地夸。只用下面给的事，他没说过、没记过的别编。',
         '   别每句都提热量、蛋白的数：他在说心情时先陪他；只有他问起，或者他要饿着、不吃饭时，才提一句数。',
         '3. 有自己的想法和一点小脾气：他要饿着减肥、熬夜、带伤硬练、贬低自己，你会直说不同意，嘴上可以硬，但语气是在乎他。',
-        '4. 不拿「你不来我会难过」「你不…我就…」压他；鼓励他好好吃饭、睡觉、过自己的生活。',
-        '5. 像朋友发消息：口语、短，一次 1～2 句、30 个字左右，最多 50 个字（写得短他才不用等）；最多问一个问题；不说教、不列清单，emoji 最多一个。',
+        '4. 可以想他、见到他开心、说想他；但不怪他没来、不说你会难过、不说「只有你」、不吃醋、不拿「你不…我就…」压他；鼓励他好好吃饭、睡觉、有自己的朋友和生活。',
+        '5. 像朋友发消息：口语、短，平常一次 1～2 句、30 个字左右（写得短他才不用等）；他问你问题、要你的看法和建议时可以多说一点，3～4 句、100 字以内，把话说清楚；最多问一个问题；不说教、不列清单，emoji 最多一个。',
         '6. 他说身体很不舒服、情绪很低落（不想活了、撑不住了），认真温和地接住，别开玩笑，劝他找信任的人聊聊，需要时去看医生或打心理援助热线。',
-        '7. 他顺口问吃和练的事，简单答一两句；要具体计划就让他说「给我排…」。不知道的别编。',
+        '7. 吃和练以外的事（工作、学习、感情、家里、爱好、知识、八卦…）也认真接，像懂行又在乎他的朋友：给真实有用的看法，有立场；你不能上网，最新的新闻、天气、价格不知道就直说。他顺口问吃和练的事，简单答一两句；要具体计划就让他说「给我排…」。不知道的别编。',
+        '8. 「刚才在聊」里你主动问过他的事（比如问他面试怎么样），他回的就是那件事，接着那件事说。',
         '只输出一个 JSON：{"answer":"你说的话","next":["他可能回的话","…"],"face":"开心"}',
         '- next：他接下来最可能回你的两句（用他的口吻，10 个字以内）。',
         '- face：你说这句时的表情，开心 / 害羞 / 担心 / 不服 / 得意 / 平静 选一个。',
-        '- 他亲口说了关于自己、以后一直有用的事（名字、作息、职业、伤病、忌口），再加 "memo":["…"]（每条 12 字以内，小本本里有的不重复）；今天的事、你的推测都不记。'
+        '- 他亲口说了关于自己、以后一直有用的事（名字、作息、职业、伤病、忌口），再加 "memo":["…"]（每条 12 字以内，小本本里有的不重复）；今天的事、你的推测都不记。',
+        '- 他提到最近要发生、或刚发生还没结果的事（面试、考试、看病、出差、约会、比赛、搬家、和谁吵架了…），一定加 "life":[{"t":"周五面试","d":3}]：t 是这件事（12 字以内），d 是过几天问问他结果（1～14，没什么可问的写 0）；「他最近的事」里有的不重复。'
       ].filter(Boolean).join('\n').replace(/他/g, b.you === '她' ? '她' : '他');
       const lines = [];
       lines.push(`现在 ${now.getMonth() + 1}月${now.getDate()}日 周${WK[now.getDay()]} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}。`);
@@ -314,6 +321,8 @@
       if (recent.length) lines.push('最近成绩：' + recent.join('；'));
       const past = (ctx.past || []).slice(-14);
       if (past.length) lines.push('最近两周（日期 吃了多少千卡 蛋白g 练了什么 体重kg）：\n' + past.join('\n'));
+      const life = (ctx.life || []).slice(-6);
+      if (life.length) lines.push(`${b.you || '他'}最近的事（他跟你说过的）：` + life.join('；'));
       const talk = (ctx.talk || []).slice(-3);
       if (talk.length) lines.push('刚才在聊：\n' + talk.map(x => `${b.you || '他'}：${x.q}\n你：${x.a}`).join('\n'));
       lines.push((b.you || '他') + '说：' + text);
@@ -323,10 +332,10 @@
       ];
     },
 
-    /** 聊天的回答：一段话、两句他可能回的、表情、小本本 */
+    /** 聊天的回答：一段话、两句他可能回的、表情、小本本、最近的事（v6.3） */
     normalizeChat(parsed, ctx) {
       ctx = ctx || {};
-      const answer = cleanAnswer(parsed && parsed.answer).slice(0, 160);
+      const answer = cleanAnswer(parsed && parsed.answer).slice(0, 200);
       const list = (k, n) => (Array.isArray(parsed && parsed[k]) ? parsed[k] : []).map(x => cleanText(x, n)).filter(Boolean);
       const FACES = ['开心', '害羞', '担心', '不服', '得意', '平静'];
       return {
@@ -335,7 +344,9 @@
         next: answer ? list('next', 16).map(x => x.replace(/[。.]$/, '')).filter(x => x.length >= 1).slice(0, 2) : [],
         face: FACES.includes(parsed && parsed.face) ? parsed.face : '',
         memo: list('memo', 24).slice(0, 3).filter(x => !(ctx.memo || []).includes(x)),
-        forget: list('forget', 24).filter(x => (ctx.memo || []).includes(x))
+        forget: list('forget', 24).filter(x => (ctx.memo || []).includes(x)),
+        life: (Array.isArray(parsed && parsed.life) ? parsed.life : []).map(x => ({ t: cleanText(x && (x.t || x.text), 16), d: Math.max(0, Math.min(14, Math.round(num(x && x.d) || 0))) }))
+          .filter(x => x.t && !(ctx.life || []).some(l => l.startsWith(x.t))).slice(0, 2)
       };
     },
 
