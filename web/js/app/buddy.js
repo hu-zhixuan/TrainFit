@@ -905,7 +905,10 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     const rare = sulk ? tap[Math.floor(Math.random() * tap.length)] + '（长按摸摸头哄哄）' : this.rareLine ? this.rareLine() : '';
     pop.innerHTML = `<div class="buddy-pop-head">${head}</div>` + (rare ? `<p class="buddy-rare">${esc(rare)}</p>` : '') + this.bondRow() + `<p class="buddy-say">${esc(st.say)}</p>` +
       (obs ? `<p class="buddy-obs">${esc(obs)}</p>` : '') +
-      (tip ? `<p class="buddy-train">${esc(tip)}</p>` : '') + `<p class="buddy-foot">${esc(foot)}</p>`;
+      (tip ? `<p class="buddy-train">${esc(tip)}</p>` : '') +
+      `<button class="buddy-dex" type="button"><i aria-hidden="true">📖</i>食物图鉴 · 自己搭一顿<span aria-hidden="true">›</span></button>` +
+      `<p class="buddy-foot">${esc(foot)}</p>`;
+    pop.querySelector('.buddy-dex').addEventListener('click', (e) => { e.stopPropagation(); this.openDex && this.openDex(); });
     this.positionBuddyPop();
     pop.classList.remove('hidden');
   },

@@ -395,6 +395,7 @@ class FitnessApp {
     this.bindShare();
     this.bindBuddy();
     this.bindBuddySettings();
+    this.bindDex && this.bindDex();
     $('date-label').addEventListener('click', () => { this.selectedDate = getTodayDateString(); this.render(); });
     $('setup-hint').addEventListener('click', () => this.switchView('settings'));
     $('weight-log').addEventListener('click', () => this.openWeightEditor(getTodayDateString()));
