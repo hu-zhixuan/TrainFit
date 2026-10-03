@@ -59,7 +59,7 @@ Object.assign(FitnessApp.prototype, {
     const pop = document.getElementById('buddy-pop');
     if (!pop || this._touring) return false;
     const thread = !!(extra && extra.thread) || options.some(o => o.chat);
-    if (thread && this.pushTalk) this.pushTalk('（你主动跟他说）', text);
+    if (thread && this.pushTalk) this.pushTalk('（你先开口的）', text);
     pop.dataset.mode = 'chat';
     pop.dataset.level = 'none';
     pop.innerHTML = `<p class="buddy-say"></p>` + (extra && extra.pics && this.dexPicsHtml ? this.dexPicsHtml(extra.pics) : '') +
