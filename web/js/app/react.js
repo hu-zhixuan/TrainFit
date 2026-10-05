@@ -148,7 +148,11 @@ Object.assign(FitnessApp.prototype, {
     if (m && m.big && tier !== 'small') {
       this.momentSaid(m.key || m.kind);
       // 第一次：一段小剧情（选的会被记住）；今天已经演过一段就用卡片
-      if (m.story && this.storyEvent && this.storyEvent('record', Object.assign({ must: true }, m.story))) return true;
+      // v8.0：刚记的那条（飞向小人再进剧场）
+      const recId = (batch.dietIds || [])[0] || (batch.workoutIds || [])[0];
+      const meal = (result.meals || [])[0], lift = (result.workouts || [])[0];
+      const rec = meal ? String(meal.foodSummary || '').slice(0, 16) : lift ? String(lift.exerciseName || '') : '';
+      if (m.story && this.storyEvent && this.storyEvent('record', Object.assign({ must: true, recId, rec }, m.story))) return true;
       setTimeout(() => this.showMoment(m), 700);
       return true;
     }

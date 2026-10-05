@@ -42,6 +42,23 @@
     return EVENTS.find(e => c.lv >= e.lv && (!seen.has(e.id) || (e.id === 'confess' && c.romance == null)) && e.when(c)) || null;
   }
 
+  // 小剧情来找你时的那句（v8.0）：[江叙, 夏柚]
+  const EVENT_INVITE = {
+    firstweek: ['……认识一周了。有句话，想当面说。', '我们认识一周啦！我有话想说～'],
+    weekend: ['……周末。你有空吗。', '周末诶！你今天有空吗？'],
+    hotpot: ['……火锅啊。我想起一件事。', '火锅！！我也想吃……啊不是，我有话要说！'],
+    sweet: ['……甜的。我想起一件事。', '你吃甜的啦？我有个秘密要说～'],
+    rain: ['……外面下雨了。你那边呢。', '下雨了诶……你那边呢？'],
+    night: ['……还没睡。', '这么晚还没睡呀……陪我说两句？'],
+    secret: ['……想带你去个地方。', '想带你去一个秘密的地方！'],
+    confess: ['……今晚有空吗。那句话，我想再问一次。', '今晚……那句话，我想再问一次。'],
+    date: ['……周末。出去走走吗。', '周末！要不要出去走走？'],
+    firstpr: ['……破纪录了。我看见了。', '破纪录了！！我有话要说！'],
+    stuffed: ['……今天吃撑了吧。没事。来，说两句。', '吃撑啦？没关系！来，陪我说两句～'],
+    trainweek: ['……这周第五练了。', '这周第五练了！你看看我！'],
+    lighter: ['……轻了。我有话想说。', '你轻了诶！我有话想说～']
+  };
+
   // 还没看过的那段怎么解锁（设置「剧情」里写着，像游戏的任务提示；都是你本来就在做的事）
   const HINTS = {
     firstweek: '记满 7 天', hotpot: '记一顿火锅、烧烤', firstpr: '破一次自己的纪录', stuffed: '有一天吃撑了', trainweek: '一周练满 5 天', lighter: '比刚开始轻 1 公斤',
@@ -49,7 +66,7 @@
     confess: '这一章的某个晚上', date: '在一起以后的周末'
   };
 
-  TF.Story = { EVENTS, HINTS, pick };
+  TF.Story = { EVENTS, HINTS, pick, EVENT_INVITE };
   if (typeof module !== 'undefined' && module.exports) module.exports = TF.Story;
 })(typeof window !== 'undefined' ? window : globalThis);
 
@@ -91,9 +108,27 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     if (info.moment && !ev.id.match(/^(firstpr|stuffed|trainweek|lighter)$/)) return false; // 大反应只演跟它有关的那段，别的照旧出卡片
     try { localStorage.setItem('tf_story', today); } catch (e) {}
     this.voiceBudget(level, true);
-    if (trigger === 'record') setTimeout(() => this.showStoryEvent(ev.id), 900);
-    else this.showStoryEvent(ev.id);
+    // v8.0：不再一打开就直接演——TA 先来问一句（记了东西触发的，先对那条有反应），你点了才演
+    setTimeout(() => this.storyInvite(ev.id, info), trigger === 'record' ? 600 : 0);
     return true;
+  },
+
+  /**
+   * 小剧情的邀请（v8.0，用户：「进入 galgame 的方式有点机械」）：TA 用自己的话来找你（「……火锅啊。我想起一件事。」），
+   * 「好」——记了东西触发的，刚记的那条飞向小人再进剧场；「等会儿」——这段以后还会来（没看就不算看过）。
+   */
+  storyInvite(id, info) {
+    info = info || {};
+    const E = this.cast().events[id];
+    if (!E || this._scene) return false;
+    const f = this.cast().sex === 'f';
+    const L = EVENT_INVITE[id];
+    const line = (L && L[f ? 1 : 0]) || (f ? `有件事想跟你说……「${E.title}」，现在有空吗？` : `……有件事。「${E.title}」。现在有空吗。`);
+    const go = () => this.showStoryEvent(id);
+    return this.askUser(line, [
+      { label: f ? '好呀' : '好', pick: () => (info.recId ? this.carryIntoStory(info.recId, info.rec || '', go) : setTimeout(() => { this.closeBuddyPop && this.closeBuddyPop(); go(); }, 200)) },
+      { label: '等会儿', reply: f ? '好～下次再说！' : '嗯。下次说。' }
+    ]);
   },
 
   /** 记完一顿（reactRecord 里）：火锅、奶茶这类会触发一段 */
@@ -101,7 +136,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     const meals = ((batch && batch.dietIds) || []).map(id => this.diet.find(d => d.id === id)).filter(Boolean);
     if (!meals.length) return false;
     const food = meals.map(m => m.foodSummary || '').join('、');
-    return this.storyEvent('record', { food });
+    return this.storyEvent('record', { food, recId: meals[0].id, rec: String(meals[0].foodSummary || '').slice(0, 16) });
   },
 
   /**
@@ -180,6 +215,12 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     const c = this.cast();
     const script = sc.script.slice();
     if (opts.lead) script.unshift(['开心', opts.lead, 'wave']);
+    // 从记录切进来的（v8.0）：你刚记的那条就是这一段的开头——手机聊天的段落里是你发的第一条，别的段落是一句旁白
+    if (opts.bridge) {
+      const ph = script.findIndex((x, i) => i < 4 && x && !Array.isArray(x) && x.phone === true);
+      if (ph >= 0) script.splice(ph + 1, 0, ['你', opts.bridge]);
+      else script.unshift([null, `你刚记下「${opts.bridge}」。`]);
+    }
     const outfits = (opts.outfits || []).slice(-2);
     if (outfits.length) script.push({ ask: '_wear', opts: this.wearChoices(outfits).map(o => ({ t: o[0], r: o[1] ? [[o[2], o[1]]] : [], sp: o[4] })) });
     let talk = null;
@@ -200,29 +241,149 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       },
       after: () => {
         this.renderBuddy();
-        if (!opts.replay && !this._touring) this.storyAfterglow(first ? sc.after : '', item.ch);
+        if (!opts.replay && !this._touring) this.storyHandoff(first ? sc.after : '', item.ch, sc);
         if (opts.after) opts.after();
       }
     });
   },
 
   /**
-   * 演完回到今天页：小人先招招手，再说一句余韵（「……记得喝水。温的。」），这一章三段都看完了就提一句它写了点东西（手册 / 搭子本）。
-   * 不占每天说话的次数（刚演完的，是你自己点开的）。
+   * 演完回到今天页（v8.0，用户：「从 galgame 退出来，怎么丝滑地引导用户使用我们的记饮食」）：
+   * 立绘缩回像素小人、落回原位（theater.js 收场），小人接一句余韵，再顺着时间引导记录——
+   * 剧情里刚约好的事（「明早吃了，按住说一声就行」）> 这顿还没记（「午饭吃了吗」+ 我说一下 / 点图片记）> 今天还没练（白天）。
+   * 输入框亮一下，提示语换成 TA 的话。这一章三段都看完了，先提一句它写了点东西（手册 / 搭子本）。不占每天说话的次数（是你自己点开的剧情）。
    */
-  storyAfterglow(line, ch) {
+  storyHandoff(line, ch, sc) {
     if (!this.buddyLook().show) return;
-    if (this.buddyDo) this.buddyDo([['stand', 120], ['wave', 900], ['stand', 300]]);
     const diary = ch && this.diaryReady(ch) && !this.diarySeen(ch);
     const f = this.cast().sex === 'f';
-    const tail = diary ? (f ? '……我在搭子本上写了点东西。偷看的话，在设置的剧情里。' : '……我在本子角落写了几行。想看的话，在设置的剧情里。') : '';
-    const text = [line, tail].filter(Boolean).join(' ');
-    if (!text) return;
+    const cue = diary ? null : this.logCue(sc);
     setTimeout(() => {
       if (this._scene || this._touring) return;
-      if (diary) this.askUser(text, [{ label: f ? '现在偷看' : '现在看', pick: () => setTimeout(() => this.showDiary(ch), 250) }, { label: '等会儿', reply: f ? '好～不许笑我！' : '……嗯。' }]);
-      else this.sayTip(text);
-    }, 700);
+      if (diary) {
+        const tail = f ? '……我在搭子本上写了点东西。想偷看的话，现在就给你。' : '……我在本子角落写了几行。想看的话，现在给你。';
+        this.askUser([line, tail].filter(Boolean).join(' '), [{ label: f ? '现在偷看' : '现在看', pick: () => setTimeout(() => this.showDiary(ch), 250) }, { label: '等会儿', reply: f ? '好～在设置的剧情里，随时能看！' : '……嗯。在设置的剧情里。' }]);
+        return;
+      }
+      if (cue) {
+        this.askUser([line, cue.say].filter(Boolean).join(' '), cue.opts);
+        this.logHint(cue.hint);
+      } else if (line) this.sayTip(line);
+    }, this.reducedMotion() ? 200 : 900);
+  },
+
+  /** 加篇演完：一样的收尾（老名字留着） */
+  storyAfterglow(line, ch) { this.storyHandoff(line, ch, null); },
+
+  /** 演完以后引导记什么：{ say, opts, hint（输入框里的提示语） }，没有要引导的返回 null */
+  logCue(sc) {
+    const f = this.cast().sex === 'f';
+    const today = getTodayDateString();
+    const hour = new Date().getHours();
+    const st = this.storyData();
+    // 这段刚约的事
+    const pid = sc && TF.Theater.scriptInfo(sc.script).promises.find(id => { const p = (st.promises || {})[id]; return p && !p.declined && !p.done && !p.lapsed; });
+    const P = pid && (this.cast().promises || {})[pid];
+    const talk = (label) => ({ label, talk: true, reply: f ? '按住下面说一句就好～' : '按住下面说就行。' });
+    if (P) {
+      const say = {
+        breakfast: f ? '明天早上吃了，按住跟我说一声就行！' : '明早吃了，按住说一声就行。',
+        train: f ? '练完了按住跟我说！散步也算哦～' : '练完了按住跟我说。走路也算。',
+        newmove: f ? '练新动作的时候，记得跟我说是哪个！' : '练了新动作，跟我说是哪个。',
+        protein: f ? '吃了鸡蛋、牛奶、肉，都按住跟我说～' : '吃了蛋白高的，按住跟我说。',
+        threemeals: f ? '三顿饭，吃一顿记一顿就好！' : '三顿，吃一顿记一顿就行。',
+        snack: f ? '饿了吃点东西，也按住跟我说～' : '饿了吃点东西，也跟我说。'
+      }[P.kind];
+      return { say, opts: [{ label: '好', reply: f ? '嗯！我等着！' : '嗯。等你。' }, talk('现在就记点什么')], hint: P.kind === 'breakfast' ? '明早：早饭吃了啥？' : '' };
+    }
+    // 这顿还没记
+    const m = this.mealNow ? this.mealNow(hour) : { meal: '' };
+    const cls = this.mealClasses ? this.mealClasses(today) : {};
+    const eaten = new Set(this.diet.filter(d => d.date === today).map(d => (cls[d.id] || {}).group || d.mealType));
+    if (m.meal && !eaten.has(m.meal)) {
+      return {
+        say: f ? `对了，${m.meal.replace('餐', '饭')}吃了吗？按住说一句就好～` : `……${m.meal.replace('餐', '饭')}吃了吗。按住说一句就行。`,
+        opts: [talk('吃了，我说一下'), { label: '点图片记', pick: () => setTimeout(() => { this.closeBuddyPop && this.closeBuddyPop(); this.openDex && this.openDex({ log: true }); }, 200) }, { label: '还没吃', reply: f ? '吃了再跟我说！别饿着～' : '吃了再说。别饿着。' }],
+        hint: `${m.meal.replace('餐', '饭')}吃了啥？比如「${m.eg}」`
+      };
+    }
+    // 白天还没练
+    if (hour >= 9 && hour < 21 && !this.workouts.some(w => w.date === today)) {
+      return {
+        say: f ? '今天练了吗？练完跟我说～' : '今天练了吗。练完跟我说一声。',
+        opts: [talk('练了，我说一下'), { label: '今天歇', reply: f ? '歇着也很好！' : '歇着也是练的一部分。' }],
+        hint: '练了啥？比如「深蹲 60 公斤 4 组 8 个」'
+      };
+    }
+    return null;
+  },
+
+  /** 输入框亮一下，提示语换成 TA 的话（「跟江叙说：午饭吃了啥？」），半分钟后换回来 */
+  logHint(text) {
+    if (this.glowTalk) this.glowTalk();
+    const box = document.getElementById('cmp-text');
+    if (!box || !text) return;
+    if (!box.dataset.ph) box.dataset.ph = box.getAttribute('placeholder') || '';
+    box.setAttribute('placeholder', `跟${this.buddyName()}说：${text}`);
+    clearTimeout(this._hintT);
+    this._hintT = setTimeout(() => box.setAttribute('placeholder', box.dataset.ph || ''), 30000);
+  },
+
+  /**
+   * 记完一条，顺着这条切进剧情（v8.0，用户：「从记饮食怎么样丝滑地切入到 galgame」）：
+   * 有一段新剧情在等、正好是它的时间，小人先对你刚记的有反应（「……肉包 2 个。记下了。」），再「对了——」接上这段的邀请；
+   * 点了，刚记的那条从卡片里飞向小人，小人蹦一下，进剧场——手机聊天的段落里，第一条就是你刚发的这条。
+   * 一天最多一次（打开时问过「现在有空吗」也还能再问这一次——刚记完是最顺的时候）；「安静陪着」不问。
+   */
+  storyBridge(result, batch) {
+    if (!this.buddyLook().show || this._touring || this._scene || this.needsOnboarding || this.talkLevel() === 'quiet') return false;
+    const next = this.mainNext();
+    if (!next || !this.whenOk(next.sc.when)) return false;
+    const today = getTodayDateString();
+    const seenToday = (k) => { try { return localStorage.getItem(k) === today; } catch (e) { return false; } };
+    if (seenToday('tf_bridge')) return false; // 打开时问过一次也没关系：刚记完是最顺的时候，一天最多再问这一次
+    const meal = (result.meals || [])[0];
+    const lift = (result.workouts || [])[0];
+    if (!meal && !lift) return false;
+    const rec = meal ? String(meal.foodSummary || '').slice(0, 16) : `${lift.exerciseName}${lift.durationMin ? ` ${lift.durationMin} 分钟` : lift.sets ? ` ${lift.sets}×${lift.reps}` : ''}`;
+    try { localStorage.setItem('tf_bridge', today); localStorage.setItem('tf_main_nudge', today); } catch (e) {}
+    const f = this.cast().sex === 'f';
+    const react = meal ? (f ? `${rec}，记好啦！` : `……${rec}。记下了。`) : (f ? `练完啦！${rec}～` : `……${rec}。练完了啊。`);
+    const inv = this.mainInvite(next);
+    const ids = (meal ? batch.dietIds : batch.workoutIds) || [];
+    this.askUser(`${react}${f ? '对了——' : /^……/.test(inv[0]) ? '' : '对了。'}${inv[0]}`, [
+      { label: inv[1], pick: () => this.carryIntoStory(ids[0], rec, () => this.playMain(next.sc.id, { bridge: (meal ? `${String(meal.mealType || '').replace('/补剂', '') || '吃了'} · ` : '练了 · ') + rec })) },
+      { label: inv[2], reply: f ? '好～忙完了点我！' : '嗯。忙完了点我。' }
+    ]);
+    if (this.buddyDo) this.buddyDo([['stand', 120], ['wave', 800], ['stand', 300]]);
+    return true;
+  },
+
+  /** 刚记的那条从卡片里飞向小人（像是你把它递给 TA），小人接住蹦一下，然后进剧场 */
+  carryIntoStory(id, text, go) {
+    this.closeBuddyPop && this.closeBuddyPop();
+    const row = id && (document.querySelector(`.mg-row[data-id="${CSS.escape(id)}"]`) || document.querySelector(`.item[data-id="${CSS.escape(id)}"]`));
+    const btn = document.getElementById('buddy');
+    if (!row || !btn || this.reducedMotion()) { setTimeout(go, 150); return; }
+    const a = row.getBoundingClientRect(), b = btn.getBoundingClientRect();
+    const fly = document.createElement('div');
+    fly.className = 'rec-fly';
+    fly.textContent = text;
+    fly.style.left = `${a.left + 16}px`;
+    fly.style.top = `${a.top + a.height / 2 - 16}px`;
+    fly.style.setProperty('--dx', `${b.left + b.width / 2 - (a.left + 16) - 40}px`);
+    fly.style.setProperty('--dy', `${b.top + b.height / 2 - (a.top + a.height / 2)}px`);
+    document.body.appendChild(fly);
+    row.classList.add('rec-glow');
+    if (window.Sound) window.Sound.play('swoosh');
+    setTimeout(() => {
+      fly.remove();
+      row.classList.remove('rec-glow');
+      btn.classList.remove('catch'); void btn.offsetWidth; btn.classList.add('catch');
+      if (window.Sound) window.Sound.play('pop');
+      window.Haptics && window.Haptics.fire('tap');
+      setTimeout(() => { btn.classList.remove('catch'); go(); }, 380);
+    }, 640);
   },
 
   mainSeen(id) {

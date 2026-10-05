@@ -283,8 +283,21 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     el.style.setProperty('--iy', from ? `${Math.round(from.y)}px` : '82%');
     el.classList.remove('iris-in');
     void el.offsetWidth;
-    if (!this.reducedMotion()) el.classList.add('iris-in');
+    if (!this.reducedMotion()) {
+      el.classList.add('iris-in');
+      // 像素小人放大、散开，变成剧场里的 TA（「像素一格一格拼起来」）
+      if (from) this.sceneMorph('in');
+      if (window.Sound) window.Sound.play('swoosh');
+    }
     if (sc.amb && window.Sound && window.Sound.amb) window.Sound.amb(sc.amb);
+    // TA 一开场就站在那儿（接住像素小人放大散开的那一下）；开头就是手机聊天的段落不站
+    if (!sc.viewer && !steps.slice(0, 4).some(x => x && !Array.isArray(x) && x.phone === true)) {
+      const actor = el.querySelector('.th-actor');
+      actor.innerHTML = this.sceneActor('平静', 'stand', this._scene.look);
+      this._scene.face = '平静';
+      actor.classList.remove('th-enter', 'th-exit'); void actor.offsetWidth;
+      actor.classList.add('th-enter');
+    }
     const card = el.querySelector('.th-card');
     if (sc.title) {
       card.querySelector('.th-card-label').textContent = sc.label || '';
@@ -454,9 +467,11 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       // 表情动起来：开心、得意蹦一下，不服抖一下，害羞、心动冒爱心，别的冒符号；同一个表情接着说就轻轻一顿
       actor.classList.remove('th-hop', 'th-shake', 'th-talk', 'th-enter');
       void actor.offsetWidth;
+      actor.classList.remove('th-startle', 'th-droop', 'th-sway', 'th-lean', 'th-doze');
       if (face !== s.face) {
-        if (/开心|得意|闪亮/.test(face)) actor.classList.add('th-hop');
-        else if (/不服/.test(face)) actor.classList.add('th-shake');
+        // 立绘的动作：开心蹦一下、不服抖一下、惊讶往后一缩、担心低一下头、害羞晃一晃、心动往前凑、困了慢慢点头
+        const move = { 开心: 'th-hop', 得意: 'th-hop', 闪亮: 'th-hop', 不服: 'th-shake', 惊讶: 'th-startle', 担心: 'th-droop', 害羞: 'th-sway', 心动: 'th-lean', 困: 'th-doze' }[face];
+        if (move) actor.classList.add(move);
         if (/害羞|心动/.test(face)) this.sceneHearts();
         else this.sceneEmote(face);
       } else actor.classList.add('th-talk');
@@ -1059,6 +1074,12 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     if (r && r.width) { el.style.setProperty('--ix', `${Math.round(r.left + r.width / 2)}px`); el.style.setProperty('--iy', `${Math.round(r.top + r.height / 2)}px`); }
     el.classList.remove('iris-in');
     el.classList.add('closing', r && r.width && !this.reducedMotion() ? 'iris-out' : 'fade-out');
+    // 立绘缩回像素小人、落回原位（落地轻轻一声），接着才是小人说话、引导你记录
+    if (r && r.width && !this.reducedMotion()) {
+      this.sceneMorph('out');
+      if (window.Sound) window.Sound.play('swoosh', 0.05);
+      setTimeout(() => { btn.classList.remove('land'); void btn.offsetWidth; btn.classList.add('land'); if (window.Sound) window.Sound.play('land'); setTimeout(() => btn.classList.remove('land'), 700); }, 560);
+    }
     setTimeout(() => {
       el.classList.add('hidden');
       el.classList.remove('closing', 'choosing', 'rolling', 'in-cg', 'iris-out', 'fade-out', 'phone', 'acting', 'act-card', 'fx-close', 'fx-sepia', 'fx-dark');
@@ -1113,6 +1134,28 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     if (!btn || btn.classList.contains('hidden')) return null;
     const r = btn.getBoundingClientRect();
     return r.width ? { x: r.left + r.width / 2, y: r.top + r.height / 2 } : null;
+  },
+
+  /**
+   * 进出剧场的那一下（v8.0，用户：「进入跟结束 galgame 也要很自然」）：
+   * in：今天页上的像素小人飞到屏幕中间、放大、散开，立绘接着出来；out：反过来，从中间缩回小人原来的位置。
+   */
+  sceneMorph(dir) {
+    const btn = document.getElementById('buddy');
+    const svg = btn && btn.querySelector('svg');
+    if (!svg || btn.classList.contains('hidden')) return;
+    const r = btn.getBoundingClientRect();
+    if (!r.width) return;
+    const m = document.createElement('div');
+    m.className = `th-morph ${dir}`;
+    m.setAttribute('aria-hidden', 'true');
+    m.innerHTML = svg.outerHTML;
+    Object.assign(m.style, { left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px` });
+    m.style.setProperty('--dx', `${Math.round(window.innerWidth / 2 - (r.left + r.width / 2))}px`);
+    m.style.setProperty('--dy', `${Math.round(window.innerHeight * 0.36 - (r.top + r.height / 2))}px`);
+    m.style.setProperty('--sc', Math.max(2, Math.min(6, (window.innerHeight * 0.42) / r.height)).toFixed(2));
+    document.body.appendChild(m);
+    setTimeout(() => m.remove(), 950);
   },
 
   /** 新解锁的衣服：最后问换不换（老格式的选项，special 是衣服名） */

@@ -4,7 +4,7 @@
  *   success 记好了（两声小铃）       undo 撤销    error 没听清 / 没整理好
  *   blip 点小人（8-bit 哔哔）        unlock 连续记录拿到新装备（8-bit 小琶音）
  *   babble(text) 小人主动说话时一个字一声的对话音
- *   剧场（v8.0）：pop 来消息、tick 节拍、heart 心跳、door 关门、whistle 哨子、phone 电话铃、clang 铁片；amb(rain / pool / crowd / night) 环境声
+ *   剧场（v8.0）：pop 来消息、tick 节拍、heart 心跳、door 关门、whistle 哨子、phone 电话铃、clang 铁片、swoosh 进出剧场、land 小人落地；amb(rain / pool / crowd / night) 环境声
  * 设置里能关（localStorage tf_sound = off）；手机静音 / 震动模式时不响（问原生 soundAllowed）。
  * WebView 要在用户点屏幕时才让出声：第一次点屏幕时 warm() 一下，之后异步的「记好了」也能响。
  */
@@ -73,8 +73,29 @@
     door: (c, t) => { noise(c, t, 0.18, 0.09, 'lowpass', 380); tone(c, t, { f: 110, f2: 70, dur: 0.16, gain: 0.08 }); },
     whistle: (c, t) => { tone(c, t, { f: 2600, f2: 2450, dur: 0.16, gain: 0.03 }); tone(c, t + 0.22, { f: 2600, f2: 2300, dur: 0.26, gain: 0.03 }); },
     phone: (c, t) => { for (let i = 0; i < 2; i++) { for (let k = 0; k < 6; k++) tone(c, t + i * 0.9 + k * 0.06, { f: k % 2 ? 620 : 480, dur: 0.055, gain: 0.025, type: 'triangle' }); } },
+    swoosh: (c, t) => sweep(c, t, 0.42, 380, 2600, 0.05), // 进出剧场：一阵风
+    land: (c, t) => { tone(c, t, { f: 180, f2: 90, dur: 0.12, gain: 0.07 }); tone(c, t + 0.1, { f: 660, dur: 0.05, gain: 0.025 }); }, // 小人落回原位
     clang: (c, t) => { [523, 1310, 2150].forEach((f, i) => tone(c, t, { f, dur: 0.7 - i * 0.15, gain: 0.04 - i * 0.01, type: 'triangle' })); noise(c, t, 0.05, 0.05, 'highpass', 2000); }
   };
+
+  // 一阵风：噪声过一个从低到高（或高到低）扫的带通
+  function sweep(c, t, dur, f1, f2, gain) {
+    const len = Math.max(1, Math.floor(c.sampleRate * dur));
+    const buf = c.createBuffer(1, len, c.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.sin(Math.PI * i / len);
+    const src = c.createBufferSource();
+    src.buffer = buf;
+    const f = c.createBiquadFilter();
+    f.type = 'bandpass';
+    f.Q.value = 1.4;
+    f.frequency.setValueAtTime(f1, t);
+    f.frequency.exponentialRampToValueAtTime(f2, t + dur);
+    const g = c.createGain();
+    g.gain.value = gain;
+    src.connect(f).connect(g).connect(out);
+    src.start(t);
+  }
 
   // 一小段噪声（关门、铁片碰撞）
   function noise(c, t, dur, gain, type, freq) {
