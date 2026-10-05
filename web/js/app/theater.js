@@ -188,6 +188,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     el.querySelector('.th-choices').innerHTML = '';
     el.querySelector('.th-text').textContent = '';
     el.querySelector('.th-actor').innerHTML = '';
+    el.classList.remove('has-sprite');
     el.querySelector('.th-cgfx').innerHTML = '';
     el.querySelector('.th-cgtag').textContent = '';
     el.querySelector('.th-log').classList.add('hidden');
@@ -256,8 +257,18 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
    */
   sceneActor(face, pose, look) {
     const url = TF.Art ? TF.Art.sprite(this.castKey(), face) : '';
-    if (url) return `<img class="th-sprite" src="${esc(url)}" alt="">`;
+    // has-sprite：立绘是大半身，站到对话框后面去（像 galgame 那样框住下半身），选项挪到对话框上面，别挡脸
+    this.theaterEl().classList.toggle('has-sprite', !!url);
+    if (url) return `<img class="th-sprite" src="${esc(url)}" alt="" onerror="app.spriteFail(this)">`;
     return TF.Buddy.svg(this.buddyArt(Object.assign({ pose: pose || 'stand', face, gear: [], scale: 8 }, look || {})));
+  },
+
+  /** 立绘加载失败（清单在、图没打进包）：记下这张，换回像素小人 */
+  spriteFail(img) {
+    if (TF.Art) TF.Art.fail(img.getAttribute('src'));
+    const s = this._scene;
+    const box = img.parentNode;
+    if (box) box.innerHTML = this.sceneActor((s && s.face) || '平静', 'stand', s && s.look);
   },
 
   /** 背景：有背景图用图（盖在 CSS 画的上面），没有就是 CSS 画的 */

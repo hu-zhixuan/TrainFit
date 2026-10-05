@@ -195,7 +195,12 @@ Object.assign(FitnessApp.prototype, {
       const k = b.dataset.cast, on = this._castPick === k;
       b.classList.toggle('on', on);
       b.querySelector('small').textContent = TF.Cast[k].blurb;
-      b.querySelector('.ob-pal-art').innerHTML = TF.Buddy.svg({ char: k === 'xy' ? 'girl' : 'boy', outfit: 'varsity', build: 'normal', pose: on ? 'wave' : 'stand', mood: on ? 'good' : 'ok', gear: [], scale: 4 });
+      // 有立绘（v7.2）就放立绘的上半身，点中了换笑脸；没有就是像素小人招手
+      const art = b.querySelector('.ob-pal-art');
+      const url = TF.Art ? TF.Art.sprite(k, on ? '开心' : '平静') : '';
+      art.classList.toggle('sprite', !!url);
+      art.innerHTML = url ? `<img class="ob-pal-sprite" src="${esc(url)}" alt="" onerror="TF.Art.fail(this.getAttribute('src'));app.drawCastPick()">`
+        : TF.Buddy.svg({ char: k === 'xy' ? 'girl' : 'boy', outfit: 'varsity', build: 'normal', pose: on ? 'wave' : 'stand', mood: on ? 'good' : 'ok', gear: [], scale: 4 });
     });
   },
 

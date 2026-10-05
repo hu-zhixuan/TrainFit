@@ -40,6 +40,23 @@ jobs:
           fi
           chmod +x ./gradlew
 
+      - name: Set up Python (剧场立绘要用 Pillow 压图)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Cache theater art
+        uses: actions/cache@v4
+        with:
+          path: .art-cache
+          key: art-${{ hashFiles('art/sources.json') }}
+
+      # 剧场立绘（わたおきば的免费素材）：素材不准转发原图、仓库又是公开的，所以不进仓库，打包时按 art/sources.json 现下，只进 APK
+      - name: Fetch theater art
+        run: |
+          pip install --quiet pillow
+          python3 scripts/build-art.py --fetch --strict   # 发版时下不到就报错，免得悄悄发一个没有立绘的版本
+
       - name: Cache on-device ASR files
         uses: actions/cache@v4
         with:

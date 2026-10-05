@@ -219,3 +219,49 @@ test('美术层：有立绘按表情取，没有这个表情找相近的、再�
   for (const k of ['jx', 'xy']) Object.values(Cast[k].cgs).forEach(cg => assert.ok(Art.BGS.includes(cg.bg), cg.bg));
   global.TF.ArtManifest = keep;
 });
+
+test('立绘加载失败就不再用这张（退回相近的、再退回像素小人）；署名按人取', () => {
+  const Art = require('../web/js/app/art.js');
+  const keep = global.TF.ArtManifest;
+  global.TF.ArtManifest = {
+    cast: { jx: { face: { calm: 'jc.webp', shy: 'js.webp' }, cg: {} }, xy: { face: { calm: 'xc.webp' }, cg: {} } }, bg: {},
+    credits: [{ who: 'jx', what: '立绘', credit: 'わたおきば（わたおび）', url: 'u' }, { who: 'xy', what: '立绘', credit: 'B', url: 'v' }]
+  };
+  assert.strictEqual(Art.sprite('jx', '害羞'), 'js.webp');
+  Art.fail('js.webp');
+  assert.strictEqual(Art.sprite('jx', '害羞'), 'jc.webp', '害羞那张坏了 → 平静');
+  Art.fail('jc.webp');
+  assert.strictEqual(Art.sprite('jx', '平静'), '', '都坏了 → 像素小人');
+  assert.strictEqual(Art.sprite('xy', '平静'), 'xc.webp', '别人的不受影响');
+  assert.deepStrictEqual(Art.credits('jx').map(c => c.credit), ['わたおきば（わたおび）']);
+  assert.strictEqual(Art.credits().length, 2);
+  global.TF.ArtManifest = keep;
+});
+
+test('立绘素材清单（art/sources.json）：两个人都有、能校验、表情名对得上、腮红有位置；图不进仓库', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const Art = require('../web/js/app/art.js');
+  const root = path.join(__dirname, '..');
+  const src = JSON.parse(fs.readFileSync(path.join(root, 'art/sources.json'), 'utf8')).cast;
+  const names = Object.values(Art.FACES);
+  for (const k of ['jx', 'xy']) {
+    const s = src[k];
+    assert.ok(s, k);
+    assert.match(s.zip, /^https:\/\//);
+    assert.match(s.sha256, /^[0-9a-f]{64}$/, '下载后校验，画师换了图不会悄悄换掉');
+    assert.ok(s.pattern.includes('%s'));
+    assert.ok(s.credit && s.page, '署名');
+    assert.ok(s.faces.calm, '一定要有平静（别的没有时退回它）');
+    for (const [face, spec] of Object.entries(s.faces)) {
+      assert.ok(names.includes(face), `${k} ${face} 不是剧本里的表情`);
+      assert.match(spec, /^[a-z](\+blush)?$/, `${k} ${face}`);
+      if (spec.includes('blush')) assert.ok((s.blush || []).length && s.blush.every(b => b.length === 4 && b.every(Number.isFinite)), `${k} 加腮红要写位置`);
+    }
+  }
+  // 素材不准转发原图：下载缓存、压好的图都不进仓库；清单由脚本生成，页面在 art.js 之前加载
+  const ignore = fs.readFileSync(path.join(root, '.gitignore'), 'utf8');
+  assert.ok(/^web\/img\/cast\/$/m.test(ignore) && /^\.art-cache\/$/m.test(ignore));
+  const html = fs.readFileSync(path.join(root, 'web/index.html'), 'utf8');
+  assert.ok(html.indexOf('src="img/cast/manifest.js"') > 0 && html.indexOf('src="img/cast/manifest.js"') < html.indexOf('src="js/app/art.js"'));
+});

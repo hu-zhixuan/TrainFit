@@ -23,9 +23,12 @@ app/src/main/assets/
 app/src/main/jniLibs/
 .asr-cache/
 
-# 剧场美术原图只放本地（scripts/build-art.py 压成 webp 放进 web/img/cast/ 再提交）
+# 剧场美术：原图、下载缓存、压好的图和清单都不进仓库（素材不准转发原图，仓库是公开的）。
+# CI 打包时 scripts/build-art.py --fetch 按 art/sources.json 现下，只进 APK。
 art/**/*.png
 art/**/*.jpg
 art/**/*.jpeg
 art/**/*.webp
 art/**/*.psd
+.art-cache/
+web/img/cast/
