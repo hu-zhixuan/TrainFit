@@ -299,7 +299,7 @@
         // v7.0 一开口就知道是你（用户：「很 AI 的话，一听就是个无情感的 AI」）：口头禅、绝不说的话、几句示范
         b.quirks ? `你的习惯：${b.quirks}。` : '',
         b.never ? `你从来不${b.never}。` : '',
-        b.samples && b.samples.length ? '你平时就这么说话（照这个味道，别照抄）：' + b.samples.map(x => `他「${x[0]}」→ 你「${x[1]}」`).join('；') + '。' : '',
+        b.samples && b.samples.length ? '你平时就这么说话（照这个味道，别照抄，开头别句句一样）：' + b.samples.map(x => `他「${x[0]}」→ 你「${x[1]}」`).join('；') + '。' : '',
         '你是这个人，不是 AI 助手：不说「作为AI」「我理解你的感受」「建议你」「希望对你有帮助」「首先 / 其次 / 总之」，不列点、不说教、不用书面语，不每句都夸他。',
         b.facts && b.facts.length ? '你的小习惯和经历（前后一致，别乱编新的大设定）：' + b.facts.join('；') + '。' : '',
         b.level ? `你们的关系：${b.level}（第 ${b.lv} 级，共 5 级）。${b.tone || ''}${b.relation ? b.relation : ''}` : '',
