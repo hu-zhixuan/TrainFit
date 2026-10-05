@@ -105,6 +105,7 @@
       `cast.echo`（剧本文件里，每段主线几句余韵）→ `storyEcho()` 最近看过的三段里挑，`buddyLife` 四成时候说它；台词能写成 `[话, 要先看过的剧情]`（`castLine`），低落理由里的肩伤 / 爸爸这样写；悄悄话的 secret、聊天人设里的 secret 都要看过 `<人>4a`。
       选人锁定：`endCastPick` 记 `charLocked`，设置「外观」只有「江叙陪你记」+ 开关（关 = 极简，再开还是 TA；从没选过的打开时 `showCastPick` 选一次），选人页写着「选了就不能换」。
       样子：`buddyLook()` 固定发型 / 发色 / 肤色（不看存的），衣服只能是 `outfitOpen` 的——默认棒球服、运动背心（练过那天自动）、`cast.wardrobe` 里看过对应剧情的（`scene` 或 `bonus`）；别的颜色的棒球服不让挑了。第一次看完那段 `wardrobeUnlock` 让 TA 换上（`wear: false` 的光膀子 / 运动内衣只解锁），回今天页冒一行提示；衣服不再跟亲密度等级解锁（`bondCelebrate` 不问换衣服了）。设置里衣服一行只列 `wardrobeList()`，只有一件时不出。`castKey()` 不经过 `buddyLook()`（它查衣服要用 cast，会绕回来）。
+      真实 Atria 测关键对话（`claude/api-check` 的 `.github/api_v80.js`，13 句 × 2，场景说明直接取剧本里的 ctx）：25/26 过，中位约 10 秒、最慢 26 秒（脚本没开 7 秒补发）；江叙被问「你不就是个AI吗」答「……嗯，是。但肩伤是真的。」；没过的一句是夏柚用了示范里的「嘿嘿，被你发现啦～」。剧场等 20 秒，没回来用备用台词。
       饮食分组 `log/meals.js`（`TF.Meals.classify`）：原话里说了早午晚 / 补记的照原话；没说的按吃的时间 + 你自己的作息（28 天中位数）+ 这顿像不像正餐；一个时段只一顿正餐，加餐分上午 / 下午 / 练后 / 夜宵；手动改过的 `mealFixed` 不再动。
 13. **小人能动手、计划一次就准**（v6.5，用户：「让 AI 像 Agent 一样去动我们的软件——『明天要练之前的计划 A，帮我放成明天的计划』它能做到；很多决策是重复的，写成 Skill 省 token 和时间」「能给用户用轮椅就不要给拐杖：计划一次就准，不用改第二次」「有氧跟力量训练识别不精准」）：
     - 动作 `act`（提示词规则 12）：`usePlan / savePlan / copyDay / movePlan / clearPlan / renamePlan / dropPlan / goal / protein / remind`，`Parser.cleanActs` 白名单 + 夹范围（最多 4 个），`app.runActs(acts, base)`（`app/agent.js`）照着做，返回提示条几行 + 撤销（快照 plans / planBook / 目标 / 蛋白 / `tf_reminders`）+ `jump`（放了计划跳到那天看）。dayOffset 相对正在看的日期；说到计划、星期、照着练时上下文带「日期对照」（含上周）和「存好的计划」（`planBookContext`，名字 + 前几个动作）。

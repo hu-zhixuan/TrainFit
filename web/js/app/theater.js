@@ -895,7 +895,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
 
   /**
    * 关键时刻自己说一句（深夜电话里他说完旧伤、她说完初中的事）：你打的话显示成「你」，TA 先「……」，
-   * 大模型按人设和这一幕接 1～3 句（15 秒没回来、回得不对就用写好的备用台词）。说的话记进 story.inputs，以后剧情、日记里会提。
+   * 大模型按人设和这一幕接 1～3 句（20 秒没回来、回得不对就用写好的备用台词）。说的话记进 story.inputs，以后剧情、日记里会提。
    */
   sceneInput(step) {
     const s = this._scene;
@@ -947,7 +947,8 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       const P = TF.Parser;
       if (!P || !P.sceneReply) throw new Error('NO_PARSER');
       const ctx = { buddy: this.buddyPersona ? this.buddyPersona() : {}, scene: step.ctx || '', calm: this.castKey() === 'jx' };
-      lines = await Promise.race([P.sceneReply(text, ctx), new Promise((_, rej) => setTimeout(() => rej(new Error('TIMEOUT')), 15000))]);
+      // v8.0 真实 Atria：中位 10 秒、最慢 26 秒（没开 7 秒补发）；20 秒还没回来就用写好的备用台词
+      lines = await Promise.race([P.sceneReply(text, ctx), new Promise((_, rej) => setTimeout(() => rej(new Error('TIMEOUT')), 20000))]);
     } catch (e) { lines = null; }
     if (this._scene !== s) return;
     el.classList.remove('acting');
