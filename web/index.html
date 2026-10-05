@@ -200,30 +200,25 @@
                 <div class="bond-set" id="buddy-bond"></div>
               </div>
             </div>
+            <div class="buddy-memories">
+              <div class="field-label">剧情 <small id="buddy-mem-note"></small></div>
+              <div class="story-book" id="buddy-story"></div>
+              <div class="rel-row" id="buddy-rel"></div>
+            </div>
             <div class="buddy-rows">
+              <div class="field-label">TA 的样子</div>
               <div class="buddy-opt"><span>发型</span><div class="seg seg-sm" id="buddy-style"></div></div>
               <div class="buddy-opt"><span>发色</span><div class="swatches" id="buddy-hair"></div></div>
               <div class="buddy-opt"><span>肤色</span><div class="swatches" id="buddy-skin"></div></div>
               <div class="buddy-opt"><span>衣服</span><div class="swatches" id="buddy-outfit"></div></div>
-              <div class="buddy-opt"><span>身材</span><div class="seg seg-sm" id="buddy-build">
-                <button class="seg-btn" data-value="auto" type="button">跟着我练</button>
-                <button class="seg-btn" data-value="normal" type="button">普通</button>
-                <button class="seg-btn" data-value="lean" type="button">薄肌</button>
-                <button class="seg-btn" data-value="ripped" type="button">腹肌</button>
-              </div></div>
               <div class="field-note" id="buddy-look-note"></div>
             </div>
-            <div class="buddy-memories">
-              <div class="field-label">回忆 <small id="buddy-mem-note"></small></div>
-              <div class="mem-row" id="buddy-mem"></div>
-              <div class="rel-row" id="buddy-rel"></div>
-            </div>
             <div class="buddy-talk-row">
-              <div class="switch-text"><b>话多少</b><small id="buddy-talk-note"></small></div>
+              <div class="switch-text"><b>TA 多黏你</b><small id="buddy-talk-note"></small></div>
               <div class="seg seg-sm" id="buddy-talk">
-                <button class="seg-btn" data-value="quiet" type="button">安静</button>
-                <button class="seg-btn" data-value="normal" type="button">正常</button>
-                <button class="seg-btn" data-value="more" type="button">话多</button>
+                <button class="seg-btn" data-value="quiet" type="button">安静陪着</button>
+                <button class="seg-btn" data-value="normal" type="button">刚刚好</button>
+                <button class="seg-btn" data-value="more" type="button">黏人一点</button>
               </div>
             </div>
             <p class="field-note" id="buddy-note"></p>
@@ -352,19 +347,36 @@
     </div>
   </div>
 
-  <!-- 第一次打开：选用途 + 填身体数据 -->
+  <!-- 第一次打开：选极简还是和 TA 一起（v7.0）→ 选用途 → 填身体数据 -->
   <div class="onboard hidden" id="onboard">
-    <div class="ob-step" id="ob-step-1">
+    <!-- v7.0 第一屏：先选怎么用——极简，还是和 TA 一起（角色、剧情） -->
+    <div class="ob-step" id="ob-step-0">
       <div class="ob-brand"><span class="ob-logo" id="ob-logo"></span>练食AI</div>
-      <h2 class="ob-title">说一句话，<br>帮你记下今天吃了啥</h2>
-      <p class="ob-sub">按住说「中午一碗牛肉面加个蛋」，热量自动算好。你主要想用它做什么？</p>
+      <h2 class="ob-title">按住说一句，<br>吃的练的都记好</h2>
+      <p class="ob-sub">「中午一碗牛肉面加个蛋，练了腿」——热量、蛋白、重量自动算好。先选一个你喜欢的样子：</p>
+      <div class="ob-modes">
+        <button class="ob-mode" type="button" data-mode="min">
+          <span class="ob-mode-art ob-mode-min" aria-hidden="true"><i></i></span>
+          <b>极简模式</b><span>只有一个按钮，说完就记好。没有角色、没有剧情，最干净。</span>
+        </button>
+        <button class="ob-mode" type="button" data-mode="buddy">
+          <span class="ob-mode-art" id="ob-mode-pals" aria-hidden="true"></span>
+          <b>和 TA 一起</b><span>江叙 / 夏柚陪你记：认得你、对你吃的练的有反应，跟着你的日子走一段剧情。</span>
+        </button>
+      </div>
+      <p class="ob-foot">之后随时可以在设置 → 外观里换</p>
+      <button class="ob-restore" id="ob-restore" type="button">重装了 / 换手机了？<b>从备份恢复</b></button>
+    </div>
+    <div class="ob-step hidden" id="ob-step-1">
+      <button class="ob-back" id="ob-back1" type="button" aria-label="返回">‹ 返回</button>
+      <h2 class="ob-title" id="ob-step-1-title">你主要想<br>用它做什么？</h2>
+      <p class="ob-sub">选一个，热量预算按这个算。</p>
       <div class="ob-options">
         <button class="ob-opt" type="button" data-pick="lose"><b>想瘦一点</b><span>告诉你今天还能吃多少，顺手记体重</span></button>
         <button class="ob-opt" type="button" data-pick="track"><b>就记记吃了啥</b><span>不用设目标，看看自己每天吃了多少</span></button>
         <button class="ob-opt" type="button" data-pick="fit"><b>在健身（减脂 / 增肌）</b><span>吃和练都记：热量赤字、蛋白质、动作进步</span></button>
       </div>
       <p class="ob-foot">之后随时可以在设置里改</p>
-      <button class="ob-restore" id="ob-restore" type="button">重装了 / 换手机了？<b>从备份恢复</b></button>
     </div>
     <div class="ob-step hidden" id="ob-step-2">
       <button class="ob-back" id="ob-back" type="button" aria-label="返回">‹ 返回</button>
@@ -401,6 +413,7 @@
       </div>
     </div>
     <div class="ob-step hidden" id="ob-step-3">
+      <button class="ob-back hidden" id="ob-back3" type="button" aria-label="返回">‹ 返回</button>
       <h2 class="ob-title" id="ob-cast-title">最后一步：<br>要不要一个陪你记的搭子？</h2>
       <p class="ob-sub" id="ob-cast-sub">TA 记得你说过的事，看得见你每一点进步，在对的时候说一句。不要也行，极简模式最干净。</p>
       <div class="ob-cast" id="ob-cast">
@@ -493,6 +506,7 @@
   <script src="js/app/dex.js"></script>
   <script src="js/app/heart.js"></script>
   <script src="js/app/story.js"></script>
+  <script src="js/app/theater.js"></script>
   <script src="js/app/react.js"></script>
   <script src="js/app/agent.js"></script>
 
@@ -503,6 +517,7 @@
   <script src="js/log/food.js"></script>
   <script src="js/log/fastlog.js"></script>
   <script src="js/log/agent_intent.js"></script>
+  <script src="js/log/talk.js"></script>
   <script src="js/log/parser.js"></script>
   <script src="js/log/quick_log.js"></script>
   <script src="js/log/pipeline.js"></script>

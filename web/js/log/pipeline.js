@@ -44,6 +44,8 @@
         root.app.showBuddyAnswer(text, quick.text, { next: quick.next });
         return;
       }
+      // 常说的话（「晚安」「在吗」「想你了」「你在干嘛」）：小人用自己的台词马上接，不调大模型（v7.0）
+      if (!(opts && opts.ask) && root.app.localTalk && root.app.localTalk(text)) return;
       // 「老样子」：这个钟点最常吃的那一餐，和空白页上那个按钮一样，马上记
       if (/^(还是|跟平时一样|和平时一样|跟以前一样)?(老样子|照旧)[吧啊呀了。！!]*$/.test(text) && root.app.quickSuggestions) {
         const usual = root.app.quickSuggestions().find(x => x.kind === 'meal' && x.usual && !x.done);
@@ -209,6 +211,7 @@
       if (p.chat) {
         if (!result.answer) { fail(new Error('EMPTY_RESPONSE')); return; }
         app.finishPending(p.id);
+        app._aiChatAt = Date.now(); // 在跟 TA 深聊：接下来的短句也让大模型接（v7.0 本机台词让开）
         if (((result.memo || []).length || (result.forget || []).length) && app.updateMemo) { app.updateMemo(result.memo, result.forget); app.saveData(); }
         // 最近的事：大模型没给的话本机认一遍（实测「周五我有个面试」它常忘了给）
         const life = (result.life || []).length ? result.life : [TF.lifeEvent && TF.lifeEvent(p.text)].filter(Boolean);
