@@ -184,13 +184,9 @@
             <button class="seg-btn" data-value="light" type="button">浅色</button>
           </div>
           <div class="field-note" id="set-theme-note"></div>
-          <div class="buddy-who">
-            <div class="field-label">谁陪你记</div>
-            <div class="seg seg-sm" id="buddy-char">
-              <button class="seg-btn" data-value="boy" type="button">江叙</button>
-              <button class="seg-btn" data-value="girl" type="button">夏柚</button>
-              <button class="seg-btn" data-value="off" type="button">不要 · 极简</button>
-            </div>
+          <div class="buddy-who switch-row">
+            <div class="switch-text"><b id="buddy-who-name">和 TA 一起</b><small id="buddy-who-note"></small></div>
+            <input type="checkbox" class="switch" id="buddy-show" aria-label="和 TA 一起">
           </div>
           <div class="buddy-on" id="buddy-on">
             <div class="buddy-set">
@@ -206,11 +202,8 @@
               <div class="rel-row" id="buddy-rel"></div>
             </div>
             <div class="buddy-rows">
-              <div class="field-label">TA 的样子</div>
-              <div class="buddy-opt"><span>发型</span><div class="seg seg-sm" id="buddy-style"></div></div>
-              <div class="buddy-opt"><span>发色</span><div class="swatches" id="buddy-hair"></div></div>
-              <div class="buddy-opt"><span>肤色</span><div class="swatches" id="buddy-skin"></div></div>
-              <div class="buddy-opt"><span>衣服</span><div class="swatches" id="buddy-outfit"></div></div>
+              <div class="field-label">TA 的样子 <small>跟着剧情变</small></div>
+              <div class="buddy-opt" id="buddy-outfit-row"><span>衣服</span><div class="swatches" id="buddy-outfit"></div></div>
               <div class="field-note" id="buddy-look-note"></div>
             </div>
             <div class="buddy-talk-row">

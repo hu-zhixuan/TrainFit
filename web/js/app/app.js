@@ -468,6 +468,8 @@ class FitnessApp {
   switchView(view, fromBack) {
     const prev = this.view;
     if (window.QuickLog && prev !== view) window.QuickLog.hideSnack();
+    // 离开今天页：小人的气泡收起来（小人只在今天页，气泡别飘在设置、趋势上面）
+    if (prev !== view && view !== 'today') { const pop = document.getElementById('buddy-pop'); if (pop) pop.classList.add('hidden'); }
     this.view = view;
     document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + view));
     document.querySelectorAll('#tabs .tab').forEach(b => b.classList.toggle('active', b.dataset.view === view));

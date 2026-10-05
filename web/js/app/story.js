@@ -223,7 +223,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     }
     const outfits = (opts.outfits || []).slice(-2);
     if (outfits.length) script.push({ ask: '_wear', opts: this.wearChoices(outfits).map(o => ({ t: o[0], r: o[1] ? [[o[2], o[1]]] : [], sp: o[4] })) });
-    let talk = null;
+    let talk = null, unlocked = null;
     const first = !(this.storyData().seen || []).includes(id);
     return this.playScene({
       label: this.chapterLabel(item.ch), title: `「${sc.title}」`, sub: item.k === 0 ? (c.chapterLines || [])[item.ch - 1] : '',
@@ -237,11 +237,13 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       },
       onEnd: () => {
         this.mainSeen(id);
+        if (first && !opts.replay) unlocked = this.wardrobeUnlock(id);
         if (talk && this.pushTalk) { this.pushTalk(talk.t, ((talk.r || [])[0] || [])[1] || ''); setTimeout(() => this.glowTalk && this.glowTalk(), 400); }
       },
       after: () => {
         this.renderBuddy();
         if (!opts.replay && !this._touring) this.storyHandoff(first ? sc.after : '', item.ch, sc);
+        if (unlocked) setTimeout(() => this.wardrobeToast(unlocked), 1800);
         if (opts.after) opts.after();
       }
     });
@@ -617,6 +619,52 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     this.setBuddy({ story: st });
   },
 
+  // ---------------- 今天页的小人就是剧情里的 TA（v8.0，用户：「小人说的话跟剧情要对得上」「服装、发型、身材由剧情推进来变」） ----------------
+
+  /** 这段剧情（主线 / 加篇 / 小剧情）看过没有 */
+  storySeen(id) { return !id || (this.storyData().seen || []).includes(id); },
+
+  /** 台词表里的一句：字符串，或者 [话, 要先看过的剧情]——剧情里还没说过的事（肩伤、爸爸），小人不先说 */
+  castLine(x) {
+    if (Array.isArray(x)) return this.storySeen(x[1]) ? String(x[0] || '') : '';
+    return x ? String(x) : '';
+  },
+
+  /** 剧情的余韵（cast.echo）：最近看过的三段里挑一句，接着剧情说；刚说过的不重复 */
+  storyEcho() {
+    const E = this.cast().echo || {};
+    const seen = this.storyData().seen || [];
+    const ids = seen.filter(id => E[id]).slice(-3);
+    const pool = ids.flatMap(id => E[id]).map(t => TF.Theater.fill(t, this.storyVars())).filter(t => t && !/\{/.test(t) && t !== this._echoLast);
+    if (!pool.length) return '';
+    const t = pool[Math.floor(Math.random() * pool.length)];
+    this._echoLast = t;
+    return t;
+  },
+
+  /**
+   * 看完这段剧情解锁的衣服（cast.wardrobe）：第一次看完时 TA 自己换上（wear: false 的只解锁），回到今天页冒一行提示。
+   * 返回 { k, label, worn } 或 null。重看不算。
+   */
+  wardrobeUnlock(id) {
+    const W = this.cast().wardrobe || {};
+    const k = Object.keys(W).find(x => (W[x].scene || W[x].bonus) === id);
+    if (!k) return null;
+    const st = this.storyData();
+    if ((st.wore || []).includes(k)) return null;
+    const w = W[k];
+    const worn = w.wear !== false;
+    this.setBuddy(Object.assign({ story: Object.assign({}, st, { wore: (st.wore || []).concat(k) }) }, worn ? { outfit: k } : {}));
+    return { k, label: w.label, worn };
+  },
+
+  wardrobeToast(u) {
+    if (!u || !this.showToast) return;
+    const n = this.buddyName();
+    this.showToast(u.worn ? `${n}换上了「${u.label}」· 设置 → 外观里能换回来` : `解锁了「${u.label}」· 设置 → 外观里能换上`);
+    if (u.worn && this.buddyDo) setTimeout(() => this.buddyDo([['flex', 1100], ['stand', 300]]), 700);
+  },
+
   /** 这个约定在哪几天里算：吃早饭从第二天开始，别的从约好那天开始，到 due 为止 */
   promiseRange(id, p) {
     const P = (this.cast().promises || {})[id] || {};
@@ -705,8 +753,12 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     return this.playScene({
       label: `约定 · ${this.chapterLabel(ch)}`, title: `「${B.title}」`, bg: B.bg || 'room', script: B.script.slice(), replay: !!replay, from: this.buddyCenter ? this.buddyCenter() : null,
       onChoose: (k, opt, askId) => { if (!replay) this.mainChoose(askId, k, opt); return null; },
-      onEnd: () => this.mainSeen(id),
-      after: () => { this.renderBuddy(); if (!replay && first && B.after) this.storyAfterglow(B.after); }
+      onEnd: () => { this.mainSeen(id); if (!replay && first) this._bonusWear = this.wardrobeUnlock(id); },
+      after: () => {
+        this.renderBuddy();
+        if (!replay && first && B.after) this.storyAfterglow(B.after);
+        if (this._bonusWear) { const u = this._bonusWear; this._bonusWear = null; setTimeout(() => this.wardrobeToast(u), 1800); }
+      }
     });
   },
 

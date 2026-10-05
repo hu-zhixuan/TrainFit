@@ -718,7 +718,9 @@ body.has-buddy .views { padding-bottom: calc(var(--cmp-h, 110px) + 60px + var(--
 /* 预览里站在一条边上 */
 .buddy-preview svg { flex: none; width: 90px; height: auto; border-bottom: 2px solid var(--line); box-sizing: content-box; }
 .buddy-opts { display: flex; flex-direction: column; gap: 10px; min-width: 0; flex: 1; }
-.buddy-who { display: flex; flex-direction: column; gap: 8px; margin: 16px 0 0; }
+.buddy-who { margin: 16px 0 0; }
+.buddy-who.switch-row { display: flex; flex-direction: row; align-items: center; }
+#buddy-outfit-row.hidden { display: none; }
 .buddy-blurb { margin: 0; font-size: 0.82rem; line-height: 1.5; color: var(--text-2); }
 .buddy-memories { display: flex; flex-direction: column; gap: 8px; margin: 4px 0 0; }
 .buddy-memories small { margin-left: 4px; font-weight: 500; color: var(--text-3); }

@@ -284,6 +284,37 @@ test('元设定（v8.0 第二版：TA 知道自己在 App 里）：第一句说�
   assert.ok(Theater.scriptInfo(Cast.xy.main[4][1].script).lines > 0 && JSON.stringify(Cast.xy.main[4][1].script).includes('"哭"'));
 });
 
+test('今天页的小人就是剧情里的 TA（v8.0）：衣服跟着剧情解锁、余韵台词对得上剧情、剧情里没说过的事不先说', () => {
+  for (const k of ['jx', 'xy']) {
+    const c = Cast[k];
+    const ids = new Set(c.main.flat().map(sc => sc.id).concat(Object.keys(c.bonus)));
+    // 衣服：每件对应一段剧情，名字写清楚；光膀子 / 运动内衣只解锁不自己换上
+    const W = c.wardrobe;
+    assert.ok(Object.keys(W).length >= 3, `${k} 衣服太少`);
+    Object.entries(W).forEach(([o, w]) => {
+      assert.ok(Buddy.OUTFITS[o], `${k} 衣服 ${o} 画不出来`);
+      assert.ok(ids.has(w.scene || w.bonus), `${k} ${o} 对应的剧情 ${w.scene || w.bonus} 不存在`);
+      assert.ok(w.label && w.label.length <= 14, `${k} ${o} 要有名字`);
+    });
+    assert.strictEqual(W.bare.wear, false, `${k} 光膀子 / 运动内衣不自己换上`);
+    // 余韵：只挂在真的剧情上，口吻对
+    Object.entries(c.echo).forEach(([id, lines]) => {
+      assert.ok(ids.has(id), `${k} 余韵挂在不存在的剧情 ${id}`);
+      lines.forEach(t => {
+        assert.ok([...t].length <= 40, `${k} 余韵太长：${t}`);
+        if (k === 'jx') assert.ok(!/[！!～~]/.test(t), `江叙余韵用了感叹号：${t}`);
+        assert.ok(!/只有你|别走|离不开|你不来我/.test(t), `${k} 余韵情感勒索：${t}`);
+      });
+    });
+    assert.ok(c.main.flat().every(sc => c.echo[sc.id]), `${k} 每段主线都有余韵`);
+    // 剧情里还没说过的事（肩伤、爸爸）：低落的理由写成 [话, 要先看过的剧情]
+    c.heart.low.why.forEach(x => { if (Array.isArray(x)) assert.ok(ids.has(x[1]), `${k} 低落理由要先看的剧情 ${x[1]}`); });
+    assert.ok(c.heart.low.why.some(x => typeof x === 'string'), `${k} 至少一条随时能说的低落理由`);
+  }
+  assert.ok(Cast.jx.heart.low.why.some(x => Array.isArray(x) && /肩膀/.test(x[0])), '江叙的肩伤要等老周说了以后');
+  assert.ok(Cast.xy.heart.low.why.some(x => Array.isArray(x) && /我爸/.test(x[0])), '夏柚的爸爸要等剧情里出现以后');
+});
+
 test('新条件：结局路线、按过跳过、现在几点', () => {
   assert.ok(Theater.evalCond('route:near', { route: 'near' }));
   assert.ok(!Theater.evalCond('route:near', { route: 'soft' }));
