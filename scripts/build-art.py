@@ -1,30 +1,45 @@
 #!/usr/bin/env python3
 """
-剧场美术（立绘 / CG / 背景）→ 压成 webp 放进 web/img/cast/，生成清单 web/js/data/art_manifest.js（v7.1）。
+剧场美术（立绘 / CG / 背景）→ 压成 webp 放进 web/img/cast/，生成清单 web/img/cast/manifest.js（v7.1，v7.2 加 --fetch）。
 
-原图放在仓库根目录的 art/ 里（png / jpg / webp 都行，原图可以很大，不进安装包）：
-  art/jx/face-calm.png         江叙的立绘，一个表情一张：calm 平静 / happy 开心 / shy 害羞 / worried 担心 / smug 得意 /
-                               surprised 惊讶 / pout 不服 / love 心动 / sleepy 困 / sparkle 闪亮 / full 撑（至少要 calm）
-  art/xy/face-calm.png         夏柚，同上
-  art/jx/cg/jx-pool6.png       CG，名字和 web/js/app/cast_main.js 里 cgs 的键一样
-  art/bg/pool.png              背景：room roomnight gym pool studio cafe street citynight rain night dusk dawn stage
+图从两处来，都不进仓库（.gitignore 挡掉了 art/ 里的图、.art-cache/ 和整个 web/img/cast/）：
+  1. art/sources.json 里写的免费素材（现在两个人的立绘都是わたおきば的）：--fetch 下载 zip 到 .art-cache/、校验 sha256、
+     按 faces 取出每个表情（「+blush」加腮红）存成 art/<人>/face-<表情>.png。素材不准转发原图、仓库又是公开的，
+     所以 CI 打包时现下（.github/workflows 里的「Fetch theater art」），图只进 APK。
+  2. 自己放进 art/ 的图（png / jpg / webp，原图可以很大）：
+       art/jx/face-calm.png         江叙的立绘，一个表情一张：calm 平静 / happy 开心 / shy 害羞 / worried 担心 / smug 得意 /
+                                    surprised 惊讶 / pout 不服 / love 心动 / sleepy 困 / sparkle 闪亮 / full 撑（至少要 calm）
+       art/xy/face-calm.png         夏柚，同上
+       art/jx/cg/jx-pool6.png       CG，名字和 web/js/app/cast_main.js 里 cgs 的键一样
+       art/bg/pool.png              背景：room roomnight gym pool studio cafe street citynight rain night dusk dawn stage
 
-立绘要透明底（png / webp 带透明），所有表情同一个姿势、同一个大小、人物站的位置一样，只换脸；
-CG 和背景竖屏 9:16（至少 1080×1920）。脚本：立绘缩到高 1400、CG / 背景缩到 1080×1920 以内，压成 webp。
+立绘要透明底，所有表情同一个姿势、同一个大小、人物站的位置一样，只换脸（脚本按透明边裁掉空白，同一个人的表情裁法一样）；
+CG 和背景竖屏 9:16（至少 1080×1920）。脚本：立绘缩到高 1400 以内、CG / 背景缩到 1080×1920 以内，压成 webp。
+清单没生成时（没跑过这个脚本）剧场用像素小人放大、CSS 画的背景，App 照样能用。
 
   pip install pillow
-  python3 scripts/build-art.py          # 全部重做
-  python3 scripts/build-art.py --check  # 只检查文件名、尺寸，不写文件
+  python3 scripts/build-art.py --fetch           # 下载 sources.json 里的素材，再全部重做（CI 用这个）
+  python3 scripts/build-art.py --fetch --strict  # 下载失败就报错退出（发版用，免得悄悄发了个没有立绘的版本）
+  python3 scripts/build-art.py                   # 只用 art/ 里已有的图重做
+  python3 scripts/build-art.py --check           # 只检查文件名、尺寸，不写文件
 """
+import hashlib
+import io
 import json
 import os
 import re
+import shutil
 import sys
+import time
+import urllib.request
+import zipfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(ROOT, 'art')
+SOURCES = os.path.join(SRC, 'sources.json')
+CACHE = os.environ.get('ART_CACHE_DIR') or os.path.join(ROOT, '.art-cache')
 OUT = os.path.join(ROOT, 'web', 'img', 'cast')
-MANIFEST = os.path.join(ROOT, 'web', 'js', 'data', 'art_manifest.js')
+MANIFEST = os.path.join(OUT, 'manifest.js')
 FACES = ['calm', 'happy', 'shy', 'worried', 'smug', 'surprised', 'pout', 'love', 'sleepy', 'sparkle', 'full']
 BGS = ['room', 'roomnight', 'gym', 'pool', 'studio', 'cafe', 'street', 'citynight', 'rain', 'night', 'dusk', 'dawn', 'stage']
 CHARS = ['jx', 'xy']
@@ -43,8 +58,96 @@ def files(d):
     return sorted(f for f in os.listdir(d) if f.lower().endswith(EXT))
 
 
+def sources():
+    if not os.path.exists(SOURCES):
+        return {}
+    return json.load(open(SOURCES, encoding='utf-8')).get('cast', {})
+
+
+def sha256(path):
+    h = hashlib.sha256()
+    with open(path, 'rb') as f:
+        for block in iter(lambda: f.read(1 << 16), b''):
+            h.update(block)
+    return h.hexdigest()
+
+
+def download(url, out):
+    """下载到 out（先写临时文件），失败重试三次"""
+    tmp = out + '.part'
+    for i in range(4):
+        try:
+            req = urllib.request.Request(url, headers={'User-Agent': 'TrainFit-build-art/1.0'})
+            with urllib.request.urlopen(req, timeout=60) as r, open(tmp, 'wb') as f:
+                shutil.copyfileobj(r, f)
+            os.replace(tmp, out)
+            return True
+        except Exception as e:  # noqa: BLE001 网络错误都重试
+            print(f'  下载失败（{e}），{2 ** (i + 1)} 秒后重试' if i < 3 else f'  下载失败（{e}）')
+            if i < 3:
+                time.sleep(2 ** (i + 1))
+    return False
+
+
+def blush(im, spots, strength=0.5, color=(255, 150, 160)):
+    """在脸颊上加腮红：spots 是 [中心 x, 中心 y, 横半径, 竖半径]（原图坐标），只染皮肤（亮、偏暖、不透明），不染头发和眼白"""
+    from PIL import Image, ImageChops, ImageDraw, ImageFilter
+    r, g, b, a = im.split()
+
+    def over(band, t):
+        return band.point(lambda v: 255 if v > t else 0)
+
+    skin = over(r, 225)
+    for m in (over(g, 195), over(b, 185), over(ImageChops.subtract(r, b), 6), over(a, 240)):
+        skin = ImageChops.multiply(skin, m)
+    skin = skin.filter(ImageFilter.GaussianBlur(0.6))
+    spot = Image.new('L', im.size, 0)
+    draw = ImageDraw.Draw(spot)
+    for cx, cy, rx, ry in spots:
+        draw.ellipse([cx - rx, cy - ry, cx + rx, cy + ry], fill=255)
+    spot = spot.filter(ImageFilter.GaussianBlur(3))
+    mask = ImageChops.multiply(spot, skin).point(lambda v: int(v * strength))
+    rgb = im.convert('RGB')
+    tinted = ImageChops.multiply(rgb, Image.new('RGB', im.size, color))
+    out = Image.composite(tinted, rgb, mask).convert('RGBA')
+    out.putalpha(a)
+    return out
+
+
+def fetch(strict):
+    """按 art/sources.json 下载素材、取表情 → art/<人>/face-*.png。返回下好的人"""
+    from PIL import Image
+    os.makedirs(CACHE, exist_ok=True)
+    done = []
+    for ch, s in sources().items():
+        zpath = os.path.join(CACHE, os.path.basename(s['zip']))
+        if not (os.path.exists(zpath) and sha256(zpath) == s['sha256']):
+            print(f'下载 {ch}：{s["title"]}')
+            if not download(s['zip'], zpath) or sha256(zpath) != s['sha256']:
+                msg = f'{ch} 的素材没下好（{s["zip"]}），这个人在剧场里先用像素小人'
+                if os.path.exists(zpath) and sha256(zpath) != s['sha256']:
+                    msg = f'{ch} 的素材和记下的 sha256 不一样（画师可能更新了），先看一眼新图再改 art/sources.json'
+                if strict:
+                    sys.exit('✗ ' + msg)
+                print(f'::warning title=剧场立绘::{msg}')
+                continue
+        os.makedirs(os.path.join(SRC, ch), exist_ok=True)
+        with zipfile.ZipFile(zpath) as z:
+            for face, spec in s['faces'].items():
+                letter, *mods = spec.split('+')
+                im = Image.open(io.BytesIO(z.read(s['pattern'] % letter))).convert('RGBA')
+                if 'blush' in mods:
+                    im = blush(im, s.get('blush') or [])
+                im.save(os.path.join(SRC, ch, f'face-{face}.png'))
+        done.append(ch)
+        print(f'  {ch}：{len(s["faces"])} 个表情')
+    return done
+
+
 def main():
     check = '--check' in sys.argv
+    if '--fetch' in sys.argv and not check:
+        fetch('--strict' in sys.argv)
     problems = []
     plan = []  # (源文件, 输出相对路径, 种类)
     ids = cg_ids()
@@ -79,28 +182,48 @@ def main():
         if plan and not check:
             sys.exit('先 pip install pillow')
 
-    sizes = {}
+    # 同一个人的立绘按所有表情透明边的并集裁（只换脸的差分裁法要一样，不然换表情时人会跳）
+    sizes, boxes = {}, {}
+    for src, rel, kind in plan:
+        if not Image or kind != 'face':
+            continue
+        im = Image.open(src)
+        if im.mode not in ('RGBA', 'LA') and 'transparency' not in im.info:
+            problems.append(f'{os.path.relpath(src, ROOT)}：立绘要透明底')
+            continue
+        ch = rel.split('/')[0]
+        sizes.setdefault(ch, set()).add(im.size)
+        bb = im.convert('RGBA').getchannel('A').getbbox()
+        if bb:
+            old = boxes.get(ch)
+            boxes[ch] = bb if not old else (min(old[0], bb[0]), min(old[1], bb[1]), max(old[2], bb[2]), max(old[3], bb[3]))
+    for ch, s in sizes.items():
+        if len(s) > 1:
+            problems.append(f'art/{ch}/ 的立绘大小不一样（{sorted(s)}），换表情时人会跳')
+
+    dims = {}
     for src, rel, kind in plan:
         if not Image:
             break
         im = Image.open(src)
-        if kind == 'face':
-            if im.mode not in ('RGBA', 'LA') and 'transparency' not in im.info:
-                problems.append(f'{os.path.relpath(src, ROOT)}：立绘要透明底')
-            sizes.setdefault(rel.split('/')[0], set()).add(im.size)
-        elif im.size[0] / im.size[1] > 0.7:
+        if kind != 'face' and im.size[0] / im.size[1] > 0.7:
             problems.append(f'{os.path.relpath(src, ROOT)}：CG / 背景要竖屏（9:16 左右），现在是 {im.size[0]}×{im.size[1]}')
         if check:
             continue
         im = im.convert('RGBA' if kind == 'face' else 'RGB')
-        limit = (1400 * im.size[0] // im.size[1], 1400) if kind == 'face' else (1080, 1920)
+        if kind == 'face':
+            ch = rel.split('/')[0]
+            if ch in boxes:
+                im = im.crop(boxes[ch])
+            limit = (1400 * im.size[0] // im.size[1], 1400)
+        else:
+            limit = (1080, 1920)
         im.thumbnail(limit, Image.LANCZOS)
+        if kind == 'face':
+            dims[rel.split('/')[0]] = list(im.size)
         out = os.path.join(OUT, rel)
         os.makedirs(os.path.dirname(out), exist_ok=True)
-        im.save(out, 'WEBP', quality=84, method=6)
-    for ch, s in sizes.items():
-        if len(s) > 1:
-            problems.append(f'art/{ch}/ 的立绘大小不一样（{sorted(s)}），换表情时人会跳')
+        im.save(out, 'WEBP', quality=88, method=6)
 
     for p in problems:
         print('⚠ ' + p)
@@ -108,7 +231,8 @@ def main():
         print(f'检查完：{len(plan)} 张能用，{len(problems)} 个问题')
         return
 
-    manifest = {'cast': {}, 'bg': {}}
+    manifest = {'cast': {}, 'bg': {}, 'credits': []}
+    src_info = sources()
     for src, rel, kind in plan:
         url = 'img/cast/' + rel
         if kind == 'bg':
@@ -119,15 +243,24 @@ def main():
             key = os.path.splitext(os.path.basename(rel))[0]
             if kind == 'face':
                 box['face'][key.replace('face-', '')] = url
+                if ch in dims:
+                    box['size'] = dims[ch]
             else:
                 box['cg'][key] = url
+    # 署名：立绘来自 sources.json 的写上画师（条款不强制，但该写）
+    for ch in CHARS:
+        s = src_info.get(ch)
+        if s and manifest['cast'].get(ch, {}).get('face'):
+            line = {'who': ch, 'what': '立绘', 'credit': s['credit'], 'url': s['page']}
+            manifest['credits'].append(line)
+    os.makedirs(OUT, exist_ok=True)
     with open(MANIFEST, 'w', encoding='utf-8') as f:
-        f.write('// 美术清单：scripts/build-art.py 按 web/img/cast/ 里的图片生成，不要手改。还没有图时是空的，剧场用像素小人和 CSS 背景。\n')
+        f.write('// 美术清单：scripts/build-art.py 生成，不要手改，不进仓库。没有这个文件时剧场用像素小人和 CSS 背景。\n')
         f.write('(function (root) {\n  (root.TF = root.TF || {}).ArtManifest = ')
         f.write(json.dumps(manifest, ensure_ascii=False, indent=2).replace('\n', '\n  '))
         f.write(';\n})(typeof window !== \'undefined\' ? window : globalThis);\n')
     n = {k: sum(1 for p in plan if p[2] == k) for k in ('face', 'cg', 'bg')}
-    print(f'好了：立绘 {n["face"]} 张、CG {n["cg"]} 张、背景 {n["bg"]} 张 → web/img/cast/，清单写进 web/js/data/art_manifest.js')
+    print(f'好了：立绘 {n["face"]} 张、CG {n["cg"]} 张、背景 {n["bg"]} 张 → web/img/cast/（清单 manifest.js）')
 
 
 if __name__ == '__main__':

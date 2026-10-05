@@ -262,7 +262,14 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       `<div class="cr-rows">${rows.map((r, i) => `<p style="--i:${i}"><span>${esc(r[0])}</span><b>${esc(r[1])}</b></p>`).join('')}</div>` +
       `<p class="cr-last" style="--i:${rows.length}"><b>${esc(c.name)}</b>${esc(e.last)}</p>` +
       `<p class="cr-foot" style="--i:${rows.length + 1}">故事还在继续——明天也见</p>` +
-      `<button class="th-done" type="button" style="--i:${rows.length + 2}">回到今天</button></div>`;
+      `<button class="th-done" type="button" style="--i:${rows.length + 2}">回到今天</button>` +
+      (this.artCredit() ? `<p class="cr-art" style="--i:${rows.length + 2}">${esc(this.artCredit())}</p>` : '') + '</div>';
+  },
+
+  /** 署名（v7.2）：立绘是谁画的（わたおきば 的免费素材，条款不强制署名，但该写上）。没有立绘时是 '' */
+  artCredit() {
+    const list = TF.Art ? TF.Art.credits(this.castKey()) : [];
+    return list.map(c => `${c.what} · ${c.credit}`).join('　');
   },
 
   /** 相册：主线里出现过的 CG（看过那段就点亮），按顺序 */
@@ -353,7 +360,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
         `<div class="sb-head"><span class="sb-open"><b>${esc(this.chapterLabel(lv))}</b><small>${open ? (b.lv === lv ? '正在这一章' : `主线 ${got}/${mine.length}`) : `再记 ${days((TF.Bond.LEVELS[lv - 1] || {}).xp || 0)} 天左右`}</small></span>` +
         `<span class="sb-count">${got + evGot}/${mine.length + evs.length}</span></div>` +
         (open || lv === b.lv + 1 ? `<div class="sb-mains">${rows}</div>` + (evs.length ? `<p class="sb-sub">小剧情</p><div class="sb-scenes">${scenes}</div>` : '') : '') + '</div>';
-    }).join('') + this.albumHtml();
+    }).join('') + this.albumHtml() + (this.artCredit() ? `<p class="sb-credit">${esc(this.artCredit())} · wataokiba.net</p>` : '');
   },
 
   /** 相册：主线里的 CG，看过那段才点亮（结局的那张要走到那条线） */

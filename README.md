@@ -113,7 +113,7 @@ TrainFit/
 │       │   ├── pipeline.js      #   后台整理、保存、撤销
 │       │   └── api_settings.js  #   设置里的 AI 接口 / 语音识别卡片
 │       ├── lib/                 # 旧的离线规则引擎，App 已不加载；nutrition.js 里的成品菜是生成食物库的数据来源
-│       └── data/                # 脚本生成，不要手改：food_db.js 食物营养库、food_img.js 图鉴照片的作者和授权、art_manifest.js 剧场美术清单
+│       └── data/                # 脚本生成，不要手改：food_db.js 食物营养库、food_img.js 图鉴照片的作者和授权
 ├── app/                         # 安卓壳（Kotlin）
 │   └── src/main/java/com/trainfit/app/
 │       ├── MainActivity.kt      #   WebView 容器、权限、系统栏
@@ -129,7 +129,7 @@ TrainFit/
 │   ├── fetch-asr.sh             # 下载本机识别用的库和 VAD（编译前运行，CI 自动运行；识别模型由 App 自己下载）
 │   ├── build-food-db.js         # 生成 web/js/data/food_db.js
 │   ├── build-food-img.py        # 按 scripts/food-img.json 生成图鉴照片和照片来源
-│   ├── build-art.py             # art/ 里的立绘、CG、背景 → web/img/cast/ + 美术清单（要画什么见 art/README.md）
+│   ├── build-art.py             # 剧场立绘：--fetch 按 art/sources.json 下载免费素材 → web/img/cast/ + 清单（不进仓库，CI 打包前跑）
 │   └── build-icon.py            # 生成 App 图标（深绿底 + 发光叶子 + AI 星光），用 Chromium 渲染
 ├── tests/                       # 单元测试：npm test
 └── CHANGELOG.md                 # 更新记录，也是 Release 说明的来源
@@ -175,6 +175,10 @@ bash scripts/fetch-asr.sh      # 第一次需要：下载 sherpa-onnx 的库和 
 `web/js/data/food_db.js` 由 `npm run build:food-db -- <数据目录>` 生成：`web/js/lib/nutrition.js` 里整理的常见成品菜 + 《中国食物成分表标准版（第6版）》（[Sanotsu/china-food-composition-data](https://github.com/Sanotsu/china-food-composition-data)）+ 成分表里没有的常见食物取自 [USDA FoodData Central](https://fdc.nal.usda.gov/)（SR Legacy，公有领域，脚本里注了 fdcId）。成分表数据集注明仅供个人学习研究使用，商用前需要换成授权明确的数据。
 
 食物图鉴的照片是开放授权的实拍图（CC0 / 公有领域 / CC BY / CC BY-SA，经 [Openverse](https://openverse.org) 检索，来自 Flickr、Wikimedia Commons），`python3 scripts/build-food-img.py` 按 `scripts/food-img.json` 下载、裁方、压成 webp；每张的作者和授权在 App 图鉴底部「照片来源」和 [web/img/food/CREDITS.md](web/img/food/CREDITS.md)。
+
+### 剧场立绘
+
+江叙、夏柚的立绘来自 [わたおきば](https://wataokiba.net/)（作者わたおび）的免费立ち絵素材（男性15、女性20），按[利用規約](https://wataokiba.net/%e5%88%a9%e7%94%a8%e8%a6%8f%e7%b4%84/)：可商用、可改色裁剪、可补腮红，**不可转发素材本身**。所以图不放进本仓库：`art/sources.json` 记着下载地址和校验值，CI 打包时 `python3 scripts/build-art.py --fetch` 现下、只放进 APK。本地要看效果先 `pip install pillow` 再跑这一句。
 
 ## 开源协议
 

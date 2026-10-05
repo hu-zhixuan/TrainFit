@@ -1536,6 +1536,8 @@ body.onboarding .rec-panel { z-index: 210; bottom: calc(24px + var(--sab)); }
 .ob-pal { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 14px 10px 14px; border: 2px solid var(--line); border-radius: var(--r-lg); background: var(--surface); color: var(--text); font: inherit; cursor: pointer; box-shadow: var(--shadow-sm); transition: border-color 0.15s ease, transform 0.12s ease; -webkit-tap-highlight-color: transparent; }
 .ob-pal-art { display: flex; align-items: flex-end; justify-content: center; width: 100%; height: 146px; border-radius: var(--r-md); background: radial-gradient(circle at 50% 45%, color-mix(in srgb, var(--love) 18%, transparent), transparent 70%); }
 .ob-pal-art svg { width: 116px; height: auto; }
+.ob-pal-art.sprite { overflow: hidden; align-items: flex-start; }
+.ob-pal-sprite { display: block; height: 430px; width: auto; margin-top: 6px; filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.25)); -webkit-user-drag: none; }
 .ob-pal b { margin-top: 2px; font-size: 1.1rem; }
 .ob-pal small { font-size: 0.74rem; line-height: 1.45; color: var(--text-3); text-align: center; }
 .ob-pal.on { border-color: var(--love); transform: translateY(-2px); box-shadow: 0 6px 18px color-mix(in srgb, var(--love) 25%, transparent); }
@@ -1865,6 +1867,8 @@ body.in-theater { overflow: hidden; }
 .cr-rows p span { color: rgba(244, 242, 238, 0.6); }
 .cr-rows p b { font-variant-numeric: tabular-nums; text-align: right; }
 .cr-last { margin: 0 0 4px; font-size: 1.02rem; line-height: 1.6; }
+.cr-art { margin: 14px 0 0; font-size: 0.7rem; letter-spacing: 0.04em; color: rgba(244, 242, 238, 0.4); }
+.sb-credit { margin: 10px 2px 0; font-size: 0.7rem; color: var(--text-3); }
 .cr-last b { display: block; font-size: 0.78rem; color: #ff9ab2; letter-spacing: 0.08em; }
 .cr-foot { margin: 0 0 16px; font-size: 0.8rem; color: rgba(244, 242, 238, 0.55); letter-spacing: 0.1em; }
 .th-done { border: 0; border-radius: 999px; padding: 12px 28px; background: #ff7a9a; color: #fff; font: inherit; font-weight: 800; cursor: pointer; }
@@ -1907,6 +1911,14 @@ button.sb-main:active { background: var(--surface-2); }
 .th-cgimg { position: absolute; inset: 0; z-index: 2; background: center / cover no-repeat; opacity: 0; transition: opacity 0.5s; pointer-events: none; }
 .theater.cg-art .th-cgimg { opacity: 1; }
 .theater.cg-art .th-stage { opacity: 0; }
-/* 立绘：像 galgame 一样大，下半身藏在对话框后面 */
-.th-actor img.th-sprite { display: block; height: min(70vh, 780px); width: auto; max-width: 96vw; object-fit: contain; margin-bottom: -170px; filter: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.45)); }
+/* 立绘（v7.2 わたおきば的全身立绘）：像 galgame 一样大——头在屏幕上方一成处，腿藏在对话框后面；
+   高度跟着屏幕高走（头的大小在各种手机上差不多），宽屏上别比屏幕宽 */
+.theater.has-sprite .th-stage { top: 0; bottom: 0; align-items: flex-start; overflow: hidden; }
+.th-actor img.th-sprite { display: block; height: min(100dvh, 1200px); width: auto; max-width: 96vw; object-fit: contain; object-position: top;
+  margin-top: calc(env(safe-area-inset-top, 0px) + min(11dvh, 110px)); filter: drop-shadow(0 12px 28px rgba(0, 0, 0, 0.5)); -webkit-user-drag: none; user-select: none; }
+.theater.has-sprite .th-hearts { top: calc(env(safe-area-inset-top, 0px) + min(11dvh, 110px)); }
+/* 选项挪到对话框上面（盖住身子，不盖脸） */
+.theater.has-sprite .th-choices { top: auto; bottom: calc(env(safe-area-inset-bottom, 0px) + 196px); }
+/* 没有 CG 图、用立绘 + 道具拼时：像素画的道具（猫、伞、本子）和立绘画风不搭，穿着衣服的立绘泡在水里也怪——只留光、雨、星星、花瓣这些气氛 */
+.theater.has-sprite .cgp-cat, .theater.has-sprite .cgp-umbrella, .theater.has-sprite .cgp-book, .theater.has-sprite .cgp-water { display: none; }
 .cg-thumb.art { background: center / cover no-repeat; }

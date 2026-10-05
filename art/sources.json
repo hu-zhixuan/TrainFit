@@ -1,0 +1,51 @@
+{
+  "_说明": "剧场立绘从哪来（v7.2）。图不进仓库：画师不准转发原图，仓库又是公开的，所以 CI 打包时按这里下载、只放进 APK。scripts/build-art.py --fetch 下载到 .art-cache/、校验 sha256、按 faces 取表情存进 art/<人>/，再压成 web/img/cast/。faces 的值是 zip 里文件名的那个字母（pattern 里的 %s），「+blush」= 按 blush 里的位置加腮红（条款允许「涙や頬紅などを自分で書き加える」）。换人：改这里（sha256 用 sha256sum 算），跑一遍 --fetch 看图。",
+  "cast": {
+    "jx": {
+      "title": "わたおきば 立ち絵素材 男性15",
+      "page": "https://wataokiba.net/2020/12/07/dansei15/",
+      "zip": "https://wataokiba.net/wp-content/uploads/2020/12/dansei_15_looptie.zip",
+      "sha256": "76adc3746b1730bb48a0ac47dbbad854bdd9f86b85ffafee38e72ac44964b3ea",
+      "pattern": "dansei_15_looptie/png/dansei_15_%s.png",
+      "credit": "わたおきば（わたおび）",
+      "terms": "https://wataokiba.net/%e5%88%a9%e7%94%a8%e8%a6%8f%e7%b4%84/",
+      "faces": {
+        "calm": "f",
+        "happy": "a",
+        "shy": "d+blush",
+        "surprised": "c",
+        "pout": "e",
+        "worried": "d",
+        "love": "a+blush",
+        "smug": "b",
+        "sparkle": "b",
+        "sleepy": "h",
+        "full": "g"
+      },
+      "blush": [[219, 156, 9, 4], [175, 160, 4, 3]]
+    },
+    "xy": {
+      "title": "わたおきば 立ち絵素材 女性20",
+      "page": "https://wataokiba.net/2023/05/01/josei20/",
+      "zip": "https://wataokiba.net/wp-content/uploads/2023/05/josei_20_pw.zip",
+      "sha256": "dbd0cd1113d79f45892c66b4573137117ffedc37f7249b8a4064b6f78fce17b4",
+      "pattern": "josei_20_pw/png/josei_20_%s.png",
+      "credit": "わたおきば（わたおび）",
+      "terms": "https://wataokiba.net/%e5%88%a9%e7%94%a8%e8%a6%8f%e7%b4%84/",
+      "faces": {
+        "calm": "a",
+        "happy": "g",
+        "shy": "f",
+        "surprised": "e",
+        "worried": "d",
+        "pout": "d",
+        "love": "b+blush",
+        "smug": "c",
+        "sparkle": "b",
+        "sleepy": "h",
+        "full": "g"
+      },
+      "blush": [[293, 149, 10, 4], [238, 161, 8, 3]]
+    }
+  }
+}
