@@ -8,7 +8,7 @@
  *
  * 清单里的路径：
  *   img/cast/jx/face-calm.webp …           立绘，一个表情一张（同一个姿势、同一个构图，只换脸），表情名见 FACES
- *   img/cast/jx/cg/jx-pool6.webp …         CG，名字和 cast_main.js 里的 cgs 对上
+ *   img/cast/jx/cg/jx-pool6.webp …         CG，名字和 script_jx.js / script_xy.js 里的 cgs 对上
  *   img/cast/bg/pool.webp …                背景，名字和剧场的 data-bg 对上（room / pool / gym / studio / stage …）
  *   credits                                署名（立绘是谁画的），结局字幕和设置「剧情」底下写出来
  */
@@ -35,6 +35,23 @@
     return '';
   }
 
+  /**
+   * 眨眼（v8.0）：闭眼那张图 + 眼睛那块的位置（clip-path inset），叠在立绘上面一闪；本来就闭着眼的表情（眯眼笑、困了）不眨。
+   * 返回 { url, inset } 或 null
+   */
+  function blink(char, face) {
+    const m = (manifest().cast || {})[char];
+    if (!m || !m.blink || !m.eyes || broken.has(m.blink)) return null;
+    const k = FACES[face];
+    if (k && (m.noblink || []).includes(k)) return null;
+    if (!k || !(m.face || {})[k]) { // 这个表情没图、退回了相近的：按退回的那张判断
+      const url = sprite(char, face);
+      const used = Object.keys(m.face || {}).find(x => m.face[x] === url);
+      if (used && (m.noblink || []).includes(used)) return null;
+    }
+    return { url: m.blink, inset: m.eyes };
+  }
+
   /** 图加载失败：记下来，剧场重画时退回像素小人 */
   function fail(url) { if (url) broken.add(url); }
 
@@ -58,6 +75,6 @@
     return { face: Object.keys(m.face || {}).length, cg: Object.keys(m.cg || {}).length, bg: Object.keys(manifest().bg || {}).length };
   }
 
-  TF.Art = { FACES, FALLBACK, BGS, sprite, fail, credits, cg, bg, count };
+  TF.Art = { FACES, FALLBACK, BGS, sprite, blink, fail, credits, cg, bg, count };
   if (typeof module !== 'undefined' && module.exports) module.exports = TF.Art;
 })(typeof window !== 'undefined' ? window : globalThis);

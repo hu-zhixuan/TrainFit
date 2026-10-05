@@ -24,7 +24,7 @@
     { id: 'sweet', lv: 2, when: (c) => c.trigger === 'record' && /奶茶|蛋糕|甜品|冰淇淋|冰激凌|巧克力|甜点|雪糕|蛋挞|布丁/.test(c.food) },
     { id: 'night', lv: 3, when: (c) => c.trigger === 'night' && (c.hour >= 23 || c.hour < 2) },
     { id: 'firstweek', lv: 1, when: (c) => c.trigger === 'open' && c.days >= 7 },
-    // v7.1：第一次表白在主线第四章最后一段（cast_main.js）；这里只管「让我想想」七天后、或者设置里「让 TA 再问一次」之后再问
+    // v7.1：第一次表白在主线第四章最后一段（script_jx.js / script_xy.js）；这里只管「让我想想」七天后、或者设置里「让 TA 再问一次」之后再问
     { id: 'confess', lv: 4, when: (c) => c.trigger === 'open' && c.hour >= 18 && c.hour < 23 && c.romance == null && !!c.confessAfter && c.confessAfter <= c.today },
     { id: 'date', lv: 4, when: (c) => c.trigger === 'open' && c.romance === true && c.weekend && c.hour >= 16 && c.hour < 22 },
     { id: 'weekend', lv: 2, when: (c) => c.trigger === 'open' && c.weekend && c.hour >= 9 && c.hour < 15 },
@@ -137,7 +137,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     });
   },
 
-  // ---------------- 主线（v7.1，cast_main.js） ----------------
+  // ---------------- 主线（v7.1，v8.0 剧本在 script_jx.js / script_xy.js） ----------------
 
   /** 主线一段一段排好：[{ sc, ch（第几章）, k（这章第几段） }] */
   mainList() {
@@ -168,7 +168,8 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
   },
 
   /**
-   * 演一段主线：左上角写第几章，开场大字是这段的名字；你选的记进 story.picks，表白改关系；看完记进 seen（跳过也算）。
+   * 演一段主线：左上角写第几章，开场大字是这段的名字（章节第一段下面加一句章节的话）；从小人那儿圆形展开进来，演完收回去，小人接一句余韵。
+   * 你选的记进 story.picks，表白改关系；看完记进 seen（跳过也算）。
    * opts：{ lead（升级时先说的那句，加在最前面）, outfits（新解锁的衣服，最后问换不换）, replay（设置里重看）, after }
    */
   playMain(id, opts) {
@@ -176,27 +177,52 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     const item = this.mainFind(id);
     if (!item || this._touring) return false;
     const sc = item.sc;
+    const c = this.cast();
     const script = sc.script.slice();
     if (opts.lead) script.unshift(['开心', opts.lead, 'wave']);
     const outfits = (opts.outfits || []).slice(-2);
-    if (outfits.length) script.push({ ask: '_wear', opts: this.wearChoices(outfits).map(c => ({ t: c[0], r: c[1] ? [[c[2], c[1]]] : [], sp: c[4] })) });
+    if (outfits.length) script.push({ ask: '_wear', opts: this.wearChoices(outfits).map(o => ({ t: o[0], r: o[1] ? [[o[2], o[1]]] : [], sp: o[4] })) });
     let talk = null;
+    const first = !(this.storyData().seen || []).includes(id);
     return this.playScene({
-      label: this.chapterLabel(item.ch), title: `「${sc.title}」`, bg: sc.bg || (this.cast().chapterBg || [])[item.ch - 1] || 'room', script,
+      label: this.chapterLabel(item.ch), title: `「${sc.title}」`, sub: item.k === 0 ? (c.chapterLines || [])[item.ch - 1] : '',
+      bg: sc.bg || (c.chapterBg || [])[item.ch - 1] || 'room', amb: sc.amb, script, replay: !!opts.replay, from: this.buddyCenter ? this.buddyCenter() : null,
       onChoose: (k, opt, askId) => {
         if (askId === '_wear') return this.wearChosen(opt);
         if (!opts.replay || askId === 'confess') this.mainChoose(askId, k, opt); // 重看时换个选项玩玩，不改当时选的（表白除外，那是你的回答）
         if (opt.sp === 'talk') talk = opt;
-        if (opt.r && opt.r[0] && /害羞|心动/.test(opt.r[0][0])) this.buddyMood('love', 2400);
+        if (opt.r && Array.isArray(opt.r[0]) && /害羞|心动/.test(opt.r[0][0])) this.buddyMood('love', 2400);
         return null;
       },
       onEnd: () => {
         this.mainSeen(id);
-        if (talk && this.pushTalk) { this.pushTalk(talk.t, (talk.r[0] || [])[1] || ''); setTimeout(() => this.glowTalk && this.glowTalk(), 400); }
-        if (!opts.replay && !this._touring && this.buddyDo) setTimeout(() => this.buddyDo([['stand', 120], ['wave', 900], ['stand', 300]]), 350);
+        if (talk && this.pushTalk) { this.pushTalk(talk.t, ((talk.r || [])[0] || [])[1] || ''); setTimeout(() => this.glowTalk && this.glowTalk(), 400); }
       },
-      after: () => { this.renderBuddy(); if (opts.after) opts.after(); }
+      after: () => {
+        this.renderBuddy();
+        if (!opts.replay && !this._touring) this.storyAfterglow(first ? sc.after : '', item.ch);
+        if (opts.after) opts.after();
+      }
     });
+  },
+
+  /**
+   * 演完回到今天页：小人先招招手，再说一句余韵（「……记得喝水。温的。」），这一章三段都看完了就提一句它写了点东西（手册 / 搭子本）。
+   * 不占每天说话的次数（刚演完的，是你自己点开的）。
+   */
+  storyAfterglow(line, ch) {
+    if (!this.buddyLook().show) return;
+    if (this.buddyDo) this.buddyDo([['stand', 120], ['wave', 900], ['stand', 300]]);
+    const diary = ch && this.diaryReady(ch) && !this.diarySeen(ch);
+    const f = this.cast().sex === 'f';
+    const tail = diary ? (f ? '……我在搭子本上写了点东西。偷看的话，在设置的剧情里。' : '……我在本子角落写了几行。想看的话，在设置的剧情里。') : '';
+    const text = [line, tail].filter(Boolean).join(' ');
+    if (!text) return;
+    setTimeout(() => {
+      if (this._scene || this._touring) return;
+      if (diary) this.askUser(text, [{ label: f ? '现在偷看' : '现在看', pick: () => setTimeout(() => this.showDiary(ch), 250) }, { label: '等会儿', reply: f ? '好～不许笑我！' : '……嗯。' }]);
+      else this.sayTip(text);
+    }, 700);
   },
 
   mainSeen(id) {
@@ -210,7 +236,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
   /** 主线里选了：记下来；表白那一问和小剧情「那句话」是一回事（ask 都叫 confess），改关系 */
   mainChoose(askId, k, opt) {
     const st = Object.assign({ seen: [], picks: {} }, this.storyData());
-    st.picks = Object.assign({}, st.picks, { [askId]: k });
+    st.picks = Object.assign({}, st.picks, { [askId]: k }); // k = -1：限时选项没选，沉默
     if (askId === 'confess') {
       st.seen = [...new Set((st.seen || []).concat('confess'))];
       if (opt.sp === 'romance') { st.romance = true; delete st.confessAfter; }
@@ -238,11 +264,16 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     const ws = (this.weights || []).slice().sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
     const drop = ws.length >= 2 ? Math.round((ws[0].kg - ws[ws.length - 1].kg) * 10) / 10 : 0;
     const name = this.callName ? this.callName() : '';
-    return {
+    const st = this.storyData();
+    const out = {
       you: name || '你', name, days, meals: this.diet.length, trains: new Set(this.workouts.map(w => w.date)).size,
       fav: favs.length ? favs[0][0] : '', lift: best ? `${best.exerciseName} ${round1(best.weightKg)} 公斤` : '',
       kg: drop >= 0.5 ? `轻了 ${drop} 公斤` : ''
     };
+    // v8.0：剧情里起的名字（橘猫、搭子本最后一页）、关键时刻你说过的话
+    Object.entries(st.names || {}).forEach(([k, v]) => { out[k] = v; });
+    Object.entries(st.inputs || {}).forEach(([k, v]) => { const t = String(v || ''); out['said_' + k] = t.length > 24 ? t.slice(0, 24) + '…' : t; });
+    return out;
   },
 
   /** 结局那一屏：END · 恋人「以后的每个六点」，下面一行行浮上来你们一起走过的数字，最后 TA 说一句 */
@@ -295,23 +326,236 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     return !!(this.buddyLook().show && !this.needsOnboarding && this.cast().main && this.mainNext());
   },
 
-  /** 打开 App 时，有新的主线就问一句「有件事想跟你说」——你点了才演，不打断你记东西；一天问一次 */
+  /**
+   * 打开 App 时，有新的主线就由 TA 来找你（v8.0：每段有自己的邀请话——「……你醒了？我在泳池。」——和合适的时间，
+   * 早上六点那段早上才来，深夜电话那段晚上才来；等了两天还没碰上那个时间就不等了）。你点了才演，一天问一次。
+   */
   mainNudge() {
     const next = this.mainNext();
     if (!next || !this.buddyLook().show || this._touring) return false;
+    if (!this.whenOk(next.sc.when) && this.mainWaited(next) < 2) return false;
     const today = getTodayDateString();
     let last = '';
     try { last = localStorage.getItem('tf_main_nudge') || ''; } catch (e) {}
     if (last === today || !this.voiceBudget('guide', false)) return false;
     try { localStorage.setItem('tf_main_nudge', today); } catch (e) {}
     this.voiceBudget('guide', true);
+    const inv = this.mainInvite(next);
     const f = this.cast().sex === 'f';
-    const say = next.k === 0 ? (f ? `新的一章开始啦——${this.chapterLabel(next.ch)}。现在有空吗？` : `新的一章。${this.chapterLabel(next.ch)}。……现在有空吗。`)
-      : (f ? '有件事想跟你说……现在有空听吗？' : '……有件事想跟你说。现在有空吗。');
-    return this.askUser(say, [
-      { label: `听你说 ·「${next.sc.title}」`, pick: () => setTimeout(() => { this.closeBuddyPop && this.closeBuddyPop(); this.playMain(next.sc.id); }, 250) },
-      { label: '等会儿', reply: f ? '好～你忙完了点我，我等你！' : '嗯。忙完了点我。' }
+    return this.askUser(inv[0], [
+      { label: inv[1], pick: () => setTimeout(() => { this.closeBuddyPop && this.closeBuddyPop(); this.playMain(next.sc.id); }, 250) },
+      { label: inv[2], reply: f ? '好～你忙完了点我，我等你！' : '嗯。忙完了点我。' }
     ]);
+  },
+
+  /** 这段的邀请：TA 来找你说的那句 + 去 / 不去（没写的用通用的） */
+  mainInvite(item) {
+    const f = this.cast().sex === 'f';
+    const inv = item.sc.invite || [];
+    const gen = item.k === 0 ? (f ? `新的一章开始啦——${this.chapterLabel(item.ch)}。现在有空吗？` : `新的一章。${this.chapterLabel(item.ch)}。……现在有空吗。`)
+      : (f ? '有件事想跟你说……现在有空听吗？' : '……有件事想跟你说。现在有空吗。');
+    return [inv[0] || gen, inv[1] || `听你说 ·「${item.sc.title}」`, inv[2] || '等会儿'];
+  },
+
+  /** 这段适合什么时候来：morning 5～10 点 / day 9～19 点 / evening 17～24 点 / night 20～3 点 / any */
+  whenOk(when, hour) {
+    const h = hour == null ? new Date().getHours() : hour;
+    if (!when || when === 'any') return true;
+    if (when === 'morning') return h >= 5 && h < 10;
+    if (when === 'day') return h >= 9 && h < 19;
+    if (when === 'evening') return h >= 17;
+    if (when === 'night') return h >= 20 || h < 3;
+    return true;
+  },
+
+  /** 解锁了多少天（亲密度一天记录 10 点，粗算） */
+  mainWaited(item) {
+    return Math.max(0, Math.floor((this.bond().xp - this.mainXp(item.ch, item.k)) / 10));
+  },
+
+  /**
+   * TA 现在有什么想跟你说的（点小人气泡最上面那一行、头上的小气泡）：约定达成的加篇优先，其次新的主线。
+   * 返回 { kind: 'bonus' | 'main', id, line（TA 的那句）, label } 或 null
+   */
+  storyCue() {
+    if (!this.buddyLook().show || this.needsOnboarding || !this.cast().main) return null;
+    const b = this.bonusReady();
+    if (b) return { kind: 'bonus', id: b.id, line: this.cast().sex === 'f' ? '约好的事你做到了！我有东西给你看～' : '约好的事，你做到了。……有东西给你看。', label: `约定达成 ·「${b.title}」` };
+    const next = this.mainNext();
+    if (!next) return null;
+    return { kind: 'main', id: next.sc.id, line: this.mainInvite(next)[0], label: `${this.chapterLabel(next.ch)}「${next.sc.title}」` };
+  },
+
+  // ---------------- 约定（v8.0）：剧情里跟你约的事，在真实的记录里做到了就解锁加篇 ----------------
+
+  /** 打开 App 时：约定做到了、加篇还没看（记完那会儿小人在说别的），问一句；一天一次 */
+  bonusNudge() {
+    const B = this.bonusReady();
+    if (!B || !this.buddyLook().show || this._touring) return false;
+    const today = getTodayDateString();
+    let last = '';
+    try { last = localStorage.getItem('tf_bonus_nudge') || ''; } catch (e) {}
+    if (last === today) return false;
+    try { localStorage.setItem('tf_bonus_nudge', today); } catch (e) {}
+    const cue = this.storyCue();
+    const f = this.cast().sex === 'f';
+    return this.askUser(cue.line, [
+      { label: `看看 ·「${B.title}」`, pick: () => setTimeout(() => { this.closeBuddyPop && this.closeBuddyPop(); this.playBonus(B.id); }, 250) },
+      { label: '等会儿', reply: f ? '好！点我就能看～' : '嗯。点我就能看。' }
+    ]);
+  },
+
+  /** 剧场里发生的事记进存档（重看时剧场不调这个）：set / setmax 隐藏好感、input 你说的话、name 起的名字、promise 约定 */
+  storyStep(kind, data) {
+    const st = Object.assign({ seen: [], picks: {} }, this.storyData());
+    if (kind === 'set') { st.sv = Object.assign({}, st.sv || {}); Object.keys(data).forEach(k => { st.sv[k] = (+st.sv[k] || 0) + (+data[k] || 0); }); }
+    else if (kind === 'setmax') { st.sv = Object.assign({}, st.sv || {}); Object.keys(data).forEach(k => { st.sv[k] = Math.max(+st.sv[k] || 0, +data[k] || 0); }); }
+    else if (kind === 'input') {
+      st.inputs = Object.assign({}, st.inputs || {}, { [data.id]: String(data.text || '').slice(0, 80) });
+      if (data.fact) st.inputFacts = Object.assign({}, st.inputFacts || {}, { [data.id]: String(data.fact).slice(0, 60) });
+    } else if (kind === 'name') st.names = Object.assign({}, st.names || {}, { [data.key]: String(data.value || '').slice(0, 8) });
+    else if (kind === 'promise') {
+      const P = (this.cast().promises || {})[data.id];
+      if (!P) return;
+      const today = getTodayDateString();
+      st.promises = Object.assign({}, st.promises || {}, { [data.id]: data.yes ? { at: today, due: shiftDateString(today, P.days || 2) } : { at: today, declined: true } });
+    }
+    this.setBuddy({ story: st });
+  },
+
+  /** 这个约定在哪几天里算：吃早饭从第二天开始，别的从约好那天开始，到 due 为止 */
+  promiseRange(id, p) {
+    const P = (this.cast().promises || {})[id] || {};
+    return { from: P.kind === 'breakfast' ? shiftDateString(p.at, 1) : p.at, to: p.due };
+  },
+
+  /** 这个约定做到了没有（按你的真实记录） */
+  promiseDone(id, p) {
+    const P = (this.cast().promises || {})[id];
+    if (!P || !p || p.declined) return false;
+    const { from, to } = this.promiseRange(id, p);
+    const days = [];
+    for (let d = from; d <= to; d = shiftDateString(d, 1)) days.push(d);
+    const groups = (d) => { const cls = this.mealClasses ? this.mealClasses(d) : {}; return new Set(this.diet.filter(x => x.date === d).map(x => (cls[x.id] || {}).group || String(x.mealType || '').replace('/补剂', ''))); };
+    if (P.kind === 'breakfast') return days.some(d => groups(d).has('早餐'));
+    if (P.kind === 'train') return days.some(d => this.workouts.some(w => w.date === d));
+    if (P.kind === 'threemeals') return days.some(d => { const g = groups(d); return g.has('早餐') && g.has('午餐') && g.has('晚餐'); });
+    if (P.kind === 'snack') return days.some(d => groups(d).has('加餐'));
+    if (P.kind === 'protein') {
+      const target = this.gaugeProteinTarget ? this.gaugeProteinTarget() : 0;
+      return !!target && days.some(d => this.diet.filter(x => x.date === d).reduce((t, x) => t + (x.proteinG || 0), 0) >= target);
+    }
+    if (P.kind === 'newmove') {
+      const before = new Set(this.workouts.filter(w => w.date < p.at).map(w => String(w.exerciseName || '').trim()));
+      return days.some(d => this.workouts.some(w => w.date === d && w.exerciseName && !before.has(String(w.exerciseName).trim())));
+    }
+    return false;
+  },
+
+  /**
+   * 记完东西 / 打开 App 时看一眼约定：做到了就标上，小人马上说一句（不占说话次数，是你做到的事）+ 问要不要看加篇；
+   * 过期了没做到的悄悄收起来，不提、不怪你（陪伴不绑架）。返回这次新做到的约定 id。
+   */
+  promiseCheck(quiet) {
+    const st = this.storyData();
+    const list = Object.entries(st.promises || {});
+    if (!list.length) return null;
+    const today = getTodayDateString();
+    let hit = null, changed = false;
+    const next = Object.assign({}, st.promises);
+    list.forEach(([id, p]) => {
+      if (!p || p.declined || p.done || p.lapsed) return;
+      if (this.promiseDone(id, p)) { next[id] = Object.assign({}, p, { done: today }); hit = hit || id; changed = true; }
+      else if (today > p.due) { next[id] = Object.assign({}, p, { lapsed: true }); changed = true; }
+    });
+    if (changed) this.setBuddy({ story: Object.assign({}, st, { promises: next }) });
+    if (hit && !quiet) this.promiseCelebrate(hit);
+    return hit;
+  },
+
+  promiseCelebrate(id) {
+    const P = (this.cast().promises || {})[id];
+    if (!P || !this.buddyLook().show || this._touring) return;
+    const B = (this.cast().bonus || {})[P.bonus];
+    const f = this.cast().sex === 'f';
+    setTimeout(() => {
+      if (this._scene) return;
+      this.buddyBang && this.buddyBang('♥');
+      if (this.buddyDo) this.buddyDo([['flex', 1000], ['wave', 700], ['stand', 300]]);
+      if (window.Sound) window.Sound.play('unlock');
+      const say = f ? `约定达成！「${P.title}」——你做到了！` : `约定达成。「${P.title}」。……你做到了。`;
+      if (!B) { this.sayTip(say); return; }
+      this.askUser(say + (f ? ' 我有东西给你看～' : ' 有东西给你看。'), [
+        { label: `看看 ·「${B.title}」`, pick: () => setTimeout(() => { this.closeBuddyPop && this.closeBuddyPop(); this.playBonus(B.id); }, 250) },
+        { label: '等会儿', reply: f ? '好！点我就能看～' : '嗯。点我就能看。' }
+      ]);
+    }, 1600);
+  },
+
+  /** 做到了、还没看的加篇（最早的那个） */
+  bonusReady() {
+    const st = this.storyData();
+    const c = this.cast();
+    const seen = new Set(st.seen || []);
+    const id = Object.keys(c.promises || {}).find(k => (st.promises || {})[k] && st.promises[k].done && c.promises[k].bonus && !seen.has(c.promises[k].bonus));
+    return id ? (c.bonus || {})[c.promises[id].bonus] : null;
+  },
+
+  /** 演一段约定加篇（重看也走这里） */
+  playBonus(id, replay) {
+    const B = (this.cast().bonus || {})[id];
+    if (!B || this._touring) return false;
+    const pid = Object.keys(this.cast().promises || {}).find(k => this.cast().promises[k].bonus === id);
+    const ch = pid ? this.cast().promises[pid].ch : this.bond().lv;
+    const first = !(this.storyData().seen || []).includes(id);
+    return this.playScene({
+      label: `约定 · ${this.chapterLabel(ch)}`, title: `「${B.title}」`, bg: B.bg || 'room', script: B.script.slice(), replay: !!replay, from: this.buddyCenter ? this.buddyCenter() : null,
+      onChoose: (k, opt, askId) => { if (!replay) this.mainChoose(askId, k, opt); return null; },
+      onEnd: () => this.mainSeen(id),
+      after: () => { this.renderBuddy(); if (!replay && first && B.after) this.storyAfterglow(B.after); }
+    });
+  },
+
+  // ---------------- TA 视角的手册边角 / 搭子本（v8.0）：每章三段主线都看完了解锁 ----------------
+
+  diaryReady(ch) {
+    const seen = new Set(this.storyData().seen || []);
+    const list = (this.cast().main || [])[ch - 1] || [];
+    return !!list.length && list.every(sc => seen.has(sc.id)) && !!((this.cast().diary || [])[ch - 1]);
+  },
+
+  diarySeen(ch) { return ((this.storyData().diary || [])).includes(ch); },
+
+  /** 翻开这一章的手册边角 / 搭子本：一张纸，一行一行浮出来；只出你们真的经历过的那几行（按你当时选的） */
+  showDiary(ch) {
+    const D = (this.cast().diary || [])[ch - 1];
+    if (!D || !this.diaryReady(ch)) return false;
+    const vars = this.storyVars();
+    const ctx = Object.assign(this.sceneCtx(), { vars });
+    const lines = D.lines.filter(l => TF.Theater.evalCond(l[1], ctx)).map(l => TF.Theater.fill(l[0], vars)).filter(Boolean);
+    let el = document.getElementById('diary-sheet');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'diary-sheet';
+      el.className = 'diary-sheet hidden';
+      el.setAttribute('role', 'dialog');
+      document.body.appendChild(el);
+      el.addEventListener('click', (e) => { if (e.target === el || e.target.closest('.dy-close')) el.classList.add('hidden'); });
+    }
+    const f = this.cast().sex === 'f';
+    el.dataset.who = f ? 'xy' : 'jx';
+    el.innerHTML = `<div class="dy-paper"><small class="dy-from">${esc(f ? `${this.buddyName()}的搭子本` : `${this.buddyName()}的训练本 · 角落里的字`)}</small>` +
+      `<b class="dy-title">${esc(D.title)}</b><span class="dy-ch">${esc(this.chapterLabel(ch))}</span>` +
+      `<div class="dy-lines">${lines.map((t, i) => `<p style="--i:${i}">${esc(t)}</p>`).join('')}</div>` +
+      `<button class="dy-close" type="button">${f ? '合上本子' : '合上'}</button></div>`;
+    el.classList.remove('hidden');
+    if (window.Sound) window.Sound.play('blip');
+    if (!this.diarySeen(ch)) {
+      const st = Object.assign({ seen: [], picks: {} }, this.storyData());
+      st.diary = [...new Set((st.diary || []).concat(ch))];
+      this.setBuddy({ story: st });
+    }
+    return true;
   },
 
   /** 记下选了什么：看过、选的第几个；「那句话」的三个选项改关系；周末出去玩这类记成近况，过一天问问 */
@@ -356,10 +600,24 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
         ? `<button type="button" class="sb-scene seen" data-scene="${e.id}">${esc(c.events[e.id].title)}</button>`
         : `<span class="sb-scene${open ? '' : ' far'}" title="${esc(TF.Story.HINTS[e.id] || '')}"><b>？？？</b>${open ? esc(TF.Story.HINTS[e.id] || '') : ''}</span>`).join('');
       const evGot = evs.filter(e => seen.has(e.id)).length;
+      // v8.0：这一章的约定（约好了 · 还剩几天 / 做到了 · 加篇 / 下次吧）和 TA 写的那一页（三段都看完了解锁）
+      const pid = Object.keys(c.promises || {}).find(k => c.promises[k].ch === lv);
+      const P = pid && c.promises[pid];
+      const pr = P && (st.promises || {})[pid];
+      const B = P && (c.bonus || {})[P.bonus];
+      const today = getTodayDateString();
+      const left = pr && pr.due ? Math.max(0, Math.round((new Date(pr.due + 'T00:00:00') - new Date(today + 'T00:00:00')) / 86400000)) : 0;
+      const promise = !P ? '' : pr && pr.done && B ? `<button type="button" class="sb-promise done${seen.has(B.id) ? ' seen' : ''}" data-bonus="${B.id}"><i>约定</i><b>「${esc(B.title)}」</b><small>${seen.has(B.id) ? '重看' : '做到了 · 点开看'}</small></button>`
+        : pr && !pr.declined && !pr.lapsed ? `<span class="sb-promise on" title="${esc(P.detail)}"><i>约定</i><b>${esc(P.title)}</b><small>${left ? `还剩 ${left} 天` : '今天'}</small></span>`
+        : pr ? `<span class="sb-promise off" title="${esc(P.detail)}"><i>约定</i><b>${esc(P.title)}</b><small>${pr.declined ? '下次吧' : '这次没做到，没关系'}</small></span>`
+        : open ? `<span class="sb-promise far" title="主线里会跟你约"><i>约定</i><b>？？？</b><small>这一章里会约</small></span>` : '';
+      const f = c.sex === 'f';
+      const diary = !(c.diary || [])[lv - 1] ? '' : this.diaryReady(lv) ? `<button type="button" class="sb-diary${this.diarySeen(lv) ? ' seen' : ''}" data-diary="${lv}"><i>${f ? '搭子本' : '手册边角'}</i><b>${esc(c.diary[lv - 1].title)}</b><small>${this.diarySeen(lv) ? '再看看' : `${f ? '她' : '他'}写的 · 新`}</small></button>`
+        : open ? `<span class="sb-diary far"><i>${f ? '搭子本' : '手册边角'}</i><b>？？？</b><small>这章三段看完解锁</small></span>` : '';
       return `<div class="sb-ch${open ? '' : ' locked'}${b.lv === lv ? ' now' : ''}">` +
         `<div class="sb-head"><span class="sb-open"><b>${esc(this.chapterLabel(lv))}</b><small>${open ? (b.lv === lv ? '正在这一章' : `主线 ${got}/${mine.length}`) : `再记 ${days((TF.Bond.LEVELS[lv - 1] || {}).xp || 0)} 天左右`}</small></span>` +
         `<span class="sb-count">${got + evGot}/${mine.length + evs.length}</span></div>` +
-        (open || lv === b.lv + 1 ? `<div class="sb-mains">${rows}</div>` + (evs.length ? `<p class="sb-sub">小剧情</p><div class="sb-scenes">${scenes}</div>` : '') : '') + '</div>';
+        (open || lv === b.lv + 1 ? `<div class="sb-mains">${rows}</div>` + (promise || diary ? `<div class="sb-extras">${promise}${diary}</div>` : '') + (evs.length ? `<p class="sb-sub">小剧情</p><div class="sb-scenes">${scenes}</div>` : '') : '') + '</div>';
     }).join('') + this.albumHtml() + (this.artCredit() ? `<p class="sb-credit">${esc(this.artCredit())} · wataokiba.net</p>` : '');
   },
 
@@ -384,7 +642,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     const picks = st.picks || {};
     const fact = (id) => {
       if (E[id]) { const c = E[id].choices[picks[id]]; return c ? [c[3]] : []; }
-      const m = this.mainFind(id); // 主线一段里可能有几问，按出场顺序
+      const m = this.mainFind(id) || (this.cast().bonus && this.cast().bonus[id] ? { sc: this.cast().bonus[id] } : null); // 主线 / 加篇一段里可能有几问，按出场顺序
       if (!m) return [];
       const out = [];
       const walk = (steps) => (steps || []).forEach(s => {
@@ -395,7 +653,9 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       walk(m.sc.script);
       return out;
     };
-    return [...new Set((st.seen || []).flatMap(fact).filter(Boolean))].slice(-5);
+    // 关键时刻你对 TA 说过的话（v8.0）
+    const said = Object.values(st.inputFacts || {}).filter(Boolean);
+    return [...new Set((st.seen || []).flatMap(fact).concat(said).filter(Boolean))].slice(-6);
   },
 
   /** 你们现在的关系（给聊天的大模型）：恋人 / 好搭子 / 有点暧昧 */

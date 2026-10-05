@@ -4,6 +4,7 @@
  *   success 记好了（两声小铃）       undo 撤销    error 没听清 / 没整理好
  *   blip 点小人（8-bit 哔哔）        unlock 连续记录拿到新装备（8-bit 小琶音）
  *   babble(text) 小人主动说话时一个字一声的对话音
+ *   剧场（v8.0）：pop 来消息、tick 节拍、heart 心跳、door 关门、whistle 哨子、phone 电话铃、clang 铁片；amb(rain / pool / crowd / night) 环境声
  * 设置里能关（localStorage tf_sound = off）；手机静音 / 震动模式时不响（问原生 soundAllowed）。
  * WebView 要在用户点屏幕时才让出声：第一次点屏幕时 warm() 一下，之后异步的「记好了」也能响。
  */
@@ -64,7 +65,41 @@
     unlock: (c, t) => {
       [1046.5, 1318.5, 1568, 2093].forEach((f, i) => tone(c, t + i * 0.075, { f, dur: 0.09, gain: 0.03, type: 'square', attack: 0.002 }));
       bell(c, t + 0.3, 2093, 0.5, 0.045);
-    }
+    },
+    // ---- 剧场里的音效（v8.0）：都很轻，像背景里的一声 ----
+    pop: (c, t) => tone(c, t, { f: 880, f2: 1320, dur: 0.06, gain: 0.035 }), // 手机来消息
+    tick: (c, t) => tone(c, t, { f: 1500, dur: 0.03, gain: 0.03, type: 'square', attack: 0.002 }), // 节拍
+    heart: (c, t) => { tone(c, t, { f: 70, dur: 0.14, gain: 0.12 }); tone(c, t + 0.2, { f: 62, dur: 0.16, gain: 0.1 }); },
+    door: (c, t) => { noise(c, t, 0.18, 0.09, 'lowpass', 380); tone(c, t, { f: 110, f2: 70, dur: 0.16, gain: 0.08 }); },
+    whistle: (c, t) => { tone(c, t, { f: 2600, f2: 2450, dur: 0.16, gain: 0.03 }); tone(c, t + 0.22, { f: 2600, f2: 2300, dur: 0.26, gain: 0.03 }); },
+    phone: (c, t) => { for (let i = 0; i < 2; i++) { for (let k = 0; k < 6; k++) tone(c, t + i * 0.9 + k * 0.06, { f: k % 2 ? 620 : 480, dur: 0.055, gain: 0.025, type: 'triangle' }); } },
+    clang: (c, t) => { [523, 1310, 2150].forEach((f, i) => tone(c, t, { f, dur: 0.7 - i * 0.15, gain: 0.04 - i * 0.01, type: 'triangle' })); noise(c, t, 0.05, 0.05, 'highpass', 2000); }
+  };
+
+  // 一小段噪声（关门、铁片碰撞）
+  function noise(c, t, dur, gain, type, freq) {
+    const len = Math.max(1, Math.floor(c.sampleRate * dur));
+    const buf = c.createBuffer(1, len, c.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = c.createBufferSource();
+    src.buffer = buf;
+    const f = c.createBiquadFilter();
+    f.type = type || 'lowpass';
+    f.frequency.value = freq || 800;
+    const g = c.createGain();
+    g.gain.value = gain;
+    src.connect(f).connect(g).connect(out);
+    src.start(t);
+  }
+
+  // 环境声（v8.0）：雨、泳池的水声、看台的人声、夜里——白噪声过滤出来，很轻地循环；换一种先淡出再淡入
+  let ambNode = null;
+  const AMB = {
+    rain: { type: 'highpass', freq: 1400, q: 0.5, gain: 0.028 },
+    pool: { type: 'lowpass', freq: 420, q: 0.8, gain: 0.03, wobble: 0.35 },
+    crowd: { type: 'bandpass', freq: 750, q: 0.6, gain: 0.02, wobble: 0.5 },
+    night: { type: 'lowpass', freq: 260, q: 0.4, gain: 0.012 }
   };
 
   const Sound = {
@@ -84,6 +119,48 @@
       try { SOUNDS[kind](c, c.currentTime + 0.01 + (delay || 0)); } catch (e) {}
     },
     warm() { if (this.on()) audio(); },
+    /** 环境声：kind = rain / pool / crowd / night，'' 关掉（剧场收场时关）。静音、关了音效时不响 */
+    amb(kind) {
+      const c = ctx;
+      if (ambNode && c) {
+        const old = ambNode;
+        ambNode = null;
+        try { old.g.gain.cancelScheduledValues(c.currentTime); old.g.gain.setTargetAtTime(0.0001, c.currentTime, 0.25); setTimeout(() => { try { old.src.stop(); } catch (e) {} }, 1200); } catch (e) {}
+      }
+      const A = AMB[kind];
+      if (!A || !this.on() || !this.allowed()) return;
+      const a = audio();
+      if (!a) return;
+      try {
+        const len = a.sampleRate * 2;
+        const buf = a.createBuffer(1, len, a.sampleRate);
+        const d = buf.getChannelData(0);
+        let last = 0;
+        for (let i = 0; i < len; i++) { const w = Math.random() * 2 - 1; last = kind === 'rain' ? w : (last + 0.04 * w) / 1.04; d[i] = kind === 'rain' ? w : last * 3.5; }
+        const src = a.createBufferSource();
+        src.buffer = buf;
+        src.loop = true;
+        const f = a.createBiquadFilter();
+        f.type = A.type;
+        f.frequency.value = A.freq;
+        f.Q.value = A.q;
+        const g = a.createGain();
+        g.gain.setValueAtTime(0.0001, a.currentTime);
+        g.gain.setTargetAtTime(A.gain, a.currentTime, 0.6);
+        src.connect(f).connect(g).connect(out);
+        if (A.wobble) { // 水声、人声一阵一阵的
+          const lfo = a.createOscillator();
+          const lg = a.createGain();
+          lfo.frequency.value = A.wobble;
+          lg.gain.value = A.gain * 0.45;
+          lfo.connect(lg).connect(g.gain);
+          lfo.start();
+          src.addEventListener('ended', () => { try { lfo.stop(); } catch (e) {} });
+        }
+        src.start();
+        ambNode = { src, g };
+      } catch (e) {}
+    },
     /**
      * 小人说话的声音（像游戏里角色说话时的「哔哔」声，v5.7）：前二十几个字每个字一声很轻的方波，
      * 同一个字同一个音高，听着像在说话；男生低一点、女生高一点。静音、关了音效时不响。

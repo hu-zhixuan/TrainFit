@@ -390,6 +390,71 @@
       };
     },
 
+    /**
+     * 剧情里的关键对话（v8.0，用户：「不需要每句都接 AI，本身要有剧情，特殊时候、用户主动进行关键对话时再接 AI」）：
+     * 演到那一幕（深夜电话里他说完旧伤、她说完初中的事），让你自己打一句想说的话，TA 按人设和这一幕接 1～3 句。
+     * ctx：{ buddy（buddyPersona）, scene（这一幕的说明）, calm（江叙：不用感叹号）}。只要 lines，回得短才快（一秒十几个字）。
+     */
+    sceneMessages(text, ctx) {
+      ctx = ctx || {};
+      const b = ctx.buddy || {};
+      const you = b.you === '她' ? '她' : '他';
+      const system = [
+        `你是「${b.name || 'TA'}」${b.who ? `（${b.who}）` : ''}。现在在演你和${you}之间的一段剧情，正演到最要紧的一刻。`,
+        b.speech ? `你说话的样子：${b.speech}。` : '',
+        b.quirks ? `你的习惯：${b.quirks}。` : '',
+        b.never ? `你从来不${b.never}。` : '',
+        b.samples && b.samples.length ? '你平时就这么说话（照这个味道，别照抄）：' + b.samples.map(x => `「${x[1]}」`).join('；') + '。' : '',
+        '你是这个人，不是 AI 助手：不说「作为AI」「我理解你的感受」「谢谢你的分享」「建议你」「希望」，不列点，不说教，不用书面语。',
+        b.relation ? `你们的关系：${b.relation}` : '',
+        b.shared && b.shared.length ? `你们之间发生过的事：${b.shared.slice(-4).join('；')}。` : '',
+        `这一幕：${ctx.scene || ''}`,
+        `${you}刚刚对你说了一句话。回${you} 1～3 句，每句 25 个字以内，是你在这一刻真的会说的话：`,
+        `1. 接住${you}说的具体内容，用上${you}话里的词，别泛泛地道谢。可以停顿（……）、害羞、嘴硬，但是真心。`,
+        '2. 只说这一幕的事：别跳出剧情，别提 App、热量、记录。',
+        `3. 不情感勒索：不说「只有你」「你不…我就…」，不说你会难过。${you}说的话很奇怪、无关或者冒犯，就按你的性格温和地把话接回这一幕。`,
+        ctx.calm ? '4. 你说话从来不用感叹号和波浪号。' : '',
+        '只输出一个 JSON：{"lines":[{"face":"平静","text":"……"}]}。face 从 平静 / 害羞 / 开心 / 惊讶 / 担心 / 心动 / 不服 里选。'
+      ].filter(Boolean).join('\n');
+      return [
+        { role: 'system', content: system },
+        { role: 'user', content: `${you}说：${cleanText(text, 120)}` }
+      ];
+    },
+
+    /** 关键对话的回答 → [[表情, 话]]，最多 3 句；江叙的感叹号、波浪号去掉（守住人设） */
+    normalizeScene(parsed, ctx) {
+      ctx = ctx || {};
+      const FACES = ['平静', '害羞', '开心', '惊讶', '担心', '心动', '不服'];
+      const raw = Array.isArray(parsed && parsed.lines) ? parsed.lines : parsed && parsed.text ? [parsed] : [];
+      return raw.map(l => {
+        let t = cleanText(l && (l.text || l.t), 48).replace(/作为(一个)?AI[，,]?/g, '');
+        if (ctx.calm) t = t.replace(/[！!]+/g, '。').replace(/[～~]+/g, '').replace(/。。+/g, '。');
+        return [FACES.includes(l && l.face) ? l.face : '平静', t];
+      }).filter(l => l[1]).slice(0, 3);
+    },
+
+    /** 演关键对话：调一次大模型（不重写、不带聊天记录）；回不来、回得不对就抛错，剧场用写好的备用台词 */
+    async sceneReply(text, ctx) {
+      const override = readOverride();
+      const base = { messages: this.sceneMessages(text, ctx), temperature: 0.7, stream: false };
+      if (override.model) base.model = override.model;
+      const attempts = [Object.assign({ thinking: { type: 'disabled' } }, base), base];
+      let lastErr;
+      for (let i = 0; i < attempts.length; i++) {
+        try {
+          const raw = await this.sendHedged(attempts[i], override, null);
+          const lines = this.normalizeScene(this.extractJson(this.contentFromResponse(raw)), ctx);
+          if (!lines.length) throw new Error('NO_LINES');
+          return lines;
+        } catch (e) {
+          lastErr = e;
+          if (!/^HTTP (400|422)/.test((e && e.message) || '')) break;
+        }
+      }
+      throw lastErr || new Error('LLM_FAILED');
+    },
+
     extractJson(content) {
       if (content && typeof content === 'object') return content;
       let s = String(content || '').trim();

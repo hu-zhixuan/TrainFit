@@ -690,7 +690,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     this._buddyGear = st.gear;
     btn.setAttribute('aria-label', `小人：${st.say}`);
     btn.classList.toggle('has-note', !!(this.noteReady && this.noteReady())); // 今天的小纸条还没拆：头上挂个小信封
-    btn.classList.toggle('has-story', !!(this.mainReady && this.mainReady())); // 有新的主线没看：头上挂「新剧情」（v7.1）
+    btn.classList.toggle('has-story', !!(this.storyCue && this.storyCue())); // TA 有话想跟你说（新的主线、约定达成的加篇）：头上冒一个「…」气泡（v8.0）
     this.placeBuddy();
     const pop = document.getElementById('buddy-pop');
     if (!pop.classList.contains('hidden') && !pop.dataset.mode) this.showBuddyPop();
@@ -782,7 +782,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     btn.dataset.key = key;
     btn.dataset.pose = pose;
     let move = btn.querySelector('.bd-move');
-    if (!move) { btn.innerHTML = '<span class="bd-move"></span><span class="bd-mail" aria-hidden="true">✉</span><span class="bd-story" aria-hidden="true">新剧情</span>'; move = btn.querySelector('.bd-move'); }
+    if (!move) { btn.innerHTML = '<span class="bd-move"></span><span class="bd-mail" aria-hidden="true">✉</span><span class="bd-story" aria-hidden="true"><i></i><i></i><i></i></span>'; move = btn.querySelector('.bd-move'); }
     move.innerHTML = TF.Buddy.svg(Object.assign(art, { mood: face ? TF.Buddy.FACE_MOOD[face] : mood, gear, pose }));
     if (posed) this.placeBuddy(); // 站起来 / 趴下高度变了，底边还贴着那个框
   },
@@ -917,9 +917,9 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     const sulk = this.sulkNow && this.sulkNow();
     const tap = sulk ? this.cast().sulkTap : null;
     const rare = sulk ? tap[Math.floor(Math.random() * tap.length)] + '（长按摸摸头哄哄）' : this.rareLine ? this.rareLine() : '';
-    // v7.1：有新的主线没看，最上面一行「新剧情 · 第二章 · 晨泳「早上六点」 ▶」，点了就演
-    const next = this.mainReady && this.mainReady() ? this.mainNext() : null;
-    const story = next ? `<button class="buddy-story-row" type="button" data-main="${esc(next.sc.id)}"><i>新剧情</i><span>${esc(this.chapterLabel(next.ch))}「${esc(next.sc.title)}」</span><b>▶</b></button>` : '';
+    // v8.0：TA 有话想跟你说（新的主线 / 约定达成的加篇），最上面一行是 TA 自己的那句话（「……你醒了？我在泳池。」），点了就演
+    const cue = this.storyCue ? this.storyCue() : null;
+    const story = cue ? `<button class="buddy-story-row" type="button" data-${cue.kind}="${esc(cue.id)}"><span class="bsr-say">${esc(cue.line)}</span><small>${esc(cue.label)}</small><b>▶</b></button>` : '';
     pop.innerHTML = story + `<div class="buddy-pop-head">${head}</div>` + (rare ? `<p class="buddy-rare">${esc(rare)}</p>` : '') + this.bondRow() + `<p class="buddy-say">${esc(st.say)}</p>` +
       (obs ? `<p class="buddy-obs">${esc(obs)}</p>` : '') +
       (tip ? `<p class="buddy-train">${esc(tip)}</p>` : '') +
@@ -927,7 +927,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       `<p class="buddy-foot">${esc(foot)}</p>`;
     pop.querySelector('.buddy-dex').addEventListener('click', (e) => { e.stopPropagation(); this.openDex && this.openDex(); });
     const row = pop.querySelector('.buddy-story-row');
-    if (row) row.addEventListener('click', (e) => { e.stopPropagation(); pop.classList.add('hidden'); this.playMain(row.dataset.main); });
+    if (row) row.addEventListener('click', (e) => { e.stopPropagation(); pop.classList.add('hidden'); if (row.dataset.bonus) this.playBonus(row.dataset.bonus); else this.playMain(row.dataset.main); });
     this.positionBuddyPop();
     pop.classList.remove('hidden');
   },
@@ -1792,6 +1792,12 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       const sc = e.target.closest('[data-scene]');
       const cg = e.target.closest('[data-cg]');
       if (m) { e.stopPropagation(); const seen = m.classList.contains('seen'); this.playMain(m.dataset.main, { replay: seen, after: () => this.renderBuddySettings() }); return; }
+      const bo = e.target.closest('[data-bonus]');
+      const dy = e.target.closest('[data-diary]');
+      if (bo) { e.stopPropagation(); this.playBonus(bo.dataset.bonus, bo.classList.contains('seen')); return; }
+      if (dy) { e.stopPropagation(); this.showDiary(+dy.dataset.diary); setTimeout(() => this.renderBuddySettings(), 300); return; }
+      const pr = e.target.closest('.sb-promise[title]');
+      if (pr) { this.showToast(pr.title); return; }
       if (sc) { e.stopPropagation(); this.showStoryEvent(sc.dataset.scene, true); return; }
       if (cg) { e.stopPropagation(); this.viewCg(cg.dataset.cg); return; }
       const hint = e.target.closest('.sb-scene');

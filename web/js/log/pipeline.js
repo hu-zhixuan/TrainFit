@@ -243,10 +243,13 @@
       if ((result.updates || []).length || (result.deletes || []).length) { try { localStorage.setItem('tf_used_fix', '1'); } catch (e) {} }
       const batch = this.save(Object.assign(result, { said: p.text }), p.date, ctx);
       this.showSnack(batch, result);
+      // 剧情里的约定（v8.0）：这条记录让哪个约定做到了，先标上；没有更要紧的话要说时，小人马上庆祝 + 问要不要看加篇
+      const kept = app.promiseCheck ? app.promiseCheck(true) : null;
       // 放了计划（「明天练计划A」）：跳到那天看
       if (batch.acts && batch.acts.jump && app.jumpToPlans && !result.answer) app.jumpToPlans(batch.acts.jump);
       if (result.answer && app.showBuddyAnswer) app.showBuddyAnswer(p.text, result.answer, answerOpts); // 又记又问
       else if (batch.asks.length && app.askPortion) app.askPortion(batch.asks); // 份量含糊：小人问一句，点一下就改
+      else if (kept && app.promiseCelebrate) app.promiseCelebrate(kept); // 约定达成：解锁一段加篇
       else if (app.makeUpAfter && app.makeUpAfter(result, batch)) { /* 闹着小别扭：好好吃饭了就和好 */ }
       else if (app.memoTip && app.memoTip(result, batch)) { /* 你说过有伤：练到那儿提醒一句 */ }
       else if (app.recordReact && app.recordReact(result, batch, 'big')) { /* 破纪录、吃撑了、蛋白够了、这周第 5 练、体重轻了：小人一张卡片（第一次是小剧情，v6.4） */ }
