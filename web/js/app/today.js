@@ -169,24 +169,17 @@ Object.assign(FitnessApp.prototype, {
     // 有过记录后再问，别一打开就弹
     $('remind-banner').classList.toggle('hidden', asked || !this.hasNotifApi() || (this.workouts.length + this.diet.length) < 1);
 
-    // 记录：整理中的在最上面（提问的在小人气泡里等，不占卡片；没整理出来才显示）；然后是计划；饮食按 早→午→晚→加餐，训练按先后顺序
+    // 记录：整理中的在最上面（提问的在小人气泡里等，不占卡片；没整理出来才显示）；然后是计划的进度；
+    // 饮食按顿分组（v7.1）：早餐 / 午餐 / 晚餐 / 加餐 / 补剂各一张卡，卡里一行一样，这顿的计划也放在里面；训练一张卡
     // 提问：整理中不出卡片（小人在想）；没答上来也不留卡片（小人的气泡里能重试），又记又问的才留
     const pend = this.pending.filter(p => p.date === date && !(p.ask && (p.status === 'working' || p.plan || p.chat || (TF.pureQuestion && TF.pureQuestion(p.text))))).sort((a, b) => b.ts - a.ts);
-    const meals = this.diet.filter(d => d.date === date)
-      .sort((a, b) => (MEAL_TYPES.indexOf(a.mealType) - MEAL_TYPES.indexOf(b.mealType)) || (recordTs(a) - recordTs(b)));
-    const lifts = this.workouts.filter(w => w.date === date).sort((a, b) => recordTs(a) - recordTs(b));
+    const todo = this.plansFor ? this.plansFor(date).filter(p => !p.done) : [];
 
     const tl = $('timeline');
     let html = pend.map(p => this.renderRow({ kind: 'pending', ts: p.ts, rec: p })).join('');
-    html += this.renderPlanRows ? this.renderPlanRows(date) : '';
-    if (meals.length) {
-      html += `<div class="group-head"><span>饮食</span><b>${fmt(s.intake)} kcal · 蛋白 ${fmt(s.protein)}g</b></div>`;
-      html += meals.map(d => this.renderRow({ kind: 'meal', ts: recordTs(d), rec: d })).join('');
-    }
-    if (lifts.length) {
-      html += `<div class="group-head"><span>${simple ? '运动' : '训练'}</span><b>消耗 ${fmt(s.workoutBurn)} kcal</b></div>`;
-      html += lifts.map(w => this.renderRow({ kind: 'workout', ts: recordTs(w), rec: w })).join('');
-    }
+    html += this.renderPlanHead ? this.renderPlanHead(date) : '';
+    html += this.renderMealGroups(date, todo.filter(p => p.kind === 'meal'));
+    html += this.renderTrainGroup(date, s, todo.filter(p => p.kind !== 'meal'));
     if (!html) {
       // 空着的时候只说一句（v6.3.1 用户：「空白页太复杂了，最多一句话」）。老样子、点图片记都交给小人饭点时问
       html = !isToday ? `<div class="empty">这天没有记录</div>`
@@ -200,11 +193,81 @@ Object.assign(FitnessApp.prototype, {
     if (tip) tip.classList.toggle('hidden', this.workouts.length + this.diet.length >= 3);
   },
 
+  /** 这条吃的算哪一顿：补剂单独一组；没写顿的按时间算 */
+  mealGroupOf(d) {
+    if (isSuppOnly(d)) return '补剂';
+    const t = MEAL_TYPES.includes(d.mealType) ? d.mealType : (TF.mealTypeByHour ? TF.mealTypeByHour(new Date(recordTs(d)).getHours()) : '加餐/补剂');
+    return t === '加餐/补剂' ? '加餐' : t;
+  },
+
+  /**
+   * 饮食按顿分组（v7.1，用户：「每天的饮食自动分个组，现在有点乱」——以前一条一张卡，加餐、补剂、计划散在各处）：
+   * 每顿一张卡，头上写这顿几点、多少千卡、多少蛋白，下面一行一样（点开能改），这顿还没吃的计划虚线放在最后。
+   */
+  renderMealGroups(date, plans) {
+    const meals = this.diet.filter(d => d.date === date).sort((a, b) => recordTs(a) - recordTs(b));
+    const planGroup = (p) => (p.mealType || '').replace('/补剂', '');
+    return ['早餐', '午餐', '晚餐', '加餐', '补剂'].map(g => {
+      const rows = meals.filter(d => this.mealGroupOf(d) === g);
+      const plan = plans.filter(p => planGroup(p) === g);
+      if (!rows.length && !plan.length) return '';
+      const kcal = rows.reduce((t, d) => t + (d.calories || 0), 0);
+      const prot = rows.reduce((t, d) => t + (d.proteinG || 0), 0);
+      const total = !rows.length ? `<span class="mg-total plan"><small>计划</small>${fmt(plan.reduce((t, p) => t + (p.calories || 0), 0))} kcal</span>`
+        : g === '补剂' && !kcal ? `<span class="mg-total"><small>${rows.length} 样</small></span>`
+        : `<span class="mg-total"><b>${fmt(kcal)}</b> kcal${prot ? `<small>蛋白 ${round1(prot)}g</small>` : ''}</span>`;
+      return `<section class="mgroup" data-group="${g}"><div class="mg-head"><span class="mg-ico ${g === '补剂' ? 'supp' : 'meal'}">${ICONS.meal}</span>` +
+        `<span class="mg-name">${g}${rows.length ? `<small>${esc(hhmm(recordTs(rows[0])))}${rows.length > 1 ? ` · ${rows.length} 样` : ''}</small>` : ''}</span>${total}</div>` +
+        rows.map(d => this.renderMealLine(d)).join('') + plan.map(p => this.renderPlanRow(p, true)).join('') + '</section>';
+    }).join('');
+  },
+
+  renderMealLine(x) {
+    const supp = isSuppOnly(x);
+    const macro = supp ? TF.nutrientsText(sumNutrients(x.items), 3)
+      : this.isSimple() ? (x.proteinG ? `蛋白 ${round1(x.proteinG)}g` : '')
+      : [x.proteinG ? `蛋白 ${round1(x.proteinG)}g` : '', x.carbsG ? `碳水 ${round1(x.carbsG)}g` : '', x.fatG ? `脂肪 ${round1(x.fatG)}g` : ''].filter(Boolean).join(' · ');
+    return `<button class="mg-row" data-kind="meal" data-id="${esc(x.id)}" type="button"><span class="mg-main"><span class="mg-title">${esc(x.foodSummary)}</span>` +
+      `<span class="mg-sub">${esc(hhmm(recordTs(x)))}${macro ? ' · ' + macro : ''}</span></span><span class="mg-val">${supp && !x.calories ? '' : fmt(x.calories)}</span></button>`;
+  },
+
+  /** 训练一张卡：头上写几个动作、消耗多少，下面一行一个动作（下次练多少写在下面），还没做的计划虚线放最后 */
+  renderTrainGroup(date, s, plans) {
+    const lifts = this.workouts.filter(w => w.date === date).sort((a, b) => recordTs(a) - recordTs(b));
+    if (!lifts.length && !plans.length) return '';
+    const simple = this.isSimple();
+    const total = lifts.length ? `<span class="mg-total"><b>${fmt(s.workoutBurn)}</b> kcal<small>${lifts.length} 个${simple ? '运动' : '动作'}</small></span>`
+      : `<span class="mg-total plan"><small>计划</small>${plans.length} 个动作</span>`;
+    return `<section class="mgroup" data-group="train"><div class="mg-head"><span class="mg-ico lift">${ICONS.lift}</span>` +
+      `<span class="mg-name">${simple ? '运动' : '训练'}${lifts.length ? `<small>${esc(hhmm(recordTs(lifts[0])))}</small>` : ''}</span>${total}</div>` +
+      lifts.map(w => this.renderWorkoutLine(w)).join('') + plans.map(p => this.renderPlanRow(p, true)).join('') + '</section>';
+  },
+
+  renderWorkoutLine(x) {
+    const ts = recordTs(x);
+    const parts = [];
+    let value;
+    if (ts) parts.push(esc(hhmm(ts)));
+    if (x.durationMin) {
+      value = `${fmt(x.durationMin)}<small>分钟</small>`;
+      parts.push(`消耗约 ${fmt(x.burnedCalories)} kcal`);
+    } else {
+      value = `${x.weightKg > 0 ? round1(x.weightKg) + 'kg' : '自重'}<small>${fmt(x.sets)}×${fmt(x.reps)}</small>`;
+      if (x.muscleGroup) parts.push(esc(x.muscleGroup));
+      const p = this.exerciseProgress(x.exerciseName);
+      if (x.notes && /估计/.test(x.notes)) parts.push('有数字是估的，点开改');
+      else if (p && p.isLatest(x.id) && p.next.kind !== 'keep') parts.push(`<span class="up">${esc(p.next.text)}</span>`);
+    }
+    const tag = TF.workoutTag(x);
+    return `<button class="mg-row" data-kind="workout" data-id="${esc(x.id)}" type="button"><span class="mg-main"><span class="mg-title"><span class="tag ${tag.cls}">${tag.label}</span>${esc(x.exerciseName)}</span>` +
+      `<span class="mg-sub">${parts.join(' · ')}</span></span><span class="mg-val">${value}</span></button>`;
+  },
+
+  /** 整理中 / 没整理出来的那一行（记好的按顿放进卡里，见 renderMealGroups） */
   renderRow(r) {
     const x = r.rec;
-    if (r.kind === 'pending') {
-      const failed = x.status === 'failed';
-      return `
+    const failed = x.status === 'failed';
+    return `
         <div class="item pending ${failed ? 'failed' : ''}">
           <div class="item-icon">${failed ? ICONS.alert : '<div class="spinner"></div>'}</div>
           <div class="item-main">
@@ -217,50 +280,8 @@ Object.assign(FitnessApp.prototype, {
             <button class="chip chip-primary" data-act="retry" data-id="${esc(x.id)}" type="button">重试</button>
           </div>` : ''}
         </div>`;
-    }
-    if (r.kind === 'meal') {
-      // 只有补剂的一条：标「补剂」，下面写含的营养素
-      const suppOnly = isSuppOnly(x);
-      const macro = suppOnly ? TF.nutrientsText(sumNutrients(x.items), 3)
-        : this.isSimple() ? (x.proteinG ? `蛋白 ${round1(x.proteinG)}g` : '')
-        : [x.proteinG ? `蛋白 ${round1(x.proteinG)}g` : '', x.carbsG ? `碳水 ${round1(x.carbsG)}g` : '', x.fatG ? `脂肪 ${round1(x.fatG)}g` : ''].filter(Boolean).join(' · ');
-      return `
-        <button class="item" data-kind="meal" data-id="${esc(x.id)}" type="button">
-          <div class="item-icon meal">${ICONS.meal}</div>
-          <div class="item-main">
-            <div class="item-title"><span class="tag tag-meal">${esc(suppOnly ? '补剂' : (x.mealType || '').replace('/补剂', ''))}</span>${esc(x.foodSummary)}</div>
-            <div class="item-sub">${esc(hhmm(r.ts))}${macro ? ' · ' + macro : ''}</div>
-          </div>
-          <div class="item-value">${fmt(x.calories)}<small>kcal</small></div>
-        </button>`;
-    }
-    // workout
-    let value;
-    const parts = [];
-    if (r.ts) parts.push(esc(hhmm(r.ts)));
-    if (x.durationMin) {
-      value = `${fmt(x.durationMin)}<small>分钟</small>`;
-      parts.push(`消耗约 ${fmt(x.burnedCalories)} kcal`);
-    } else {
-      value = `${x.weightKg > 0 ? round1(x.weightKg) + 'kg' : '自重'}<small>${fmt(x.sets)} 组 × ${fmt(x.reps)} 次</small>`;
-      if (x.muscleGroup) parts.push(esc(x.muscleGroup));
-      const p = this.exerciseProgress(x.exerciseName);
-      if (x.notes && /估计/.test(x.notes)) parts.push('有数字是估的，点开改');
-      else if (p && p.isLatest(x.id) && p.next.kind !== 'keep') parts.push(`<span class="up">${esc(p.next.text)}</span>`);
-    }
-    const tag = TF.workoutTag(x); // 有氧 / 运动 / 放松 / 训练：按动作名字认（v6.5，以前按有没有时长，一小时器械也显示成有氧）
-    return `
-      <button class="item" data-kind="workout" data-id="${esc(x.id)}" type="button">
-        <div class="item-icon ${tag.cls === 'tag-cardio' ? 'cardio' : 'lift'}">${tag.cls === 'tag-cardio' ? ICONS.cardio : ICONS.lift}</div>
-        <div class="item-main">
-          <div class="item-title"><span class="tag ${tag.cls}">${tag.label}</span>${esc(x.exerciseName)}</div>
-          <div class="item-sub">${parts.join(' · ')}</div>
-        </div>
-        <div class="item-value">${value}</div>
-      </button>`;
   },
 
-  /** @param ask 听着像提问：整理时不出卡片，小人在气泡里说「我想想」 */
   addPending(text, ask, extra) {
     const p = Object.assign({ id: 'p_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6), text, date: this.selectedDate, ts: Date.now(), status: 'working', ask: !!ask }, extra || {});
     this.pending.unshift(p);

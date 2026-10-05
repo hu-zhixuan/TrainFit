@@ -22,12 +22,13 @@ test('记了火锅、奶茶：马上一段；深夜打开：睡不着；记满 7
   assert.strictEqual(pick({ trigger: 'open', lv: 1, hour: 10, days: 3 }), undefined);
 });
 
-test('「那句话」：老搭子、晚上、到这一级三天以后；选了「让我想想」七天后再问；选过了就不再问', () => {
+test('「那句话」：第一次在主线第四章（v7.1）；小剧情只在选了「让我想想」七天后、晚上再问；选过了就不再问', () => {
   const seen = ['firstweek'];
-  assert.strictEqual(pick({ trigger: 'open', seen }), 'confess');
-  assert.strictEqual(pick({ trigger: 'open', seen, lv: 3 }), 'secret', 'Lv3 还不表白');
-  assert.strictEqual(pick({ trigger: 'open', seen, lvDays: 1 }) === 'confess', false, '刚升级不马上表白');
-  assert.strictEqual(pick({ trigger: 'open', seen, hour: 10 }) === 'confess', false, '白天不表白');
+  assert.strictEqual(pick({ trigger: 'open', seen }) === 'confess', false, '第一次表白在主线里，小剧情不抢');
+  const later = { confessAfter: '2026-10-03' };
+  assert.strictEqual(pick(Object.assign({ trigger: 'open', seen: seen.concat('confess') }, later)), 'confess');
+  assert.strictEqual(pick(Object.assign({ trigger: 'open', seen, lv: 3 }, later)), 'secret', 'Lv3 还不问');
+  assert.strictEqual(pick(Object.assign({ trigger: 'open', seen, hour: 10 }, later)) === 'confess', false, '白天不问');
   assert.strictEqual(pick({ trigger: 'open', seen: seen.concat('confess'), confessAfter: '2026-10-08' }) === 'confess', false, '想想：七天内不再问');
   assert.strictEqual(pick({ trigger: 'open', seen: seen.concat('confess'), confessAfter: '2026-10-03' }), 'confess', '七天到了再问');
   assert.strictEqual(pick({ trigger: 'open', seen: seen.concat('confess'), romance: false }) === 'confess', false);

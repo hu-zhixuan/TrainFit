@@ -22,3 +22,10 @@ app/src/main/assets/
 # 本机语音识别文件（scripts/fetch-asr.sh 下载，太大不进仓库）
 app/src/main/jniLibs/
 .asr-cache/
+
+# 剧场美术原图只放本地（scripts/build-art.py 压成 webp 放进 web/img/cast/ 再提交）
+art/**/*.png
+art/**/*.jpg
+art/**/*.jpeg
+art/**/*.webp
+art/**/*.psd

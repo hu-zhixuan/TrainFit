@@ -109,26 +109,29 @@ Object.assign(FitnessApp.prototype, {
     }));
   },
 
-  /** 今天页：计划那几行（虚线框、点 ✓ 记上、点 × 不要了） */
-  renderPlanRows(date) {
+  /** 今天页：计划的进度（「计划  完成 2/5」+ 一根进度条）；每一行放进那顿 / 训练的卡里（v7.1，renderPlanRow） */
+  renderPlanHead(date) {
     const all = this.plansFor(date);
     if (!all.length) return '';
-    const list = all.filter(p => !p.done);
-    const done = all.length - list.length;
+    const left = all.filter(p => !p.done).length;
+    const done = all.length - left;
     const pct = Math.round(done / all.length * 100);
-    // 「计划  完成 2/5」+ 一根进度条；全做完了只留一行
-    let html = `<div class="group-head plan-head"><span>计划</span><b>${done ? (list.length ? `完成 ${done}/${all.length}` : `全部完成 ✓`) : '做完点 ✓'}</b></div>` +
-      `<div class="plan-bar${list.length ? '' : ' full'}"><i style="width:${this._planPct && this._planPct[date] != null ? this._planPct[date] : pct}%" data-to="${pct}"></i></div>`;
+    const html = `<div class="group-head plan-head"><span>计划</span><b>${done ? (left ? `完成 ${done}/${all.length}` : `全部完成 ✓`) : '做完点那行的 ✓'}</b></div>` +
+      `<div class="plan-bar${left ? '' : ' full'}"><i style="width:${this._planPct && this._planPct[date] != null ? this._planPct[date] : pct}%" data-to="${pct}"></i></div>`;
     this._planPct = Object.assign(this._planPct || {}, { [date]: pct });
-    if (!list.length) return html;
-    html += list.map(p => {
-      const meal = p.kind === 'meal';
-      const title = meal ? `<span class="tag tag-meal">${esc(p.mealType.replace('/补剂', ''))}</span>${esc(p.foodSummary)}`
-        : `<span class="tag ${TF.workoutTag(p).cls}">${TF.workoutTag(p).label}</span>${esc(p.exerciseName)}`;
-      const sub = meal ? [p.calories ? `${fmt(p.calories)} kcal` : '', p.proteinG ? `蛋白 ${round1(p.proteinG)}g` : ''].filter(Boolean).join(' · ')
-        : (p.durationMin ? `${p.durationMin} 分钟` : `${p.weightKg > 0 ? p.weightKg + 'kg' : '自重'} · ${p.sets}×${p.reps}`);
-      return `
-        <div class="item plan" data-plan="${esc(p.id)}">
+    return html;
+  },
+
+  /** 一行计划（虚线、点 ✓ 记上、点 × 不要了）；inGroup：放在那顿的卡里，不再写是哪顿 */
+  renderPlanRow(p, inGroup) {
+    const meal = p.kind === 'meal';
+    const tag = meal ? (inGroup ? '<span class="tag tag-plan">计划</span>' : `<span class="tag tag-meal">${esc(p.mealType.replace('/补剂', ''))}</span>`)
+      : `<span class="tag ${TF.workoutTag(p).cls}">${TF.workoutTag(p).label}</span>${inGroup ? '<span class="tag tag-plan">计划</span>' : ''}`;
+    const title = tag + esc(meal ? p.foodSummary : p.exerciseName);
+    const sub = meal ? [p.calories ? `${fmt(p.calories)} kcal` : '', p.proteinG ? `蛋白 ${round1(p.proteinG)}g` : ''].filter(Boolean).join(' · ')
+      : (p.durationMin ? `${p.durationMin} 分钟` : `${p.weightKg > 0 ? p.weightKg + 'kg' : '自重'} · ${p.sets}×${p.reps}`);
+    return `
+        <div class="item plan${inGroup ? ' in-group' : ''}" data-plan="${esc(p.id)}">
           <div class="item-icon ${meal ? 'meal' : 'lift'}">${meal ? ICONS.meal : ICONS.lift}</div>
           <div class="item-main">
             <div class="item-title">${title}</div>
@@ -140,7 +143,5 @@ Object.assign(FitnessApp.prototype, {
             <button class="plan-done" type="button" data-act="plan-done" data-id="${esc(p.id)}" aria-label="做到了，记上">✓</button>
           </div>
         </div>`;
-    }).join('');
-    return html;
   }
 });
