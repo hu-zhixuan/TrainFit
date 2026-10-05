@@ -277,6 +277,7 @@
         batch.before.push({ kind: r.kind, snapshot: JSON.parse(JSON.stringify(rec)) });
         Object.keys(u.set).forEach(k => {
           if (r.kind === 'meal' && ['mealType', 'foodSummary', 'calories', 'proteinG', 'carbsG', 'fatG'].includes(k)) rec[k] = u.set[k];
+          if (r.kind === 'meal' && k === 'mealType') rec.mealFixed = true; // 说了「这是午饭」：以后分顿照这个
           if (r.kind === 'workout' && ['exerciseName', 'muscleGroup', 'weightKg', 'sets', 'reps', 'durationMin', 'burnedCalories'].includes(k)) rec[k] = u.set[k];
         });
         // 挪到别的日子（「记错日子了，挪到前一天」）：整条改日期，不删了重加
@@ -360,6 +361,12 @@
           said: result.said ? String(result.said).slice(0, 200) : undefined // 原话：分得清是没听清还是理解错
         });
       });
+
+      // 分顿（v8.0）：没说顿的按吃的时间、你的作息、这顿多大重新判断，提示条也跟着写对
+      if (result.meals.length && app.fixMealTypes) {
+        app.fixMealTypes(date);
+        result.meals.forEach((m, i) => { const rec = app.diet.find(d => d.id === batch.dietIds[i]); if (rec) m.mealType = rec.mealType; });
+      }
 
       // 体重
       if (result.bodyWeight && app.setWeight) {
