@@ -248,11 +248,12 @@ Object.assign(FitnessApp.prototype, {
       if (x.notes && /估计/.test(x.notes)) parts.push('有数字是估的，点开改');
       else if (p && p.isLatest(x.id) && p.next.kind !== 'keep') parts.push(`<span class="up">${esc(p.next.text)}</span>`);
     }
+    const tag = TF.workoutTag(x); // 有氧 / 运动 / 放松 / 训练：按动作名字认（v6.5，以前按有没有时长，一小时器械也显示成有氧）
     return `
       <button class="item" data-kind="workout" data-id="${esc(x.id)}" type="button">
-        <div class="item-icon ${x.durationMin ? 'cardio' : 'lift'}">${x.durationMin ? ICONS.cardio : ICONS.lift}</div>
+        <div class="item-icon ${tag.cls === 'tag-cardio' ? 'cardio' : 'lift'}">${tag.cls === 'tag-cardio' ? ICONS.cardio : ICONS.lift}</div>
         <div class="item-main">
-          <div class="item-title"><span class="tag ${x.durationMin ? 'tag-cardio' : 'tag-lift'}">${x.durationMin ? '有氧' : '训练'}</span>${esc(x.exerciseName)}</div>
+          <div class="item-title"><span class="tag ${tag.cls}">${tag.label}</span>${esc(x.exerciseName)}</div>
           <div class="item-sub">${parts.join(' · ')}</div>
         </div>
         <div class="item-value">${value}</div>

@@ -26,6 +26,15 @@ Object.assign(FitnessApp.prototype, {
       this.setBuddy({ life: ((this.profile.buddy || {}).life || []).filter(x => x.t !== b.dataset.lifeDel) });
       this.renderLife();
     });
+    $('plan-book').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-plan-del]');
+      if (!b) return;
+      const prev = (this.planBook ? this.planBook() : []).slice();
+      this.profile.planBook = prev.filter(x => x.name !== b.dataset.planDel);
+      this.saveData();
+      this.renderPlanBook();
+      if (window.QuickLog) window.QuickLog.showUndo(`已删除计划「${b.dataset.planDel}」`, [], () => { this.profile.planBook = prev; this.saveData(); this.renderPlanBook(); });
+    });
     $('my-foods').addEventListener('click', (e) => {
       const b = e.target.closest('[data-forget]');
       if (!b) return;
@@ -126,6 +135,7 @@ Object.assign(FitnessApp.prototype, {
     this.renderReminders();
     this.renderMemo();
     if (this.renderLife) this.renderLife();
+    if (this.renderPlanBook) this.renderPlanBook();
     this.renderMyFoods();
     const ql = window.QuickLog;
     const days = new Set([...this.workouts, ...this.diet].map(r => r.date)).size;
