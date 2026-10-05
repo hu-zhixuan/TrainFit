@@ -79,12 +79,18 @@ function mergeBackupData(cur, bak) {
     if (xp === (+cb.xp || 0) && (cb.name || !bb.name) && !note && !Object.keys(dex).length) return c;
     return Object.assign({}, c || {}, { buddy: Object.assign({}, cb, { xp }, !cb.name && bb.name ? { name: bb.name } : {}, note ? { note } : {}, dex) });
   };
+  // 存好的计划（v6.5）：两边合在一起，同名的以这边为准
+  const mergePlanBook = (c, b) => {
+    const cur = (c && Array.isArray(c.planBook)) ? c.planBook : [];
+    const more = (b && Array.isArray(b.planBook) ? b.planBook : []).filter(x => x && x.name && !cur.some(y => y.name === x.name));
+    return more.length ? Object.assign({}, c || {}, { planBook: more.concat(cur).slice(-26) }) : c;
+  };
   const fresh = !(cur.fit_diet || []).length && !(cur.fit_workouts || []).length && !(cur.fit_profile && cur.fit_profile.customized);
   const profileRestored = fresh && !!bak.fit_profile;
   const byTime = (a, b) => (b.date === a.date ? (b.ts || 0) - (a.ts || 0) : (b.date > a.date ? 1 : -1));
   return {
     data: {
-      fit_profile: profileRestored ? Object.assign({}, cur.fit_profile || {}, bak.fit_profile) : mergeBuddy(mergeMemo(cur.fit_profile, bak.fit_profile), bak.fit_profile),
+      fit_profile: profileRestored ? Object.assign({}, cur.fit_profile || {}, bak.fit_profile) : mergePlanBook(mergeBuddy(mergeMemo(cur.fit_profile, bak.fit_profile), bak.fit_profile), bak.fit_profile),
       fit_diet: (cur.fit_diet || []).concat(newDiet).sort(byTime),
       fit_workouts: (cur.fit_workouts || []).concat(newWo).sort(byTime),
       fit_weights: (cur.fit_weights || []).concat(newW).sort((a, b) => (a.date > b.date ? 1 : -1)),

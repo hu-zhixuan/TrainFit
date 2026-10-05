@@ -5,7 +5,7 @@
   'use strict';
   const TF = root.TF = root.TF || {};
 
-  const MUSCLES = ['胸部', '背部', '腿部', '肩部', '手臂', '核心', '有氧'];
+  const MUSCLES = ['胸部', '背部', '腿部', '肩部', '手臂', '核心', '全身', '有氧'];
   const MEAL_TYPES = ['早餐', '午餐', '晚餐', '加餐/补剂'];
 
   // ---------------------------------------------------------------------------
@@ -138,16 +138,59 @@
     return m ? toKg(parseFloat(m[1]), m[2], lastKg) : null;
   }
 
-  function guessMuscle(name) {
+  /**
+   * 这是什么运动（v6.5，用户：「有氧运动跟力量训练等等的识别不精准」）。按名字认，不信大模型给的 muscleGroup：
+   *  cardio 有氧（跑步、单车、跳绳、游泳、走路、HIIT、跳操…）/ sport 球类和项目（篮球、羽毛球、拳击、攀岩、跳舞…）/
+   *  flex 放松（瑜伽、普拉提、拉伸）/ iso 静力（平板支撑、靠墙静蹲：按时间算，但练的是核心 / 腿，不是有氧）/
+   *  strength 力量（卧推、深蹲、划船…；「力量训练」「撸铁」这种笼统的也是，部位记全身）/ '' 认不出。
+   * met：这项运动的代谢当量（Compendium of Physical Activities 的常见值），消耗 = met × 体重kg × 小时。
+   */
+  const EXERCISES = [
+    ['flex', /瑜伽/, 2.5], ['flex', /普拉提/, 3], ['flex', /太极|八段锦|五禽戏/, 3], ['flex', /拉伸|伸展|泡沫轴|筋膜|放松|冥想/, 2.3],
+    ['iso', /平板支撑|侧平板|撑平板/, 4, '核心'], ['iso', /靠墙静蹲|静蹲|马步/, 4, '腿部'],
+    ['sport', /篮球/, 6.5], ['sport', /足球/, 7], ['sport', /羽毛球/, 5.5], ['sport', /网球/, 7.3], ['sport', /乒乓/, 4], ['sport', /排球|棒球|垒球|高尔夫/, 4],
+    ['sport', /壁球|匹克球|板球|飞盘|橄榄球|手球|冰球/, 7], ['sport', /拳击|搏击|散打|泰拳|跆拳道|空手道|柔道|巴西柔术|击剑|摔跤/, 7.8],
+    ['sport', /攀岩|抱石/, 8], ['sport', /滑雪|单板|双板/, 7], ['sport', /滑冰|轮滑|滑板|冲浪|桨板|皮划艇|赛艇/, 6], ['sport', /街舞|跳舞|舞蹈|爵士舞|芭蕾|拉丁|广场舞|尊巴/, 5.5],
+    ['cardio', /跳绳/, 11], ['cardio', /游泳|蛙泳|自由泳|仰泳|蝶泳/, 7], ['cardio', /动感单车|单车课|spinning/i, 8.5], ['cardio', /骑行|骑车|单车|自行车|公路车/, 7.5],
+    ['cardio', /椭圆/, 5], ['cardio', /划船机|划艇机/, 7], ['cardio', /楼梯机|爬楼|台阶/, 8.8], ['cardio', /战绳/, 8.5],
+    ['cardio', /开合跳|波比|高抬腿|登山跑|登山者|HIIT|tabata|间歇/i, 8], ['cardio', /跳操|健身操|搏击操|踏板操|帕梅拉|刘畊宏|毽子操|有氧操/, 6.5],
+    ['cardio', /慢跑/, 7], ['cardio', /跑/, 9.8], ['cardio', /快走|健走|暴走/, 4.3], ['cardio', /爬坡/, 6], ['cardio', /爬山|登山|徒步/, 6], ['cardio', /走路|散步|遛狗|步行|走了|万步|步数/, 3.5],
+    ['cardio', /有氧/, 6],
+    ['strength', /力量训练|撸铁|器械|无氧|练了会|健身房练|举铁/, 5, '全身'], ['strength', /壶铃|农夫行走|推雪橇|轮胎/, 6, '全身']
+  ];
+  function exerciseInfo(name) {
+    const n = String(name || '');
+    const hit = EXERCISES.find(e => e[1].test(n));
+    if (hit) return { kind: hit[0], met: hit[2], muscle: hit[3] || (hit[0] === 'strength' ? '全身' : '有氧') };
+    const m = guessMuscle(n, true);
+    return m ? { kind: 'strength', met: 5, muscle: m } : { kind: '', met: 5, muscle: '' };
+  }
+
+  /** 按时间算的运动消耗多少千卡：met × 体重 × 小时（体重不知道按 65kg） */
+  function metBurn(met, minutes, kg) {
+    return Math.round((met || 5) * (kg > 30 ? kg : 65) * (minutes || 0) / 60);
+  }
+
+  /** 记录 / 计划上的小标签：有氧、运动、放松，别的（力量、静力）都是「训练」 */
+  function workoutTag(w) {
+    const info = exerciseInfo(w && w.exerciseName);
+    const kind = info.kind || (w && w.muscleGroup === '有氧' ? 'cardio' : 'strength');
+    return kind === 'cardio' ? { label: '有氧', cls: 'tag-cardio' } : kind === 'sport' ? { label: '运动', cls: 'tag-cardio' }
+      : kind === 'flex' ? { label: '放松', cls: 'tag-cardio' } : { label: '训练', cls: 'tag-lift' };
+  }
+
+  /** 力量动作练的部位；strict=true 时认不出返回 ''（不再默认胸部） */
+  function guessMuscle(name, strict) {
     const n = name || '';
-    if (/跑|骑|单车|椭圆|跳绳|游泳|快走|爬坡|划船机|有氧|HIIT|楼梯/i.test(n)) return '有氧';
-    if (/卧推|夹胸|飞鸟|俯卧撑|胸/.test(n)) return '胸部';
-    if (/引体|划船|下拉|硬拉|背/.test(n)) return '背部';
-    if (/蹲|腿|臀|箭步|提踵/.test(n)) return '腿部';
-    if (/推举|侧平举|肩|面拉/.test(n)) return '肩部';
-    if (/弯举|二头|三头|臂屈伸|下压/.test(n)) return '手臂';
-    if (/卷腹|平板|腹|核心/.test(n)) return '核心';
-    return '胸部';
+    if (!strict && /跑|骑|单车|椭圆|跳绳|游泳|快走|爬坡|划船机|有氧|HIIT|楼梯/i.test(n)) return '有氧';
+    if (/卧推|夹胸|飞鸟|俯卧撑|胸|双杠/.test(n)) return '胸部';
+    if (/引体|划船|下拉|硬拉|背|山羊挺身|耸肩/.test(n)) return '背部';
+    if (/蹲|腿|臀|箭步|提踵|弓步|髋|保加利亚/.test(n)) return '腿部';
+    if (/推举|侧平举|前平举|肩|面拉|阿诺德/.test(n)) return '肩部';
+    if (/弯举|二头|三头|臂屈伸|下压|臂|腕/.test(n)) return '手臂';
+    if (/卷腹|平板|腹|核心|悬垂举腿|俄罗斯转体|死虫/.test(n)) return '核心';
+    if (/壶铃|抓举|挺举|高翻|全身/.test(n)) return '全身';
+    return strict ? '' : '胸部';
   }
 
   /**
@@ -165,6 +208,31 @@
    * 别的问题（「明天吃啥」「腿怎么练」）带一行画像就够了，省 token、也快。
    */
   /** 这句话里说没说重量（「80公斤」「一百斤」「自重」）：没说的话，记下的重量是按上次 / 常见估的 */
+  // 原话里说的时长（v6.5，真实 Atria 2/2：「平板支撑3组每组1分钟」写成 3×10、没写时长）：每组多久 per、一共多久 total（分钟）
+  const CN_D = { 一: 1, 两: 2, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9 };
+  function smallNum(s) {
+    if (/^\d+(\.\d+)?$/.test(s)) return parseFloat(s);
+    if (s === '半') return 0.5;
+    const m = String(s).match(/^([一两二三四五六七八九])?(十)?([一二三四五六七八九])?$/);
+    if (!m || !(m[1] || m[2])) return null;
+    return m[2] ? (m[1] ? CN_D[m[1]] : 1) * 10 + (m[3] ? CN_D[m[3]] : 0) : CN_D[m[1]];
+  }
+  function saidMinutes(text) {
+    const t = String(text || '');
+    const N = '(\\d+(?:\\.\\d+)?|[一两二三四五六七八九十半]{1,3})';
+    const val = (m) => {
+      if (!m) return null;
+      const v = smallNum(m[1]);
+      if (v == null || v <= 0) return null;
+      const min = /秒/.test(m[2]) ? v / 60 : /小时/.test(m[2]) ? v * 60 : v;
+      return min + (m[3] ? (/小时/.test(m[2]) ? 30 : 0.5) : 0);
+    };
+    const per = val(t.match(new RegExp('每组\\s*' + N + '\\s*(秒钟?|分钟?|小时)(半)?'))) ||
+      val(t.match(new RegExp(N + '\\s*(秒钟?|分钟?)(半)?\\s*一组')));
+    const total = per ? null : val(t.match(new RegExp(N + '\\s*个?\\s*(秒钟?|分钟?|小时)(半)?')));
+    return per || total ? { per, total } : null;
+  }
+
   function saidWeight(text) {
     return /(\d+(\.\d+)?|[一二两三四五六七八九十百半]+)\s*(公斤|kg|千克|斤|磅|lb)|自重|空杆|徒手/i.test(String(text || ''));
   }
@@ -324,7 +392,7 @@
     return null;
   }
 
-  Object.assign(TF, { MUSCLES, MEAL_TYPES, num, cleanText, round1, mealTypeByHour, normMealType, mealTimes, mealSegments, NUTRIENTS, cleanNutrients, nutrientsText, toKg, quickWeight, findWeight, guessMuscle, looksLikeQuestion, looksLikePlanEdit, looksLikeChat, lifeEvent, LIFE_EVENT, pureQuestion, noCard, needsHistory, saidWeight, quickIntent });
+  Object.assign(TF, { MUSCLES, MEAL_TYPES, num, cleanText, round1, mealTypeByHour, normMealType, mealTimes, mealSegments, NUTRIENTS, cleanNutrients, nutrientsText, toKg, quickWeight, findWeight, guessMuscle, exerciseInfo, metBurn, workoutTag, looksLikeQuestion, looksLikePlanEdit, looksLikeChat, lifeEvent, LIFE_EVENT, pureQuestion, noCard, needsHistory, saidWeight, saidMinutes, quickIntent });
 
   if (typeof module !== 'undefined' && module.exports) module.exports = TF;
 })(typeof window !== 'undefined' ? window : globalThis);

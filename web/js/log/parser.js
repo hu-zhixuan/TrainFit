@@ -10,7 +10,7 @@
     require('./food.js');
   }
   const TF = root.TF = root.TF || {};
-  const { MUSCLES, MEAL_TYPES, NUTRIENTS, num, cleanText, round1, mealTypeByHour, normMealType, mealTimes, mealSegments, findWeight, guessMuscle, saidWeight, readOverride, Native, FoodDB, MyFoods, groundItem, sizeOpts, sumItems } = TF;
+  const { MUSCLES, MEAL_TYPES, NUTRIENTS, num, cleanText, round1, mealTypeByHour, normMealType, mealTimes, mealSegments, findWeight, guessMuscle, exerciseInfo, metBurn, saidWeight, saidMinutes, readOverride, Native, FoodDB, MyFoods, groundItem, sizeOpts, sumItems } = TF;
 
   const summaryOf = (items) => cleanText(items.map(it => it.name + (it.amount || '')).join('、'), 60);
 
@@ -183,12 +183,12 @@
         '                 {"mealType":"午餐","foodSummary":"番茄炒蛋盖饭1份","items":[{"name":"米饭","amount":"1碗","grams":200,"whole":false,"calories":232,"proteinG":5,"carbsG":52,"fatG":0.6},{"name":"番茄炒蛋","amount":"1份","grams":200,"whole":true,"calories":260,"proteinG":11,"carbsG":10,"fatG":19}]}]},',
         ' "dayOffset":0}',
         '例 2（改、删已有的记录）：{"reply":"改好了","update":[{"ref":"r2","set":{"weightKg":85}}],"delete":["r3"],"dayOffset":0}',
-        '别的字段只在下面规则说要用时才写，都放在这一个 JSON 对象里："bodyWeight":62.5、"remember":[{…}]、"memo":["…"]、"forget":["…"]、"answer":"…"、"next":["…","…"]、"plan":{…}、"donePlans":["p1"]；add 里只有吃的就不写 workouts，只有练的就不写 meals。',
+        '别的字段只在下面规则说要用时才写，都放在这一个 JSON 对象里："bodyWeight":62.5、"remember":[{…}]、"memo":["…"]、"forget":["…"]、"answer":"…"、"next":["…","…"]、"plan":{…}、"donePlans":["p1"]、"act":[{…}]；add 里只有吃的就不写 workouts，只有练的就不写 meals。',
         '规则：',
         '1. muscleGroup 只能是：' + MUSCLES.join('、') + '；mealType 只能是：' + MEAL_TYPES.join('、') + '（怎么判断见第 4 条）。',
-        '2. 重量换算成公斤（磅×0.45，斤×0.5），自重 weightKg=0。跑步、单车、跳绳、平板支撑等按时间算的填 durationMin（分钟），不写 sets、reps；只说了距离（「跑了5公里」）就按常见配速估分钟数。',
+        '2. 重量换算成公斤（磅×0.45，斤×0.5），自重 weightKg=0。有氧（跑步、走路、单车、椭圆机、跳绳、游泳、爬楼、HIIT、跳操）、球类和项目（篮球、羽毛球、拳击、攀岩、跳舞）、瑜伽拉伸：muscleGroup 写 有氧，填 durationMin（分钟），不写 sets、reps；只说了距离（「跑了5公里」）按常见配速估分钟数，只说了个数（「跳绳1000个」）按一分钟一百来个估。平板支撑、靠墙静蹲这种静力的：muscleGroup 写 核心 / 腿部，填 durationMin。力量动作（杠铃、哑铃、器械、自重的俯卧撑引体）写练的部位，填 sets、reps。',
         '3. 用户没说的重量/组数/次数：优先用下面「最近成绩」里同一动作的数；没有就按常见训练估一个（别拿别的动作的重量套），并设 "estimated":true。同一动作请沿用最近成绩里的名字。',
-        '   新手常常叫不出动作、器械的名字，只会描述（「坐着往前推的那个机器」「拉下来的那个」「夹胸的」「坐着蹬腿的」「躺着推杠铃」）：按描述记成最像的标准名字（坐姿推胸、高位下拉、蝴蝶机夹胸、腿举、杠铃卧推），reply 里顺便告诉他叫什么（「这个叫高位下拉，记上了」）。只说了「练了一个小时器械」「练了会儿」：记一项「力量训练」，填 durationMin。',
+        '   新手常常叫不出动作、器械的名字，只会描述（「坐着往前推的那个机器」「拉下来的那个」「夹胸的」「坐着蹬腿的」「躺着推杠铃」）：按描述记成最像的标准名字（坐姿推胸、高位下拉、蝴蝶机夹胸、腿举、杠铃卧推），reply 里顺便告诉他叫什么（「这个叫高位下拉，记上了」）。只说了「练了一个小时器械」「撸了会儿铁」：记一项「力量训练」，muscleGroup 写 全身，填 durationMin。',
         '4. 饮食按餐分：用户说的时间决定是哪一餐——早上/早饭 → 早餐，中午/午饭 → 午餐，晚上/晚饭 → 晚餐，下午茶、练前练后、睡前、夜宵、零食 → 加餐/补剂；没说时间（「刚吃了」）按现在时间和食物判断。',
         '   一句话说了几个时间就拆成几条 meal（「早上A和B，晚上C」= 早餐 A+B 一条、晚餐 C 一条，不能都记到一餐里）；同一餐的东西合并成一条。foodSummary 写给用户看的菜名和份量。items 列出吃了的东西，每项写 name、amount（份量原话，如「1个」「1碗」「半份」）、grams（吃下去的熟重，可食部分）、whole，以及你估的 calories/proteinG/carbsG/fatG。',
         '   先把一样东西当整体估，不要随便拆成原料：成品、包装、门店和早餐店的东西（糯米鸡、饭团、粽子、包子、烧卖、三明治、汉堡、面包蛋糕、奶茶饮料、零食），一碗面、一份麻辣烫、一份炒菜，都作为一项，whole=true，按一个/一份的常见大小估热量，油已经算在里面，不要再单独加烹调油。',
@@ -216,12 +216,18 @@
         '   回答要用下面「今天的情况」「小本本」「画像」「最近成绩」「记住的食物」，按这个人的目标、习惯和还剩的热量、还差的蛋白质来定，具体到吃什么、多少，大概多少千卡和蛋白质（训练就写动作、重量、组数）。用户说了要求（「训练强度大，碳水多点」「不想吃米饭」）就照着调。',
         '   写成几行短句，每行一件事（「早餐：两个鸡蛋＋一杯牛奶＋一个馒头，约450千卡、蛋白25g」），最多 8 行，不要 markdown 符号、不要客套话。reply 写一句「给了你明天的食谱」这样的话（又记又问就写「记了…，晚上吃啥看小人」），不要出现 answer 这个词。',
         '   回答了问题时，next 写两句用户接着最可能想问的话（每句 12 字以内，用用户的口吻，比如「晚上吃点啥能补蛋白」「给我排个练腿的」）；没回答问题就不写 next。',
+        '   排计划要一次就能直接照着做，别让用户再补充：份量按下面的热量预算和蛋白目标配好（几顿加起来对得上），练过的动作按最近成绩往上加一点，没说的（在哪练、有多少时间、口味）按小本本、画像和最常见的情况定，不要反问；排了计划时 next 写两句一点就能改的（「在家没器械」「只有半小时」「不想吃米饭」）。',
         '   练什么、怎么练、动作怎么做、练哪儿、减脂增肌、饿不饿、睡眠恢复、身体酸痛，都算吃和练的事，要正经回答：练什么就给动作、重量、组数次数，小本本里是新手或者问怎么做的，每个动作带一句要点。只有天气、新闻、写作业这种完全无关的，answer 才写一句「这个我帮不上，我只管吃和练」。',
         '   answer 是某一天的具体安排（明天的食谱、今晚吃什么、明天练什么、我想练腿怎么练）时，同时写 plan：{"dayOffset":1,"meals":[和 add.meals 一样的格式],"workouts":[和 add.workouts 一样的格式，每个动作再加 "tip":"一句要点，16字以内"]}，dayOffset 相对正在看的日期（明天 1，今天 0，没说哪天就是今天），内容和 answer 一致；只是回答问题（还差多少蛋白、能不能吃）就不写 plan。',
         '   要排好几天的训练（「这周怎么练」「一周练三次帮我排一下」「给我一个新手计划」）：plan 写成 {"days":[{"dayOffset":1,"workouts":[…]},{"dayOffset":3,"workouts":[…]}]}，从明天开始排一周、练的日子之间隔开，每天 4～6 个动作，不排吃的；重量按最近成绩往上加一点，没练过的按新手能做的估。answer 每天一行，开头写那天的星期（按下面的日期对照，「周五 腿：深蹲 40kg 4×10、腿举…」）。',
         '   下面有「刚才给的计划」，用户说要改（「不要米饭换红薯」「蛋白再多点」「晚上少吃点」「深蹲换成腿举」），就按要求改好，重新写完整的 answer 和 plan（还是那天的，dayOffset 按日期对照算；没让改的照原样写上），不要记录，不能只回一句「改好了」。',
         '   下面有「这天的计划」，用户说照着吃了 / 练了（「早餐照计划吃了」「计划里的都练完了」）：把那几项 add 进来（份量照计划），donePlans 写它们的编号。',
         '11. 用户说了关于自己、以后一直有用的事（名字、在增肌还是减脂、健身新手、在练什么、不吃 / 过敏的东西、伤病、作息、口味）：写进 memo，每条一句话、12 字以内（「叫阿程」「健身新手」「不吃辣」「膝盖有旧伤」），下面「小本本」里已经有的不要重复；说要忘掉或者变了的（「现在能吃辣了」「膝盖好了」），一定把小本本里原来那句原样写进 forget。吃了什么、练了什么、今天的事不算。回答、估算、出计划时照顾到小本本里的事（不吃辣就别推荐辣的，膝盖有伤就别排深蹲跳）。',
+        '12. 用户要你动手改软件里的东西：写 "act":[…]（可以几个），手机照着做、能撤销，reply 一句话说做了什么。每个是下面一种：',
+        '   {"do":"usePlan","name":"计划A","dayOffset":1} 把存好的计划放到某天（「明天练计划A」「周五照练腿日练」）；{"do":"savePlan","name":"练腿日","from":"plan"} 把刚才给的计划存起来（存这天练的 / 吃的写 "from":"day","dayOffset":0）；',
+        '   {"do":"copyDay","from":-7,"to":1,"what":"workouts"} 把某天练的（meals 吃的）照搬成另一天的计划（「明天照上周一练」）；{"do":"movePlan","from":1,"to":2} 把计划挪到另一天；{"do":"clearPlan","dayOffset":1} 清掉某天的计划（「明天不练了」）；',
+        '   {"do":"renamePlan","name":"旧名","to":"新名"}、{"do":"dropPlan","name":"…"}；{"do":"goal","goal":"muscle_gain"} 换目标（fat_loss 减脂 / maintain 保持 / muscle_gain 增肌）；{"do":"protein","g":150} 改每天蛋白目标；{"do":"remind","kind":"weigh","time":"07:00","on":true} 改提醒（weigh 称体重 / lunch 午饭 / dinner 晚饭 / night 晚上小结）。',
+        '   dayOffset、from、to 都相对正在看的日期（按日期对照算）；name 用「存好的计划」里的名字，说法不一样也要对上（「计划a」「上次那个练腿的」）。只是问问、没让你动的不写 act。',
         '输出前核对一遍：原话里说到的每样吃的、喝的、补剂（包括听错字的，比如"茶叶大"）都记上了，没多记、没漏记。'
       ].join('\n');
 
@@ -246,14 +252,20 @@
       // 这天有记录时不提醒：实测提醒了，「早上的鸡蛋改成三个」3/3 被当成改计划
       else if (ctx.lastPlan && ctx.maybeEditPlan && !records.length) lines.push('注意：这句是在改上面「刚才给的计划」（这天没有记录可改）：照他说的改好，写出改完的完整 answer 和 plan，不要记录。');
       if (ctx._again) lines.push('注意：这句是在问吃或练的事，要正经回答，不能说帮不上。');
-      // 问「这周怎么练」时大模型自己算星期几会算错：把接下来一周是周几直接给它
-      if (ctx.ask && /^\d{4}-\d{2}-\d{2}$/.test(ctx.date || '')) {
+      // 问「这周怎么练」、说「周五练计划A」「明天照上周一练」时大模型自己算星期几会算错：把前后一周是周几直接给它
+      if ((ctx.ask || /周[一二三四五六日天]|星期|礼拜|下周|上周|计划|挪|排到|放到|照着|照搬/.test(text)) && /^\d{4}-\d{2}-\d{2}$/.test(ctx.date || '')) {
         const WK = '日一二三四五六';
         const at = (n) => { const d = new Date(ctx.date + 'T00:00:00'); d.setDate(d.getDate() + n); return d; };
-        lines.push('日期对照（dayOffset：日期 星期）：' + [0, 1, 2, 3, 4, 5, 6, 7].map(n => { const d = at(n); return `${n}：${d.getMonth() + 1}月${d.getDate()}日 周${WK[d.getDay()]}`; }).join('，'));
+        const from = /上周|上个|上星期|昨天|前天|之前|上次/.test(text) ? -7 : 0;
+        lines.push('日期对照（dayOffset：日期 星期）：' + Array.from({ length: 8 - from }, (_, i) => i + from).map(n => { const d = at(n); return `${n}：${d.getMonth() + 1}月${d.getDate()}日 周${WK[d.getDay()]}`; }).join('，'));
       }
+      const book = (ctx.planBook || []).slice(0, 12);
+      if (book.length) lines.push('存好的计划（act 用这里的名字）：' + book.join('；'));
       const d = ctx.day;
-      if (d) lines.push(`今天的情况：目标${GOALS[d.goal] || '减脂'}；热量预算 ${d.budget} 千卡（含训练消耗 ${d.burn}），已吃 ${d.intake}，还能吃 ${d.budget - d.intake}；蛋白质目标 ${d.proteinTarget}g，已吃 ${d.protein}g。`);
+      if (d) lines.push(`今天的情况：目标${GOALS[d.goal] || '减脂'}；热量预算 ${d.budget} 千卡（含训练消耗 ${d.burn}），已吃 ${d.intake}，还能吃 ${d.budget - d.intake}；蛋白质目标 ${d.proteinTarget}g，已吃 ${d.protein}g。` +
+        (ctx.ask && d.base ? `别的日子（没算训练）热量预算约 ${d.base} 千卡、蛋白 ${d.proteinTarget}g；排一天的吃的大概早餐 27%、午餐 35%、晚餐 30%、加餐 8%。` : ''));
+      // 回答用小人的口吻（v6.5，用户：「一开口就知道是这个人」）：只改说话的样子，内容照样要准
+      if (ctx.voice && ctx.voice.name) lines.push(`answer 和 reply 用「${ctx.voice.name}」的口吻说：${ctx.voice.speech}。口吻像他，内容照样要具体、准，数字一个不能少。`);
       const mine = (ctx.myFoods || []).slice(0, 40);
       if (mine.length) lines.push('记住的食物（用户确认过，优先用）：\n' + mine.map(f => MyFoods.line(f)).join('\n'));
       const cands = FoodDB.candidates(text, 18);
@@ -332,6 +344,29 @@
       ];
     },
 
+    /** 大模型给的动作（act）：只认这几种，数字夹在合理范围里，名字最多 14 个字 */
+    cleanActs(raw) {
+      const list = Array.isArray(raw) ? raw : raw && typeof raw === 'object' ? [raw] : [];
+      const off = (v, d) => { const n = num(v); return n === null ? d : Math.max(-30, Math.min(30, Math.round(n))); };
+      const name = (v) => cleanText(v, 14);
+      return list.map(a => {
+        if (!a || typeof a !== 'object') return null;
+        switch (a.do) {
+          case 'usePlan': return name(a.name) ? { do: 'usePlan', name: name(a.name), dayOffset: off(a.dayOffset, 1) } : null;
+          case 'savePlan': return { do: 'savePlan', name: name(a.name), from: ['plan', 'day', 'dayplan'].includes(a.from) ? a.from : 'plan', dayOffset: off(a.dayOffset, 0), what: ['workouts', 'meals', 'all'].includes(a.what) ? a.what : 'all' };
+          case 'copyDay': return { do: 'copyDay', from: off(a.from, -1), to: off(a.to, 1), what: ['workouts', 'meals', 'all'].includes(a.what) ? a.what : 'workouts' };
+          case 'movePlan': return off(a.from, 0) !== off(a.to, 0) ? { do: 'movePlan', from: off(a.from, 0), to: off(a.to, 1) } : null;
+          case 'clearPlan': return { do: 'clearPlan', dayOffset: off(a.dayOffset, 0), what: ['workouts', 'meals', 'all'].includes(a.what) ? a.what : 'all' };
+          case 'renamePlan': return name(a.name) && name(a.to) ? { do: 'renamePlan', name: name(a.name), to: name(a.to) } : null;
+          case 'dropPlan': return name(a.name) ? { do: 'dropPlan', name: name(a.name) } : null;
+          case 'goal': return ['fat_loss', 'maintain', 'muscle_gain'].includes(a.goal) ? { do: 'goal', goal: a.goal } : null;
+          case 'protein': { const g = num(a.g); return g >= 40 && g <= 300 ? { do: 'protein', g: Math.round(g) } : null; }
+          case 'remind': return ['weigh', 'lunch', 'dinner', 'night'].includes(a.kind) ? { do: 'remind', kind: a.kind, time: /^\d{1,2}:\d{2}$/.test(String(a.time || '')) ? String(a.time) : '', on: a.on !== false } : null;
+          default: return null;
+        }
+      }).filter(Boolean).slice(0, 4);
+    },
+
     /** 聊天的回答：一段话、两句他可能回的、表情、小本本、最近的事（v6.3） */
     normalizeChat(parsed, ctx) {
       ctx = ctx || {};
@@ -393,7 +428,7 @@
       ctx = ctx || {};
       const history = ctx.history || [];
       const now = ctx.now || new Date();
-      const out = { dayOffset: 0, workouts: [], meals: [], updates: [], deletes: [], remember: [], memo: [], forget: [], reply: '' };
+      const out = { dayOffset: 0, workouts: [], meals: [], updates: [], deletes: [], remember: [], memo: [], forget: [], acts: [], reply: '' };
       const myFoods = ctx.myFoods || [];
       const ground = (it) => groundItem(it, myFoods);
       // 兼容两种格式：{add:{workouts,meals}} 或顶层 workouts/meals
@@ -428,6 +463,8 @@
       }
       const known = new Set((ctx.plans || []).map(p => p.ref));
       out.donePlans = Array.isArray(parsed && parsed.donePlans) ? parsed.donePlans.filter(x => known.has(x)) : [];
+      // 动手改软件里的东西（v6.5，规则 12）：只认这几种、字段洗干净，最多 4 个；手机照着做（app/agent.js 的 runActs）
+      out.acts = Parser.cleanActs(parsed && parsed.act);
       const refs = new Set((ctx.dayRecords || []).map(r => r.ref));
       (Array.isArray(parsed && parsed.update) ? parsed.update : []).forEach(u => {
         if (!u || !refs.has(u.ref) || !u.set || typeof u.set !== 'object') return;
@@ -491,19 +528,41 @@
 
       const lastOf = (name) => history.find(h => h.exerciseName === name && !h.durationMin);
 
-      (Array.isArray(parsed && parsed.workouts) ? parsed.workouts : []).forEach(w => {
+      const workouts = Array.isArray(parsed && parsed.workouts) ? parsed.workouts : [];
+      const isTimed = (w) => ['cardio', 'sport', 'flex', 'iso'].includes(exerciseInfo(cleanText(w.exerciseName || w.name, 30)).kind);
+      // 原话里的时长只在这句只有一样按时间算的运动时用（「跑了半小时，平板支撑三组」分不清哪个是哪个）
+      const saidTime = workouts.filter(isTimed).length === 1 ? saidMinutes(ctx.said) : null;
+      workouts.forEach(w => {
         const name = cleanText(w.exerciseName || w.name, 30);
         if (!name) return;
         let muscle = cleanText(w.muscleGroup, 6);
         if (!MUSCLES.includes(muscle)) muscle = guessMuscle(name);
+        // 按名字纠正大模型给的类型（v6.5）：跑步、球类、瑜伽记成有氧；平板支撑记核心；「力量训练」记全身，不是有氧
+        const info = exerciseInfo(name);
+        const timed = ['cardio', 'sport', 'flex', 'iso'].includes(info.kind);
+        if (timed && info.kind !== 'iso') muscle = '有氧';
+        else if (info.muscle && (info.kind === 'iso' || muscle === '有氧' || info.muscle === '全身')) muscle = info.muscle;
 
-        const duration = num(w.durationMin);
+        let duration = num(w.durationMin);
         let weight = num(w.weightKg);
         let sets = num(w.sets);
         let reps = num(w.reps);
         let estimated = w.estimated === true;
 
+        // 按时间算的运动，大模型写成了组数次数（「平板支撑 3组 每组60秒」「跳绳 3组 每组300个」）：换成分钟
+        if (timed && !(duration > 0)) {
+          // 先看原话：「每组1分钟」× 组数；只说了「60秒」「3分钟」的，静力动作 2 分钟以内当每组（平板支撑很少一次撑过 2 分钟）
+          if (saidTime && saidTime.per) duration = (sets || 1) * saidTime.per;
+          else if (saidTime && saidTime.total) duration = info.kind === 'iso' && sets > 1 && saidTime.total <= 2 ? sets * saidTime.total : saidTime.total;
+          else if (info.kind === 'iso' && sets && reps) duration = reps <= 5 ? sets * reps : sets * reps / 60; // 5 以下是分钟，再多是秒
+          else if (/跳绳/.test(name) && reps >= 30) duration = (sets || 1) * reps / 110; // 一分钟一百来个
+          else { duration = 20; estimated = true; }
+          sets = null; reps = null;
+        }
         if (duration && duration > 0 && !sets && !reps) {
+          // 消耗按运动的代谢当量和体重算（跑步 9.8、游泳 7、瑜伽 2.5…）；大模型给的差得不多（考虑了速度、坡度）就用它的
+          const minutes = Math.max(1, Math.round(duration));
+          const local = metBurn(info.met, minutes, ctx.lastWeight);
           const burn = num(w.burnedCalories);
           out.workouts.push({
             exerciseName: name,
@@ -511,8 +570,8 @@
             weightKg: 0,
             sets: 1,
             reps: 0,
-            durationMin: Math.round(duration),
-            burnedCalories: Math.round(burn && burn > 0 ? burn : duration * 8),
+            durationMin: minutes,
+            burnedCalories: burn > 0 && burn >= local * 0.6 && burn <= local * 1.8 ? Math.round(burn) : local,
             estimated
           });
           return;

@@ -36,6 +36,8 @@
         this.process(p);
         return;
       }
+      // 本机认得出的动手说法（「明天练计划A」「把明天的计划挪到后天」「明天不练了」）：直接做，不调大模型（v6.5）
+      if (root.app.runSkill && root.app.runSkill(text)) return;
       // 手机自己就能答的（「还差多少蛋白」「卧推最好多少」）：马上答，不问大模型
       const quick = root.app.quickAnswer ? root.app.quickAnswer(text) : null;
       if (quick && root.app.showBuddyAnswer) {
@@ -99,7 +101,8 @@
       try {
         const s = app.getDaySummary(date);
         day = { goal: app.profile.goalType, budget: Math.round(s.budget), burn: Math.round(s.workoutBurn), intake: Math.round(s.intake),
-          protein: Math.round(s.protein), proteinTarget: Math.round(app.gaugeProteinTarget ? app.gaugeProteinTarget() : (app.profile.targetProteinG || 0)) };
+          protein: Math.round(s.protein), proteinTarget: Math.round(app.gaugeProteinTarget ? app.gaugeProteinTarget() : (app.profile.targetProteinG || 0)),
+          base: Math.round(s.budget - s.workoutBurn) };
       } catch (e) {}
       // 这天的计划（「早餐照计划吃了」），刚才小人给的计划（「不要米饭换红薯」，15 分钟内）
       const plans = app.planContext ? app.planContext(date) : [];
@@ -111,7 +114,10 @@
         state: app.profile.dayState && app.profile.dayState.date === date ? app.profile.dayState.sleep : '',
         // 聊天：小人是谁、你们多熟、刚才聊了啥（最多 3 轮，15 分钟内）
         chat: !!p.chat, buddy: p.chat && app.buddyPersona ? app.buddyPersona() : null, talk: p.chat && app.chatThread ? app.chatThread() : [],
-        life: p.chat && app.lifeList ? app.lifeList() : [] }; // v6.3：他最近说过的事（「周五面试」），小人接着上次聊
+        life: p.chat && app.lifeList ? app.lifeList() : [], // v6.3：他最近说过的事（「周五面试」），小人接着上次聊
+        // v6.5：存好的计划（说到计划、照着练时才带）；回答用小人的口吻（极简模式不带）
+        planBook: app.planBookContext ? app.planBookContext(p.text) : [],
+        voice: !p.chat && app.buddyLook && app.buddyLook().show && app.cast ? { name: app.cast().name, speech: app.cast().speech } : null };
     },
 
     /**
@@ -211,7 +217,9 @@
         if (app.showBuddyAnswer) app.showBuddyAnswer(p.text, result.answer, { next: result.next, chat: true, face: result.face });
         return;
       }
-      const changes = result.workouts.length + result.meals.length + (result.updates || []).length + (result.deletes || []).length + (result.bodyWeight ? 1 : 0) + (result.remember || []).length + (result.memo || []).length + (result.forget || []).length;
+      const changes = result.workouts.length + result.meals.length + (result.updates || []).length + (result.deletes || []).length + (result.bodyWeight ? 1 : 0) + (result.remember || []).length + (result.memo || []).length + (result.forget || []).length + (result.acts || []).length;
+      // 小人给的计划：练过的动作按你的成绩、食谱按那天的预算配平，一次就能照着做（v6.5）
+      if (result.plan && app.calibratePlan) result.plan = app.calibratePlan(result.plan, p.date);
       const answerOpts = { plan: result.plan, baseDate: p.date, next: result.next };
       if (!changes) {
         // 问问题（「明天吃什么」）：不记、不报错，小人回答；给了计划的话气泡里能「加到明天」
@@ -232,6 +240,8 @@
       if ((result.updates || []).length || (result.deletes || []).length) { try { localStorage.setItem('tf_used_fix', '1'); } catch (e) {} }
       const batch = this.save(Object.assign(result, { said: p.text }), p.date, ctx);
       this.showSnack(batch, result);
+      // 放了计划（「明天练计划A」）：跳到那天看
+      if (batch.acts && batch.acts.jump && app.jumpToPlans && !result.answer) app.jumpToPlans(batch.acts.jump);
       if (result.answer && app.showBuddyAnswer) app.showBuddyAnswer(p.text, result.answer, answerOpts); // 又记又问
       else if (batch.asks.length && app.askPortion) app.askPortion(batch.asks); // 份量含糊：小人问一句，点一下就改
       else if (app.makeUpAfter && app.makeUpAfter(result, batch)) { /* 闹着小别扭：好好吃饭了就和好 */ }
@@ -357,6 +367,8 @@
       batch.remembered = (result.remember || []).map(f => ({ name: f.name, prev: app.rememberFood(f) }));
       // 小本本（「我叫阿程」「我不吃辣」）
       if (((result.memo || []).length || (result.forget || []).length) && app.updateMemo) batch.memoPrev = app.updateMemo(result.memo, result.forget);
+      // 动手：放计划、存计划、挪计划、改目标、改提醒（v6.5，规则 12）；dayOffset 相对正在看的那天
+      if ((result.acts || []).length && app.runActs) batch.acts = app.runActs(result.acts, base);
 
       app.saveData();
       app.render();
@@ -366,7 +378,7 @@
     describe(result) {
       const lines = [];
       result.workouts.forEach(w => {
-        if (w.durationMin) lines.push(`有氧 · ${w.exerciseName} ${w.durationMin} 分钟`);
+        if (w.durationMin) lines.push(`${TF.workoutTag(w).label} · ${w.exerciseName} ${w.durationMin} 分钟`);
         else lines.push(`训练 · ${w.exerciseName} ${w.weightKg > 0 ? w.weightKg + 'kg' : '自重'} ${w.sets}×${w.reps}${w.estimated ? '（估）' : ''}`);
       });
       result.meals.forEach(m => {
@@ -391,7 +403,7 @@
         : (result.memo || []).length ? '✓ 记住了'
         : '✓ 已更新';
       if (n && batch.date !== getTodayDateString()) t += `（${batch.date.slice(5).replace('-', '月')}日）`;
-      const lines = this.describe(result).concat(batch.changed || []);
+      const lines = this.describe(result).concat(batch.changed || [], (batch.acts && batch.acts.lines) || []);
       // 练了的动作：和上次比怎么样、下次练多少（本机算，不用等大模型）
       (batch.workoutIds || []).forEach(id => {
         const fb = app.liftFeedback && app.liftFeedback(app.workouts.find(w => w.id === id));
@@ -425,6 +437,7 @@
         if (batch.weight && app.restoreWeight) app.restoreWeight(batch.weight.date, batch.weight.prev);
         (batch.remembered || []).slice().reverse().forEach(r => app.restoreFood(r.name, r.prev));
         if (batch.memoPrev) app.profile.memo = batch.memoPrev;
+        if (batch.acts && batch.acts.ok) batch.acts.undo();
         app.saveData();
         app.render();
       });

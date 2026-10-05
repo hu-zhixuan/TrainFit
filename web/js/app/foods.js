@@ -93,6 +93,18 @@ Object.assign(FitnessApp.prototype, {
       : '<p class="field-note">跟小人聊聊最近的事（「周五要面试」「下周考试」），它会记在这里，到了日子主动问你怎么样了。</p>';
   },
 
+  /** 「存好的计划」（v6.5）：说「明天练练腿日」就放到那天；能删。自动存的（加计划时悄悄存的）写着「最近用过」 */
+  renderPlanBook() {
+    const el = document.getElementById('plan-book');
+    if (!el) return;
+    const book = (this.planBook ? this.planBook() : []).slice().reverse();
+    el.innerHTML = book.length ? book.map(e => {
+      const lifts = (e.workouts || []).concat(...(e.days || []).map(d => d.workouts || []));
+      const what = lifts.length ? lifts.slice(0, 3).map(w => w.exerciseName).join('、') + (lifts.length > 3 ? ` 等 ${lifts.length} 个动作` : '') : (e.meals || []).map(m => m.mealType.replace('/补剂', '')).join('、');
+      return `<div class="myfood-row"><div class="myfood-main"><b>${esc(e.name)}</b><small>${e.auto ? '最近用过 · ' : ''}${esc(what)}</small></div><button type="button" class="chip" data-plan-del="${esc(e.name)}">删除</button></div>`;
+    }).join('') : '<p class="field-note">小人给的计划点「存起来」，或者说「把这个计划存起来叫练腿日」，就会存在这里。以后说「明天练练腿日」「把练腿日排到周五」，它直接帮你放好。</p>';
+  },
+
   renderMyFoods() {
     const el = document.getElementById('my-foods');
     if (!el) return;

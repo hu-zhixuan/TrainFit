@@ -14,7 +14,7 @@ Object.assign(FitnessApp.prototype, {
 
   todoPlans(date) { return this.plansFor(date).filter(p => !p.done); },
 
-  /** 把小人给的计划放到那一天（同一天原来的计划换掉，免得改了几次叠在一起） */
+  /** 把小人给的计划放到那一天（同一天原来同类的计划换掉，免得改了几次叠在一起；v6.5 起只换同类：放训练不动那天的食谱） */
   addPlans(date, plan, noSave) {
     const stamp = Date.now();
     const from = plan.from || stamp;
@@ -28,7 +28,8 @@ Object.assign(FitnessApp.prototype, {
       exerciseName: w.exerciseName, muscleGroup: w.muscleGroup, weightKg: w.weightKg, sets: w.sets, reps: w.reps,
       durationMin: w.durationMin || undefined, burnedCalories: w.burnedCalories, tip: w.tip || undefined
     }));
-    this.plans = (this.plans || []).filter(p => p.date !== date).concat(meals, lifts);
+    const kinds = new Set([meals.length ? 'meal' : '', lifts.length ? 'workout' : ''].filter(Boolean));
+    this.plans = (this.plans || []).filter(p => p.date !== date || p.done || !kinds.has(p.kind)).concat(meals, lifts);
     if (!noSave) { this.saveData(); this.render(); }
     return meals.length + lifts.length;
   },
@@ -123,7 +124,7 @@ Object.assign(FitnessApp.prototype, {
     html += list.map(p => {
       const meal = p.kind === 'meal';
       const title = meal ? `<span class="tag tag-meal">${esc(p.mealType.replace('/补剂', ''))}</span>${esc(p.foodSummary)}`
-        : `<span class="tag ${p.durationMin ? 'tag-cardio' : 'tag-lift'}">${p.durationMin ? '有氧' : '训练'}</span>${esc(p.exerciseName)}`;
+        : `<span class="tag ${TF.workoutTag(p).cls}">${TF.workoutTag(p).label}</span>${esc(p.exerciseName)}`;
       const sub = meal ? [p.calories ? `${fmt(p.calories)} kcal` : '', p.proteinG ? `蛋白 ${round1(p.proteinG)}g` : ''].filter(Boolean).join(' · ')
         : (p.durationMin ? `${p.durationMin} 分钟` : `${p.weightKg > 0 ? p.weightKg + 'kg' : '自重'} · ${p.sets}×${p.reps}`);
       return `

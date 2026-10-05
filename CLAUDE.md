@@ -83,6 +83,14 @@
       pipeline 的顺序：回答 > 份量 > 和好 > 伤病提醒 > **大反应** `recordReact(…, 'big')` > 新手提示 > `coachTip`（只剩深夜和蛋白，破纪录 / 吃超挪走了）> 练完问感受 > **小反应** `reactRecord`。饭点「老样子」（`quickRepeat`）、照计划（`donePlan`）、图鉴记一顿也调 `reactRecord`。回应前 `clearStalePop` 把之前主动说的、还开着的气泡（chat / quip / tip / 点小人的）让掉；记完 15 秒内 `greetOrGuide` 不来抢（`_recAt`）。
       跟着记录变样子：`dayLook()` 今天练过 → 穿运动背心（本来是棒球服、衬衫这种盖住胳膊的才换）+ `towel` 毛巾（`ART.gear` 支持 `{ lie, stand }` 两个姿势不同的位置）；`buddyState` 今天超预算 100 以上 → `full`（∪∪ 眯眼 `content`、脸红、灰色热气 `puff`）。设置里的预览不用 dayLook，还是你选的样子。
       安静的地方：`browseTick`（发呆、翻以前、翻记录、看趋势凑过来）只在「话多」档；`greetOrGuide` 里饭前挑一顿 `mealPick`、图鉴介绍 `dexIntro`、回来了 `welcomeBack`、考题 `quizNudge` 只在「话多」档；`voiceBudget` 正常 14 → 8 句、chat 0。顺手修了 v6.3 的键冲突：`noteFeeling` 用的 `tf_feel` 和练完问感受的 `tf_feel`（存日期）撞了，改成 `tf_moodnote`。
+13. **小人能动手、计划一次就准**（v6.5，用户：「让 AI 像 Agent 一样去动我们的软件——『明天要练之前的计划 A，帮我放成明天的计划』它能做到；很多决策是重复的，写成 Skill 省 token 和时间」「能给用户用轮椅就不要给拐杖：计划一次就准，不用改第二次」「有氧跟力量训练识别不精准」）：
+    - 动作 `act`（提示词规则 12）：`usePlan / savePlan / copyDay / movePlan / clearPlan / renamePlan / dropPlan / goal / protein / remind`，`Parser.cleanActs` 白名单 + 夹范围（最多 4 个），`app.runActs(acts, base)`（`app/agent.js`）照着做，返回提示条几行 + 撤销（快照 plans / planBook / 目标 / 蛋白 / `tf_reminders`）+ `jump`（放了计划跳到那天看）。dayOffset 相对正在看的日期；说到计划、星期、照着练时上下文带「日期对照」（含上周）和「存好的计划」（`planBookContext`，名字 + 前几个动作）。
+    - 本机技能（`log/agent_intent.js`，`TF.AgentIntent.matchSkill`，纯函数 node 能测）：「明天练计划A」「把明天的计划挪到后天」「明天不练了」「明天照着上周一练」「把这个计划存起来叫X」直接认出来做，不调大模型（`QuickLog.submit` 里排在改计划之后、本机答之前，`app.runSkill`）；带问号、「怎么」的不认；usePlan 的名字计划本里没有就交给大模型。
+    - 计划本 `profile.planBook`（最多 26 份，auto 的留最近 6 份，备份按名字合并）：计划气泡「存起来」、说「存起来叫…」存；点「加到…」时悄悄存一份 auto（名字带日期，和已存的一样就不存），「照上次那个练腿的」找得到。`addPlans` v6.5 起只换同类（放训练不动那天的食谱）。设置「小人记住的」→「存好的计划」能删。
+    - 计划一次就准（`calibratePlan`，pipeline 拿到 plan 就跑、`usePlan` 也跑）：练过的动作按 `exerciseProgress` 的「下次」定重量和次数（今天已经练过的不动）；食谱 `balanceMeals` 按那几顿该占的比例（早 27 / 午 35 / 晚 30 / 加餐 8，今天吃过的那几顿不算）算出剩下的热量和蛋白目标，差 12% 以上才改：蛋白多的（蛋白占热量 35% 以上）和别的分两组放大缩小（0.6～1.8 倍），蔬菜（每克不到 0.6 千卡）不动，只改「150g」「2个」这种写了数的，菜名里的份量跟着改。提示词：份量按预算配好、练过的按成绩、不反问，排了计划时 next 写一点就能改的（「在家没器械」）。
+    - 回答用小人的口吻：上下文带 `voice`（`cast.speech`，极简模式不带），「口吻像他，内容照样要具体、准」。
+    - 训练类型（`TF.exerciseInfo`，helpers）按名字认，不信大模型的 muscleGroup：cardio（跑、跳绳、游泳、走路、HIIT、跳操）/ sport（球类、拳击、攀岩、跳舞）/ flex（瑜伽、拉伸）→ muscleGroup 有氧 + 按时间；iso（平板支撑、静蹲）→ 核心 / 腿部 + 按时间；strength（具体动作按部位，「力量训练」「撸铁」「壶铃」→ 新加的 `全身`）。写成组数的按时间换（平板支撑 3×60 秒 = 3 分钟，跳绳 110 个一分钟）；消耗 `metBurn` = MET × 体重 × 小时（大模型的在 0.6～1.8 倍以内才用它的）。界面标签 `TF.workoutTag`（有氧 / 运动 / 放松 / 训练）和图标都按这个，以前记的也显示对。
+    - 真实 Atria 测试脚本在 `claude/api-check` 的 `.github/api_v65.js`（15 句 × 2：act 各种、换说法找计划、星期算对、训练类型、食谱份量、深蹲重量、记录和提问不带 act）。
 
 ## 工作流
 

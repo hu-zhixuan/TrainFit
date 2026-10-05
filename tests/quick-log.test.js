@@ -961,3 +961,36 @@ test('v6.3 本机认「过几天有结果的事」：大模型没给 life 时用
   assert.strictEqual(TF.lifeEvent('今天好累', sat), null);
   assert.strictEqual(TF.lifeEvent('我跟我妈吵架了', sat), null);
 });
+
+test('v6.5 训练类型按名字认：跑步、球类、瑜伽是有氧，平板支撑记核心，「力量训练」是全身不是有氧；消耗按代谢当量和体重算', () => {
+  const w = (list) => Parser.normalize({ add: { workouts: list }, dayOffset: 0 }, { lastWeight: 70, said: '' }).workouts;
+  const [run, rope, plank, gym, bench, ball, yoga] = w([
+    { exerciseName: '跑步', muscleGroup: '腿部', durationMin: 30 },
+    { exerciseName: '跳绳', muscleGroup: '有氧', sets: 3, reps: 300 },
+    { exerciseName: '平板支撑', muscleGroup: '有氧', sets: 3, reps: 60 },
+    { exerciseName: '力量训练', muscleGroup: '有氧', durationMin: 60 },
+    { exerciseName: '杠铃卧推', muscleGroup: '有氧', weightKg: 60, sets: 4, reps: 8 },
+    { exerciseName: '打篮球', muscleGroup: '胸部', durationMin: 60, burnedCalories: 2000 },
+    { exerciseName: '瑜伽', durationMin: 45 }
+  ]);
+  assert.strictEqual(run.muscleGroup, '有氧'); assert.strictEqual(run.burnedCalories, 343);
+  assert.ok(rope.muscleGroup === '有氧' && rope.durationMin === 8 && !rope.weightKg, '跳绳 900 个 ≈ 8 分钟');
+  assert.ok(plank.muscleGroup === '核心' && plank.durationMin === 3, '平板支撑 3×60 秒 = 3 分钟，练核心');
+  assert.ok(gym.muscleGroup === '全身' && gym.durationMin === 60 && gym.burnedCalories === 350);
+  assert.ok(bench.muscleGroup === '胸部' && bench.sets === 4 && !bench.durationMin);
+  assert.strictEqual(ball.burnedCalories, 455, '大模型给的 2000 千卡太离谱，按 6.5 × 70kg × 1 小时');
+  assert.ok(yoga.muscleGroup === '有氧' && yoga.burnedCalories < 150);
+  const tag = (n, extra) => TF.workoutTag(Object.assign({ exerciseName: n }, extra)).label;
+  assert.deepStrictEqual(['跑步机', '羽毛球', '普拉提', '平板支撑', '力量训练', '坐姿划船', '划船机'].map(n => tag(n)), ['有氧', '运动', '放松', '训练', '训练', '训练', '有氧']);
+  assert.strictEqual(tag('自己编的动作', { muscleGroup: '有氧' }), '有氧', '认不出名字的按记录里的部位');
+  // 真实 Atria 2/2：「平板支撑3组每组1分钟」写成 3×10、没写时长——按原话算 3 分钟
+  const said = (text, list) => Parser.normalize({ add: { workouts: list }, dayOffset: 0 }, { lastWeight: 70, said: text }).workouts;
+  assert.strictEqual(said('平板支撑3组每组1分钟', [{ exerciseName: '平板支撑', muscleGroup: '核心', sets: 3, reps: 10 }])[0].durationMin, 3);
+  assert.strictEqual(said('平板支撑三组，每组一分半', [{ exerciseName: '平板支撑', sets: 3, reps: 10 }])[0].durationMin, 5);
+  assert.strictEqual(said('平板支撑4组60秒', [{ exerciseName: '平板支撑', sets: 4, reps: 10 }])[0].durationMin, 4, '只说 60 秒的当每组');
+  assert.strictEqual(said('跳绳十分钟', [{ exerciseName: '跳绳', sets: 1, reps: 100 }])[0].durationMin, 10);
+  const two = said('跑了半小时，平板支撑3组', [{ exerciseName: '跑步', durationMin: 30 }, { exerciseName: '平板支撑', sets: 3, reps: 1 }]);
+  assert.strictEqual(two[1].durationMin, 3, '两样按时间的，原话的时长不知道是谁的，不乱用');
+  assert.deepStrictEqual(TF.saidMinutes('每组45秒做了四组'), { per: 0.75, total: null });
+  assert.strictEqual(TF.saidMinutes('卧推80公斤5组'), null);
+});

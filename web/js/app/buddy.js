@@ -1064,6 +1064,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       (plan ? this.planPreview(days, dayWord) : '') +
       (opts.streaming ? `<p class="buddy-wait${opts.planning ? '' : ' hidden'}">正在排成计划，好了能一键加上<span class="think-dots"><i></i><i></i><i></i></span></p>` : '') +
       (plan ? `<div class="buddy-acts"><button class="buddy-act" type="button" data-pa="edit">改一改</button>` +
+        `<button class="buddy-act" type="button" data-pa="save">存起来</button>` +
         `<button class="buddy-act primary" type="button" data-pa="add"${added ? ' disabled' : ''}>${added ? '✓ 已加到' : '加到'}${where}</button></div>` +
         `<p class="buddy-tip hidden">按住下面的按钮说要改的地方，比如「不要米饭，换成红薯」「蛋白再多一点」</p>` : '') +
       (opts.streaming ? '' : this.nextChips(opts.next, opts.chat) + '<button class="buddy-more" type="button">看看连续记录 ›</button>');
@@ -1075,6 +1076,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       if (b.dataset.pa === 'add') {
         const from = this._lastAnswer.at;
         const n = days.reduce((t, d) => t + this.addPlans(d.date, Object.assign({}, d, { from }), true), 0);
+        if (this.rememberPlan) this.rememberPlan(days); // 悄悄存一份：以后说「照上次那个练腿的计划」找得到（v6.5）
         this.saveData();
         if (this.bondGain) this.bondGain('plan');
         b.disabled = true;
@@ -1093,6 +1095,17 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
           this.landPlanRows();
           this.showToast(days.length > 1 ? `排好了 ${days.length} 天，练完点 ✓ 就记上` : `加了 ${n} 条，做完点 ✓ 就记上`);
         }, quick ? 300 : 120 + rows.length * 70 + 700);
+      } else if (b.dataset.pa === 'save') {
+        // 存进计划本（v6.5）：以后说「明天练练腿」就放到那天，不用再问一遍
+        const entry = days.length > 1 ? { workouts: [], meals: [], days: days.map(d => ({ offset: Math.round((new Date(d.date + 'T00:00:00') - new Date(days[0].date + 'T00:00:00')) / 86400000), workouts: d.workouts, meals: d.meals })) }
+          : { workouts: days[0].workouts, meals: days[0].meals };
+        const e = this.savePlanBook && this.savePlanBook(entry, '');
+        if (!e) return;
+        this.saveData();
+        b.disabled = true;
+        b.textContent = '✓ 已存';
+        window.Haptics && window.Haptics.fire('success');
+        this.showToast(`存成「${e.name}」了，以后说「明天练${e.name}」就行`);
       } else {
         // 「改一改」：接下来说的那一句就是在改这份计划（v5.5，以前不做标记，「不要米饭换红薯」被当成记录，冒一张「没整理好」）
         this._planEdit = Date.now();
@@ -1406,7 +1419,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       const right = kcal ? `约 ${fmt(kcal)} kcal · 蛋白 ${fmt(prot)}g` : `${lifts.length} 个动作`;
       const wd = WK[new Date(d.date + 'T00:00:00').getDay()];
       const rows = meals.map(m => ({ tag: m.mealType.replace('/补剂', ''), name: m.foodSummary, val: `${fmt(m.calories)} kcal` }))
-        .concat(lifts.map(w => ({ tag: w.durationMin ? '有氧' : '', name: w.exerciseName, tip: w.tip,
+        .concat(lifts.map(w => ({ tag: TF.workoutTag(w).label === '训练' ? '' : TF.workoutTag(w).label, name: w.exerciseName, tip: w.tip,
           val: w.durationMin ? `${w.durationMin} 分钟` : `${w.weightKg > 0 ? round1(w.weightKg) + 'kg' : '自重'} ${w.sets}×${w.reps}` })));
       return `<div class="pp-day"><div class="pp-head"><b>${esc(dayWord(d.date))} · 周${wd}</b><span>${esc(right)}</span></div>` +
         rows.map(r => `<div class="pp-row" style="--i:${k++}"><span class="pp-tick"></span><div class="pp-main">` +
