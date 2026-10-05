@@ -41,7 +41,14 @@
     return EVENTS.find(e => c.lv >= e.lv && (!seen.has(e.id) || (e.id === 'confess' && c.romance == null)) && e.when(c)) || null;
   }
 
-  TF.Story = { EVENTS, pick };
+  // 还没看过的那段怎么解锁（设置「剧情」里写着，像游戏的任务提示；都是你本来就在做的事）
+  const HINTS = {
+    firstweek: '记满 7 天', hotpot: '记一顿火锅、烧烤', firstpr: '破一次自己的纪录', stuffed: '有一天吃撑了', trainweek: '一周练满 5 天', lighter: '比刚开始轻 1 公斤',
+    sweet: '记一杯奶茶或甜点', weekend: '周末上午来看看', rain: '某个下雨天', night: '深夜还没睡的时候', secret: '到这一章过两天',
+    confess: '这一章的某个晚上', date: '在一起以后的周末'
+  };
+
+  TF.Story = { EVENTS, HINTS, pick };
   if (typeof module !== 'undefined' && module.exports) module.exports = TF.Story;
 })(typeof window !== 'undefined' ? window : globalThis);
 
@@ -97,68 +104,35 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
   },
 
   /**
-   * 演一段：小人的头像 + 标题，一句一句打出来（点「▸」下一句），最后三个选项；选了它回一句，记下来。
+   * 演一段（v7.0 起在整屏的剧场里，theater.js）：背景、大大的 TA、一句一句打出来，最后三个选项；选了它回一句，记下来。
+   * 「让我看看」（flex）：TA 秀一下跟着你练出来的样子；「陪你聊会儿」（talk）：演完把输入框亮一下，接着跟大模型聊。
    */
-  showStoryEvent(id) {
+  showStoryEvent(id, replay) {
     const E = this.cast().events[id];
-    const pop = document.getElementById('buddy-pop');
-    if (!E || !pop || this._touring) return false;
-    let i = 0;
-    pop.dataset.mode = 'story';
-    pop.dataset.level = 'none';
-    const art = (face) => TF.Buddy.svg(this.buddyArt({ pose: 'stand', face, gear: [], scale: 3 }));
-    pop.innerHTML = `<div class="story-card ev"><div class="story-art">${art(E.lines[0][0])}</div>` +
-      `<div class="story-meta"><span class="story-tag ev"><i aria-hidden="true">✦</i>小剧情</span><b class="story-title">${esc(E.title)}</b>` +
-      `<span class="story-who">${esc(this.buddyName())} · ${esc(this.bond().name)}</span></div></div>` +
-      `<p class="story-text ev-text"></p><div class="buddy-acts story-acts ev-acts"></div>`;
-    const text = pop.querySelector('.ev-text');
-    const acts = pop.querySelector('.ev-acts');
-    const face = (f) => { pop.querySelector('.story-art').innerHTML = art(f); };
-    const step = () => {
-      const [f, line] = E.lines[i];
-      face(f);
-      this.typeOut(text, line);
-      if (i < E.lines.length - 1) {
-        acts.innerHTML = '<button class="buddy-act ev-next" type="button" aria-label="下一句">▸</button>';
-        return;
+    if (!E || this._touring) return false;
+    const ev = TF.Story.EVENTS.find(e => e.id === id);
+    const c = this.cast();
+    const bg = id === 'secret' ? (c.chapterBg || [])[1] || 'pool' : TF.Theater.SCENE_BG[id] || 'room';
+    let talk = null;
+    // 重看：最后接上你当时选的（旁白「你说：…」+ TA 回的），不再让你选
+    const k = (this.storyData().picks || {})[id];
+    const was = replay && k != null && E.choices[k];
+    const lines = was ? E.lines.concat([[null, `你说：「${was[0]}」`], [was[2], was[1], was[4] === 'flex' ? 'flex' : undefined]]) : E.lines;
+    // 左上角写第几章：正在发生的写你现在在第几章；设置里重看的写它属于哪一章
+    return this.playScene({
+      label: this.chapterLabel(replay && ev ? ev.lv : this.bond().lv), title: E.title, bg, lines, choices: replay ? null : E.choices,
+      onChoose: (k, ch) => {
+        this.storyChoose(id, k);
+        if (ch[4] === 'talk') talk = ch;
+        if (/害羞|心动/.test(ch[2])) this.buddyMood('love', 2400);
+        if (ch[4] === 'flex') return { pose: 'flex', outfit: this.showOffOutfit ? this.showOffOutfit() : 'tank' };
+        return null;
+      },
+      onEnd: () => {
+        if (talk) { this.pushTalk && this.pushTalk(talk[0], talk[1]); setTimeout(() => this.glowTalk && this.glowTalk(), 400); }
+        if (!this._touring) this.buddyDo([['stand', 120], ['wave', 900], ['stand', 300]]);
       }
-      acts.innerHTML = E.choices.map((c, k) => `<button class="buddy-act ev-choice" type="button" data-k="${k}">${esc(c[0])}</button>`).join('');
-    };
-    acts.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const b = e.target.closest('button');
-      if (!b) return;
-      window.Haptics && window.Haptics.fire('tick');
-      if (b.classList.contains('ev-next')) { i += 1; step(); return; }
-      if (b.dataset.done) { this.closeBuddyPop('story'); return; }
-      const c = E.choices[+b.dataset.k];
-      if (!c) return;
-      this.storyChoose(id, +b.dataset.k);
-      if (c[4] !== 'flex') face(c[2]);
-      text.classList.add('reply');
-      this.typeOut(text, c[1]);
-      const talk = c[4] === 'talk';
-      // 「让我看看」：给你看跟着你练出来的样子（秀肌肉，露一下身材）
-      if (c[4] === 'flex') {
-        pop.querySelector('.story-art').innerHTML = TF.Buddy.svg(this.buddyArt({ pose: 'flex', face: c[2], gear: [], scale: 3, outfit: this.showOffOutfit ? this.showOffOutfit() : 'tank' }));
-        this.buddyDo([['stand', 150], ['flex', 1600], ['stand', 300]]);
-      }
-      acts.innerHTML = `<button class="buddy-act primary" type="button" data-done="1">${talk ? '嗯，我说' : '嗯'}</button>`;
-      if (/害羞|心动/.test(c[2])) { this.buddyMood('love', 2400); this.buddyBang('♥'); }
-      else this.buddyMood(TF.Buddy.FACE_MOOD[c[2]] || 'good', 2000);
-      if (talk) { this.pushTalk && this.pushTalk(c[0], c[1]); setTimeout(() => this.glowTalk && this.glowTalk(), 400); }
-      clearTimeout(this._askT);
-      this._askT = setTimeout(() => this.closeBuddyPop('story'), 9000);
     });
-    step();
-    this.positionBuddyPop();
-    this.popIn(pop);
-    document.getElementById('gauge-pop').classList.add('hidden');
-    clearTimeout(this._askT);
-    this._askT = setTimeout(() => this.closeBuddyPop('story'), 60000);
-    if (window.Sound) window.Sound.play('unlock', 0.5);
-    if (!this._touring) this.buddyDo([['stand', 120], ['wave', 900], ['stand', 400]]);
-    return true;
   },
 
   /** 记下选了什么：看过、选的第几个；「那句话」的三个选项改关系；周末出去玩这类记成近况，过一天问问 */
@@ -175,6 +149,31 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     this.setBuddy({ story: st });
     if (c[4] && typeof c[4] === 'object' && this.addLife) this.addLife([c[4]]);
     if (this.bondGain) this.bondGain('answer');
+  },
+
+  /**
+   * 设置里的「剧情」（v7.0：回忆、小剧情、衣服都按章放在一起）：每章一行——开头（这一章的回忆，点了重看）+ 这章的几段小剧情
+   * （看过的点了重看，没看过的写怎么解锁，还没到的章节写再记几天）。
+   */
+  renderStoryBook() {
+    const el = document.getElementById('buddy-story');
+    if (!el) return;
+    const c = this.cast(), b = this.bond(), st = this.storyData();
+    const seen = new Set(st.seen || []);
+    const days = (lv) => Math.max(1, Math.ceil((((TF.Bond.LEVELS[lv - 1] || {}).xp || 0) - b.xp) / 10)); // 一天记录 10 点亲密度
+    el.innerHTML = c.story.map((x, i) => {
+      const lv = i + 1, open = b.lv >= lv;
+      const evs = TF.Story.EVENTS.filter(e => e.lv === lv && c.events[e.id] && (e.id !== 'date' || st.romance === true));
+      const got = evs.filter(e => seen.has(e.id)).length;
+      const scenes = evs.map(e => seen.has(e.id)
+        ? `<button type="button" class="sb-scene seen" data-scene="${e.id}">${esc(c.events[e.id].title)}</button>`
+        : `<span class="sb-scene${open ? '' : ' far'}" title="${esc(TF.Story.HINTS[e.id] || '')}"><b>？？？</b>${open ? esc(TF.Story.HINTS[e.id] || '') : ''}</span>`).join('');
+      return `<div class="sb-ch${open ? '' : ' locked'}${b.lv === lv ? ' now' : ''}">` +
+        `<div class="sb-head">${open ? `<button type="button" class="sb-open" data-chapter="${lv}">` : '<span class="sb-open">'}` +
+        `<b>${esc(this.chapterLabel(lv))}</b><small>${open ? `开头「${esc(x[0])}」${b.lv === lv ? ' · 正在这一章' : ''}` : `再记 ${days(lv)} 天左右`}</small>${open ? '</button>' : '</span>'}` +
+        `<span class="sb-count">${got}/${evs.length}</span></div>` +
+        (open || lv === b.lv + 1 ? `<div class="sb-scenes">${scenes}</div>` : '') + '</div>';
+    }).join('');
   },
 
   /** 你们之间发生过的事（给聊天的大模型，最多 5 件，新的在后） */

@@ -926,19 +926,20 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     pop.classList.remove('hidden');
   },
 
-  /** 点小人看到的那一行亲密度：名字、第几级、离下一级还差几天、下一级解锁什么 */
+  /** 点小人看到的那一行亲密度：名字、第几章、离下一章还差几天、下一章是什么 */
   bondRow() {
     if (!this.bond) return '';
     const b = this.bond();
     const unlock = b.next && Object.keys(TF.Buddy.OUTFITS).find(k => TF.Buddy.OUTFITS[k].lv === b.next.lv);
     // 下一级解锁什么：一段回忆（给一句预告，让人想知道后面）+ 衣服
     const tease = b.next && this.cast().tease[b.next.lv - 1];
-    const next = b.next ? `再记 ${Math.max(1, Math.ceil(b.next.need / 10))} 天左右到「${b.next.name}」，解锁回忆「${tease}」${unlock ? `和${this.outfitLabel(unlock)}` : ''}` : '已经是最懂你的了';
+    // v7.0：亲密度就是剧情走到第几章
+    const next = b.next ? `再记 ${Math.max(1, Math.ceil(b.next.need / 10))} 天左右进${this.chapterLabel(b.next.lv)}：${tease}${unlock ? `（解锁${this.outfitLabel(unlock)}）` : ''}` : '剧情都解锁了，TA 已经是最懂你的了';
     // v6.3：它现在的心情（有点想你 / 有点低落 / 担心你…），恋人线显示「恋人」
     const heart = this.heartLabel ? this.heartLabel() : '';
     const love = this.storyData && this.storyData().romance === true;
     return `<div class="bond-row"><div class="bond-top"><span class="bond-name"><i aria-hidden="true">♥</i>${esc(this.buddyName())} · ${esc(love ? '恋人' : b.name)}</span>` +
-      `${heart ? `<span class="bond-heart">${esc(heart)}</span>` : ''}<span class="bond-lv">Lv${b.lv}</span></div>` +
+      `${heart ? `<span class="bond-heart">${esc(heart)}</span>` : ''}<span class="bond-lv">${esc(this.chapterLabel(b.lv).split(' · ')[0])}</span></div>` +
       `<div class="bond-bar"><i style="width:${Math.round(b.pct * 100)}%"></i></div><div class="bond-next">${esc(next)} · 长按我摸摸头</div></div>`;
   },
 
@@ -1678,7 +1679,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     if (!this.maybeCastPick || !this.maybeCastPick()) this.maybeTour(); // 老用户升级到 v6.0：先选谁陪你
   },
 
-  /** 设置 →「外观」里的小人：谁陪你（江叙 / 夏柚 / 不要·极简）、预览（站着，看得见衣服和身材）、亲密度、发型、发色、肤色、衣服、身材、回忆、话多少 */
+  /** 设置 →「外观」里的小人：谁陪你（江叙 / 夏柚 / 不要·极简）、预览（站着，看得见衣服和身材）、走到第几章、剧情（v7.0）、TA 的样子、TA 多黏你 */
   renderBuddySettings(pose) {
     const look = this.buddyLook();
     const $ = (id) => document.getElementById(id);
@@ -1698,7 +1699,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       $(group).innerHTML = Object.keys(list).map(k => {
         const lock = locked && locked(k);
         const label = group === 'buddy-outfit' ? this.outfitLabel(k) : list[k].label;
-        return `<button type="button" class="swatch${k === cur ? ' on' : ''}${lock ? ' locked' : ''}" data-value="${k}" aria-label="${label}${lock ? `（Lv${list[k].lv} 解锁）` : ''}" title="${label}" style="${fill(list[k])}">${lock ? '<i aria-hidden="true">🔒</i>' : ''}</button>`;
+        return `<button type="button" class="swatch${k === cur ? ' on' : ''}${lock ? ' locked' : ''}" data-value="${k}" aria-label="${label}${lock ? `（${this.chapterLabel(list[k].lv).split(' · ')[0]}解锁）` : ''}" title="${label}" style="${fill(list[k])}">${lock ? '<i aria-hidden="true">🔒</i>' : ''}</button>`;
       }).join('');
     };
     sw('buddy-hair', B.HAIR, look.hair, (h) => `background:${h.H}`);
@@ -1708,34 +1709,32 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       o.type === 'open' ? `background:linear-gradient(90deg, ${o.V} 0 22%, ${o.J} 22% 40%, ${B.SKINS[look.skin].S} 40% 60%, ${o.J} 60% 78%, ${o.V} 78%)` :
       `background:linear-gradient(90deg, ${o.V} 0 30%, ${o.J} 30% 70%, ${o.V} 70%)`;
     sw('buddy-outfit', B.OUTFITS, look.outfit, fill, (k) => !this.outfitOpen(k));
-    document.querySelectorAll('#buddy-build .seg-btn').forEach(b => b.classList.toggle('active', b.dataset.value === look.build));
+    // v7.0：身材不用选了，跟着你练（最近 4 周练 4 天薄肌、10 天腹肌），只在露出来的衣服上看得出
     const n = this.trainDays28();
     const built = B.BUILDS[this.buddyBuild()].label;
-    $('buddy-look-note').textContent = `衣服：${this.outfitLabel(look.outfit)}。` + (look.build === 'auto'
-      ? `身材跟着你练：最近 4 周练了 ${n} 天，现在是${built}${n < 10 ? `，练满 ${n < 4 ? 4 : 10} 天${n < 4 ? '薄肌' : '腹肌'}` : ''}。`
-      : '身材只在露出来的衣服（背心、敞开的外套、光膀子）上看得出来，点上面的小人秀一下。');
+    $('buddy-look-note').textContent = `衣服：${this.outfitLabel(look.outfit)}。身材跟着你练：最近 4 周练了 ${n} 天，现在是${built}` +
+      (n < 10 ? `，练满 ${n < 4 ? 4 : 10} 天变${n < 4 ? '薄肌' : '腹肌'}` : '') + '（背心、敞开的外套、光膀子看得出来，点上面的 TA 秀一下）。';
     const b = this.bond();
-    const lockNext = Object.keys(B.OUTFITS).filter(k => !this.outfitOpen(k)).map(k => B.OUTFITS[k].lv).sort()[0];
-    $('buddy-bond').innerHTML = `<div class="bond-top"><span class="bond-name"><i aria-hidden="true">♥</i>${esc(c.name)} · ${esc(b.name)}</span><span class="bond-lv">Lv${b.lv}</span></div>` +
-      `<div class="bond-bar"><i style="width:${Math.round(b.pct * 100)}%"></i></div>` +
-      `<div class="bond-next">${b.next ? `再记 ${Math.max(1, Math.ceil(b.next.need / 10))} 天左右升级，解锁下一段回忆${lockNext ? '和新衣服' : ''}` : '亲密度满了，回忆和衣服都解锁了'}</div>`;
-    // 回忆：每升一级解锁一段，点开重看；没解锁的给一句预告
-    $('buddy-mem').innerHTML = c.story.map((x, i) => {
-      const open = b.lv > i;
-      return `<button type="button" class="mem-card${open ? '' : ' locked'}" data-lv="${i + 1}" aria-label="${open ? `回忆 ${i + 1}：${x[0]}` : `Lv${i + 1} 解锁`}">` +
-        `<i class="mem-n">${i + 1}</i><b>${open ? esc(x[0]) : '🔒'}</b><small>${esc(TF.Bond.LEVELS[i].name)}</small></button>`;
-    }).join('');
-    const nb = (this.profile.buddy || {}).note || {};
-    $('buddy-mem-note').textContent = `${Math.min(b.lv, c.story.length)}/${c.story.length}` + (nb.n ? ` · 收到小纸条 ${nb.n} 张${nb.s ? `（珍藏 ${nb.s}）` : ''}` : '');
-    // v6.3：你们现在的关系、看过几段小剧情；恋人可以改回搭子，选过搭子的可以让它再问一次
     const rel = this.storyData ? this.storyData() : {};
-    $('buddy-rel').innerHTML = this.relationNote ? `<span>${esc(this.relationNote())}</span>` +
+    const lockNext = Object.keys(B.OUTFITS).filter(k => !this.outfitOpen(k)).map(k => B.OUTFITS[k].lv).sort()[0];
+    // 亲密度 = 剧情走到第几章；下一章再记几天、解锁什么
+    $('buddy-bond').innerHTML = `<div class="bond-top"><span class="bond-name"><i aria-hidden="true">♥</i>${esc(c.name)} · ${esc(rel.romance === true ? '恋人' : b.name)}</span><span class="bond-lv">${esc(this.chapterLabel(b.lv).split(' · ')[0])}</span></div>` +
+      `<div class="bond-bar"><i style="width:${Math.round(b.pct * 100)}%"></i></div>` +
+      `<div class="bond-next">${b.next ? `再记 ${Math.max(1, Math.ceil(b.next.need / 10))} 天左右进下一章${lockNext === b.next.lv ? '，解锁新衣服' : ''}` : '剧情都解锁了，衣服也是'}</div>`;
+    // 剧情：五章，每章一个开头 + 几段小剧情，看过的点了重看
+    this.renderStoryBook();
+    const nb = (this.profile.buddy || {}).note || {};
+    const total = Object.keys(c.events || {}).length;
+    $('buddy-mem-note').textContent = `看过 ${(rel.seen || []).filter(id => (c.events || {})[id]).length}/${total} 段` + (nb.n ? ` · 小纸条 ${nb.n} 张${nb.s ? `（珍藏 ${nb.s}）` : ''}` : '');
+    // 你们现在的关系；恋人可以改回搭子，选过搭子的可以让它再问一次
+    const relName = rel.romance === true ? '恋人' : rel.romance === false ? '最好的搭子' : b.lv >= 3 ? '有点暧昧' : '';
+    $('buddy-rel').innerHTML = relName || rel.romance != null ? `<span>你们现在：${esc(relName || b.name)}</span>` +
       (rel.romance != null ? `<button type="button" class="chip" data-rel-reset="1">${rel.romance ? '改回搭子' : '让 TA 再问一次'}</button>` : '') : '';
     const talk = this.talkLevel ? this.talkLevel() : 'normal';
     document.querySelectorAll('#buddy-talk .seg-btn').forEach(x => x.classList.toggle('active', x.dataset.value === talk));
-    $('buddy-talk-note').textContent = talk === 'quiet' ? '记完只做个动作（破纪录、吃撑这种还会说），卡住了才开口' :
-      talk === 'more' ? '再加上你逛的时候、发呆的时候凑过来聊几句，一天二十句以内' : '你记了什么它都有反应，打招呼、饭点问一句；你逛的时候不打扰';
-    $('buddy-note').textContent = (st.streak ? `连续记录 ${st.streak} 天。` : '') + `${c.name}趴在「按住说话」上面：点一下看今天（每天第一次点有张小纸条），长按摸摸头。连续记 3 天戴头带，7 天棒球帽，30 天皇冠。`;
+    $('buddy-talk-note').textContent = talk === 'quiet' ? '记完只做个动作，破纪录、吃撑这种大事和剧情还会有；卡住了才开口' :
+      talk === 'more' ? '再加上你逛的时候、发呆的时候凑过来聊几句、出个题，一天二十句以内' : '你记了什么 TA 都有反应，剧情照常走，打招呼、饭点问一句；你逛的时候不打扰';
+    $('buddy-note').textContent = (st.streak ? `连续记录 ${st.streak} 天。` : '') + `${c.name}趴在「按住说话」上面：点一下看今天（每天第一次点有张小纸条），长按摸摸头，打字跟 TA 说「早」「晚安」「抱抱」TA 马上接。连续记 3 天戴头带，7 天棒球帽，30 天皇冠。`;
   },
 
   bindBuddySettings() {
@@ -1751,7 +1750,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       if (!b) return;
       if (b.classList.contains('locked')) {
         const lv = TF.Buddy.OUTFITS[b.dataset.value].lv;
-        this.showToast(`和${this.buddyName()}到 Lv${lv}（${TF.Bond.LEVELS[lv - 1].name}）解锁「${this.outfitLabel(b.dataset.value)}」，多记几天就到了`);
+        this.showToast(`剧情走到${this.chapterLabel(lv)}解锁「${this.outfitLabel(b.dataset.value)}」，多记几天就到了`);
         return;
       }
       set({ [key]: b.dataset.value }, pose);
@@ -1760,7 +1759,6 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     pick('buddy-skin', 'skin');
     pick('buddy-outfit', 'outfit');
     pick('buddy-style', 'style');
-    pick('buddy-build', 'build', 'flex');
     document.getElementById('buddy-char').addEventListener('click', (e) => {
       const b = e.target.closest('.seg-btn');
       if (!b) return;
@@ -1779,13 +1777,14 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       this.renderBuddySettings();
       this.showToast(love ? '改回搭子了。到了晚上，TA 也许还会再说一次那句话' : '好，过几天晚上 TA 会再问一次');
     });
-    document.getElementById('buddy-mem').addEventListener('click', (e) => {
-      const b = e.target.closest('.mem-card');
-      if (!b) return;
-      e.stopPropagation();
-      const lv = +b.dataset.lv;
-      if (b.classList.contains('locked')) { this.showToast(`Lv${lv}「${TF.Bond.LEVELS[lv - 1].name}」解锁：${this.cast().tease[lv - 1]}`); return; }
-      this.showMemory(lv);
+    // 剧情：点章节重看开头，点看过的小剧情重看，没解锁的告诉你怎么解锁
+    document.getElementById('buddy-story').addEventListener('click', (e) => {
+      const ch = e.target.closest('[data-chapter]');
+      const sc = e.target.closest('[data-scene]');
+      if (ch) { e.stopPropagation(); this.showMemory(+ch.dataset.chapter); return; }
+      if (sc) { e.stopPropagation(); this.showStoryEvent(sc.dataset.scene, true); return; }
+      const hint = e.target.closest('.sb-scene');
+      if (hint && hint.title) this.showToast(`解锁：${hint.title}`);
     });
     document.getElementById('buddy-talk').addEventListener('click', (e) => {
       const b = e.target.closest('.seg-btn');

@@ -1,5 +1,6 @@
 /**
- * 第一次打开：选用途（想瘦一点 / 就记记吃了啥 / 在健身），再简单填身体数据。
+ * 第一次打开（v7.0）：先选怎么用——极简模式，还是和 TA 一起（选江叙 / 夏柚）；再选用途（想瘦一点 / 就记记吃了啥 / 在健身），
+ * 简单填身体数据。选了 TA 的，进 App 先演第一章的开头（剧场），再由 TA 带三步教程。
  */
 Object.assign(FitnessApp.prototype, {
   /** 在引导页从备份恢复了：用备份里的身体数据和用途，不用再填 */
@@ -16,9 +17,20 @@ Object.assign(FitnessApp.prototype, {
     const ob = document.getElementById('onboard');
     ob.classList.remove('hidden');
     document.getElementById('ob-logo').innerHTML = brandIcon(30);
-    document.getElementById('ob-step-1').classList.remove('hidden');
-    document.getElementById('ob-step-2').classList.add('hidden');
+    this.obStep(0);
+    // 「和 TA 一起」那张卡片上画两个人
+    const pals = document.getElementById('ob-mode-pals');
+    const mic = document.querySelector('.ob-mode-min i');
+    if (mic && typeof ICONS !== 'undefined') mic.innerHTML = ICONS.mic;
+    if (pals) pals.innerHTML = ['boy', 'girl'].map(char => TF.Buddy.svg({ char, outfit: 'varsity', build: 'normal', pose: 'stand', mood: 'good', gear: [], scale: 3 })).join('');
     document.body.classList.add('onboarding');
+  },
+
+  /** 引导页显示第几步（0 选模式、1 用途、2 填数据、3 选人） */
+  obStep(n) {
+    [0, 1, 2, 3].forEach(i => { const el = document.getElementById('ob-step-' + i); if (el) el.classList.toggle('hidden', i !== n); });
+    const ob = document.getElementById('onboard');
+    if (ob) ob.scrollTop = 0;
   },
 
   bindOnboarding() {
@@ -37,14 +49,27 @@ Object.assign(FitnessApp.prototype, {
       $('ob-step-2-sub').textContent = pick === 'track'
         ? '用来估你每天大概消耗多少，好告诉你吃得多还是少。数据只存在这台手机上。'
         : '用来估你每天大概消耗多少，热量预算才准。数据只存在这台手机上。';
-      $('ob-step-1').classList.add('hidden');
-      $('ob-step-2').classList.remove('hidden');
+      this.obStep(2);
       setSeg('ob-gender', gender);
       setSeg('ob-goal', goal);
     });
     $('ob-gender').addEventListener('click', (e) => { const b = e.target.closest('.seg-btn'); if (b) { gender = b.dataset.value; setSeg('ob-gender', gender); } });
     $('ob-goal').addEventListener('click', (e) => { const b = e.target.closest('.seg-btn'); if (b) { goal = b.dataset.value; setSeg('ob-goal', goal); } });
-    $('ob-back').addEventListener('click', () => { $('ob-step-2').classList.add('hidden'); $('ob-step-1').classList.remove('hidden'); });
+    $('ob-back').addEventListener('click', () => this.obStep(1));
+    // 第一屏：极简 → 直接选用途；和 TA 一起 → 先选江叙 / 夏柚，选好了再选用途
+    $('ob-step-0').addEventListener('click', (e) => {
+      const m = e.target.closest('[data-mode]');
+      if (!m) return;
+      window.Haptics && window.Haptics.fire('tap');
+      if (m.dataset.mode === 'min') {
+        this.profile.buddy = Object.assign({}, this.profile.buddy || {}, { show: false, picked: 6 });
+        this.obStep(1);
+        return;
+      }
+      this.showCastPick(() => this.obStep(1), { mid: true });
+    });
+    $('ob-back1').addEventListener('click', () => this.obStep(0));
+    $('ob-back3').addEventListener('click', () => { this._castDone = null; this._castMid = false; this.obStep(0); });
 
     // 一句话建档：「男，175，70 公斤，28 岁，想减脂」→ 下面的表自动填好、闪一下，还能自己改
     let introName = '';
@@ -117,13 +142,21 @@ Object.assign(FitnessApp.prototype, {
       this.saveData();
       this.applyMode();
       window.Haptics && window.Haptics.fire('success');
-      // 最后一步：选一个陪你记的（江叙 / 夏柚），或者极简模式
-      this.showCastPick(() => {
+      const enter = () => {
         this.needsOnboarding = false;
         this.saveData();
+        document.getElementById('onboard').classList.add('hidden');
+        document.body.classList.remove('onboarding');
         this.render();
-        this.maybeTour(); // 搭子带着看三步
-      });
+        this.renderBuddy();
+        // 选了 TA：先演第一章的开头（「第一章 · 初遇」，几句、能跳过），演完 TA 带着看三步；极简直接看三步
+        const b = this.profile.buddy || {};
+        if (b.show !== false && this.playChapter && this.playChapter(1, { after: () => this.maybeTour() })) return;
+        this.maybeTour();
+      };
+      // 第一屏已经选过极简 / 选过人了就直接进；没选过的（老路子）最后问一次
+      if ((this.profile.buddy || {}).picked) enter();
+      else this.showCastPick(() => { this.needsOnboarding = false; this.saveData(); this.render(); this.maybeTour(); });
     };
     $('ob-done').addEventListener('click', () => finish(true));
     this.bindCastPick();
@@ -135,21 +168,24 @@ Object.assign(FitnessApp.prototype, {
    * 选搭子（v6.0）：新用户建档的最后一步；老用户升级后第一次打开也问一次（picked 记着选过了）。
    * 江叙 / 夏柚：点一下卡片，TA 招手、说一句自我介绍；「就选 TA」确定。「极简模式」：不要小人，界面最干净，之后设置里能叫出来。
    */
-  showCastPick(done) {
+  showCastPick(done, opts) {
     const $ = (id) => document.getElementById(id);
     this._castDone = done;
     this._castPick = null;
+    this._castMid = !!(opts && opts.mid); // 引导第一屏选了「和 TA 一起」：选好人接着选用途，不关引导页
     const fresh = this.needsOnboarding;
-    $('ob-cast-title').innerHTML = fresh ? '最后一步：<br>要不要一个陪你记的搭子？' : '小人长大了：<br>选一个陪你记吧';
-    $('ob-cast-sub').textContent = fresh ? 'TA 记得你说过的事，看得见你每一点进步，在对的时候说一句。不要也行，极简模式最干净。'
+    $('ob-cast-title').innerHTML = this._castMid ? '选一个<br>陪你的人' : fresh ? '最后一步：<br>要不要一个陪你记的搭子？' : '小人长大了：<br>选一个陪你记吧';
+    $('ob-cast-sub').textContent = this._castMid ? 'TA 记得你说过的事，看得见你每一点进步。你们会一章一章熟起来——点一下，听 TA 说句话。'
+      : fresh ? 'TA 记得你说过的事，看得见你每一点进步，在对的时候说一句。不要也行，极简模式最干净。'
       : '以前那个像素小人，现在是两个人了。你们之前的亲密度、解锁的衣服都还在，换谁都一样。';
+    $('ob-back3').classList.toggle('hidden', !this._castMid);
+    $('ob-cast-off').classList.toggle('hidden', this._castMid);
     this.drawCastPick();
     $('ob-pal-say').textContent = '点一下，听 TA 说句话';
     $('ob-pal-say').classList.remove('said');
     $('ob-cast-done').disabled = true;
     $('ob-cast-done').textContent = '选一个吧';
-    ['ob-step-1', 'ob-step-2'].forEach(id => $(id).classList.add('hidden'));
-    $('ob-step-3').classList.remove('hidden');
+    this.obStep(3);
     $('onboard').classList.remove('hidden');
     document.body.classList.add('onboarding');
   },
@@ -169,6 +205,14 @@ Object.assign(FitnessApp.prototype, {
     const char = k === 'xy' ? 'girl' : 'boy';
     const keep = (this.profile.buddy || {}).char === char; // 换了人：发型回到这个人默认的
     this.profile.buddy = Object.assign({}, this.profile.buddy || {}, show ? Object.assign({ char, show: true, picked: 6 }, keep ? {} : { style: '' }) : { show: false, picked: 6 });
+    if (this._castMid && this.needsOnboarding) { // 引导中：接着选用途
+      this._castMid = false;
+      window.Haptics && window.Haptics.fire('success');
+      const next = this._castDone;
+      this._castDone = null;
+      if (next) next();
+      return;
+    }
     this.saveData();
     document.getElementById('onboard').classList.add('hidden');
     document.getElementById('ob-step-3').classList.add('hidden');

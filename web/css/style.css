@@ -722,13 +722,26 @@ body.has-buddy .views { padding-bottom: calc(var(--cmp-h, 110px) + 60px + var(--
 .buddy-blurb { margin: 0; font-size: 0.82rem; line-height: 1.5; color: var(--text-2); }
 .buddy-memories { display: flex; flex-direction: column; gap: 8px; margin: 4px 0 0; }
 .buddy-memories small { margin-left: 4px; font-weight: 500; color: var(--text-3); }
-.mem-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
-.mem-card { position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; padding: 14px 2px 7px; border: 1px solid color-mix(in srgb, var(--love) 35%, var(--line)); border-radius: var(--r-sm);
-  background: linear-gradient(160deg, color-mix(in srgb, var(--love) 16%, var(--surface-2)), var(--surface-2)); color: var(--text); font: inherit; cursor: pointer; }
-.mem-card b { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.74rem; }
-.mem-card small { font-size: 0.6rem; color: var(--text-3); white-space: nowrap; }
-.mem-card .mem-n { position: absolute; top: 3px; left: 5px; font-style: normal; font-size: 0.6rem; font-weight: 700; color: var(--love); }
-.mem-card.locked { background: var(--surface-2); border-color: var(--line); opacity: 0.6; }
+/* 设置里的剧情（v7.0）：五章，每章一行——章名（点了重看开头）+ 这章的小剧情（看过的点了重看，没看过的写怎么解锁） */
+.story-book { display: flex; flex-direction: column; gap: 6px; }
+.sb-ch { padding: 9px 10px 8px; border: 1px solid color-mix(in srgb, var(--love) 30%, var(--line)); border-radius: var(--r-md); background: color-mix(in srgb, var(--love) 5%, var(--surface)); }
+.sb-ch.now { border-color: var(--love); box-shadow: 0 0 0 1px color-mix(in srgb, var(--love) 35%, transparent) inset; }
+.sb-ch.locked { background: var(--surface-2); border-color: var(--line); }
+.sb-head { display: flex; align-items: center; gap: 8px; }
+.sb-open { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; flex: 1; min-width: 0; padding: 0; border: 0; background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+span.sb-open { cursor: default; }
+.sb-open b { font-size: 0.86rem; }
+.sb-ch.locked .sb-open b { color: var(--text-3); }
+.sb-open small { margin: 0 !important; font-size: 0.72rem; color: var(--text-3); }
+button.sb-open b::after { content: ' ▸'; color: var(--love); font-weight: 600; }
+.sb-count { flex: none; font-size: 0.72rem; font-weight: 700; color: var(--love); font-variant-numeric: tabular-nums; }
+.sb-ch.locked .sb-count { color: var(--text-3); }
+.sb-scenes { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
+.sb-scenes:empty { display: none; }
+.sb-scene { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 999px; border: 1px dashed var(--line); background: var(--surface); color: var(--text-3); font: inherit; font-size: 0.72rem; line-height: 1.5; }
+.sb-scene b { font-weight: 700; letter-spacing: 0.05em; }
+.sb-scene.seen { border: 1px solid color-mix(in srgb, var(--love) 45%, var(--line)); background: color-mix(in srgb, var(--love) 12%, var(--surface)); color: var(--text); font-weight: 600; cursor: pointer; }
+.sb-scene.far { opacity: 0.6; }
 /* 升级时弹出来的回忆（像收集 CG）、设置里重看的整屏卡片 */
 .buddy-pop[data-mode="story"] { width: min(320px, calc(100vw - 32px)); }
 .story-card { display: flex; align-items: flex-end; gap: 10px; margin: -2px 0 4px; }
@@ -1471,6 +1484,22 @@ body.onboarding .rec-panel { z-index: 210; bottom: calc(24px + var(--sab)); }
 .ob-foot { margin: 4px 0 0; text-align: center; font-size: 0.76rem; color: var(--text-3); }
 .ob-back { align-self: flex-start; background: none; border: 0; padding: 4px 0; color: var(--text-2); font-weight: 600; }
 .ob-actions { margin-top: 10px; }
+/* 第一屏选怎么用（v7.0）：极简 / 和 TA 一起，两张大卡 */
+.ob-modes { display: flex; flex-direction: column; gap: 12px; margin-top: 6px; }
+.ob-mode { display: grid; grid-template-columns: 100px 1fr; grid-template-rows: auto 1fr; column-gap: 14px; row-gap: 3px; align-items: center; text-align: left; padding: 14px 16px; border: 2px solid var(--line); border-radius: var(--r-lg); background: var(--surface); color: var(--text); font: inherit; cursor: pointer; box-shadow: var(--shadow-sm); transition: border-color 0.15s ease, transform 0.1s ease; -webkit-tap-highlight-color: transparent; }
+.ob-mode:active { transform: scale(0.99); }
+.ob-mode[data-mode="min"]:active { border-color: var(--accent); }
+.ob-mode[data-mode="buddy"] { border-color: color-mix(in srgb, var(--love) 45%, var(--line)); background: linear-gradient(150deg, color-mix(in srgb, var(--love) 9%, var(--surface)), var(--surface) 70%); }
+.ob-mode[data-mode="buddy"]:active { border-color: var(--love); }
+.ob-mode-art { grid-row: 1 / 3; display: flex; align-items: flex-end; justify-content: center; height: 84px; border-radius: var(--r-md); background: var(--surface-2); overflow: hidden; }
+.ob-mode[data-mode="buddy"] .ob-mode-art { background: radial-gradient(circle at 50% 60%, color-mix(in srgb, var(--love) 22%, transparent), transparent 72%); }
+.ob-mode-art svg { width: 48px; height: auto; margin: 0 -3px; }
+.ob-mode-min { align-items: center; }
+.ob-mode-min i { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; background: var(--accent); color: var(--on-accent, #fff); box-shadow: 0 0 0 7px color-mix(in srgb, var(--accent) 18%, transparent); }
+.ob-mode-min i svg { width: 22px; height: 22px; margin: 0; }
+.ob-mode b { align-self: end; font-size: 1.08rem; }
+.ob-mode > span:last-child { align-self: start; font-size: 0.8rem; line-height: 1.5; color: var(--text-3); }
+.ob-mode[data-mode="buddy"] b { color: var(--love); }
 #buddy-tour { margin-top: 10px; width: 100%; }
 /* 选搭子（v6.0）：江叙 / 夏柚 两张卡，点一下 TA 招手说一句；下面「极简模式」 */
 .ob-cast { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 4px; }
@@ -1662,3 +1691,73 @@ body.onboarding .rec-panel { z-index: 210; bottom: calc(24px + var(--sab)); }
   .story-card.moment .story-art svg { animation: moPop 0.5s cubic-bezier(0.2, 1.4, 0.4, 1) both; }
 }
 @keyframes moPop { from { opacity: 0; transform: translateY(10px) scale(0.85); } to { opacity: 1; transform: none; } }
+
+/* ---------- v7.0 剧场：整屏的 Galgame 场景（背景 + 大大的 TA + 名字牌 + 对话框 + 选项） ---------- */
+.theater { position: fixed; inset: 0; z-index: 300; overflow: hidden; color: #f4f2ee; -webkit-tap-highlight-color: transparent; cursor: pointer;
+  animation: thIn 0.35s ease-out; }
+.theater.closing { animation: thOut 0.28s ease-in forwards; }
+@keyframes thIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes thOut { to { opacity: 0; } }
+body.in-theater { overflow: hidden; }
+.th-bg { position: absolute; inset: 0; background: linear-gradient(180deg, #3b2f2a 0%, #1d1714 100%); }
+/* 背景：房间、深夜的房间、健身房、泳池、舞蹈教室、咖啡馆（火锅、奶茶）、街上（周末）、城市夜里、下雨、夜里、黄昏、清晨 */
+.theater[data-bg="room"] .th-bg { background: radial-gradient(ellipse 55% 30% at 78% 22%, rgba(255, 214, 150, 0.28), transparent 70%), linear-gradient(180deg, #4a3a30 0%, #2a201b 62%, #1b1411 100%); }
+.theater[data-bg="roomnight"] .th-bg { background: radial-gradient(ellipse 40% 24% at 22% 20%, rgba(255, 200, 120, 0.22), transparent 70%), linear-gradient(180deg, #221c33 0%, #15111f 60%, #0c0a12 100%); }
+.theater[data-bg="gym"] .th-bg { background: repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.035) 0 2px, transparent 2px 64px), linear-gradient(180deg, #2b3a45 0%, #19232b 58%, #0f1519 100%); }
+.theater[data-bg="pool"] .th-bg { background: radial-gradient(ellipse 70% 18% at 50% 72%, rgba(170, 240, 255, 0.25), transparent 70%), repeating-radial-gradient(circle at 30% 80%, rgba(255, 255, 255, 0.05) 0 3px, transparent 3px 26px), linear-gradient(180deg, #0f6a8a 0%, #0b4a63 55%, #072c3d 100%); }
+.theater[data-bg="studio"] .th-bg { background: linear-gradient(180deg, transparent 0 68%, rgba(170, 110, 70, 0.35) 68% 100%), repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.05) 0 1px, transparent 1px 90px), linear-gradient(180deg, #5a3848 0%, #33202a 70%, #1f1419 100%); }
+.theater[data-bg="cafe"] .th-bg { background: radial-gradient(ellipse 60% 26% at 50% 18%, rgba(255, 170, 110, 0.3), transparent 70%), linear-gradient(180deg, #5a2f22 0%, #33190f 60%, #1e0f09 100%); }
+.theater[data-bg="street"] .th-bg { background: linear-gradient(180deg, #ffb27a 0%, #e0748a 38%, #5d3a6e 72%, #2b1d3c 100%); }
+.theater[data-bg="citynight"] .th-bg { background: radial-gradient(circle at 20% 70%, rgba(255, 200, 110, 0.18) 0 40px, transparent 70px), radial-gradient(circle at 82% 64%, rgba(140, 180, 255, 0.16) 0 30px, transparent 60px), linear-gradient(180deg, #1c2042 0%, #12142c 60%, #0a0b18 100%); }
+.theater[data-bg="rain"] .th-bg { background: linear-gradient(180deg, #3a4656 0%, #232c38 60%, #151b23 100%); }
+.theater[data-bg="night"] .th-bg { background: linear-gradient(180deg, #0b1026 0%, #172046 55%, #0d1230 100%); }
+.theater[data-bg="dusk"] .th-bg { background: linear-gradient(180deg, #ff9a76 0%, #c86a8e 34%, #4b3570 70%, #241a40 100%); }
+.theater[data-bg="dawn"] .th-bg { background: radial-gradient(ellipse 80% 30% at 50% 78%, rgba(255, 230, 180, 0.45), transparent 70%), linear-gradient(180deg, #8fb2e8 0%, #d9b9c7 50%, #ffd8a8 100%); }
+/* 天气、星星、水光 */
+.th-fx { position: absolute; inset: 0; pointer-events: none; }
+.theater[data-bg="rain"] .th-fx { background: repeating-linear-gradient(105deg, rgba(200, 220, 255, 0.22) 0 1px, transparent 1px 14px); background-size: 200px 200px; }
+.theater[data-bg="night"] .th-fx, .theater[data-bg="citynight"] .th-fx, .theater[data-bg="roomnight"] .th-fx, .theater[data-bg="dusk"] .th-fx {
+  background-image: radial-gradient(1.5px 1.5px at 12% 14%, #fff, transparent), radial-gradient(1px 1px at 34% 8%, #fff, transparent), radial-gradient(1.5px 1.5px at 58% 18%, #fff, transparent),
+    radial-gradient(1px 1px at 76% 6%, #fff, transparent), radial-gradient(1.5px 1.5px at 90% 22%, #fff, transparent), radial-gradient(1px 1px at 22% 30%, #fff, transparent), radial-gradient(1px 1px at 66% 34%, #fff, transparent); opacity: 0.8; }
+.theater[data-bg="dusk"] .th-fx { opacity: 0.35; }
+.th-top { position: absolute; top: calc(env(safe-area-inset-top, 0px) + 14px); left: 16px; right: 12px; display: flex; align-items: center; justify-content: space-between; z-index: 3; }
+.th-label { font-size: 0.78rem; font-weight: 700; letter-spacing: 0.06em; padding: 4px 10px; border-radius: 999px; background: rgba(0, 0, 0, 0.32); }
+.th-skip { border: 0; background: rgba(0, 0, 0, 0.32); color: inherit; font: inherit; font-size: 0.8rem; padding: 6px 12px; border-radius: 999px; cursor: pointer; }
+/* 开场大字 */
+.th-card { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; z-index: 4; pointer-events: none; opacity: 0; transition: opacity 0.4s; background: rgba(0, 0, 0, 0.45); }
+.th-card.show { opacity: 1; }
+.th-card small { font-size: 0.85rem; letter-spacing: 0.2em; opacity: 0.85; }
+.th-card b { font-size: 1.7rem; letter-spacing: 0.08em; }
+/* TA 站在对话框上面 */
+.th-stage { position: absolute; left: 0; right: 0; bottom: calc(env(safe-area-inset-bottom, 0px) + 196px); display: flex; justify-content: center; z-index: 1; }
+.th-actor svg { width: min(60vw, 240px); height: auto; filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.45)); }
+.th-hearts { position: absolute; left: 50%; top: 10%; }
+.th-hearts i { position: absolute; left: var(--x); font-style: normal; color: #ff7a9a; font-size: 1.4rem; opacity: 0; animation: thHeart 1.4s ease-out var(--d) forwards; }
+@keyframes thHeart { 0% { opacity: 0; transform: translateY(10px) scale(0.6); } 25% { opacity: 1; } 100% { opacity: 0; transform: translateY(-60px) scale(1.1); } }
+@media (prefers-reduced-motion: no-preference) {
+  .th-actor { animation: thBob 3.2s ease-in-out infinite; }
+  .th-actor.th-hop { animation: thHop 0.5s ease-out; }
+  .th-actor.th-shake { animation: thShake 0.4s ease-in-out; }
+  .theater[data-bg="rain"] .th-fx { animation: thRain 0.6s linear infinite; }
+}
+@keyframes thBob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+@keyframes thHop { 0%, 100% { transform: translateY(0); } 40% { transform: translateY(-16px); } }
+@keyframes thShake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
+@keyframes thRain { to { background-position: -40px 200px; } }
+/* 对话框 */
+.th-box { position: absolute; left: 12px; right: 12px; bottom: calc(env(safe-area-inset-bottom, 0px) + 16px); min-height: 164px; z-index: 2; padding: 26px 18px 18px;
+  border-radius: 18px; background: rgba(14, 14, 20, 0.82); border: 1px solid rgba(255, 255, 255, 0.14); box-shadow: 0 -6px 30px rgba(0, 0, 0, 0.35); backdrop-filter: blur(6px); }
+.th-name { position: absolute; top: -14px; left: 16px; padding: 5px 14px; border-radius: 10px; background: var(--love, #f2557a); color: #fff; font-weight: 800; font-size: 0.92rem; letter-spacing: 0.04em; }
+.th-text { margin: 0; font-size: 1.08rem; line-height: 1.75; min-height: 3.5em; }
+.th-more { position: absolute; right: 18px; bottom: 12px; font-size: 0.75rem; opacity: 0.7; }
+.theater.choosing .th-more { display: none; }
+@media (prefers-reduced-motion: no-preference) { .th-more { animation: evBlink 1.2s ease-in-out infinite; } }
+/* 选项：像 galgame 一样浮在场景上面（TA 的头顶上方），对话框不变大、不挡住 TA */
+.th-choices { position: absolute; left: 24px; right: 24px; top: calc(env(safe-area-inset-top, 0px) + 92px); z-index: 3; display: flex; flex-direction: column; gap: 10px; }
+.th-choices:empty { display: none; }
+.th-choice { border: 1px solid rgba(255, 170, 190, 0.7); background: rgba(20, 16, 26, 0.78); color: inherit; font: inherit; font-size: 1rem; font-weight: 700; text-align: center;
+  padding: 13px 16px; border-radius: 14px; cursor: pointer; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3); backdrop-filter: blur(4px); }
+.th-choice:active { background: rgba(255, 122, 154, 0.35); }
+@media (prefers-reduced-motion: no-preference) { .th-choice { animation: evIn 0.28s ease-out backwards; animation-delay: calc(var(--i) * 0.07s); } }
+.theater.narr .th-name { display: none; }
+.theater.narr .th-text { color: rgba(244, 242, 238, 0.75); font-style: italic; }

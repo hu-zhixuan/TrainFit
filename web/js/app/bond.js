@@ -101,7 +101,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     const b = this.bond();
     const wear = `样子：${TF.Buddy.STYLES[l.style].label}，今天穿${this.outfitLabel(l.outfit)}，身材${this.buildLabel(this.buddyBuild())}`;
     // v6.3：它现在的心情（想他、担心他、自己有点低落…）、你们的关系（暧昧 / 恋人 / 好搭子）、剧情里一起经历过的事
-    return { name: c.name, who: c.who, speech: c.speech, look: wear, facts: c.facts.concat(b.lv >= 4 ? [c.secret] : []),
+    return { name: c.name, who: c.who, speech: c.speech, quirks: c.quirks, never: c.never, samples: c.samples, look: wear, facts: c.facts.concat(b.lv >= 4 ? [c.secret] : []),
       level: b.name, lv: b.lv, tone: c.tone[b.lv - 1], call: this.callName(), you: this.profile.gender === 'female' ? '她' : '他',
       mood: this.heartPrompt ? this.heartPrompt() : '', relation: this.relationPrompt ? this.relationPrompt() : '', shared: this.storyFacts ? this.storyFacts() : [] };
   },
@@ -167,10 +167,9 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     return new Set(this.workouts.filter(w => w.date >= from).map(w => w.date)).size;
   },
 
-  /** 现在的身材：选了就用选的，「跟着我练」按最近 4 周练了几天 */
+  /** 现在的身材：按最近 4 周练了几天（4 天薄肌、10 天腹肌） */
   buddyBuild() {
-    const b = this.buddyLook().build;
-    return b === 'auto' ? TF.Buddy.buildFor(this.trainDays28()) : b;
+    return TF.Buddy.buildFor(this.trainDays28()); // v7.0：不用选了，一直跟着你练（以前能定成普通 / 薄肌 / 腹肌）
   },
 
   /** 画小人要的样子（再叠上姿势、心情这些） */
@@ -243,11 +242,11 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     this.setBuddy({ lv: b.lv, seenBuild: build, lvAt: getTodayDateString() }); // lvAt：到这一级的日子（剧情「那句话」要到老搭子几天后才出）
     const opened = Object.keys(TF.Buddy.OUTFITS).filter(k => { const lv = TF.Buddy.OUTFITS[k].lv; return lv && lv > up.from && lv <= b.lv; });
     let lead = up.first ? `我们已经是「${b.name}」了。` : this.cast().levelUp[b.lv - 1] || `我们是「${b.name}」了。`;
-    if (up.first && this.buddyLook().build === 'auto' && build !== 'normal') lead += `跟着你练了这么久，我也练出${this.buildLabel(build)}了。`;
+    if (up.first && build !== 'normal') lead += `跟着你练了这么久，我也练出${this.buildLabel(build)}了。`;
     this.voiceBudget('must', true);
-    this.showStory(b.lv, { lead, outfits: opened.slice(-2) });
+    // v7.0：新的一章开始，整屏演这一章的开头（回忆），最后问换不换刚解锁的衣服
+    if (!(this.playChapter && this.playChapter(b.lv, { lead, outfits: opened.slice(-2) }))) this.showStory(b.lv, { lead, outfits: opened.slice(-2) });
     this.buddyBang('♥');
-    this.buddyDo([['flex', 1100], ['stand', 400]]);
     return true;
   },
 
@@ -293,6 +292,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
 
   /** 设置里重看一段回忆：整屏一张卡片（大一点的人 + 那段话），点哪儿都关 */
   showMemory(lv) {
+    if (this.playChapter && this.playChapter(lv, { replay: true })) return; // v7.0：在剧场里重看这一章的开头
     const c = this.cast();
     const st = c.story[lv - 1];
     if (!st) return;
@@ -315,7 +315,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
 
   /** 「跟着我练」的身材变了：练出来了秀一下（练少了就悄悄变回去，不数落） */
   checkBuild() {
-    if (this.needsOnboarding || this.buddyLook().build !== 'auto' || (this.profile.buddy || {}).lv == null) return false;
+    if (this.needsOnboarding || (this.profile.buddy || {}).lv == null) return false;
     const seen = (this.profile.buddy || {}).seenBuild;
     const now = this.buddyBuild();
     if (seen === now) return false;

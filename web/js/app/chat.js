@@ -44,6 +44,26 @@ Object.assign(FitnessApp.prototype, {
     return ok;
   },
 
+  /**
+   * 常说的话手机自己接（v7.0）：「晚安」「在吗」「想你了」「你在干嘛」「好累」……用 TA 自己的台词马上回（cast.talk，按亲密度、恋人线），
+   * 不等大模型，也不会「很 AI」。正在跟 TA 深聊（刚才在聊）的、说长了的、极简模式，照常走大模型。接上了返回 true。
+   */
+  localTalk(text) {
+    // 刚跟 TA 深聊过（大模型接的，15 分钟内）：接着让大模型聊，别突然换成台词；只是本机台词接过的不算
+    if (!TF.Talk || !this.buddyLook().show || this.needsOnboarding || Date.now() - (this._aiChatAt || 0) < 15 * 60 * 1000) return false;
+    const key = TF.Talk.intent(text);
+    const c = this.cast();
+    if (!key || !c.talk) return false;
+    let line = key === 'doing' && this.buddyLife && Math.random() < 0.5 ? this.buddyLife() : ''; // 问它在干嘛：一半说它自己的小日子
+    if (!line) line = TF.Talk.line(c.talk, key, { lv: this.bond().lv, romance: this.storyData ? this.storyData().romance : undefined, name: this.callName(), used: this._talkUsed || [] });
+    if (!line) return false;
+    this._talkUsed = (this._talkUsed || []).concat(line).slice(-12);
+    const face = { love: '害羞', miss: '害羞', hug: '心动', praise: '害羞', tease: '不服', laugh: '开心', tired: '担心', morning: '开心', back: '开心', hi: '开心', thanks: '害羞' }[key] || '平静';
+    if (key === 'tired' && this.noteFeeling) this.noteFeeling(text);
+    if (this.showBuddyAnswer) this.showBuddyAnswer(text, line, { chat: true, next: (c.talkNext || {})[key] || ['陪我聊会儿', '嗯'], face });
+    return true;
+  },
+
   /** 打招呼、练完问感受这类（guide） */
   chatBudget(use) {
     return this.voiceBudget('guide', use);
@@ -106,7 +126,7 @@ Object.assign(FitnessApp.prototype, {
     const pop = document.getElementById('buddy-pop');
     const cmp = document.getElementById('composer');
     const dex = document.getElementById('dex-overlay');
-    return this.chatty() && this.view === 'today' && !(dex && !dex.classList.contains('hidden')) && this.selectedDate === getTodayDateString() && !this._touring && !this.needsOnboarding &&
+    return this.chatty() && this.view === 'today' && !this._scene && !(dex && !dex.classList.contains('hidden')) && this.selectedDate === getTodayDateString() && !this._touring && !this.needsOnboarding &&
       !(this.quietNow && this.quietNow()) && // 正在练、深夜：安静陪着
       pop && pop.classList.contains('hidden') && !cmp.classList.contains('recording') && !(this.pending || []).some(p => p.status === 'working') &&
       (this.diet.length + this.workouts.length > 0) && this.chatBudget(false);
@@ -247,7 +267,7 @@ Object.assign(FitnessApp.prototype, {
 
   /** 打开 App / 切回来：每天第一次打招呼；还没记过的带你记第一条；饭点空着问一句 */
   greetOrGuide() {
-    if (document.body.classList.contains('onboarding')) return false; // 还在选谁陪你
+    if (document.body.classList.contains('onboarding') || this._scene) return false; // 还在选谁陪你 / 正在演剧情（v7.0）
     if (Date.now() - (this._recAt || 0) < 15000) return false; // 刚记了东西，小人正在回应，招呼别来抢（v6.4）
     const away = this.awayMs ? this.awayMs() : 0;
     if (away) this._lastAway = away; // 离开了多久：打招呼时说不说「想你」（heart.js）
@@ -616,7 +636,7 @@ Object.assign(FitnessApp.prototype, {
 
   /** 现在凑过去合不合适：没在录音、打字、改记录、看别的弹窗，小人那边也没在说话 */
   canNudge(kind) {
-    if (!this.chatty() || this._touring || this.needsOnboarding || !this.nudgeBudget(false)) return false;
+    if (!this.chatty() || this._touring || this._scene || this.needsOnboarding || !this.nudgeBudget(false)) return false;
     if (this.quietNow && this.quietNow()) return false; // 正在练、深夜：不凑过来
     if (Date.now() - (this._popAt || 0) < 60000) return false;
     if ((this.pending || []).some(p => p.status === 'working')) return false;
