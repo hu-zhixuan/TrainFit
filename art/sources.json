@@ -1,5 +1,5 @@
 {
-  "_说明": "剧场立绘从哪来（v7.2）。图不进仓库：画师不准转发原图，仓库又是公开的，所以 CI 打包时按这里下载、只放进 APK。scripts/build-art.py --fetch 下载到 .art-cache/、校验 sha256、按 faces 取表情存进 art/<人>/，再压成 web/img/cast/。faces 的值是 zip 里文件名的那个字母（pattern 里的 %s），「+blush」= 按 blush 里的位置加腮红（条款允许「涙や頬紅などを自分で書き加える」）。换人：改这里（sha256 用 sha256sum 算），跑一遍 --fetch 看图。 blink：闭眼的那张（眨眼时只露出 eyes 那一块叠在上面）；closed：本来就闭着眼的表情，不眨。",
+  "_说明": "剧场立绘从哪来（v7.2）。图不进仓库：画师不准转发原图，仓库又是公开的，所以 CI 打包时按这里下载、只放进 APK。scripts/build-art.py --fetch 下载到 .art-cache/、校验 sha256、按 faces 取表情存进 art/<人>/，再压成 web/img/cast/。faces 的值是 zip 里文件名的那个字母（pattern 里的 %s），「+blush」= 按 blush 里的位置加腮红（条款允许「涙や頬紅などを自分で書き加える」）。换人：改这里（sha256 用 sha256sum 算），跑一遍 --fetch 看图。 blink：闭眼的那张（眨眼时只露出 eyes 那一块叠在上面）；closed：本来就闭着眼的表情，不眨。 tears：v8.0 给「哭」「泪笑」加的眼泪，按表情字母分，[眼角 x, 眼角 y, 往下流多长, 往外偏多少]。",
   "cast": {
     "jx": {
       "title": "わたおきば 立ち絵素材 男性15",
@@ -20,12 +20,16 @@
         "smug": "b",
         "sparkle": "b",
         "sleepy": "h",
-        "full": "g"
+        "full": "g",
+        "cry": "d+tears"
       },
       "blush": [[219, 156, 9, 4], [175, 160, 4, 3]],
       "blink": "h",
       "eyes": [195, 103, 232, 157],
-      "closed": ["g", "h"]
+      "closed": ["g", "h"],
+      "tears": {
+        "d": [[220, 150, 22, 1]]
+      }
     },
     "xy": {
       "title": "わたおきば 立ち絵素材 女性20",
@@ -46,12 +50,18 @@
         "smug": "c",
         "sparkle": "b",
         "sleepy": "h",
-        "full": "g"
+        "full": "g",
+        "cry": "d+tears",
+        "cryhappy": "g+tears"
       },
       "blush": [[293, 149, 10, 4], [238, 161, 8, 3]],
       "blink": "h",
       "eyes": [220, 103, 319, 159],
-      "closed": ["g", "h"]
+      "closed": ["g", "h"],
+      "tears": {
+        "d": [[236, 161, 22, -1], [299, 147, 26, 2]],
+        "g": [[235, 158, 22, -1], [304, 137, 26, 2]]
+      }
     }
   }
 }

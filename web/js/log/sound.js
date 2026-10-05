@@ -75,6 +75,10 @@
     phone: (c, t) => { for (let i = 0; i < 2; i++) { for (let k = 0; k < 6; k++) tone(c, t + i * 0.9 + k * 0.06, { f: k % 2 ? 620 : 480, dur: 0.055, gain: 0.025, type: 'triangle' }); } },
     swoosh: (c, t) => sweep(c, t, 0.42, 380, 2600, 0.05), // 进出剧场：一阵风
     land: (c, t) => { tone(c, t, { f: 180, f2: 90, dur: 0.12, gain: 0.07 }); tone(c, t + 0.1, { f: 660, dur: 0.05, gain: 0.025 }); }, // 小人落回原位
+    // 画面卡一下（说错台词、找不到想要的表情）：一小段电流噪声 + 往下掉的音
+    glitch: (c, t) => { noise(c, t, 0.07, 0.06, 'bandpass', 1800); tone(c, t + 0.02, { f: 920, f2: 210, dur: 0.12, gain: 0.03, type: 'square', attack: 0.002 }); noise(c, t + 0.14, 0.05, 0.04, 'highpass', 3000); },
+    // 翻开一张纸（人设文档）
+    paper: (c, t) => { noise(c, t, 0.12, 0.05, 'highpass', 2400); noise(c, t + 0.09, 0.08, 0.03, 'bandpass', 1200); },
     clang: (c, t) => { [523, 1310, 2150].forEach((f, i) => tone(c, t, { f, dur: 0.7 - i * 0.15, gain: 0.04 - i * 0.01, type: 'triangle' })); noise(c, t, 0.05, 0.05, 'highpass', 2000); }
   };
 
@@ -120,7 +124,9 @@
     rain: { type: 'highpass', freq: 1400, q: 0.5, gain: 0.028 },
     pool: { type: 'lowpass', freq: 420, q: 0.8, gain: 0.03, wobble: 0.35 },
     crowd: { type: 'bandpass', freq: 750, q: 0.6, gain: 0.02, wobble: 0.5 },
-    night: { type: 'lowpass', freq: 260, q: 0.4, gain: 0.012 }
+    night: { type: 'lowpass', freq: 260, q: 0.4, gain: 0.012 },
+    // 电台直播间：很轻的底噪（话筒开着的那种安静）
+    booth: { type: 'bandpass', freq: 520, q: 0.9, gain: 0.008 }
   };
 
   const Sound = {

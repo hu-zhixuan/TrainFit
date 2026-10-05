@@ -40,7 +40,7 @@ SOURCES = os.path.join(SRC, 'sources.json')
 CACHE = os.environ.get('ART_CACHE_DIR') or os.path.join(ROOT, '.art-cache')
 OUT = os.path.join(ROOT, 'web', 'img', 'cast')
 MANIFEST = os.path.join(OUT, 'manifest.js')
-FACES = ['calm', 'happy', 'shy', 'worried', 'smug', 'surprised', 'pout', 'love', 'sleepy', 'sparkle', 'full']
+FACES = ['calm', 'happy', 'shy', 'worried', 'smug', 'surprised', 'pout', 'love', 'sleepy', 'sparkle', 'full', 'cry', 'cryhappy']
 BGS = ['room', 'roomnight', 'gym', 'pool', 'studio', 'cafe', 'street', 'citynight', 'rain', 'night', 'dusk', 'dawn', 'stage']
 CHARS = ['jx', 'xy']
 EXT = ('.png', '.jpg', '.jpeg', '.webp')
@@ -114,6 +114,40 @@ def blush(im, spots, strength=0.5, color=(255, 150, 160)):
     return out
 
 
+def tears(im, spots, color=(150, 205, 255)):
+    """加眼泪（条款允许「涙や頬紅などを自分で書き加える」）：spots 是 [眼角 x, 眼角 y, 往下流多长, 往外偏多少]（原图坐标）。
+    画成一道半透明的泪痕 + 一颗泪珠 + 下眼睑一点水光，先放大 4 倍画再缩回去，边缘才不糙"""
+    from PIL import Image, ImageDraw, ImageFilter
+    k = 4
+    w, h = im.size
+    layer = Image.new('RGBA', (w * k, h * k), (0, 0, 0, 0))
+    d = ImageDraw.Draw(layer)
+    for sp in spots:
+        x, y, length = sp[0], sp[1], sp[2]
+        drift = sp[3] if len(sp) > 3 else 0
+        n = 24
+        pts_l, pts_r, mid = [], [], []
+        for i in range(n + 1):
+            t = i / n
+            cx = (x + drift * t * t) * k
+            cy = (y + length * t) * k
+            half = (1.45 - 0.6 * t) * k
+            pts_l.append((cx - half, cy))
+            pts_r.append((cx + half, cy))
+            mid.append((cx - half * 0.35, cy))
+        d.polygon(pts_l + pts_r[::-1], fill=color + (120,))
+        d.line(mid[2:-3], fill=(255, 255, 255, 170), width=max(1, int(0.7 * k)))
+        ex, ey = (x + drift) * k, (y + length) * k
+        r = 2.5 * k
+        d.ellipse([ex - r, ey - r * 1.1, ex + r, ey + r * 1.25], fill=color + (190,), outline=(90, 150, 210, 170), width=max(1, int(0.5 * k)))
+        d.ellipse([ex - r * 0.55, ey - r * 0.7, ex - r * 0.05, ey - r * 0.15], fill=(255, 255, 255, 230))
+        d.ellipse([(x - 6) * k, (y - 1.6) * k, (x + 6) * k, (y + 1.4) * k], fill=color + (95,))
+    layer = layer.filter(ImageFilter.GaussianBlur(0.35 * k)).resize((w, h), Image.LANCZOS)
+    out = im.copy()
+    out.alpha_composite(layer)
+    return out
+
+
 def fetch(strict):
     """按 art/sources.json 下载素材、取表情 → art/<人>/face-*.png。返回下好的人"""
     from PIL import Image
@@ -138,12 +172,15 @@ def fetch(strict):
                 im = Image.open(io.BytesIO(z.read(s['pattern'] % letter))).convert('RGBA')
                 if 'blush' in mods:
                     im = blush(im, s.get('blush') or [])
+                if 'tears' in mods:
+                    im = tears(im, (s.get('tears') or {}).get(letter) or [])
                 im.save(os.path.join(SRC, ch, f'face-{face}.png'))
             # 眨眼（v8.0）：闭眼那张存成 blink.png，眼睛在哪、哪些表情本来就闭着眼写进 eyes.json
             if s.get('blink') and s.get('eyes'):
                 Image.open(io.BytesIO(z.read(s['pattern'] % s['blink']))).convert('RGBA').save(os.path.join(SRC, ch, 'blink.png'))
                 closed = set(s.get('closed') or [])
-                noblink = [f for f, spec in s['faces'].items() if spec.split('+')[0] in closed]
+                # 带眼泪的也不眨（闭眼那张没有眼泪，一眨泪痕就断了）
+                noblink = [f for f, spec in s['faces'].items() if spec.split('+')[0] in closed or 'tears' in spec]
                 json.dump({'eyes': s['eyes'], 'noblink': noblink}, open(os.path.join(SRC, ch, 'eyes.json'), 'w'))
         done.append(ch)
         print(f'  {ch}：{len(s["faces"])} 个表情')

@@ -74,6 +74,7 @@ function mergeBackupData(cur, bak) {
     const seenAll = [...new Set([].concat(sc.seen || [], sb.seen || []))];
     if (seenAll.length !== (sc.seen || []).length || (sc.romance == null && sb.romance != null)) {
       dex.story = Object.assign({}, sb, sc, { seen: seenAll, picks: Object.assign({}, sb.picks || {}, sc.picks || {}) });
+      if (sb.docAdds || sc.docAdds) dex.story.docAdds = [...new Set((sb.docAdds || []).concat(sc.docAdds || []))].slice(-6);
       if (sc.romance == null && sb.romance != null) dex.story.romance = sb.romance;
     }
     if (xp === (+cb.xp || 0) && (cb.name || !bb.name) && !note && !Object.keys(dex).length) return c;

@@ -20,6 +20,18 @@
  *   { set: { trust: 1 } }：隐藏的好感      { end: 'romance' }：演完放结局字幕
  *   条件：rel:romance / friend / none、pick:jx2b=0（-1 是沉默）、has:lift、seen:jx1a、lv>=3、said:jx4a、v:trust>=2、promise:jxp1、kept:jxp1，& 连，! 取反。
  *   占位符 {you}{name}{days}{meals}{trains}{fav}{lift}{kg}{cat}{page}{said_<input id>}{said}。
+ * v8.0 第二轮（用户选了「TA 是 App 里的角色，自己发现了」，要活人感——「说错台词说了两遍，自己也愣住了，这种细节非常好，可以多加」）：
+ *   台词第三格写 'sys'：这句是「写好的台词」（台词表上的，嘴自己说出来的）——一下子整句出来、没有说话音、灰一点；
+ *     'own'：TA 自己的话（关键时刻大模型接的那几句自动标上，名字牌旁边写「自己的话」）。
+ *   { fx: 'glitch' }：画面卡一下      { fx: 'onair' / 'offair' }：电台直播间的红灯亮 / 灭（背景 booth）
+ *   { doc: true, hl: 4, add: '…' }：翻开 TA 的人设文档（cast.doc），hl 高亮第几行，add 是 TA 自己手写加上去的一行（记下来，以后再翻开还在）
+ *   { recall: '…' }：手机里发出去一条、又撤回了（「江叙撤回了一条消息」）
+ *   { memo: '…' }：TA 悄悄写进「小人记住的」（小本本，以后聊天大模型也知道）
+ *   { push: { at: '07:00', text: '…' } }：约好的时间，手机真的响一下（安卓通知，标题是 TA 的名字；设置里能关）
+ *   { route: true }：按一路上的选择（隐藏的 near 靠近 / brave 往前 / soft 温柔，选项的 v 里记的）定走哪条结局（cast.endings 的 route），
+ *     后面的条件写 route:near；{ end: 'auto' } 放这条结局的字幕。
+ *   条件还有 act:skip（这一场你按过「跳过」，TA 会发现）、time:morning / day / evening / night / late（现在几点）。
+ *   互动 target 还有 mic / tear / wipe（擦掉屏幕上的雨）/ letter；dir: 'down' 往下划（顺着眼角画一滴眼泪）。
  * 剧场里能「回看」「自动」「跳过」（跳到下一个选项 / 互动；互动按默认的走完）。
  * 过场：从小人那儿圆形展开进来、演完收回小人那儿；章节开头有大字卡；立绘会眨眼、呼吸、冒情绪符号。
  */
@@ -27,7 +39,7 @@
   'use strict';
   const TF = root.TF = root.TF || {};
 
-  // 小剧情 → 背景（秘密那段江叙在泳池、夏柚在舞蹈教室，按 cast.chapterBg 第 2 章的）
+  // 小剧情 → 背景（秘密那段江叙在泳池、夏柚在直播间，按 cast.chapterBg 第 2 章的）
   const SCENE_BG = { firstweek: 'room', weekend: 'street', hotpot: 'cafe', sweet: 'cafe', rain: 'rain', night: 'night', confess: 'dusk', date: 'citynight',
     firstpr: 'gym', stuffed: 'roomnight', trainweek: 'gym', lighter: 'dawn' };
 
@@ -46,7 +58,14 @@
   /** 第几章：一二三四五 */
   const CN = ['一', '二', '三', '四', '五'];
 
-  /** 条件：ctx = { picks, seen, romance, vars, lv, inputs, sv, promises } */
+  /** 现在算不算「早上 / 白天 / 傍晚 / 晚上 / 深夜」 */
+  function timeOk(k, h) {
+    if (h == null) h = new Date().getHours();
+    return k === 'morning' ? h >= 5 && h < 10 : k === 'day' ? h >= 10 && h < 17 : k === 'evening' ? h >= 17 && h < 22
+      : k === 'night' ? h >= 22 || h < 5 : k === 'late' ? h >= 23 || h < 5 : false;
+  }
+
+  /** 条件：ctx = { picks, seen, romance, vars, lv, inputs, sv, promises, route, acts, hour } */
   function evalCond(cond, ctx) {
     if (!cond) return true;
     ctx = ctx || {};
@@ -70,6 +89,9 @@
       else if (m && m[1] === 'said') ok = !!(ctx.inputs || {})[m[2]];
       else if (m && m[1] === 'promise') { const pr = (ctx.promises || {})[m[2]]; ok = !!(pr && !pr.declined); }
       else if (m && m[1] === 'kept') ok = !!((ctx.promises || {})[m[2]] || {}).done;
+      else if (m && m[1] === 'route') ok = ctx.route === m[2];
+      else if (m && m[1] === 'act') ok = !!((ctx.acts || {})[m[2]]);
+      else if (m && m[1] === 'time') ok = timeOk(m[2], ctx.hour);
       return neg ? !ok : ok;
     });
   }
@@ -99,13 +121,13 @@
   // 剧本里认得的步骤（测试用：写错了一眼看出来）
   const STEP_KEYS = ['ask', 'opts', 'timed', 'silent', 'silentFact', 'silentSp', 'cond', 'cg', 'bg', 't', 'end', 'look', 'fx', 'sfx', 'amb', 'set', 'phone', 'typing', 'drop',
     'time', 'wait', 'enter', 'exit', 'touch', 'target', 'prompt', 'ms', 'ok', 'meh', 'rhythm', 'beats', 'bpm', 'input', 'hint', 'ctx', 'fallback', 'skip', 'skipR', 'fact',
-    'name', 'max', 'r', 'promise'];
+    'name', 'max', 'r', 'promise', 'doc', 'hl', 'add', 'recall', 'memo', 'push', 'route', 'dir'];
 
   /** 剧本里有哪些选项、CG、结局、互动（测试、相册用） */
   function scriptInfo(script) {
-    const out = { asks: [], cgs: [], ends: [], lines: 0, touch: 0, rhythm: [], inputs: [], names: [], promises: [], timed: 0, phone: 0, steps: [] };
+    const out = { asks: [], cgs: [], ends: [], lines: 0, touch: 0, rhythm: [], inputs: [], names: [], promises: [], timed: 0, phone: 0, steps: [], docs: 0, memos: [], pushes: [], recalls: 0, routes: 0, sys: 0 };
     const walk = (steps) => (steps || []).forEach(s => {
-      if (Array.isArray(s)) { out.lines += 1; return; }
+      if (Array.isArray(s)) { out.lines += 1; if (s[2] === 'sys') out.sys += 1; return; }
       if (!s) return;
       out.steps.push(s);
       if (s.ask) { out.asks.push(s.ask); if (s.timed) out.timed += 1; (s.opts || []).forEach(o => walk(normOpt(o).r)); walk(s.silent); }
@@ -117,6 +139,11 @@
       if (s.name) { out.names.push(s.name); walk(s.r); }
       if (s.promise) out.promises.push(s.promise);
       if (s.phone) out.phone += 1;
+      if (s.doc) out.docs += 1;
+      if (s.memo) out.memos.push(s.memo);
+      if (s.push) out.pushes.push(s.push);
+      if (s.recall) out.recalls += 1;
+      if (s.route) out.routes += 1;
     });
     walk(script);
     return out;
@@ -166,7 +193,11 @@
     eye: ic('<path d="M4 24s7-12 20-12 20 12 20 12-7 12-20 12S4 24 4 24z"/><circle cx="24" cy="24" r="6"/>'),
     curtain: ic('<path d="M8 8h32"/><path d="M12 8c0 12 4 20 8 32"/><path d="M36 8c0 12-4 20-8 32"/><path d="M20 40h8"/>'),
     heart: ic('<path d="M24 40S8 30 8 18a8 8 0 0 1 16-2 8 8 0 0 1 16 2c0 12-16 22-16 22z"/>'),
-    towel: ic('<path d="M10 10h28v8H10z"/><path d="M14 18v20h20V18"/><path d="M20 24h8M20 30h8"/>')
+    towel: ic('<path d="M10 10h28v8H10z"/><path d="M14 18v20h20V18"/><path d="M20 24h8M20 30h8"/>'),
+    mic: ic('<rect x="17" y="6" width="14" height="22" rx="7"/><path d="M11 22a13 13 0 0 0 26 0"/><path d="M24 35v7M17 42h14"/>'),
+    tear: ic('<path d="M24 6C19 15 14 22 14 29a10 10 0 0 0 20 0c0-7-5-14-10-23z"/><path d="M19 30a5 5 0 0 0 5 5"/>'),
+    wipe: ic('<path d="M8 14c4 0 4 4 8 4s4-4 8-4 4 4 8 4 4-4 8-4"/><path d="M8 24c4 0 4 4 8 4s4-4 8-4 4 4 8 4 4-4 8-4"/><path d="M12 36h24"/>'),
+    letter: ic('<rect x="7" y="12" width="34" height="24" rx="3"/><path d="M7 15l17 12 17-12"/>')
   };
 
   // 情绪符号：不服冒青筋、担心冒汗、惊讶「!」、得意闪光、困了「z」（害羞、心动是爱心，另外画）
@@ -179,7 +210,7 @@
     困: '<b class="emo-txt z">z<small>z</small></b>'
   };
 
-  TF.Theater = { SCENE_BG, splitLines, CN, evalCond, fill, normOpt, toSteps, scriptInfo, rhythmScore, STEP_KEYS, PROPS, ICONS, EMOTES };
+  TF.Theater = { SCENE_BG, splitLines, CN, evalCond, timeOk, fill, normOpt, toSteps, scriptInfo, rhythmScore, STEP_KEYS, PROPS, ICONS, EMOTES };
   if (typeof module !== 'undefined' && module.exports) module.exports = TF.Theater;
 })(typeof window !== 'undefined' ? window : globalThis);
 
@@ -212,6 +243,8 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       '<div class="th-act"></div>' +
       '<div class="th-card" aria-hidden="true"><small class="th-card-label"></small><b class="th-card-title"></b><i class="th-card-line"></i><span class="th-card-sub"></span></div>' +
       '<div class="th-time" aria-hidden="true"><span></span></div><div class="th-flash" aria-hidden="true"></div>' +
+      '<div class="th-onair" aria-hidden="true">ON AIR</div><div class="th-glass" aria-hidden="true"></div>' +
+      '<div class="th-doc hidden" role="document"></div><div class="th-toast" aria-live="polite"></div>' +
       '<div class="th-log hidden"><div class="th-log-head">回看<button class="th-tool th-log-close" type="button">关闭</button></div><div class="th-log-list"></div></div>' +
       '<div class="th-credits hidden"></div>';
     document.body.appendChild(el);
@@ -220,13 +253,14 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       if (!s) return;
       if (e.target.closest('.th-credits')) { if (e.target.closest('.th-done')) this.theaterClose(); return; }
       if (e.target.closest('.th-log')) { el.querySelector('.th-log').classList.add('hidden'); return; }
+      if (s.phase === 'doc') { this.sceneDocClose(); return; }
       if (e.target.closest('.th-log-btn')) { this.sceneLog(); return; }
       if (e.target.closest('.th-auto')) { this.sceneAuto(!s.auto); return; }
       if (e.target.closest('.th-skip')) { this.sceneSkip(); return; }
       if (e.target.closest('.th-act')) return; // 互动自己处理
       const b = e.target.closest('.th-choice');
       if (b) { this.sceneChoose(+b.dataset.k); return; }
-      if (['choose', 'credits', 'act', 'wait'].includes(s.phase)) return;
+      if (['choose', 'credits', 'act', 'wait', 'doc'].includes(s.phase)) return;
       this.sceneTap();
     });
     return el;
@@ -237,7 +271,8 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     const st = this.storyData ? this.storyData() : {};
     const s = this._scene;
     return { picks: Object.assign({}, st.picks || {}, s ? s.picks : {}), seen: st.seen || [], romance: st.romance, vars: s ? s.vars : {}, lv: this.bond ? this.bond().lv : 1,
-      inputs: Object.assign({}, st.inputs || {}, s ? s.inputs : {}), sv: Object.assign({}, st.sv || {}, s ? s.sv : {}), promises: st.promises || {} };
+      inputs: Object.assign({}, st.inputs || {}, s ? s.inputs : {}), sv: Object.assign({}, st.sv || {}, s ? s.sv : {}), promises: st.promises || {},
+      route: s ? s.route : null, acts: { skip: !!(s && s.skipped) }, hour: new Date().getHours() };
   },
 
   /**
@@ -275,7 +310,9 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     el.querySelector('.th-auto').classList.toggle('on', auto);
     el.querySelector('.th-tools').classList.toggle('hidden', !!sc.viewer);
     el.querySelector('.th-cgimg').style.backgroundImage = '';
-    el.classList.remove('hidden', 'closing', 'choosing', 'narr', 'other', 'me', 'in-cg', 'cg-art', 'rolling', 'phone', 'acting', 'has-sprite', 'fx-close', 'fx-sepia', 'fx-dark', 'iris-out');
+    el.classList.remove('hidden', 'closing', 'choosing', 'narr', 'other', 'me', 'in-cg', 'cg-art', 'rolling', 'phone', 'acting', 'has-sprite', 'fx-close', 'fx-sepia', 'fx-dark', 'iris-out',
+      'sys-line', 'own-line', 'onair', 'glass-rain');
+    el.querySelector('.th-doc').classList.add('hidden');
     document.body.classList.add('in-theater');
     // 从小人那儿圆形展开（没有位置就淡入）
     const from = sc.from;
@@ -356,6 +393,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
         return;
       }
       if (step.cond && !TF.Theater.evalCond(step.cond, ctx)) continue;
+      if (step.recall) { this.sceneRecall(step); return; }
       if (this.sceneQuick(step)) {
         if (step.typing) { this.sceneTyping(step); return; }
         if (step.time) { this.sceneTime(step.time); return; }
@@ -368,6 +406,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       if (step.input) { this.sceneInput(step); return; }
       if (step.name) { this.sceneName(step); return; }
       if (step.promise) { if (this.scenePromise(step)) return; continue; }
+      if (step.doc) { this.sceneDoc(step); return; }
     }
   },
 
@@ -379,7 +418,10 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     if (step.amb != null && window.Sound && window.Sound.amb) window.Sound.amb(step.amb);
     if (step.cg != null) this.sceneCg(step.cg);
     if (step.look) s.look = Object.assign({}, s.look || {}, step.look);
-    if (step.end) s.ending = step.end;
+    if (step.route) this.sceneRoute();
+    if (step.end) s.ending = step.end === 'auto' ? this.routeEnding() : step.end;
+    if (step.memo) this.sceneMemo(step.memo, skipping);
+    if (step.push) this.scenePush(step.push, skipping);
     if (step.fx) this.sceneFx(step.fx, skipping);
     if (step.sfx && !skipping && window.Sound) window.Sound.play(step.sfx);
     if (step.set) this.sceneSet(step.set);
@@ -390,7 +432,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       if (!skipping) { void a.offsetWidth; a.classList.add(step.exit ? 'th-exit' : 'th-enter'); }
       el.classList.toggle('actor-out', !!step.exit);
     }
-    return !(step.ask || step.touch || step.rhythm || step.input || step.name || step.promise);
+    return !(step.ask || step.touch || step.rhythm || step.input || step.name || step.promise || step.doc);
   },
 
   /**
@@ -402,13 +444,17 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     const url = TF.Art ? TF.Art.sprite(ch, face) : '';
     // has-sprite：立绘是大半身，站到对话框后面去（像 galgame 那样框住下半身），选项挪到对话框上面，别挡脸
     this.theaterEl().classList.toggle('has-sprite', !!url);
+    // 哭、泪笑没有自己那张图（退回了担心、开心 / 像素小人）：剧场自己在眼角画一滴往下流的眼泪
+    const crying = /^(哭|泪笑)$/.test(face) && !(url && TF.Art.has && TF.Art.has(ch, face));
     if (url) {
       const bl = TF.Art.blink ? TF.Art.blink(ch, face) : null;
       const delay = (1.2 + Math.random() * 3).toFixed(2);
+      const eye = bl && String(bl.inset).split(/\s+/).map(parseFloat);
+      const tear = crying ? `<i class="th-tear" style="${eye && eye.length === 4 ? `top:${(100 - eye[2]).toFixed(1)}%;left:${(eye[3] + 3).toFixed(1)}%` : ''}"></i>` : '';
       return `<span class="th-spr" style="--blink-delay:${delay}s"><img class="th-sprite" src="${esc(url)}" alt="" onerror="app.spriteFail(this)">` +
-        (bl ? `<img class="th-blink" src="${esc(bl.url)}" alt="" style="clip-path:inset(${bl.inset})" onerror="this.remove()">` : '') + '</span>';
+        (bl && !crying ? `<img class="th-blink" src="${esc(bl.url)}" alt="" style="clip-path:inset(${bl.inset})" onerror="this.remove()">` : '') + tear + '</span>';
     }
-    return TF.Buddy.svg(this.buddyArt(Object.assign({ pose: pose || 'stand', face, gear: [], scale: 8 }, look || {})));
+    return TF.Buddy.svg(this.buddyArt(Object.assign({ pose: pose || 'stand', face, gear: [], scale: 8 }, look || {}))) + (crying ? '<i class="th-tear px"></i>' : '');
   },
 
   /** 立绘加载失败（清单在、图没打进包）：记下这张，换回像素小人 */
@@ -447,10 +493,14 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     const s = this._scene;
     const face = line[0];
     const text = TF.Theater.fill(line[1], s.vars);
-    const pose = line[2];
+    // 第三格 'sys'：写好的台词（嘴自己说出来的）；'own'：TA 自己的话。这两个不是姿势
+    const special = line[2] === 'sys' || line[2] === 'own' ? line[2] : '';
+    const pose = special ? undefined : line[2];
     const el = this.theaterEl();
     s.line = text;
-    if (s.phone) { this.sceneBubble(face, text); return; }
+    el.classList.toggle('sys-line', special === 'sys');
+    el.classList.toggle('own-line', special === 'own');
+    if (s.phone) { this.sceneBubble(face, text, special); return; }
     const other = typeof face === 'string' && face[0] === '@';
     const me = face === '你';
     // 表情写 null 的是旁白：不挂名字牌；「@老周」是别人在说：名字牌换成他，TA 退到后面；「你」是你说的
@@ -470,13 +520,21 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       actor.classList.remove('th-startle', 'th-droop', 'th-sway', 'th-lean', 'th-doze');
       if (face !== s.face) {
         // 立绘的动作：开心蹦一下、不服抖一下、惊讶往后一缩、担心低一下头、害羞晃一晃、心动往前凑、困了慢慢点头
-        const move = { 开心: 'th-hop', 得意: 'th-hop', 闪亮: 'th-hop', 不服: 'th-shake', 惊讶: 'th-startle', 担心: 'th-droop', 害羞: 'th-sway', 心动: 'th-lean', 困: 'th-doze' }[face];
+        const move = { 开心: 'th-hop', 得意: 'th-hop', 闪亮: 'th-hop', 不服: 'th-shake', 惊讶: 'th-startle', 担心: 'th-droop', 害羞: 'th-sway', 心动: 'th-lean', 困: 'th-doze', 哭: 'th-droop', 泪笑: 'th-sway' }[face];
         if (move) actor.classList.add(move);
         if (/害羞|心动/.test(face)) this.sceneHearts();
         else this.sceneEmote(face);
       } else actor.classList.add('th-talk');
       if (el.classList.contains('actor-out')) { el.classList.remove('actor-out'); actor.classList.add('th-enter'); }
       s.face = face;
+    }
+    // 写好的台词：整句一下子出来，像按了一个键（没有说话音，只有很轻的一声「嗒」）
+    if (special === 'sys') {
+      clearTimeout(this._thTypeT);
+      el.querySelector('.th-text').textContent = text;
+      if (window.Sound && !this.reducedMotion()) window.Sound.play('tick');
+      this.sceneAutoNext();
+      return;
     }
     this.sceneType(el.querySelector('.th-text'), text);
   },
@@ -539,10 +597,13 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     else if (fx === 'nosepia') el.classList.remove('fx-sepia');
     else if (fx === 'dark') el.classList.add('fx-dark');
     else if (fx === 'light') el.classList.remove('fx-dark');
+    else if (fx === 'onair') { el.classList.add('onair'); if (!skipping && window.Sound) window.Sound.play('tick'); }
+    else if (fx === 'offair') el.classList.remove('onair');
     else if (skipping || this.reducedMotion()) return;
     else if (fx === 'shake') { once('fx-shake', 460); window.Haptics && window.Haptics.fire('tap'); }
     else if (fx === 'flash') once('fx-flash', 700);
     else if (fx === 'heart') { once('fx-heart', 1300); window.Haptics && window.Haptics.fire('success'); if (window.Sound) window.Sound.play('heart'); }
+    else if (fx === 'glitch') { once('fx-glitch', 560); window.Haptics && window.Haptics.fire('tap'); if (window.Sound) window.Sound.play('glitch'); }
   },
 
   /** 隐藏的好感（v: trust…）：这一场先记在 s.sv，重看不记进存档 */
@@ -569,7 +630,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
   },
 
   /** 一条气泡：TA 先「正在输入…」（按字数等一会儿，点一下马上出），旁白是灰色小字，你说的在右边 */
-  sceneBubble(face, text) {
+  sceneBubble(face, text, special) {
     const s = this._scene;
     const el = this.theaterEl();
     const list = el.querySelector('.th-ph-list');
@@ -584,7 +645,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       clearTimeout(this._phT);
       list.querySelectorAll('.ph-typing').forEach(n => n.remove());
       el.querySelector('.th-ph-state').textContent = '';
-      add(`<p class="ph-msg${other ? ' other' : ''}">${other ? `<b>${esc(who)}</b>` : ''}${esc(text)}</p>`);
+      add(`<p class="ph-msg${other ? ' other' : ''}${special ? ' ' + special : ''}">${other ? `<b>${esc(who)}</b>` : ''}${esc(text)}</p>`);
       if (window.Sound) window.Sound.play('pop');
       window.Haptics && window.Haptics.fire('tick');
       if (/害羞|心动/.test(face)) this.sceneHearts();
@@ -716,8 +777,11 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     clearTimeout(this._autoT);
     const kind = step.touch;
     const icon = TF.Theater.ICONS[step.target] || TF.Theater.ICONS.heart;
-    const hint = kind === 'hold' ? '按住' : kind === 'swipe' ? '往左划' : '点一下';
+    const downward = kind === 'swipe' && step.dir === 'down';
+    const hint = kind === 'hold' ? '按住' : kind === 'swipe' ? (downward ? '往下划' : '往左划') : '点一下';
     el.classList.add('acting');
+    // 擦屏幕上的雨：先落满一层雨点，划一下擦掉
+    if (step.target === 'wipe') el.classList.add('glass-rain');
     const act = el.querySelector('.th-act');
     act.innerHTML = `<div class="ta-touch ${kind}"><button class="ta-target" type="button" aria-label="${esc(step.prompt || hint)}">${icon}` +
       `<svg class="ta-ring" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="46"/></svg></button>` +
@@ -729,18 +793,24 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       if (finished || this._scene !== s) return;
       finished = true;
       box.classList.add('done');
+      el.classList.remove('glass-rain');
       window.Haptics && window.Haptics.fire('success');
       if (window.Sound) window.Sound.play('blip');
       setTimeout(() => this.sceneActDone(step.ok), this.reducedMotion() ? 0 : 320);
     };
-    s.act = { finish: () => { finished = true; this.sceneActDone(step.ok); } };
+    s.act = { finish: () => { finished = true; el.classList.remove('glass-rain'); this.sceneActDone(step.ok); } };
     if (kind === 'tap') { btn.addEventListener('click', finish); return; }
     if (kind === 'swipe') {
-      let x0 = null;
+      let x0 = null, y0 = null;
+      if (downward) box.classList.add('down');
       btn.addEventListener('click', () => { if (x0 == null) finish(); }); // 划不动的（无障碍、电脑）点一下也行
-      act.addEventListener('pointerdown', (e) => { x0 = e.clientX; });
-      act.addEventListener('pointermove', (e) => { if (x0 != null && Math.abs(e.clientX - x0) > 50) { box.classList.add('flip'); finish(); } });
-      act.addEventListener('pointerup', () => { setTimeout(() => { x0 = null; }, 0); });
+      act.addEventListener('pointerdown', (e) => { x0 = e.clientX; y0 = e.clientY; });
+      act.addEventListener('pointermove', (e) => {
+        if (x0 == null) return;
+        const moved = downward ? e.clientY - y0 > 50 : Math.abs(e.clientX - x0) > 50;
+        if (moved) { box.classList.add('flip'); finish(); }
+      });
+      act.addEventListener('pointerup', () => { setTimeout(() => { x0 = null; y0 = null; }, 0); });
       return;
     }
     // 按住：圈慢慢转满，松手就退回去；按的时候轻轻震
@@ -881,7 +951,9 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     if (this._scene !== s) return;
     el.classList.remove('acting');
     s.phase = 'line';
-    s.steps.splice(s.i + 1, 0, ...((lines && lines.length) ? lines : (step.fallback || [])));
+    // 这几句是 TA 自己的话（不是台词表上的）：对话框换个样子
+    const said = ((lines && lines.length) ? lines : (step.fallback || [])).map(l => (Array.isArray(l) && l[0] != null && l[0] !== '你' && String(l[0])[0] !== '@' ? [l[0], l[1], 'own', l[3]] : l));
+    s.steps.splice(s.i + 1, 0, ...said);
     this.sceneNext();
   },
 
@@ -953,6 +1025,8 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     el.querySelector('.th-card').classList.remove('show');
     clearTimeout(this._cardT);
     if (s.phase === 'choose') return;
+    s.skipped = (s.skipped || 0) + 1;
+    if (s.phase === 'doc') { this.sceneDocClose(); return; }
     if (s.phase === 'act') { if (s.act && s.act.finish) s.act.finish(); return; }
     if (s.phase === 'time') { el.querySelector('.th-time').classList.remove('show'); clearTimeout(this._waitT); }
     clearTimeout(this._waitT);
@@ -969,6 +1043,11 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       }
       if (!step || (step.cond && !TF.Theater.evalCond(step.cond, ctx))) continue;
       s.i = j;
+      if (step.recall) {
+        s.log.push({ who: this.buddyName(), text: TF.Theater.fill(step.recall, s.vars) + '（撤回了）' });
+        if (s.phone) el.querySelector('.th-ph-list').insertAdjacentHTML('beforeend', `<p class="ph-sys">${esc(this.buddyName())}撤回了一条消息</p>`);
+        continue;
+      }
       if (this.sceneQuick(step, true)) continue;
       // 停在选项 / 互动：选项前那一句留在对话框里，知道在选什么
       const prev = [...s.log].reverse().find(x => x.who !== '你');
@@ -1010,6 +1089,125 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     list.innerHTML = s.log.map(x => `<p class="${x.who === '你' ? 'me' : x.who ? '' : 'narr'}">${x.who ? `<b>${esc(x.who)}</b>` : ''}${esc(x.text)}</p>`).join('') || '<p class="narr">还没开始呢</p>';
     panel.classList.remove('hidden');
     list.scrollTop = list.scrollHeight;
+  },
+
+  // ---------------- 人设文档、撤回、小本本、约好的通知、结局路线（v8.0 第二轮） ----------------
+
+  /**
+   * 翻开 TA 的人设文档（cast.doc：{ title, ver, lines }）：hl 那行高亮（「经历：高二肩伤，没进省队。」），
+   * add 是 TA 自己手写加上去的一行（记进 story.docAdds，以后再翻开还在）。轻点合上。
+   */
+  sceneDoc(step) {
+    const s = this._scene;
+    const el = this.theaterEl();
+    const d = this.cast().doc;
+    if (!d) { this.sceneNext(); return; }
+    s.phase = 'doc';
+    clearTimeout(this._autoT);
+    const fill = (t) => TF.Theater.fill(t, s.vars);
+    const adds = ((this.storyData ? this.storyData().docAdds : null) || []).filter(x => x !== step.add);
+    const add = step.add ? fill(step.add) : '';
+    if (add && !s.sc.replay && this.storyStep) this.storyStep('docAdd', step.add);
+    const box = el.querySelector('.th-doc');
+    box.innerHTML = `<div class="td-paper"><div class="td-head"><b>${esc(d.title)}</b><small>${esc(d.ver || '')}</small></div>` +
+      d.lines.map((l, i) => `<p class="${i === step.hl ? 'hl' : ''}">${esc(fill(l))}</p>`).join('') +
+      adds.map(x => `<p class="td-add">${esc(fill(x))}</p>`).join('') +
+      (add ? `<p class="td-add new">${esc(add)}</p>` : '') +
+      '<span class="td-close">轻点合上</span></div>';
+    box.classList.remove('hidden', 'show');
+    void box.offsetWidth;
+    box.classList.add('show');
+    s.log.push({ who: '', text: `（${d.title}）` + (step.hl != null && d.lines[step.hl] ? fill(d.lines[step.hl]) : '') + (add ? ` ${add}` : '') });
+    if (window.Sound) window.Sound.play('paper');
+    window.Haptics && window.Haptics.fire('tick');
+  },
+
+  sceneDocClose() {
+    const s = this._scene;
+    if (!s || s.phase !== 'doc') return;
+    const box = this.theaterEl().querySelector('.th-doc');
+    box.classList.remove('show');
+    box.classList.add('hidden');
+    s.phase = 'line';
+    this.sceneNext();
+  },
+
+  /** 手机里发出去一条、又撤回了：气泡出来一秒半，变成灰字「江叙撤回了一条消息」（点一下马上撤回） */
+  sceneRecall(step) {
+    const s = this._scene;
+    const el = this.theaterEl();
+    const text = TF.Theater.fill(step.recall, s.vars);
+    s.log.push({ who: this.buddyName(), text: text + '（撤回了）' });
+    if (!s.phone) { this.sceneNext(); return; }
+    const list = el.querySelector('.th-ph-list');
+    list.insertAdjacentHTML('beforeend', `<p class="ph-msg recalling">${esc(text)}</p>`);
+    list.scrollTop = list.scrollHeight;
+    if (window.Sound) window.Sound.play('pop');
+    s.phase = 'phtype';
+    const done = () => {
+      this._phNow = null;
+      clearTimeout(this._phT);
+      const b = list.querySelector('.ph-msg.recalling');
+      if (b) b.outerHTML = `<p class="ph-sys recalled">${esc(this.buddyName())}撤回了一条消息</p>`;
+      if (this._scene !== s) return;
+      s.phase = 'line';
+      this.sceneNext();
+    };
+    this._phNow = done;
+    this._phT = setTimeout(done, this.reducedMotion() ? 0 : 1500);
+  },
+
+  /** TA 悄悄写进「小人记住的」（重看不写）；剧场里冒一行小字 */
+  sceneMemo(text, skipping) {
+    const s = this._scene;
+    if (!s || s.sc.replay || !this.updateMemo) return;
+    const t = TF.Theater.fill(text, s.vars).replace(/\s+/g, '').slice(0, 40);
+    if (!t) return;
+    this.updateMemo([t], []);
+    if (this.saveData) this.saveData();
+    if (!skipping) this.sceneToast(`${this.buddyName()}在「小人记住的」里写了一行`);
+  },
+
+  /** 约好的时间手机响一下（重看不约）：安卓上排一条通知，剧场里冒一行「明早 7:00，手机会响」 */
+  scenePush(p, skipping) {
+    const s = this._scene;
+    if (!s || s.sc.replay || !p || !p.text || !this.storyPush) return;
+    const when = this.storyPush(p.at, TF.Theater.fill(p.text, s.vars), p.day);
+    if (when && !skipping) this.sceneToast(`约好了：${when}，手机会响一下`);
+  },
+
+  sceneToast(text) {
+    const box = this.theaterEl().querySelector('.th-toast');
+    box.textContent = text;
+    box.classList.remove('show');
+    void box.offsetWidth;
+    box.classList.add('show');
+    clearTimeout(this._toastT);
+    this._toastT = setTimeout(() => box.classList.remove('show'), 2600);
+  },
+
+  /**
+   * 结局走哪条：cast.endings 里每条写着 route（near / brave / soft），看一路上哪个隐藏值最多；平手走 dflt 那条。
+   * 记进 story.route（结局字幕、剧情书用）。
+   */
+  sceneRoute() {
+    const s = this._scene;
+    const ends = this.cast().endings || {};
+    const sv = this.sceneCtx().sv;
+    const keys = Object.keys(ends).filter(k => ends[k].route);
+    if (!keys.length) return;
+    let best = keys.find(k => ends[k].dflt) || keys[0];
+    let bv = +sv[ends[best].route] || 0;
+    keys.forEach(k => { const v = +sv[ends[k].route] || 0; if (v > bv) { bv = v; best = k; } });
+    s.route = ends[best].route;
+    s.routeEnd = best;
+    if (!s.sc.replay && this.storyStep) this.storyStep('route', { key: best });
+  },
+
+  routeEnding() {
+    const s = this._scene;
+    if (!s.routeEnd) this.sceneRoute();
+    return s.routeEnd || '';
   },
 
   // ---------------- CG、收场 ----------------
@@ -1082,7 +1280,8 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     }
     setTimeout(() => {
       el.classList.add('hidden');
-      el.classList.remove('closing', 'choosing', 'rolling', 'in-cg', 'iris-out', 'fade-out', 'phone', 'acting', 'act-card', 'fx-close', 'fx-sepia', 'fx-dark');
+      el.classList.remove('closing', 'choosing', 'rolling', 'in-cg', 'iris-out', 'fade-out', 'phone', 'acting', 'act-card', 'fx-close', 'fx-sepia', 'fx-dark', 'sys-line', 'own-line', 'onair', 'glass-rain');
+      el.querySelector('.th-doc').classList.add('hidden');
       el.querySelector('.th-credits').classList.add('hidden');
       el.querySelector('.th-act').innerHTML = '';
       document.body.classList.remove('in-theater');

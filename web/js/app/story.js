@@ -261,7 +261,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     setTimeout(() => {
       if (this._scene || this._touring) return;
       if (diary) {
-        const tail = f ? '……我在搭子本上写了点东西。想偷看的话，现在就给你。' : '……我在本子角落写了几行。想看的话，现在给你。';
+        const tail = f ? '……我在节目单边上写了点东西。想偷看的话，现在就给你。' : '……我在本子角落写了几行。想看的话，现在给你。';
         this.askUser([line, tail].filter(Boolean).join(' '), [{ label: f ? '现在偷看' : '现在看', pick: () => setTimeout(() => this.showDiary(ch), 250) }, { label: '等会儿', reply: f ? '好～在设置的剧情里，随时能看！' : '……嗯。在设置的剧情里。' }]);
         return;
       }
@@ -479,7 +479,38 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
   cgReached(sc, id) {
     const step = sc.script.find(s => !Array.isArray(s) && s.cg === id);
     if (!step || !step.cond) return true;
-    return TF.Theater.evalCond(step.cond, { romance: this.storyData().romance, picks: this.storyData().picks, seen: this.storyData().seen });
+    const st = this.storyData();
+    return TF.Theater.evalCond(step.cond, { romance: st.romance, picks: st.picks, seen: st.seen, sv: st.sv, route: ((this.cast().endings || {})[st.route] || {}).route });
+  },
+
+  /**
+   * 剧情里约好的时间，手机真的响一下（v8.0，用户：要）：at 'HH:MM'，今天这个点过了就明天（day 写了就是 day 天后）。
+   * 安卓上排一条一次性通知（标题是 TA 的名字）；同时只排一条，新的替掉旧的。设置里关了（tf_story_push = '0'）、没有原生接口就不排。
+   * 返回「明早 7:00」这样的话（剧场里冒一行提示），没排返回 ''。
+   */
+  storyPush(at, text, day) {
+    try { if (localStorage.getItem('tf_story_push') === '0') return ''; } catch (e) {}
+    const N = window.TrainFitNative;
+    if (!N || !N.storyPush || !text) return '';
+    const m = /^(\d{1,2}):(\d{2})$/.exec(String(at || ''));
+    if (!m) return '';
+    const now = new Date();
+    const t = new Date(now);
+    t.setHours(+m[1], +m[2], 0, 0);
+    if (day) t.setDate(t.getDate() + (+day || 0));
+    else if (t.getTime() <= now.getTime() + 60000) t.setDate(t.getDate() + 1);
+    const tomorrow = t.toDateString() !== now.toDateString();
+    const h = t.getHours();
+    const part = h < 11 ? (tomorrow ? '明早' : '早上') : h < 18 ? (tomorrow ? '明天' : '今天') : (tomorrow ? '明晚' : '今晚');
+    try { N.storyPush(JSON.stringify({ at: t.getTime(), title: this.buddyName(), body: String(text).slice(0, 80) })); } catch (e) { return ''; }
+    // 还没给通知权限：TA 刚说完「手机会响」，正是问的时候（只问一次）
+    try {
+      if (N.notificationsEnabled && !N.notificationsEnabled() && this.requestNotif && localStorage.getItem('tf_story_perm') !== '1') {
+        localStorage.setItem('tf_story_perm', '1');
+        this.requestNotif(() => {});
+      }
+    } catch (e) {}
+    return `${part} ${h}:${String(t.getMinutes()).padStart(2, '0')}`;
   },
 
   /** 小人头上挂本小书：有解锁了还没看的主线 */
@@ -575,6 +606,8 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       st.inputs = Object.assign({}, st.inputs || {}, { [data.id]: String(data.text || '').slice(0, 80) });
       if (data.fact) st.inputFacts = Object.assign({}, st.inputFacts || {}, { [data.id]: String(data.fact).slice(0, 60) });
     } else if (kind === 'name') st.names = Object.assign({}, st.names || {}, { [data.key]: String(data.value || '').slice(0, 8) });
+    else if (kind === 'docAdd') st.docAdds = [...new Set((st.docAdds || []).concat(String(data || '').slice(0, 40)))].slice(-6);
+    else if (kind === 'route') st.route = data.key;
     else if (kind === 'promise') {
       const P = (this.cast().promises || {})[data.id];
       if (!P) return;
@@ -692,7 +725,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     const D = (this.cast().diary || [])[ch - 1];
     if (!D || !this.diaryReady(ch)) return false;
     const vars = this.storyVars();
-    const ctx = Object.assign(this.sceneCtx(), { vars });
+    const ctx = Object.assign(this.sceneCtx(), { vars, route: ((this.cast().endings || {})[this.storyData().route] || {}).route });
     const lines = D.lines.filter(l => TF.Theater.evalCond(l[1], ctx)).map(l => TF.Theater.fill(l[0], vars)).filter(Boolean);
     let el = document.getElementById('diary-sheet');
     if (!el) {
@@ -705,7 +738,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     }
     const f = this.cast().sex === 'f';
     el.dataset.who = f ? 'xy' : 'jx';
-    el.innerHTML = `<div class="dy-paper"><small class="dy-from">${esc(f ? `${this.buddyName()}的搭子本` : `${this.buddyName()}的训练本 · 角落里的字`)}</small>` +
+    el.innerHTML = `<div class="dy-paper"><small class="dy-from">${esc(f ? `${this.buddyName()}的节目单 · 边上的字` : `${this.buddyName()}的训练本 · 角落里的字`)}</small>` +
       `<b class="dy-title">${esc(D.title)}</b><span class="dy-ch">${esc(this.chapterLabel(ch))}</span>` +
       `<div class="dy-lines">${lines.map((t, i) => `<p style="--i:${i}">${esc(t)}</p>`).join('')}</div>` +
       `<button class="dy-close" type="button">${f ? '合上本子' : '合上'}</button></div>`;
@@ -773,8 +806,8 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
         : pr ? `<span class="sb-promise off" title="${esc(P.detail)}"><i>约定</i><b>${esc(P.title)}</b><small>${pr.declined ? '下次吧' : '这次没做到，没关系'}</small></span>`
         : open ? `<span class="sb-promise far" title="主线里会跟你约"><i>约定</i><b>？？？</b><small>这一章里会约</small></span>` : '';
       const f = c.sex === 'f';
-      const diary = !(c.diary || [])[lv - 1] ? '' : this.diaryReady(lv) ? `<button type="button" class="sb-diary${this.diarySeen(lv) ? ' seen' : ''}" data-diary="${lv}"><i>${f ? '搭子本' : '手册边角'}</i><b>${esc(c.diary[lv - 1].title)}</b><small>${this.diarySeen(lv) ? '再看看' : `${f ? '她' : '他'}写的 · 新`}</small></button>`
-        : open ? `<span class="sb-diary far"><i>${f ? '搭子本' : '手册边角'}</i><b>？？？</b><small>这章三段看完解锁</small></span>` : '';
+      const diary = !(c.diary || [])[lv - 1] ? '' : this.diaryReady(lv) ? `<button type="button" class="sb-diary${this.diarySeen(lv) ? ' seen' : ''}" data-diary="${lv}"><i>${f ? '节目单' : '手册边角'}</i><b>${esc(c.diary[lv - 1].title)}</b><small>${this.diarySeen(lv) ? '再看看' : `${f ? '她' : '他'}写的 · 新`}</small></button>`
+        : open ? `<span class="sb-diary far"><i>${f ? '节目单' : '手册边角'}</i><b>？？？</b><small>这章三段看完解锁</small></span>` : '';
       return `<div class="sb-ch${open ? '' : ' locked'}${b.lv === lv ? ' now' : ''}">` +
         `<div class="sb-head"><span class="sb-open"><b>${esc(this.chapterLabel(lv))}</b><small>${open ? (b.lv === lv ? '正在这一章' : `主线 ${got}/${mine.length}`) : `再记 ${days((TF.Bond.LEVELS[lv - 1] || {}).xp || 0)} 天左右`}</small></span>` +
         `<span class="sb-count">${got + evGot}/${mine.length + evs.length}</span></div>` +

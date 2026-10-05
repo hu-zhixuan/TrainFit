@@ -17,10 +17,11 @@
   const TF = root.TF = root.TF || {};
 
   // 剧本里的表情名 → 立绘文件名（英文好管理）
-  const FACES = { 平静: 'calm', 开心: 'happy', 害羞: 'shy', 担心: 'worried', 得意: 'smug', 惊讶: 'surprised', 不服: 'pout', 心动: 'love', 困: 'sleepy', 闪亮: 'sparkle', 撑: 'full' };
+  const FACES = { 平静: 'calm', 开心: 'happy', 害羞: 'shy', 担心: 'worried', 得意: 'smug', 惊讶: 'surprised', 不服: 'pout', 心动: 'love', 困: 'sleepy', 闪亮: 'sparkle', 撑: 'full', 哭: 'cry', 泪笑: 'cryhappy' };
   // 没有这个表情的立绘时，先找相近的（心动 → 害羞 → 开心 → 平静）
-  const FALLBACK = { 心动: ['害羞', '开心'], 闪亮: ['得意', '开心'], 得意: ['开心'], 撑: ['开心'], 困: ['平静'], 不服: ['担心'], 惊讶: ['平静'], 害羞: ['开心'] };
-  const BGS = ['room', 'roomnight', 'gym', 'pool', 'studio', 'cafe', 'street', 'citynight', 'rain', 'night', 'dusk', 'dawn', 'stage'];
+  // 哭、泪笑（v8.0，加了眼泪的那两张）没有就退回担心、开心，剧场另外画一滴 CSS 眼泪
+  const FALLBACK = { 哭: ['担心'], 泪笑: ['开心'], 心动: ['害羞', '开心'], 闪亮: ['得意', '开心'], 得意: ['开心'], 撑: ['开心'], 困: ['平静'], 不服: ['担心'], 惊讶: ['平静'], 害羞: ['开心'] };
+  const BGS = ['room', 'roomnight', 'gym', 'pool', 'studio', 'booth', 'cafe', 'street', 'citynight', 'rain', 'night', 'dusk', 'dawn', 'stage'];
 
   const broken = new Set(); // 加载失败的图（清单在、图没打进包时），以后不再用
 
@@ -52,6 +53,13 @@
     return { url: m.blink, inset: m.eyes };
   }
 
+  /** 这个表情有没有自己那张图（没有的话是退回了相近的：哭退回担心时，剧场自己画眼泪） */
+  function has(char, face) {
+    const m = (manifest().cast || {})[char];
+    const k = FACES[face];
+    return !!(m && m.face && k && m.face[k] && !broken.has(m.face[k]));
+  }
+
   /** 图加载失败：记下来，剧场重画时退回像素小人 */
   function fail(url) { if (url) broken.add(url); }
 
@@ -75,6 +83,6 @@
     return { face: Object.keys(m.face || {}).length, cg: Object.keys(m.cg || {}).length, bg: Object.keys(manifest().bg || {}).length };
   }
 
-  TF.Art = { FACES, FALLBACK, BGS, sprite, blink, fail, credits, cg, bg, count };
+  TF.Art = { FACES, FALLBACK, BGS, sprite, blink, has, fail, credits, cg, bg, count };
   if (typeof module !== 'undefined' && module.exports) module.exports = TF.Art;
 })(typeof window !== 'undefined' ? window : globalThis);

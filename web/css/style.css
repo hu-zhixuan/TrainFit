@@ -2174,3 +2174,91 @@ button.sb-promise, button.sb-diary { cursor: pointer; }
 @keyframes thLean { 0% { transform: none; } 50% { transform: scale(1.025) translateY(4px); } 100% { transform: scale(1.015) translateY(2px); } }
 @keyframes thDoze { 0%, 100% { transform: none; } 30% { transform: translateY(5px) rotate(0.8deg); } 50% { transform: translateY(1px); } 75% { transform: translateY(6px) rotate(0.8deg); } }
 .theater.iris-in .th-actor.th-enter { animation-delay: 0.38s; }
+
+/* ===== v8.0 第二轮：TA 知道自己在 App 里 ===== */
+/* 写好的台词（台词表上的，嘴自己说出来的）：整句一下子出来，字灰一点、等宽，左边一道竖线，名字牌旁边写「台词」 */
+.theater.sys-line .th-text { color: rgba(244, 242, 238, 0.62); font-family: ui-monospace, "SF Mono", Menlo, monospace; letter-spacing: 0.02em; border-left: 3px solid rgba(255, 255, 255, 0.28); padding-left: 10px; }
+.theater.sys-line .th-name::after { content: "台词"; margin-left: 8px; padding: 1px 6px; border-radius: 6px; font-size: 0.68rem; font-weight: 700; background: rgba(0, 0, 0, 0.28); }
+/* TA 自己的话（关键时刻大模型接的）：对话框暖一点，名字牌旁边写「自己的话」 */
+.theater.own-line .th-box { border-color: rgba(255, 196, 140, 0.55); box-shadow: 0 -6px 30px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 196, 140, 0.18), 0 0 28px rgba(255, 170, 110, 0.18); }
+.theater.own-line .th-name::after { content: "自己的话"; margin-left: 8px; padding: 1px 6px; border-radius: 6px; font-size: 0.68rem; font-weight: 700; background: rgba(255, 196, 140, 0.32); }
+.ph-msg.sys { font-family: ui-monospace, "SF Mono", Menlo, monospace; color: rgba(244, 242, 238, 0.62); border: 1px dashed rgba(255, 255, 255, 0.24); background: transparent; }
+.ph-msg.own { box-shadow: 0 0 0 1px rgba(255, 196, 140, 0.4); }
+.ph-msg.recalling { opacity: 0.85; }
+.ph-sys.recalled { font-style: italic; }
+@media (prefers-reduced-motion: no-preference) { .ph-msg.recalling { animation: bubbleIn 0.28s cubic-bezier(0.2, 0.9, 0.3, 1.2) both, recallOut 0.35s ease-in 1.2s forwards; } }
+@keyframes recallOut { to { opacity: 0.2; transform: scale(0.96); filter: blur(1px); } }
+
+/* 画面卡一下：错位 + 横条 */
+@media (prefers-reduced-motion: no-preference) {
+  .theater.fx-glitch .th-actor { animation: thGlitch 0.56s steps(2, end); }
+  .theater.fx-glitch .th-box { animation: thGlitchBox 0.56s steps(2, end); }
+  .theater.fx-glitch .th-fx { background: repeating-linear-gradient(180deg, transparent 0 18px, rgba(255, 255, 255, 0.07) 18px 20px, transparent 20px 46px); }
+}
+@keyframes thGlitch {
+  0% { transform: none; filter: none; }
+  20% { transform: translateX(-7px); filter: drop-shadow(6px 0 0 rgba(255, 60, 90, 0.55)) drop-shadow(-6px 0 0 rgba(60, 200, 255, 0.55)); clip-path: inset(10% 0 52% 0); }
+  40% { transform: translateX(5px); filter: drop-shadow(-5px 0 0 rgba(255, 60, 90, 0.5)); clip-path: inset(40% 0 20% 0); }
+  60% { transform: translateX(-3px); clip-path: none; }
+  100% { transform: none; filter: none; clip-path: none; }
+}
+@keyframes thGlitchBox { 0%, 100% { transform: none; } 30% { transform: translateX(4px) skewX(-2deg); } 60% { transform: translateX(-3px); } }
+
+/* 电台直播间（夏柚）：吸音棉的格子、暖黄的台灯，右上角 ON AIR 的灯 */
+.theater[data-bg="booth"] .th-bg, .cg-thumb[data-bg="booth"] { background:
+  radial-gradient(ellipse 60% 40% at 72% 78%, rgba(255, 190, 110, 0.28), transparent 70%),
+  repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.18) 0 2px, transparent 2px 34px),
+  repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.18) 0 2px, transparent 2px 34px),
+  linear-gradient(180deg, #2b2233 0%, #1d1724 64%, #3a2a24 64%, #241a17 100%); }
+.th-onair { position: absolute; top: calc(env(safe-area-inset-top, 0px) + 52px); right: 18px; z-index: 3; display: none; padding: 4px 10px; border-radius: 6px;
+  font: 800 0.78rem/1.2 ui-monospace, Menlo, monospace; letter-spacing: 0.14em; color: rgba(255, 120, 120, 0.4); border: 2px solid rgba(255, 120, 120, 0.3); background: rgba(40, 10, 14, 0.6); }
+.theater[data-bg="booth"] .th-onair { display: block; }
+.theater.onair .th-onair { color: #fff; background: #e23a4a; border-color: #ff8a94; box-shadow: 0 0 18px rgba(255, 60, 80, 0.75), 0 0 46px rgba(255, 60, 80, 0.35); }
+@media (prefers-reduced-motion: no-preference) { .theater.onair .th-onair { animation: onairGlow 2.4s ease-in-out infinite; } }
+@keyframes onairGlow { 50% { box-shadow: 0 0 10px rgba(255, 60, 80, 0.55), 0 0 30px rgba(255, 60, 80, 0.22); } }
+
+/* 屏幕上的雨（下雨那天，擦掉一片很快又落满） */
+.th-glass { position: absolute; inset: 0; z-index: 3; pointer-events: none; opacity: 0; transition: opacity 0.6s;
+  background:
+    radial-gradient(circle at 12% 18%, rgba(255, 255, 255, 0.35) 0 3px, transparent 4px), radial-gradient(circle at 34% 42%, rgba(255, 255, 255, 0.3) 0 4px, transparent 5px),
+    radial-gradient(circle at 58% 22%, rgba(255, 255, 255, 0.28) 0 3px, transparent 4px), radial-gradient(circle at 78% 52%, rgba(255, 255, 255, 0.32) 0 5px, transparent 6px),
+    radial-gradient(circle at 22% 66%, rgba(255, 255, 255, 0.3) 0 4px, transparent 5px), radial-gradient(circle at 66% 76%, rgba(255, 255, 255, 0.28) 0 3px, transparent 4px),
+    radial-gradient(circle at 88% 14%, rgba(255, 255, 255, 0.3) 0 3px, transparent 4px), radial-gradient(circle at 46% 88%, rgba(255, 255, 255, 0.26) 0 4px, transparent 5px),
+    linear-gradient(180deg, rgba(180, 200, 230, 0.12), rgba(180, 200, 230, 0.2));
+  backdrop-filter: blur(1.5px); }
+.theater.glass-rain .th-glass { opacity: 1; }
+
+/* 人设文档：一张打印的纸，被 TA 自己用笔加了几行 */
+.th-doc { position: absolute; inset: 0; z-index: 8; display: flex; align-items: center; justify-content: center; padding: 24px; background: rgba(6, 6, 10, 0.55); }
+.th-doc.hidden { display: none; }
+.td-paper { width: min(360px, 100%); padding: 22px 20px 16px; border-radius: 6px; background: #f4f1ea; color: #2b2a2e; box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
+  font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.86rem; line-height: 1.7; transform: rotate(-1.2deg); }
+.td-head { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 1px solid #c9c3b6; padding-bottom: 6px; margin-bottom: 8px; }
+.td-head b { font-size: 0.95rem; }
+.td-head small { color: #8a8478; }
+.td-paper p { margin: 0 0 2px; }
+.td-paper p.hl { background: linear-gradient(transparent 55%, rgba(255, 210, 90, 0.7) 55%); font-weight: 700; }
+.td-add { font-family: "Kaiti SC", "STKaiti", "KaiTi", serif; color: #2a4a8a; font-size: 1rem; transform: rotate(-0.8deg); margin-top: 6px !important; }
+.td-close { display: block; margin-top: 12px; text-align: right; font-size: 0.72rem; color: #8a8478; }
+@media (prefers-reduced-motion: no-preference) {
+  .th-doc.show .td-paper { animation: docIn 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.1) both; }
+  .td-paper p.hl { animation: docHl 1.2s ease-out 0.5s both; }
+  .td-add.new { animation: docWrite 1.4s steps(18, end) 0.6s both; }
+}
+@keyframes docIn { from { opacity: 0; transform: translateY(40px) rotate(-4deg) scale(0.92); } }
+@keyframes docHl { from { background-size: 0 100%; } }
+@keyframes docWrite { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+
+/* 剧场里冒的一行小字（写进小本本、约好了通知） */
+.th-toast { position: absolute; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 56px); z-index: 7; transform: translate(-50%, -8px); opacity: 0; pointer-events: none;
+  padding: 6px 14px; border-radius: 999px; background: rgba(20, 16, 26, 0.86); border: 1px solid rgba(255, 196, 140, 0.45); font-size: 0.8rem; white-space: nowrap; transition: opacity 0.3s, transform 0.3s; }
+.th-toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+/* 没有哭的那张图时，剧场自己在眼角画一滴往下流的眼泪 */
+.th-spr { position: relative; }
+.th-tear { position: absolute; top: 12%; left: 46%; width: 7px; height: 11px; border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%; background: rgba(160, 210, 255, 0.85); box-shadow: inset -1px -2px 0 rgba(80, 140, 210, 0.5); pointer-events: none; }
+.th-tear.px { top: 34%; left: 44%; }
+@media (prefers-reduced-motion: no-preference) { .th-tear { animation: tearFall 2.2s ease-in infinite; } }
+@keyframes tearFall { 0% { transform: translateY(0) scale(0.6); opacity: 0; } 15% { opacity: 1; transform: translateY(2px) scale(1); } 85% { opacity: 1; } 100% { transform: translateY(48px) scale(0.9); opacity: 0; } }
+@media (prefers-reduced-motion: no-preference) { .ta-touch.down:not(.done) .ta-target svg:not(.ta-ring) { animation: taSwipeDown 1.4s ease-in-out infinite; } }
+@keyframes taSwipeDown { 0%, 100% { transform: translateY(-6px); } 50% { transform: translateY(8px); } }
