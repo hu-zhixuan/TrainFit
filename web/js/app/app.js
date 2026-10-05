@@ -423,7 +423,7 @@ class FitnessApp {
         else if (act.dataset.act === 'plan-drop') this.dropPlan(id);
         return;
       }
-      const item = e.target.closest('.item[data-kind]');
+      const item = e.target.closest('.item[data-kind], .mg-row[data-kind]');
       if (item) this.openEditor(item.dataset.kind, item.dataset.id);
     });
 

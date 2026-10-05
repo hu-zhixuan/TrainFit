@@ -690,6 +690,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     this._buddyGear = st.gear;
     btn.setAttribute('aria-label', `小人：${st.say}`);
     btn.classList.toggle('has-note', !!(this.noteReady && this.noteReady())); // 今天的小纸条还没拆：头上挂个小信封
+    btn.classList.toggle('has-story', !!(this.mainReady && this.mainReady())); // 有新的主线没看：头上挂「新剧情」（v7.1）
     this.placeBuddy();
     const pop = document.getElementById('buddy-pop');
     if (!pop.classList.contains('hidden') && !pop.dataset.mode) this.showBuddyPop();
@@ -781,7 +782,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     btn.dataset.key = key;
     btn.dataset.pose = pose;
     let move = btn.querySelector('.bd-move');
-    if (!move) { btn.innerHTML = '<span class="bd-move"></span><span class="bd-mail" aria-hidden="true">✉</span>'; move = btn.querySelector('.bd-move'); }
+    if (!move) { btn.innerHTML = '<span class="bd-move"></span><span class="bd-mail" aria-hidden="true">✉</span><span class="bd-story" aria-hidden="true">新剧情</span>'; move = btn.querySelector('.bd-move'); }
     move.innerHTML = TF.Buddy.svg(Object.assign(art, { mood: face ? TF.Buddy.FACE_MOOD[face] : mood, gear, pose }));
     if (posed) this.placeBuddy(); // 站起来 / 趴下高度变了，底边还贴着那个框
   },
@@ -916,12 +917,17 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     const sulk = this.sulkNow && this.sulkNow();
     const tap = sulk ? this.cast().sulkTap : null;
     const rare = sulk ? tap[Math.floor(Math.random() * tap.length)] + '（长按摸摸头哄哄）' : this.rareLine ? this.rareLine() : '';
-    pop.innerHTML = `<div class="buddy-pop-head">${head}</div>` + (rare ? `<p class="buddy-rare">${esc(rare)}</p>` : '') + this.bondRow() + `<p class="buddy-say">${esc(st.say)}</p>` +
+    // v7.1：有新的主线没看，最上面一行「新剧情 · 第二章 · 晨泳「早上六点」 ▶」，点了就演
+    const next = this.mainReady && this.mainReady() ? this.mainNext() : null;
+    const story = next ? `<button class="buddy-story-row" type="button" data-main="${esc(next.sc.id)}"><i>新剧情</i><span>${esc(this.chapterLabel(next.ch))}「${esc(next.sc.title)}」</span><b>▶</b></button>` : '';
+    pop.innerHTML = story + `<div class="buddy-pop-head">${head}</div>` + (rare ? `<p class="buddy-rare">${esc(rare)}</p>` : '') + this.bondRow() + `<p class="buddy-say">${esc(st.say)}</p>` +
       (obs ? `<p class="buddy-obs">${esc(obs)}</p>` : '') +
       (tip ? `<p class="buddy-train">${esc(tip)}</p>` : '') +
       (this.dexEntryHtml ? this.dexEntryHtml() : '') +
       `<p class="buddy-foot">${esc(foot)}</p>`;
     pop.querySelector('.buddy-dex').addEventListener('click', (e) => { e.stopPropagation(); this.openDex && this.openDex(); });
+    const row = pop.querySelector('.buddy-story-row');
+    if (row) row.addEventListener('click', (e) => { e.stopPropagation(); pop.classList.add('hidden'); this.playMain(row.dataset.main); });
     this.positionBuddyPop();
     pop.classList.remove('hidden');
   },
@@ -1725,7 +1731,10 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     this.renderStoryBook();
     const nb = (this.profile.buddy || {}).note || {};
     const total = Object.keys(c.events || {}).length;
-    $('buddy-mem-note').textContent = `看过 ${(rel.seen || []).filter(id => (c.events || {})[id]).length}/${total} 段` + (nb.n ? ` · 小纸条 ${nb.n} 张${nb.s ? `（珍藏 ${nb.s}）` : ''}` : '');
+    const mains = this.mainList ? this.mainList() : [];
+    const mainGot = mains.filter(x => (rel.seen || []).includes(x.sc.id)).length;
+    $('buddy-mem-note').textContent = (mains.length ? `主线 ${mainGot}/${mains.length} · ` : '') + `小剧情 ${(rel.seen || []).filter(id => (c.events || {})[id] && id !== 'confess').length}/${total - ((c.events || {}).confess ? 1 : 0)}` +
+      (nb.n ? ` · 小纸条 ${nb.n} 张` : '');
     // 你们现在的关系；恋人可以改回搭子，选过搭子的可以让它再问一次
     const relName = rel.romance === true ? '恋人' : rel.romance === false ? '最好的搭子' : b.lv >= 3 ? '有点暧昧' : '';
     $('buddy-rel').innerHTML = relName || rel.romance != null ? `<span>你们现在：${esc(relName || b.name)}</span>` +
@@ -1777,12 +1786,14 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       this.renderBuddySettings();
       this.showToast(love ? '改回搭子了。到了晚上，TA 也许还会再说一次那句话' : '好，过几天晚上 TA 会再问一次');
     });
-    // 剧情：点章节重看开头，点看过的小剧情重看，没解锁的告诉你怎么解锁
+    // 剧情：点主线（看过的重看、新的直接看），点看过的小剧情重看，点相册看大图，没解锁的告诉你怎么解锁
     document.getElementById('buddy-story').addEventListener('click', (e) => {
-      const ch = e.target.closest('[data-chapter]');
+      const m = e.target.closest('[data-main]');
       const sc = e.target.closest('[data-scene]');
-      if (ch) { e.stopPropagation(); this.showMemory(+ch.dataset.chapter); return; }
+      const cg = e.target.closest('[data-cg]');
+      if (m) { e.stopPropagation(); const seen = m.classList.contains('seen'); this.playMain(m.dataset.main, { replay: seen, after: () => this.renderBuddySettings() }); return; }
       if (sc) { e.stopPropagation(); this.showStoryEvent(sc.dataset.scene, true); return; }
+      if (cg) { e.stopPropagation(); this.viewCg(cg.dataset.cg); return; }
       const hint = e.target.closest('.sb-scene');
       if (hint && hint.title) this.showToast(`解锁：${hint.title}`);
     });

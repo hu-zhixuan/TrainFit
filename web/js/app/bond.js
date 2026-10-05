@@ -83,7 +83,10 @@
 
 if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
   /** 陪你的是谁（cast.js）：江叙 / 夏柚 */
-  cast() { return TF.Cast[this.buddyLook().char === 'girl' ? 'xy' : 'jx']; },
+  cast() { return TF.Cast[this.castKey()]; },
+
+  /** jx 江叙 / xy 夏柚（美术清单、主线 id 都按这个分） */
+  castKey() { return this.buddyLook().char === 'girl' ? 'xy' : 'jx'; },
 
   /** 它的名字（v6.0 起是角色本来的名字，不再自己起） */
   buddyName() { return this.cast().name; },
@@ -265,7 +268,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     pop.dataset.level = 'none';
     const outfits = opts.outfits || [];
     pop.innerHTML = `<div class="story-card"><div class="story-art">${TF.Buddy.svg(this.buddyArt({ pose: 'lie', face, gear: [], scale: 3 }))}</div>` +
-      `<div class="story-meta"><span class="story-tag"><i aria-hidden="true">♥</i>回忆 ${lv}/5</span><b class="story-title">${esc(st[0])}</b>` +
+      `<div class="story-meta"><span class="story-tag"><i aria-hidden="true">♥</i>${esc(this.chapterLabel ? this.chapterLabel(lv) : `第 ${lv} 章`)}</span><b class="story-title">${esc(st[0])}</b>` +
       `<span class="story-who">${esc(c.name)} · ${esc(TF.Bond.LEVELS[lv - 1].name)}</span></div></div>` +
       (opts.lead ? `<p class="story-lead">${esc(opts.lead)}</p>` : '') +
       `<p class="story-text"></p>` +
