@@ -2237,7 +2237,7 @@ button.sb-promise, button.sb-diary { cursor: pointer; }
 .td-head b { font-size: 0.95rem; }
 .td-head small { color: #8a8478; }
 .td-paper p { margin: 0 0 2px; }
-.td-paper p.hl { background: linear-gradient(transparent 55%, rgba(255, 210, 90, 0.7) 55%); font-weight: 700; }
+.td-paper p.hl { background: linear-gradient(transparent 55%, rgba(255, 210, 90, 0.75) 55%) no-repeat 0 0 / 100% 100%; font-weight: 700; }
 .td-add { font-family: "Kaiti SC", "STKaiti", "KaiTi", serif; color: #2a4a8a; font-size: 1rem; transform: rotate(-0.8deg); margin-top: 6px !important; }
 .td-close { display: block; margin-top: 12px; text-align: right; font-size: 0.72rem; color: #8a8478; }
 @media (prefers-reduced-motion: no-preference) {
@@ -2246,7 +2246,9 @@ button.sb-promise, button.sb-diary { cursor: pointer; }
   .td-add.new { animation: docWrite 1.4s steps(18, end) 0.6s both; }
 }
 @keyframes docIn { from { opacity: 0; transform: translateY(40px) rotate(-4deg) scale(0.92); } }
-@keyframes docHl { from { background-size: 0 100%; } }
+@keyframes docHl { from { background-size: 0% 100%; } to { background-size: 100% 100%; } }
+/* 结局字幕出来时，后面的对话框、选项收起来，别透出来 */
+.theater.rolling .th-box, .theater.rolling .th-choices, .theater.rolling .th-cgtag { opacity: 0; transition: opacity 0.4s; }
 @keyframes docWrite { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
 
 /* 剧场里冒的一行小字（写进小本本、约好了通知） */

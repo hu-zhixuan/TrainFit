@@ -804,10 +804,11 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       let x0 = null, y0 = null;
       if (downward) box.classList.add('down');
       btn.addEventListener('click', () => { if (x0 == null) finish(); }); // 划不动的（无障碍、电脑）点一下也行
-      act.addEventListener('pointerdown', (e) => { x0 = e.clientX; y0 = e.clientY; });
+      // 按下以后手指划出这块也接着认（不然划快了、划出按钮就收不到）
+      act.addEventListener('pointerdown', (e) => { x0 = e.clientX; y0 = e.clientY; try { act.setPointerCapture(e.pointerId); } catch (err) {} });
       act.addEventListener('pointermove', (e) => {
         if (x0 == null) return;
-        const moved = downward ? e.clientY - y0 > 50 : Math.abs(e.clientX - x0) > 50;
+        const moved = downward ? e.clientY - y0 > 40 : Math.abs(e.clientX - x0) > 40;
         if (moved) { box.classList.add('flip'); finish(); }
       });
       act.addEventListener('pointerup', () => { setTimeout(() => { x0 = null; y0 = null; }, 0); });
