@@ -1360,7 +1360,8 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     document.querySelectorAll('#ql-snack-list .ql-snack-line').forEach(el => {
       if (el.textContent.includes(was)) el.textContent = el.textContent.replace(was, `${rec.exerciseName} ${kg}kg`).replace('（估）', '');
     });
-    rec.burnedCalories = Math.round((rec.sets || 3) * (rec.reps || 10) * (kg * 0.05 + 1.2));
+    const lw = this.latestWeight ? this.latestWeight() : null;
+    rec.burnedCalories = TF.strengthBurn(rec.exerciseName, kg, rec.sets || 3, rec.reps || 10, lw ? lw.kg : null);
     if (a.saidReps && /估计/.test(rec.notes || '')) rec.notes = '一键记录';
     this.saveData();
     this.render();

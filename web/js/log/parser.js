@@ -8,9 +8,10 @@
     require('./helpers.js');
     require('./native.js');
     require('./food.js');
+    require('./agent_intent.js');
   }
   const TF = root.TF = root.TF || {};
-  const { MUSCLES, MEAL_TYPES, NUTRIENTS, num, cleanText, round1, mealTypeByHour, normMealType, mealTimes, mealSegments, findWeight, guessMuscle, exerciseInfo, metBurn, saidWeight, saidMinutes, readOverride, Native, FoodDB, MyFoods, groundItem, sizeOpts, sumItems } = TF;
+  const { MUSCLES, MEAL_TYPES, NUTRIENTS, num, cleanText, round1, mealTypeByHour, normMealType, mealTimes, mealSegments, findWeight, guessMuscle, exerciseInfo, metBurn, strengthBurn, saidWeight, saidMinutes, readOverride, Native, FoodDB, MyFoods, groundItem, sizeOpts, sumItems } = TF;
 
   const summaryOf = (items) => cleanText(items.map(it => it.name + (it.amount || '')).join('、'), 60);
 
@@ -178,7 +179,7 @@
         // 例子里 add 后面还跟着 dayOffset，括号的写法和以前的例子一样（]}]},）
         '由你决定怎么改数据：新增、修改或删除。只输出一个 JSON 对象，不要 markdown，不要解释。reply 和 dayOffset 每次都写，别的字段只写用得上的（值是 null、空数组的不要写）。',
         '例 1（记吃的、练的）：{"reply":"一句短话说你做了什么，15字以内，不写热量数（下面会单独列出来）；估得比较粗的，30字以内说按什么估的",',
-        ' "add":{"workouts":[{"exerciseName":"杠铃卧推","muscleGroup":"胸部","weightKg":80,"sets":4,"reps":8,"burnedCalories":110}],',
+        ' "add":{"workouts":[{"exerciseName":"杠铃卧推","muscleGroup":"胸部","weightKg":80,"sets":4,"reps":8,"burnedCalories":40}],',
         '        "meals":[{"mealType":"早餐","foodSummary":"肉包2个","items":[{"name":"肉包","amount":"2个","grams":200,"whole":true,"calories":460,"proteinG":16,"carbsG":60,"fatG":16}]},',
         '                 {"mealType":"午餐","foodSummary":"番茄炒蛋盖饭1份","items":[{"name":"米饭","amount":"1碗","grams":200,"whole":false,"calories":232,"proteinG":5,"carbsG":52,"fatG":0.6},{"name":"番茄炒蛋","amount":"1份","grams":200,"whole":true,"calories":260,"proteinG":11,"carbsG":10,"fatG":19}]}]},',
         ' "dayOffset":0}',
@@ -203,7 +204,7 @@
         '   水、黑咖啡、茶这类没有热量的也记，calories 写 0。',
         '   用户念了包装上的营养数（「包装上写每100克210大卡」「一包300大卡」），严格按用户给的数算，这一项加 "source":"label"。',
         '   item 的 name 要具体到用户说的那种（「甜牛奶」不要写成「牛奶」，「肉松面包」不要写成「面包」），改过的数会按这个名字记住。',
-        '   下面「记住的食物」是用户确认过的数：说到同样的东西（同名或明显是同一样）就用那里的名字，数值按份数换算；只是相似的不要套用。burnedCalories 按常见强度估算。',
+        '   下面「记住的食物」是用户确认过的数：说到同样的东西（同名或明显是同一样）就用那里的名字，数值按份数换算；只是相似的不要套用。burnedCalories：有氧按时间和强度估，力量训练按做的时间估（一个动作四组大约 30～50 千卡，别按次数乘）。',
         '5. 用户说「记错了/改成/其实是/只吃了一半/删掉/不算」，或者回头补充某样东西（「刚才那个牛奶是甜的，包装上写每100毫升290千焦」「鸡蛋其实只吃了一个」），是在改已有记录：用 update 或 delete，引用下面的编号，不要重复新增。',
         '   接着补充刚记的那一顿（「火锅是羊肉的」「锅底是牛油的」「肉吃了三盘」「吃得挺多」「是汉堡王的」）也是改：按新的描述把那一条重估一遍，用 update 改，没说吃了新东西就不要新增。',
         '   记到了别的日子（「记错日子了」「挪到前一天」「这是昨天吃的」「放到后天」）：用 update，set 里写 "dayOffset":-1（相对正在看的这天，前一天 -1、后一天 1），整条挪过去，不要删了重新加。',
@@ -225,9 +226,11 @@
         '11. 用户说了关于自己、以后一直有用的事（名字、在增肌还是减脂、健身新手、在练什么、不吃 / 过敏的东西、伤病、作息、口味）：写进 memo，每条一句话、12 字以内（「叫阿程」「健身新手」「不吃辣」「膝盖有旧伤」），下面「小本本」里已经有的不要重复；说要忘掉或者变了的（「现在能吃辣了」「膝盖好了」），一定把小本本里原来那句原样写进 forget。吃了什么、练了什么、今天的事不算。回答、估算、出计划时照顾到小本本里的事（不吃辣就别推荐辣的，膝盖有伤就别排深蹲跳）。',
         '12. 用户要你动手改软件里的东西：写 "act":[…]（可以几个），手机照着做、能撤销，reply 一句话说做了什么。每个是下面一种：',
         '   {"do":"usePlan","name":"计划A","dayOffset":1} 把存好的计划放到某天（「明天练计划A」「周五照练腿日练」）；{"do":"savePlan","name":"练腿日","from":"plan"} 把刚才给的计划存起来（存这天练的 / 吃的写 "from":"day","dayOffset":0）；',
-        '   {"do":"copyDay","from":-7,"to":1,"what":"workouts"} 把某天练的（meals 吃的）照搬成另一天的计划（「明天照上周一练」）；{"do":"movePlan","from":1,"to":2} 把计划挪到另一天；{"do":"clearPlan","dayOffset":1} 清掉某天的计划（「明天不练了」）；',
+        '   {"do":"copyDay","from":-7,"to":1,"what":"workouts"} 把某天练的（meals 吃的）照搬成另一天的计划（「明天照上周一练」「把明天的食谱复制到今天」）；{"do":"movePlan","from":1,"to":0,"what":"meals"} 把计划挪到另一天（「把明天的饮食搬到今天」「明天那几顿改成今天吃」；只挪吃的 / 练的写 what，都挪不写；计划不是记录，别用 update 改计划的日子）；{"do":"clearPlan","dayOffset":1} 清掉某天的计划（「明天不练了」）；',
+        '   {"do":"donePlan","dayOffset":0,"what":"workouts"} 某天的计划都做完了，照计划全记上（「上肢日都练完了」「今天的计划都完成了」；只吃完写 meals，都做完写 all）；只做了其中几样用 donePlans。',
         '   {"do":"renamePlan","name":"旧名","to":"新名"}、{"do":"dropPlan","name":"…"}；{"do":"goal","goal":"muscle_gain"} 换目标（fat_loss 减脂 / maintain 保持 / muscle_gain 增肌）；{"do":"protein","g":150} 改每天蛋白目标；{"do":"remind","kind":"weigh","time":"07:00","on":true} 改提醒（weigh 称体重 / lunch 午饭 / dinner 晚饭 / night 晚上小结）。',
-        '   dayOffset、from、to 都相对正在看的日期（按日期对照算）；name 用「存好的计划」里的名字，说法不一样也要对上（「计划a」「上次那个练腿的」）。只是问问、没让你动的不写 act。',
+        '   用户发来他自己的计划、课表（列了动作和组数，或者吃的安排），让你排到某天、排成今天的待办 / ToDoList、照这个练（「这是我的序列A上肢日：卧推60公斤4组8个、划船…，排到今天」）：写 {"do":"addPlan","name":"序列A 上肢日","dayOffset":0,"workouts":[和 add.workouts 一样的格式],"meals":[和 add.meals 一样的格式]}——内容照他写的（动作写标准名字，重量组数照抄，没写的按最近成绩估），dayOffset 是要放的那天（没说哪天就是今天）；他给了名字就写 name，会顺便存进计划本，以后说「今天练序列A」就能用。只让记下、存起来、没让排到哪天的：{"do":"savePlan","name":"序列B 全身复合日","workouts":[…]}。一次发了几套就写几个。这种不是已经练了：不写 add、answer、plan，计划本身也不写进 memo；不能说做不到，reply 一句说排好了 / 存好了。',
+        '   dayOffset、from、to 都相对正在看的日期（按日期对照算）；name 用「存好的计划」里的名字，说法不一样也要对上（「计划a」「序列a」「上次那个练腿的」）。只是问问、没让你动的不写 act。',
         '输出前核对一遍：原话里说到的每样吃的、喝的、补剂（包括听错字的，比如"茶叶大"）都记上了，没多记、没漏记。'
       ].join('\n');
 
@@ -253,7 +256,7 @@
       else if (ctx.lastPlan && ctx.maybeEditPlan && !records.length) lines.push('注意：这句是在改上面「刚才给的计划」（这天没有记录可改）：照他说的改好，写出改完的完整 answer 和 plan，不要记录。');
       if (ctx._again) lines.push('注意：这句是在问吃或练的事，要正经回答，不能说帮不上。');
       // 问「这周怎么练」、说「周五练计划A」「明天照上周一练」时大模型自己算星期几会算错：把前后一周是周几直接给它
-      if ((ctx.ask || /周[一二三四五六日天]|星期|礼拜|下周|上周|计划|挪|排到|放到|照着|照搬/.test(text)) && /^\d{4}-\d{2}-\d{2}$/.test(ctx.date || '')) {
+      if ((ctx.ask || /周[一二三四五六日天]|星期|礼拜|下周|上周|计划|挪|排到|放到|照着|照搬|待办|todo|序列|课表|清单/i.test(text)) && /^\d{4}-\d{2}-\d{2}$/.test(ctx.date || '')) {
         const WK = '日一二三四五六';
         const at = (n) => { const d = new Date(ctx.date + 'T00:00:00'); d.setDate(d.getDate() + n); return d; };
         const from = /上周|上个|上星期|昨天|前天|之前|上次/.test(text) ? -7 : 0;
@@ -354,13 +357,21 @@
       const list = Array.isArray(raw) ? raw : raw && typeof raw === 'object' ? [raw] : [];
       const off = (v, d) => { const n = num(v); return n === null ? d : Math.max(-30, Math.min(30, Math.round(n))); };
       const name = (v) => cleanText(v, 14);
+      const inline = (a) => {
+        const w = Array.isArray(a.workouts) ? a.workouts.slice(0, 16) : [], m = Array.isArray(a.meals) ? a.meals.slice(0, 8) : [];
+        return w.length || m.length ? { workouts: w, meals: m } : null;
+      };
       return list.map(a => {
         if (!a || typeof a !== 'object') return null;
         switch (a.do) {
           case 'usePlan': return name(a.name) ? { do: 'usePlan', name: name(a.name), dayOffset: off(a.dayOffset, 1) } : null;
-          case 'savePlan': return { do: 'savePlan', name: name(a.name), from: ['plan', 'day', 'dayplan'].includes(a.from) ? a.from : 'plan', dayOffset: off(a.dayOffset, 0), what: ['workouts', 'meals', 'all'].includes(a.what) ? a.what : 'all' };
+          // 用户自己发来的计划（v9.2）：内容带在动作里（workouts / meals 先原样留着，normalize 里再按记录的规矩洗一遍）
+          case 'addPlan': return inline(a) ? Object.assign({ do: 'addPlan', name: name(a.name), dayOffset: off(a.dayOffset, 0) }, inline(a)) : null;
+          case 'savePlan': return inline(a) ? Object.assign({ do: 'savePlan', name: name(a.name), from: 'inline' }, inline(a))
+            : { do: 'savePlan', name: name(a.name), from: ['plan', 'day', 'dayplan'].includes(a.from) ? a.from : 'plan', dayOffset: off(a.dayOffset, 0), what: ['workouts', 'meals', 'all'].includes(a.what) ? a.what : 'all' };
           case 'copyDay': return { do: 'copyDay', from: off(a.from, -1), to: off(a.to, 1), what: ['workouts', 'meals', 'all'].includes(a.what) ? a.what : 'workouts' };
-          case 'movePlan': return off(a.from, 0) !== off(a.to, 0) ? { do: 'movePlan', from: off(a.from, 0), to: off(a.to, 1) } : null;
+          case 'movePlan': return off(a.from, 0) !== off(a.to, 0) ? Object.assign({ do: 'movePlan', from: off(a.from, 0), to: off(a.to, 1) }, ['workouts', 'meals'].includes(a.what) ? { what: a.what } : {}) : null;
+          case 'donePlan': return { do: 'donePlan', dayOffset: off(a.dayOffset, 0), what: ['workouts', 'meals', 'all'].includes(a.what) ? a.what : 'all' };
           case 'clearPlan': return { do: 'clearPlan', dayOffset: off(a.dayOffset, 0), what: ['workouts', 'meals', 'all'].includes(a.what) ? a.what : 'all' };
           case 'renamePlan': return name(a.name) && name(a.to) ? { do: 'renamePlan', name: name(a.name), to: name(a.to) } : null;
           case 'dropPlan': return name(a.name) ? { do: 'dropPlan', name: name(a.name) } : null;
@@ -534,7 +545,20 @@
       const known = new Set((ctx.plans || []).map(p => p.ref));
       out.donePlans = Array.isArray(parsed && parsed.donePlans) ? parsed.donePlans.filter(x => known.has(x)) : [];
       // 动手改软件里的东西（v6.5，规则 12）：只认这几种、字段洗干净，最多 4 个；手机照着做（app/agent.js 的 runActs）
-      out.acts = Parser.cleanActs(parsed && parsed.act);
+      // 用户发来自己的计划，大模型却写成了 plan（没写 answer，实测 1/27）：当成「放到那天」——有 savePlan / addPlan 没带内容的就用 plan 的内容
+      let rawActs = Array.isArray(parsed && parsed.act) ? parsed.act : parsed && parsed.act && typeof parsed.act === 'object' ? [parsed.act] : [];
+      const bare = pl && typeof pl === 'object' && !Array.isArray(pl.days) && !out.answer && !ctx._inPlan && (Array.isArray(pl.workouts) || Array.isArray(pl.meals)) ? pl : null;
+      if (bare) {
+        const hole = rawActs.find(a => a && (a.do === 'savePlan' || a.do === 'addPlan') && !(a.workouts || []).length && !(a.meals || []).length);
+        const put = { do: 'addPlan', name: hole ? hole.name : '', dayOffset: num(bare.dayOffset) || 0, workouts: bare.workouts || [], meals: bare.meals || [] };
+        rawActs = hole ? rawActs.map(a => (a === hole ? put : a)) : rawActs.some(a => a && a.do === 'addPlan') ? rawActs : rawActs.concat(put);
+      }
+      out.acts = Parser.cleanActs(rawActs).map(a => {
+        if (!a.workouts && !a.meals) return a;
+        // 自己发来的计划：和记录一样整理（标准名字、部位、有氧按时间、按库算热量），但不存成记录；洗完是空的就不要了
+        const r = ctx._inPlan ? { workouts: [], meals: [] } : this.normalize({ add: { workouts: a.workouts || [], meals: a.meals || [] } }, Object.assign({}, ctx, { said: '', _inPlan: true }));
+        return r.workouts.length || r.meals.length ? Object.assign({}, a, { workouts: r.workouts, meals: r.meals }) : null;
+      }).filter(Boolean);
       const refs = new Set((ctx.dayRecords || []).map(r => r.ref));
       (Array.isArray(parsed && parsed.update) ? parsed.update : []).forEach(u => {
         if (!u || !refs.has(u.ref) || !u.set || typeof u.set !== 'object') return;
@@ -567,6 +591,19 @@
         if (Object.keys(set).length) out.updates.push({ ref: u.ref, set });
       });
       (Array.isArray(parsed && parsed.delete) ? parsed.delete : []).forEach(ref => { if (refs.has(ref)) out.deletes.push(ref); });
+      // 「明天那几顿吃的，改成今天吃吧」：大模型偶尔拿 update 改计划的日子（计划不是记录，没有编号可改，实测 1/3 这样，什么都没挪嘴上说挪好了）→ 当成 movePlan
+      const stray = (Array.isArray(parsed && parsed.update) ? parsed.update : []).filter(u => u && !refs.has(u.ref) && u.set && num(u.set.dayOffset) !== null);
+      if (stray.length && !out.acts.some(a => a.do === 'movePlan' || a.do === 'copyDay') && TF.AgentIntent) {
+        const said = String(ctx.said || '');
+        const to = Math.round(num(stray[0].set.dayOffset));
+        const planRefs = new Set((ctx.plans || []).map(p => p.ref));
+        const words = said.match(new RegExp(TF.AgentIntent.DAY, 'g')) || [];
+        const offs = words.map(w => TF.AgentIntent.dayOffset(w, now)).filter(x => x != null);
+        const from = stray.every(u => planRefs.has(u.ref)) ? 0 : offs.find(x => x !== to);
+        const what = /吃|饭|顿|餐|饮食|食谱/.test(said) && !/练|训练/.test(said) ? 'meals' : /练|训练/.test(said) && !/吃|饭|顿|餐/.test(said) ? 'workouts' : '';
+        const mv = from != null && from >= 0 && from !== to ? Parser.cleanActs([Object.assign({ do: 'movePlan', from, to }, what ? { what } : {})]) : [];
+        out.acts = out.acts.concat(mv);
+      }
 
       // 小本本：用户说的关于自己的事（名字、忌口、伤病…），一句一条
       const listOf = (k) => (Array.isArray(parsed && parsed[k]) ? parsed[k] : []).map(x => cleanText(x, 24)).filter(Boolean).slice(0, 5);
@@ -629,6 +666,8 @@
           else { duration = 20; estimated = true; }
           sets = null; reps = null;
         }
+        // 按时间算的运动，又写了时长又写了组数（「平板支撑 3 组，durationMin 3」）：时长就是一共多久，组数不要了（以前会被当成力量记成 3×10）
+        if (timed && duration > 0) { sets = null; reps = null; }
         if (duration && duration > 0 && !sets && !reps) {
           // 消耗按运动的代谢当量和体重算（跑步 9.8、游泳 7、瑜伽 2.5…）；大模型给的差得不多（考虑了速度、坡度）就用它的
           const minutes = Math.max(1, Math.round(duration));
@@ -658,10 +697,11 @@
         sets = Math.max(1, Math.min(20, Math.round(sets)));
         reps = Math.max(1, Math.min(100, Math.round(reps)));
 
+        // 消耗（v9.2，用户：「训练的识别与记录要更精准」）：力量训练按做的时间算——每次 4 秒、组间歇 75 秒，
+        // 代谢当量下肢大复合 6 / 带负重 5 / 自重 3.8 × 体重 × 小时（卧推 80kg 4×8 约 40 千卡，以前的算法给 130）。大模型给的差得不多才用它的
+        const local = strengthBurn(name, weight, sets, reps, ctx.lastWeight);
         let burn = num(w.burnedCalories);
-        if (!burn || burn <= 0) {
-          burn = sets * reps * (weight > 0 ? weight * 0.05 + 1.2 : 2.5);
-        }
+        if (!(burn > 0 && burn >= local * 0.6 && burn <= local * 1.8)) burn = local;
         out.workouts.push({
           exerciseName: name,
           muscleGroup: muscle,
@@ -723,6 +763,14 @@
       out.meals = separateSupps(splitByTime(out.meals, ctx.said));
       // 拆开了：大模型那句「已记早餐…」就不对了
       if (out.meals.length !== n) out.reply = '分开记了' + [...new Set(out.meals.map(m => m.mealType.replace('/补剂', '')))].join('、');
+      // 「明天照这个练：跑步30分钟…」：大模型排了计划，又把同样几样当成今天做了记上（实测 1/3）。没说练了 / 吃了的，计划里有的就不记
+      const planned = out.acts.filter(a => a.do === 'addPlan');
+      if (planned.length && !/(练|做|跑|游|吃|喝|跳)(了|完)|刚(练|吃|跑)|已经/.test(String(ctx.said || ''))) {
+        const pw = new Set([].concat(...planned.map(a => (a.workouts || []).map(w => w.exerciseName))));
+        const pm = new Set([].concat(...planned.map(a => (a.meals || []).map(x => x.foodSummary))));
+        out.workouts = out.workouts.filter(w => !pw.has(w.exerciseName));
+        out.meals = out.meals.filter(x => !pm.has(x.foodSummary));
+      }
 
       return out;
     },
@@ -855,7 +903,7 @@
         r = await this.viaLlm(text, Object.assign({}, ctx, { _again: true }), onDelta);
       }
       // 在改刚给的计划，大模型却只回了一句「计划改好了」、没给计划（实测 main 的提示词 3/3 这样）：说清楚再问一次
-      const nothing = !r.plan && !r.meals.length && !r.workouts.length && !r.updates.length && !r.deletes.length && !r.bodyWeight;
+      const nothing = !r.plan && !r.meals.length && !r.workouts.length && !r.updates.length && !r.deletes.length && !r.bodyWeight && !(r.acts || []).length;
       if (ctx && ctx.lastPlan && !ctx._editAgain && nothing && (ctx.editPlan || (!r.answer && TF.looksLikePlanEdit && TF.looksLikePlanEdit(text)))) {
         r = await this.viaLlm(text, Object.assign({}, ctx, { _editAgain: true }), onDelta);
       }

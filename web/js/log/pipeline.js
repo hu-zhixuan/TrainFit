@@ -183,7 +183,7 @@
         // 只是报体重：不用等大模型
         const kg = quickWeight(p.text, ctx.lastWeight);
         // 说的全是以前吃过的、练过的：按你以前的数直接记，不等大模型（秒记）
-        const fast = !kg && !p.ask && TF.fastLog ? TF.fastLog(p.text, { now: ctx.now, today: getTodayDateString(), myFoods: app.myFoods, diet: app.diet, workouts: app.workouts, simple: app.isSimple() }) : null;
+        const fast = !kg && !p.ask && TF.fastLog ? TF.fastLog(p.text, { now: ctx.now, today: getTodayDateString(), myFoods: app.myFoods, diet: app.diet, workouts: app.workouts, simple: app.isSimple(), bodyKg: ctx.lastWeight }) : null;
         result = kg ? { dayOffset: 0, workouts: [], meals: [], updates: [], deletes: [], bodyWeight: kg, reply: '', source: 'fast' }
           : fast || await Parser.parse(p.text, ctx, onDelta);
       } catch (e) {
@@ -250,6 +250,7 @@
       if (result.answer && app.showBuddyAnswer) app.showBuddyAnswer(p.text, result.answer, answerOpts); // 又记又问
       else if (batch.asks.length && app.askPortion) app.askPortion(batch.asks); // 份量含糊：小人问一句，点一下就改
       else if (kept && app.promiseCelebrate) app.promiseCelebrate(kept); // 约定达成：解锁一段加篇
+      else if (!result.meals.length && !result.workouts.length && !result.bodyWeight && !(result.updates || []).length) { if (app.closeBuddyPop) app.closeBuddyPop('thinking'); } // 只是动手（排计划、存计划、改目标）：提示条说清楚就行，小人不插新手提示
       else if (app.makeUpAfter && app.makeUpAfter(result, batch)) { /* 闹着小别扭：好好吃饭了就和好 */ }
       else if (app.memoTip && app.memoTip(result, batch)) { /* 你说过有伤：练到那儿提醒一句 */ }
       else if (app.recordReact && app.recordReact(result, batch, 'big')) { /* 破纪录、吃撑了、蛋白够了、这周第 5 练、体重轻了：小人一张卡片（第一次是小剧情，v6.4） */ }
