@@ -104,7 +104,7 @@ const walkLines = (steps, fn) => (steps || []).forEach(s => {
   ['ok', 'meh', 'fallback', 'skipR', 'r'].forEach(k => { if (Array.isArray(s[k])) walkLines(s[k], fn); });
 });
 const allScenes = (c) => c.main.flat().concat(Object.values(c.bonus || {}));
-test('主线（v8.0 重写）：两个人各五章、每章三段，id 不重复；每段够长、有选项，选项都写了记下的事；每章都有不是选项的互动', () => {
+test('主线（v9.0 重写）：两个人各五章、每章三段；每段长（50 句以上）、有好几个选项，选项都写了记下的事；有前情、有余韵的一句；小游戏少', () => {
   for (const k of ['jx', 'xy']) {
     const c = Cast[k];
     assert.strictEqual(c.main.length, 5, k);
@@ -112,27 +112,27 @@ test('主线（v8.0 重写）：两个人各五章、每章三段，id 不重复
     assert.strictEqual(ids.length, 15);
     assert.strictEqual(new Set(ids).size, 15);
     assert.ok(ids.every(id => id.startsWith(k)), '主线 id 带人名前缀（换人不会串）');
-    c.main.flat().forEach(sc => {
+    c.main.forEach((ch, i) => ch.forEach((sc, j) => {
       const info = Theater.scriptInfo(sc.script);
-      assert.ok(info.lines >= 14, `${sc.id} 太短（${info.lines} 句）`);
-      assert.ok(info.asks.length >= 1, `${sc.id} 没有选项`);
-      assert.ok(['morning', 'day', 'evening', 'night', 'any'].includes(sc.when), `${sc.id} 没写什么时候来`);
-      if (sc.id !== `${k}1a`) assert.ok(sc.invite && sc.invite.length === 3 && sc.invite.every(Boolean), `${sc.id} 没写 TA 怎么来找你`);
+      assert.ok(info.lines >= 50, `${sc.id} 太短（${info.lines} 句）：用户要「每一段都要长」`);
+      assert.ok(info.asks.length >= 1 && info.asks.length + info.inputs.length >= 2, `${sc.id} 选项太少`);
+      if (j > 0 || i > 0) assert.ok(sc.recap && [...sc.recap].length <= 48, `${sc.id} 要有一句前情（一天一段，接得上昨天）`);
+      if (sc.id !== `${k}5c`) assert.ok(sc.after, `${sc.id} 演完小人接的那句`);
+      assert.ok(!sc.when && !sc.invite, `${sc.id}：v9.0 不再挑时间、不再问「有空吗」`);
       info.steps.filter(s => s.ask).forEach(s => s.opts.forEach(o => {
         const n = Theater.normOpt(o);
         assert.ok(n.t && n.r.length >= 1, `${sc.id} 的选项要有回应`);
-        assert.ok(n.fact || n.sp === 'later' || s.ask === '_wear', `${sc.id}「${n.t}」没写记下的事`);
+        assert.ok(n.fact, `${sc.id}「${n.t}」没写记下的事`);
       }));
-    });
-    // 「点进去一张一张玩下去，没有互动」：每章至少一样点一下 / 按住 / 跟拍子 / 自己说 / 起名字 / 限时选 / 约定
-    c.main.forEach((ch, i) => {
-      const n = ch.map(sc => Theater.scriptInfo(sc.script)).reduce((t, x) => t + x.touch + x.rhythm.length + x.inputs.length + x.names.length + x.timed + x.promises.length, 0);
-      assert.ok(n >= 2, `${k} 第 ${i + 1} 章互动太少`);
-    });
+    }));
+    // 用户：「小游戏、花样太多」——点 / 按住 / 划 / 节拍 / 自己说 / 起名字 / 约定，一个人一共最多四处
     const all = c.main.flat().map(sc => Theater.scriptInfo(sc.script));
-    assert.ok(all.some(x => x.inputs.length), `${k} 没有关键时刻自己说一句的地方`);
-    assert.ok(all.some(x => x.phone), `${k} 没有手机聊天的段落`);
-    assert.ok(all.some(x => x.timed), `${k} 没有限时选项`);
+    const games = all.reduce((t, x) => t + x.touch + x.rhythm.length + x.inputs.length + x.names.length + x.promises.length, 0);
+    assert.ok(games >= 1 && games <= 4, `${k} 互动 ${games} 处`);
+    assert.ok(all.some(x => x.inputs.length), `${k} 关键时刻自己说一句`);
+    // 隔了几天才来，下一段开头先闹别扭（用户：「可以怪没来，这是游戏的一种方式」）：三档，每档至少一种
+    assert.strictEqual(c.absent.length, 3, `${k} 没来的三档`);
+    c.absent.forEach((tier, t) => { assert.ok(tier.length >= 1, `${k} 第 ${t + 1} 档`); tier.forEach(v => assert.ok(v.length >= 2 && v.every(l => Array.isArray(l)), `${k} 没来的台词`)); });
   }
 });
 
@@ -197,46 +197,36 @@ test('剧本格式：步骤都认得，表情、姿势画得出来，条件写�
   }
 });
 
-test('约定、加篇、TA 写的那一页：每章一个约定（跟真实记录挂钩）、各有一段加篇；五章各有一页，行里的条件都写对了', () => {
-  const KINDS = ['breakfast', 'train', 'newmove', 'protein', 'threemeals', 'snack'];
+test('TA 写的那一页：五章各有一页，行里的条件都写对了；约定和加篇（v8.0）v9.0 去掉了', () => {
   for (const k of ['jx', 'xy']) {
     const c = Cast[k];
-    const ps = Object.entries(c.promises);
-    assert.deepStrictEqual(ps.map(([, p]) => p.ch).sort(), [1, 2, 3, 4, 5], `${k} 每章一个约定`);
-    ps.forEach(([id, p]) => {
-      assert.ok(KINDS.includes(p.kind) && p.days >= 1 && p.title && p.detail, `${k} ${id}`);
-      assert.ok((p.yes || []).length && (p.no || []).length, `${id} 约好了、下次吧都要有回应`);
-      assert.ok(c.bonus[p.bonus] && c.bonus[p.bonus].id === p.bonus, `${id} 的加篇 ${p.bonus}`);
-      const sc = c.main[p.ch - 1].find(s => Theater.scriptInfo(s.script).promises.includes(id));
-      assert.ok(sc, `${id} 在第 ${p.ch} 章的剧情里约`);
-      assert.ok(Theater.scriptInfo(c.bonus[p.bonus].script).lines >= 6, `${p.bonus} 太短`);
-    });
+    assert.deepStrictEqual(Object.keys(c.promises || {}), [], `${k} 不再有约定（用户嫌花样多）`);
     assert.strictEqual(c.diary.length, 5);
     c.diary.forEach((d, i) => { assert.ok(d.title && d.lines.length >= 4, `${k} 第 ${i + 1} 页`); assert.ok(d.lines.some(l => !l[1]), `${k} 第 ${i + 1} 页至少一行谁都看得到`); });
     assert.strictEqual(c.chapterLines.length, 5);
   }
 });
 
-test('口吻：江叙不用感叹号和波浪号；夏柚不叠字、不叫宝宝；两个人都不情感勒索；夏柚的故事不夸瘦、不骂胖', () => {
-  const GUILT = /怎么才来|终于舍得|不理我|丢下我|只有你|离不开|别走|冷落|你不来我/;
+test('口吻：江叙不用感叹号和波浪号；夏柚不叠字、不叫宝宝；夏柚的故事不夸瘦、不骂胖；不拿伤害自己吓人', () => {
+  // v9.0 用户：「可以表白，可以怪没来，可以多写深难过」——怪你没来可以写（撒娇、闹别扭），但不写拿伤害自己、消失来吓人
+  const THREAT = /去死|不活了|自杀|伤害自己|消失给你看/;
   for (const k of ['jx', 'xy']) {
     const c = Cast[k];
     const check = (id, face, text, pose) => {
       if (face == null || String(face)[0] === '@' || face === '你') return; // 旁白、别人说的、你说的不算
-      if (pose === 'sys') { assert.ok(!GUILT.test(text), `${id}：${text}`); return; } // 写好的台词（台词表上的）是别人写的，全是感叹号
-      assert.ok(!GUILT.test(text), `${id}：${text}`);
+      assert.ok(!THREAT.test(text), `${id}：${text}`);
+      if (pose === 'sys') return; // 写好的台词（台词表上的）是别人写的，全是感叹号
       assert.ok(!/宝宝|亲爱的/.test(text), `${id}：${text}`);
       if (k === 'jx') assert.ok(!/[！!～~]/.test(text), `江叙用了感叹号：${id}「${text}」`);
       if (k === 'xy') assert.ok(!/(吃饭饭|睡觉觉|喝水水|一下下)/.test(text), `夏柚叠字：${id}「${text}」`);
       if (k === 'xy') assert.ok(!/瘦了真好|再瘦|少吃点吧|你胖了|该减肥/.test(text), `夏柚夸瘦骂胖：${id}「${text}」`);
     };
     allScenes(c).forEach(sc => walkLines(sc.script, ([face, text, pose]) => check(sc.id, face, text, pose)));
-    Object.entries(c.promises).forEach(([id, p]) => p.yes.concat(p.no).forEach(([face, text]) => check(id, face, text)));
-    Object.values(c).forEach(() => {});
+    c.absent.flat().forEach(v => v.forEach(([face, text]) => check('absent', face, text)));
   }
 });
 
-test('结局（v8.0 第二版：一直暧昧，按一路的选择分三条）：每条都走得到，各有一张 CG、结局字幕、写进小本本的一句；主线不表白', () => {
+test('结局（v9.0）：最后一段 TA 自己表白、你选接不接；按一路的选择分三条，每条都走得到，各有一张 CG、结局字幕、写进小本本的一句', () => {
   for (const k of ['jx', 'xy']) {
     const c = Cast[k];
     const fin = c.main[4][2];
@@ -255,12 +245,14 @@ test('结局（v8.0 第二版：一直暧昧，按一路的选择分三条）：
       const own = fin.script.filter(s => Array.isArray(s) && s[3] === `route:${e.route}`);
       assert.ok(own.length >= 4, `${k} ${key} 太短`);
     }
-    // 一直暧昧：主线里没有表白那一问（小剧情「那句话」只在设置里「让 TA 再问一次」后才出）
-    c.main.flat().forEach(sc => assert.ok(!Theater.scriptInfo(sc.script).asks.includes('confess'), `${sc.id} 不表白`));
+    // 用户 v9.0：「可以表白」——最后一段 TA 用自己的话说，你选：喜欢（恋人线）/ 最重要的人（搭子）/ 以后再说
+    const confess = fin.script.find(s => s && s.ask === 'confess');
+    assert.ok(confess, `${k} 最后一段表白`);
+    assert.deepStrictEqual(confess.opts.map(o => Theater.normOpt(o).sp).sort(), ['friend', 'later', 'romance']);
   }
 });
 
-test('元设定（v8.0 第二版：TA 知道自己在 App 里）：第一句说错两遍、人设文档、撤回、自己手写加一行、约好的通知每章最多一次', () => {
+test('元设定（TA 知道自己在 App 里）：第一句说错两遍、人设文档、自己手写加一行、约好的通知每章最多一次', () => {
   for (const k of ['jx', 'xy']) {
     const c = Cast[k];
     const first = Theater.scriptInfo(c.main[0][0].script);
@@ -272,16 +264,18 @@ test('元设定（v8.0 第二版：TA 知道自己在 App 里）：第一句说�
     assert.ok(c.main.flat().some(sc => sc.script.some(s => s && s.doc && s.add)), `${k} 自己在人设上加一行`);
     assert.ok(infos.some(x => x.recalls), `${k} 有撤回的消息`);
     c.main.forEach((ch, i) => assert.ok(ch.map(sc => Theater.scriptInfo(sc.script).pushes.length).reduce((a, b) => a + b, 0) <= 1, `${k} 第 ${i + 1} 章通知最多一次`));
-    assert.ok(c.main.flat().filter(sc => Theater.scriptInfo(sc.script).pushes.length).length >= 3, `${k} 剧情里约好的通知`);
-    // 第四章翻开的那行，就是虐点（江叙：经历；夏柚：表情）
-    const hl = c.main[3].flatMap(sc => sc.script.filter(s => s && s.doc && s.hl != null).map(s => c.doc.lines[s.hl]));
-    assert.ok(hl.some(l => (k === 'jx' ? /经历/ : /表情/).test(l)), `${k} 第四章：${hl}`);
+    assert.ok(c.main.flat().filter(sc => Theater.scriptInfo(sc.script).pushes.length).length >= 2, `${k} 剧情里约好的通知`);
+    // 第三、四章翻开的那行，就是虐点（江叙：经历；夏柚：表情 / 不应表现负面情绪）
+    const hl = c.main.slice(2, 4).flat().flatMap(sc => sc.script.filter(s => s && s.doc && s.hl != null).map(s => c.doc.lines[s.hl]));
+    assert.ok(hl.some(l => (k === 'jx' ? /经历/ : /表情|负面/).test(l)), `${k}：${hl}`);
   }
   // 夏柚有哭的那张（第五章你画的眼泪）
   const tears = Cast.xy.main[4].flatMap(sc => sc.script.filter(s => s && s.touch && s.target === 'tear'));
   assert.strictEqual(tears.length, 1);
   assert.strictEqual(tears[0].dir, 'down');
-  assert.ok(Theater.scriptInfo(Cast.xy.main[4][1].script).lines > 0 && JSON.stringify(Cast.xy.main[4][1].script).includes('"哭"'));
+  assert.ok(JSON.stringify(Cast.xy.main[4][1].script).includes('"哭"'));
+  // 江叙：第七天台词表替他说了喜欢；第十三天更新前用自己的嘴说
+  assert.ok(Cast.jx.main[2][2].script.some(s => Array.isArray(s) && s[2] === 'sys' && /喜欢/.test(s[1])), '第七天');
 });
 
 test('今天页的小人就是剧情里的 TA（v8.0）：衣服跟着剧情解锁、余韵台词对得上剧情、剧情里没说过的事不先说', () => {

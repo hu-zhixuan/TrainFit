@@ -253,7 +253,7 @@
       else if (app.makeUpAfter && app.makeUpAfter(result, batch)) { /* 闹着小别扭：好好吃饭了就和好 */ }
       else if (app.memoTip && app.memoTip(result, batch)) { /* 你说过有伤：练到那儿提醒一句 */ }
       else if (app.recordReact && app.recordReact(result, batch, 'big')) { /* 破纪录、吃撑了、蛋白够了、这周第 5 练、体重轻了：小人一张卡片（第一次是小剧情，v6.4） */ }
-      else if (app.storyBridge && app.storyBridge(result, batch)) { /* 有新剧情在等、正是它的时间：小人对这条有反应，顺着「对了——」邀请你进剧情（v8.0） */ }
+      else if (app.storyAfterLog && app.storyAfterLog(result, batch)) { /* 有能看的主线：TA 先对这条说一句，直接淡进剧情（v9.0） */ }
       else if (app.newbieTip && app.newbieTip(result)) { /* 新手第一周：小人说一句小提示 */ }
       else if (app.coachTip && app.coachTip(result, batch)) { /* 该提醒的时候说一句：深夜还吃、晚上蛋白还差很多 */ }
       else if (app.askFeeling && app.askFeeling(result, batch)) { /* 练完问一句感受，下次加重量按这个来 */ }

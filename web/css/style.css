@@ -771,7 +771,7 @@ button.sb-open b::after { content: ' ▸'; color: var(--love); font-weight: 600;
 .bond-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
 .bond-name { font-size: 0.84rem; font-weight: 700; color: var(--text); }
 .bond-name i { margin-right: 4px; font-style: normal; color: var(--love); }
-.bond-lv { font-size: 0.72rem; font-weight: 700; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.bond-lv { font-size: 0.72rem; font-weight: 700; color: var(--text-3); font-variant-numeric: tabular-nums; white-space: nowrap; flex-shrink: 0; }
 .bond-bar { height: 5px; border-radius: 3px; background: var(--surface-3); overflow: hidden; }
 .bond-bar i { display: block; height: 100%; border-radius: inherit; background: var(--love); }
 .bond-next { font-size: 0.72rem; line-height: 1.45; color: var(--text-3); }
@@ -1822,6 +1822,14 @@ body.in-theater { overflow: hidden; }
 .theater.in-cg .th-fx { box-shadow: inset 0 0 120px rgba(0, 0, 0, 0.65); }
 .th-cgtag { position: absolute; top: calc(env(safe-area-inset-top, 0px) + 50px); left: 16px; z-index: 5; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.08em; padding: 3px 10px; border-radius: 999px; background: rgba(255, 210, 120, 0.85); color: #2a1a08; opacity: 0; pointer-events: none; }
 .th-cgtag.show { opacity: 1; transition: opacity 0.5s; }
+/* v9.0「上回」：不是章节开头的段落，顶上淡入一句前情，五秒后淡出 */
+.th-recap { position: absolute; top: calc(env(safe-area-inset-top, 0px) + 52px); left: 16px; right: 16px; z-index: 5; font-size: 0.8rem; line-height: 1.5; color: rgba(255, 255, 255, 0.92);
+  padding: 7px 12px; border-radius: 12px; background: rgba(0, 0, 0, 0.38); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  opacity: 0; transform: translateY(-6px); pointer-events: none; transition: opacity 0.9s ease, transform 0.9s ease; }
+.th-recap:empty { display: none; }
+.th-recap.show { opacity: 1; transform: none; }
+.th-tool.th-leave { background: rgba(255, 255, 255, 0.18); }
+.th-tool.hidden { display: none; }
 .th-cgfx { --aw: min(60vw, 240px); --floor: calc(env(safe-area-inset-bottom, 0px) + 196px); }
 .cgp { position: absolute; display: block; pointer-events: none; font-style: normal; z-index: 1; }
 .cgp svg { display: block; width: 100%; height: auto; image-rendering: pixelated; }

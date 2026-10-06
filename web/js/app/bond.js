@@ -269,8 +269,9 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     let lead = up.first ? `我们已经是「${b.name}」了。` : this.cast().levelUp[b.lv - 1] || `我们是「${b.name}」了。`;
     if (up.first && build !== 'normal') lead += `跟着你练了这么久，我也练出${this.buildLabel(build)}了。`;
     this.voiceBudget('must', true);
-    // v7.0：新的一章开始，整屏演这一章的开头（回忆），最后问换不换刚解锁的衣服
-    if (!(this.playChapter && this.playChapter(b.lv, { lead, outfits: opened.slice(-2) }))) this.showStory(b.lv, { lead, outfits: opened.slice(-2) });
+    // v9.0：亲密度和剧情分开了（剧情第一天一章、之后每天一段，见 story.js 的 mainStatus）：升级只说一句、秀一下
+    this.sayTip(lead);
+    if (this.buddyDo) this.buddyDo([['stand', 150], ['flex', 1100], ['stand', 300]]);
     this.buddyBang('♥');
     return true;
   },
