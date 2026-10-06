@@ -1062,14 +1062,18 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     const unlock = b.next && Object.keys(W).find(k => W[k].scene && +W[k].scene[2] === b.next.lv); // 下一章的剧情里会解锁的衣服
     // 下一级解锁什么：一段回忆（给一句预告，让人想知道后面）+ 衣服
     const tease = b.next && this.cast().tease[b.next.lv - 1];
-    // v7.0：亲密度就是剧情走到第几章
-    const next = b.next ? `再记 ${Math.max(1, Math.ceil(b.next.need / 10))} 天左右进${this.chapterLabel(b.next.lv)}：${tease}${unlock ? `（解锁${this.outfitLabel(unlock)}）` : ''}` : '剧情都解锁了，TA 已经是最懂你的了';
+    // v9.0：剧情和亲密度分开了——这里写故事走到哪儿（第一天一章、之后每天一段）
+    const nx = this.mainNext && this.mainNext();
+    const list = this.mainList ? this.mainList() : [];
+    const pending = list.find(x => this.mainStatus(x) !== 'seen');
+    const next = !list.length ? '' : nx ? `下一段「${nx.sc.title}」可以看了` : pending ? `下一段「${pending.sc.title}」${this.mainLockNote(pending) === '明天' ? '明天来' : '在后面'}` : '故事看完了。以后每天，TA 都在这儿';
+    void unlock; void tease;
     // v6.3：它现在的心情（有点想你 / 有点低落 / 担心你…），恋人线显示「恋人」
     const heart = this.heartLabel ? this.heartLabel() : '';
     const love = this.storyData && this.storyData().romance === true;
     return `<div class="bond-row"><div class="bond-top"><span class="bond-name"><i aria-hidden="true">♥</i>${esc(this.buddyName())} · ${esc(love ? '恋人' : b.name)}</span>` +
-      `${heart ? `<span class="bond-heart">${esc(heart)}</span>` : ''}<span class="bond-lv">${esc(this.chapterLabel(b.lv).split(' · ')[0])}</span></div>` +
-      `<div class="bond-bar"><i style="width:${Math.round(b.pct * 100)}%"></i></div><div class="bond-next">${esc(next)} · 长按我摸摸头</div></div>`;
+      `${heart ? `<span class="bond-heart">${esc(heart)}</span>` : ''}<span class="bond-lv">${esc(this.chapterLabel(this.storyChapter ? this.storyChapter() : b.lv).split(' · ')[0])}</span></div>` +
+      `<div class="bond-bar"><i style="width:${Math.round(b.pct * 100)}%"></i></div><div class="bond-next">${esc(next ? `${next} · 长按我摸摸头` : '长按我摸摸头')}</div></div>`;
   },
 
   /** 气泡放在小人头顶（按小人要去的位置算，不按动画中途的位置） */
@@ -1805,6 +1809,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     const again = document.getElementById('buddy-tour');
     if (again) again.addEventListener('click', () => this.startTour());
     window.addEventListener('resize', () => { if (this._touring) this.showTourStep(); });
+    if (this.storyMigrate) this.storyMigrate(); // v9.0 剧情重写：以前看过的主线清掉，从第一章重新开始（只做一次）
     if (!this.maybeCastPick || !this.maybeCastPick()) this.maybeTour(); // 老用户升级到 v6.0：先选谁陪你
   },
 
@@ -1853,11 +1858,10 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       `身材跟着你练：最近 4 周练了 ${n} 天，现在是${built}` + (n < 10 ? `，练满 ${n < 4 ? 4 : 10} 天变${n < 4 ? '薄肌' : '腹肌'}` : '') + '（点上面的 TA 秀一下）。';
     const b = this.bond();
     const rel = this.storyData ? this.storyData() : {};
-    const lockNext = b.next && Object.keys(W).some(k => W[k].scene && +W[k].scene[2] === b.next.lv && !this.outfitOpen(k));
-    // 亲密度 = 剧情走到第几章；下一章再记几天、解锁什么
-    $('buddy-bond').innerHTML = `<div class="bond-top"><span class="bond-name"><i aria-hidden="true">♥</i>${esc(c.name)} · ${esc(rel.romance === true ? '恋人' : b.name)}</span><span class="bond-lv">${esc(this.chapterLabel(b.lv).split(' · ')[0])}</span></div>` +
+    // v9.0：亲密度和剧情分开了；这里写故事走到哪儿（第一天一章，之后每天一段）
+    $('buddy-bond').innerHTML = `<div class="bond-top"><span class="bond-name"><i aria-hidden="true">♥</i>${esc(c.name)} · ${esc(rel.romance === true ? '恋人' : b.name)}</span><span class="bond-lv">${esc(this.chapterLabel(this.storyChapter ? this.storyChapter() : b.lv).split(' · ')[0])}</span></div>` +
       `<div class="bond-bar"><i style="width:${Math.round(b.pct * 100)}%"></i></div>` +
-      `<div class="bond-next">${b.next ? `再记 ${Math.max(1, Math.ceil(b.next.need / 10))} 天左右进下一章${lockNext ? '，剧情里有新衣服' : ''}` : '剧情都解锁了'}</div>`;
+      `<div class="bond-next">${esc(this.storyStatusLine ? this.storyStatusLine() : '')}</div>`;
     // 剧情：五章，每章一个开头 + 几段小剧情，看过的点了重看
     this.renderStoryBook();
     const nb = (this.profile.buddy || {}).note || {};

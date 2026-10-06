@@ -232,10 +232,11 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     el.setAttribute('aria-label', '剧情');
     el.innerHTML = '<div class="th-bg"></div><div class="th-fx" aria-hidden="true"></div><div class="th-cgimg" aria-hidden="true"></div><div class="th-cgfx" aria-hidden="true"></div>' +
       '<div class="th-top"><span class="th-label"></span><span class="th-tools">' +
+      '<button class="th-tool th-leave" type="button" aria-label="先离开，下次接着看">离开</button>' +
       '<button class="th-tool th-log-btn" type="button" aria-label="回看刚才的话">回看</button>' +
       '<button class="th-tool th-auto" type="button" aria-label="自动播放">自动</button>' +
       '<button class="th-tool th-skip" type="button" aria-label="跳到下一个选项">跳过 ›</button></span></div>' +
-      '<div class="th-cgtag" aria-hidden="true"></div>' +
+      '<div class="th-cgtag" aria-hidden="true"></div><div class="th-recap" aria-hidden="true"></div>' +
       '<div class="th-stage"><div class="th-actor"></div><div class="th-emote" aria-hidden="true"></div><div class="th-hearts" aria-hidden="true"></div></div>' +
       '<div class="th-phone" aria-live="polite"><div class="th-ph-head"><span class="th-ph-ava"></span><span class="th-ph-name"></span><small class="th-ph-state"></small></div><div class="th-ph-list"></div><span class="th-ph-more" aria-hidden="true">▼</span></div>' +
       '<div class="th-choices"></div>' +
@@ -254,6 +255,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       if (e.target.closest('.th-credits')) { if (e.target.closest('.th-done')) this.theaterClose(); return; }
       if (e.target.closest('.th-log')) { el.querySelector('.th-log').classList.add('hidden'); return; }
       if (s.phase === 'doc') { this.sceneDocClose(); return; }
+      if (e.target.closest('.th-leave')) { this.sceneLeave(); return; }
       if (e.target.closest('.th-log-btn')) { this.sceneLog(); return; }
       if (e.target.closest('.th-auto')) { this.sceneAuto(!s.auto); return; }
       if (e.target.closest('.th-skip')) { this.sceneSkip(); return; }
@@ -272,7 +274,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     const s = this._scene;
     return { picks: Object.assign({}, st.picks || {}, s ? s.picks : {}), seen: st.seen || [], romance: st.romance, vars: s ? s.vars : {}, lv: this.bond ? this.bond().lv : 1,
       inputs: Object.assign({}, st.inputs || {}, s ? s.inputs : {}), sv: Object.assign({}, st.sv || {}, s ? s.sv : {}), promises: st.promises || {},
-      route: s ? s.route : null, acts: { skip: !!(s && s.skipped) }, hour: new Date().getHours() };
+      route: (s && s.route) || st.route || null, acts: { skip: !!(s && s.skipped) }, hour: new Date().getHours() };
   },
 
   /**
@@ -305,6 +307,13 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     el.querySelector('.th-ph-list').innerHTML = '';
     el.querySelector('.th-cgfx').innerHTML = '';
     el.querySelector('.th-cgtag').textContent = '';
+    // 「上回」：不是章节开头的段落，顶上淡出一句前情（v9.0，一天一段，接得上昨天）
+    const recap = el.querySelector('.th-recap');
+    recap.textContent = sc.recap ? `上回 · ${sc.recap}` : '';
+    recap.classList.remove('show');
+    clearTimeout(this._recapT);
+    if (sc.recap) { void recap.offsetWidth; recap.classList.add('show'); this._recapT = setTimeout(() => recap.classList.remove('show'), 5200); }
+    el.querySelector('.th-leave').classList.toggle('hidden', !(sc.onLeave || sc.leave));
     el.querySelector('.th-log').classList.add('hidden');
     el.querySelector('.th-credits').classList.add('hidden');
     el.querySelector('.th-auto').classList.toggle('on', auto);
@@ -811,7 +820,12 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
         const moved = downward ? e.clientY - y0 > 40 : Math.abs(e.clientX - x0) > 40;
         if (moved) { box.classList.add('flip'); finish(); }
       });
-      act.addEventListener('pointerup', () => { setTimeout(() => { x0 = null; y0 = null; }, 0); });
+      // 往下划却划成了别的方向：两次以后也算（别让人卡在最要紧的那一下）
+      let miss = 0;
+      act.addEventListener('pointerup', (e) => {
+        if (x0 != null && !finished && Math.hypot(e.clientX - x0, e.clientY - y0) > 40 && ++miss >= 2) { box.classList.add('flip'); finish(); }
+        setTimeout(() => { x0 = null; y0 = null; }, 0);
+      });
       return;
     }
     // 按住：圈慢慢转满，松手就退回去；按的时候轻轻震
@@ -1242,6 +1256,30 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     if (cg && cg.face) s.face = cg.face;
   },
 
+  /**
+   * 演到一半先离开（v9.0，用户：「进出太突兀」）：记下停在剧本的哪一步（sc.onLeave），收回小人那儿，小人接一句「回来接着说」。
+   * 不算看完；下次打开 / 记完一条从这儿接着演。
+   */
+  sceneLeave() {
+    const s = this._scene;
+    if (!s || s.phase === 'credits') return;
+    if (s.sc.onLeave) s.sc.onLeave(this.sceneResumeAt());
+    window.Haptics && window.Haptics.fire('tick');
+    this.theaterClose(true);
+  },
+
+  /** 现在演到剧本（sc.base）的第几步：往回找最近一步原剧本里的（选项后插进来的回应不算，回到那个选项重新选） */
+  sceneResumeAt() {
+    const s = this._scene;
+    const base = s && s.sc.base;
+    if (!base) return 0;
+    for (let j = Math.min(s.i, s.steps.length - 1); j >= 0; j--) {
+      const k = base.indexOf(s.steps[j]);
+      if (k >= 0) return k;
+    }
+    return s.sc.baseAt || 0;
+  },
+
   /** 演完（skip：点了跳过）；有结局的先放一屏字幕（你们一起走过的数字），点「回到今天」再关 */
   sceneEnd(skip) {
     const s = this._scene;
@@ -1263,7 +1301,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
   },
 
   /** 收场：收回小人那儿（圆形缩小），环境声淡出；sc.after 接着做（演完小人说的那句余韵） */
-  theaterClose() {
+  theaterClose(left) {
     const el = this.theaterEl();
     const s = this._scene;
     this._scene = null;
@@ -1289,7 +1327,8 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       document.body.classList.remove('in-theater');
     }, this.reducedMotion() ? 0 : 520);
     this.renderBuddy && this.renderBuddy();
-    if (s && s.sc.after) setTimeout(s.sc.after, 600);
+    const then = s && (left && s.sc.afterLeave ? s.sc.afterLeave : s.sc.after);
+    if (then) setTimeout(then, 600);
   },
 
   /** 相册里点一张：只看这张 CG 和它那句话 */
