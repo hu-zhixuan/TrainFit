@@ -212,6 +212,12 @@ Object.assign(FitnessApp.prototype, {
       try { localStorage.setItem('tf_haptics', $('set-haptics').checked ? 'on' : 'off'); } catch (e) {}
       if ($('set-haptics').checked && window.Haptics) window.Haptics.fire('success');
     });
+    // 剧情里约好的时间（v8.0）：关了就不排，已经排好的那条也取消
+    $('set-story-push').addEventListener('change', () => {
+      const on = $('set-story-push').checked;
+      try { localStorage.setItem('tf_story_push', on ? '1' : '0'); } catch (e) {}
+      if (!on && window.TrainFitNative && window.TrainFitNative.storyPush) { try { window.TrainFitNative.storyPush('{}'); } catch (e) {} }
+    });
     $('set-sound').addEventListener('change', () => {
       try { localStorage.setItem('tf_sound', $('set-sound').checked ? 'on' : 'off'); } catch (e) {}
       if ($('set-sound').checked && window.Sound) window.Sound.play('success');
@@ -231,6 +237,8 @@ Object.assign(FitnessApp.prototype, {
     try { hap = localStorage.getItem('tf_haptics') !== 'off'; } catch (e) {}
     $('set-haptics').checked = hap;
     $('set-sound').checked = !window.Sound || window.Sound.on();
+    try { $('set-story-push').checked = localStorage.getItem('tf_story_push') !== '0'; } catch (e) {}
+    $('row-story-push').classList.toggle('hidden', !(this.buddyLook && this.buddyLook().show));
     $('rem-note').textContent = !this.hasNotifApi() ? '提醒只在安卓 App 里可用。' :
       (!granted && localStorage.getItem('tf_remind_asked') ? '通知权限没打开，提醒不会响。打开任意一个开关会请求权限。' : '');
   }

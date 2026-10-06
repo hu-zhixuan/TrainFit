@@ -10,7 +10,7 @@
        art/jx/face-calm.png         江叙的立绘，一个表情一张：calm 平静 / happy 开心 / shy 害羞 / worried 担心 / smug 得意 /
                                     surprised 惊讶 / pout 不服 / love 心动 / sleepy 困 / sparkle 闪亮 / full 撑（至少要 calm）
        art/xy/face-calm.png         夏柚，同上
-       art/jx/cg/jx-pool6.png       CG，名字和 web/js/app/cast_main.js 里 cgs 的键一样
+       art/jx/cg/jx-pool6.png       CG，名字和 web/js/app/script_jx.js / script_xy.js 里 cgs 的键一样
        art/bg/pool.png              背景：room roomnight gym pool studio cafe street citynight rain night dusk dawn stage
 
 立绘要透明底，所有表情同一个姿势、同一个大小、人物站的位置一样，只换脸（脚本按透明边裁掉空白，同一个人的表情裁法一样）；
@@ -40,15 +40,15 @@ SOURCES = os.path.join(SRC, 'sources.json')
 CACHE = os.environ.get('ART_CACHE_DIR') or os.path.join(ROOT, '.art-cache')
 OUT = os.path.join(ROOT, 'web', 'img', 'cast')
 MANIFEST = os.path.join(OUT, 'manifest.js')
-FACES = ['calm', 'happy', 'shy', 'worried', 'smug', 'surprised', 'pout', 'love', 'sleepy', 'sparkle', 'full']
+FACES = ['calm', 'happy', 'shy', 'worried', 'smug', 'surprised', 'pout', 'love', 'sleepy', 'sparkle', 'full', 'cry', 'cryhappy']
 BGS = ['room', 'roomnight', 'gym', 'pool', 'studio', 'cafe', 'street', 'citynight', 'rain', 'night', 'dusk', 'dawn', 'stage']
 CHARS = ['jx', 'xy']
 EXT = ('.png', '.jpg', '.jpeg', '.webp')
 
 
 def cg_ids():
-    """cast_main.js 里定义了哪些 CG（名字对不上的图不收）"""
-    text = open(os.path.join(ROOT, 'web', 'js', 'app', 'cast_main.js'), encoding='utf-8').read()
+    """主线剧本里定义了哪些 CG（名字对不上的图不收）"""
+    text = ''.join(open(os.path.join(ROOT, 'web', 'js', 'app', f), encoding='utf-8').read() for f in ('script_jx.js', 'script_xy.js'))
     return set(re.findall(r"'((?:jx|xy)-[a-z0-9]+)':\s*\{\s*title", text))
 
 
@@ -114,6 +114,40 @@ def blush(im, spots, strength=0.5, color=(255, 150, 160)):
     return out
 
 
+def tears(im, spots, color=(150, 205, 255)):
+    """加眼泪（条款允许「涙や頬紅などを自分で書き加える」）：spots 是 [眼角 x, 眼角 y, 往下流多长, 往外偏多少]（原图坐标）。
+    画成一道半透明的泪痕 + 一颗泪珠 + 下眼睑一点水光，先放大 4 倍画再缩回去，边缘才不糙"""
+    from PIL import Image, ImageDraw, ImageFilter
+    k = 4
+    w, h = im.size
+    layer = Image.new('RGBA', (w * k, h * k), (0, 0, 0, 0))
+    d = ImageDraw.Draw(layer)
+    for sp in spots:
+        x, y, length = sp[0], sp[1], sp[2]
+        drift = sp[3] if len(sp) > 3 else 0
+        n = 24
+        pts_l, pts_r, mid = [], [], []
+        for i in range(n + 1):
+            t = i / n
+            cx = (x + drift * t * t) * k
+            cy = (y + length * t) * k
+            half = (1.45 - 0.6 * t) * k
+            pts_l.append((cx - half, cy))
+            pts_r.append((cx + half, cy))
+            mid.append((cx - half * 0.35, cy))
+        d.polygon(pts_l + pts_r[::-1], fill=color + (120,))
+        d.line(mid[2:-3], fill=(255, 255, 255, 170), width=max(1, int(0.7 * k)))
+        ex, ey = (x + drift) * k, (y + length) * k
+        r = 2.5 * k
+        d.ellipse([ex - r, ey - r * 1.1, ex + r, ey + r * 1.25], fill=color + (190,), outline=(90, 150, 210, 170), width=max(1, int(0.5 * k)))
+        d.ellipse([ex - r * 0.55, ey - r * 0.7, ex - r * 0.05, ey - r * 0.15], fill=(255, 255, 255, 230))
+        d.ellipse([(x - 6) * k, (y - 1.6) * k, (x + 6) * k, (y + 1.4) * k], fill=color + (95,))
+    layer = layer.filter(ImageFilter.GaussianBlur(0.35 * k)).resize((w, h), Image.LANCZOS)
+    out = im.copy()
+    out.alpha_composite(layer)
+    return out
+
+
 def fetch(strict):
     """按 art/sources.json 下载素材、取表情 → art/<人>/face-*.png。返回下好的人"""
     from PIL import Image
@@ -138,7 +172,16 @@ def fetch(strict):
                 im = Image.open(io.BytesIO(z.read(s['pattern'] % letter))).convert('RGBA')
                 if 'blush' in mods:
                     im = blush(im, s.get('blush') or [])
+                if 'tears' in mods:
+                    im = tears(im, (s.get('tears') or {}).get(letter) or [])
                 im.save(os.path.join(SRC, ch, f'face-{face}.png'))
+            # 眨眼（v8.0）：闭眼那张存成 blink.png，眼睛在哪、哪些表情本来就闭着眼写进 eyes.json
+            if s.get('blink') and s.get('eyes'):
+                Image.open(io.BytesIO(z.read(s['pattern'] % s['blink']))).convert('RGBA').save(os.path.join(SRC, ch, 'blink.png'))
+                closed = set(s.get('closed') or [])
+                # 带眼泪的也不眨（闭眼那张没有眼泪，一眨泪痕就断了）
+                noblink = [f for f, spec in s['faces'].items() if spec.split('+')[0] in closed or 'tears' in spec]
+                json.dump({'eyes': s['eyes'], 'noblink': noblink}, open(os.path.join(SRC, ch, 'eyes.json'), 'w'))
         done.append(ch)
         print(f'  {ch}：{len(s["faces"])} 个表情')
     return done
@@ -153,6 +196,9 @@ def main():
     ids = cg_ids()
     for ch in CHARS:
         for f in files(os.path.join(SRC, ch)):
+            if re.match(r'blink\.', f):
+                plan.append((os.path.join(SRC, ch, f), f'{ch}/blink.webp', 'face'))
+                continue
             m = re.match(r'face-([a-z]+)\.', f)
             if not m or m.group(1) not in FACES:
                 problems.append(f'art/{ch}/{f}：立绘要叫 face-<表情>.png，表情是 {", ".join(FACES)}')
@@ -161,7 +207,7 @@ def main():
         for f in files(os.path.join(SRC, ch, 'cg')):
             name = os.path.splitext(f)[0]
             if name not in ids:
-                problems.append(f'art/{ch}/cg/{f}：cast_main.js 里没有叫 {name} 的 CG')
+                problems.append(f'art/{ch}/cg/{f}：主线剧本里没有叫 {name} 的 CG')
                 continue
             plan.append((os.path.join(SRC, ch, 'cg', f), f'{ch}/cg/{name}.webp', 'cg'))
     for f in files(os.path.join(SRC, 'bg')):
@@ -171,7 +217,7 @@ def main():
             continue
         plan.append((os.path.join(SRC, 'bg', f), f'bg/{name}.webp', 'bg'))
     for ch in CHARS:
-        faces = [p for p in plan if p[2] == 'face' and p[1].startswith(ch + '/')]
+        faces = [p for p in plan if p[2] == 'face' and p[1].startswith(ch + '/') and not p[1].endswith('/blink.webp')]
         if faces and not any(p[1].endswith('face-calm.webp') for p in faces):
             problems.append(f'art/{ch}/：有立绘但缺 face-calm（平静），别的表情没有时都退回它')
 
@@ -241,7 +287,19 @@ def main():
             ch = rel.split('/')[0]
             box = manifest['cast'].setdefault(ch, {'face': {}, 'cg': {}})
             key = os.path.splitext(os.path.basename(rel))[0]
-            if kind == 'face':
+            if kind == 'face' and key == 'blink':
+                # 眨眼：闭眼那张 + 眼睛那块在裁好的图里的位置（clip-path: inset 上 右 下 左，百分比）
+                eyes_file = os.path.join(SRC, ch, 'eyes.json')
+                if ch in boxes and os.path.exists(eyes_file):
+                    e = json.load(open(eyes_file))
+                    x0, y0, x1, y1 = boxes[ch]
+                    w, h = x1 - x0, y1 - y0
+                    ex0, ey0, ex1, ey1 = e['eyes']
+                    pct = lambda v: f'{max(0.0, min(100.0, v * 100)):.2f}%'
+                    box['blink'] = url
+                    box['eyes'] = ' '.join([pct((ey0 - y0) / h), pct((x1 - ex1) / w), pct((y1 - ey1) / h), pct((ex0 - x0) / w)])
+                    box['noblink'] = e.get('noblink', [])
+            elif kind == 'face':
                 box['face'][key.replace('face-', '')] = url
                 if ch in dims:
                     box['size'] = dims[ch]

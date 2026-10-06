@@ -184,13 +184,9 @@
             <button class="seg-btn" data-value="light" type="button">浅色</button>
           </div>
           <div class="field-note" id="set-theme-note"></div>
-          <div class="buddy-who">
-            <div class="field-label">谁陪你记</div>
-            <div class="seg seg-sm" id="buddy-char">
-              <button class="seg-btn" data-value="boy" type="button">江叙</button>
-              <button class="seg-btn" data-value="girl" type="button">夏柚</button>
-              <button class="seg-btn" data-value="off" type="button">不要 · 极简</button>
-            </div>
+          <div class="buddy-who switch-row">
+            <div class="switch-text"><b id="buddy-who-name">和 TA 一起</b><small id="buddy-who-note"></small></div>
+            <input type="checkbox" class="switch" id="buddy-show" aria-label="和 TA 一起">
           </div>
           <div class="buddy-on" id="buddy-on">
             <div class="buddy-set">
@@ -206,11 +202,8 @@
               <div class="rel-row" id="buddy-rel"></div>
             </div>
             <div class="buddy-rows">
-              <div class="field-label">TA 的样子</div>
-              <div class="buddy-opt"><span>发型</span><div class="seg seg-sm" id="buddy-style"></div></div>
-              <div class="buddy-opt"><span>发色</span><div class="swatches" id="buddy-hair"></div></div>
-              <div class="buddy-opt"><span>肤色</span><div class="swatches" id="buddy-skin"></div></div>
-              <div class="buddy-opt"><span>衣服</span><div class="swatches" id="buddy-outfit"></div></div>
+              <div class="field-label">TA 的样子 <small>跟着剧情变</small></div>
+              <div class="buddy-opt" id="buddy-outfit-row"><span>衣服</span><div class="swatches" id="buddy-outfit"></div></div>
               <div class="field-note" id="buddy-look-note"></div>
             </div>
             <div class="buddy-talk-row">
@@ -247,6 +240,10 @@
             <div class="switch-text"><b>晚间小结</b><small id="rem-night-desc">今天还能吃多少、蛋白还差多少</small></div>
             <input type="time" class="time-input" id="rem-night-time" value="21:30">
             <input type="checkbox" class="switch" id="rem-night" aria-label="晚间小结">
+          </div>
+          <div class="switch-row" id="row-story-push">
+            <div class="switch-text"><b>剧情里约好的时间</b><small>TA 在剧情里说「明早七点，你手机会响」，就真的响一下</small></div>
+            <input type="checkbox" class="switch" id="set-story-push" aria-label="剧情里约好的时间">
           </div>
           <div class="switch-row">
             <div class="switch-text"><b>震动反馈</b><small>按下、开始、结束、记好时轻震一下</small></div>
@@ -499,7 +496,8 @@
   <script src="js/app/backup.js"></script>
   <script src="js/app/share.js"></script>
   <script src="js/app/cast.js"></script>
-  <script src="js/app/cast_main.js"></script>
+  <script src="js/app/script_jx.js"></script>
+  <script src="js/app/script_xy.js"></script>
   <!-- 剧场美术清单：scripts/build-art.py 生成（不进仓库），没有时剧场用像素小人 -->
   <script src="img/cast/manifest.js"></script>
   <script src="js/app/art.js"></script>
@@ -516,6 +514,7 @@
 
   <!-- 一键记录：按住说话 → 大模型整理 → 保存（顺序有依赖） -->
   <script src="js/log/helpers.js"></script>
+  <script src="js/log/meals.js"></script>
   <script src="js/log/native.js"></script>
   <script src="js/log/sound.js"></script>
   <script src="js/log/food.js"></script>

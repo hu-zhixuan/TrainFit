@@ -243,13 +243,17 @@
       if ((result.updates || []).length || (result.deletes || []).length) { try { localStorage.setItem('tf_used_fix', '1'); } catch (e) {} }
       const batch = this.save(Object.assign(result, { said: p.text }), p.date, ctx);
       this.showSnack(batch, result);
+      // 剧情里的约定（v8.0）：这条记录让哪个约定做到了，先标上；没有更要紧的话要说时，小人马上庆祝 + 问要不要看加篇
+      const kept = app.promiseCheck ? app.promiseCheck(true) : null;
       // 放了计划（「明天练计划A」）：跳到那天看
       if (batch.acts && batch.acts.jump && app.jumpToPlans && !result.answer) app.jumpToPlans(batch.acts.jump);
       if (result.answer && app.showBuddyAnswer) app.showBuddyAnswer(p.text, result.answer, answerOpts); // 又记又问
       else if (batch.asks.length && app.askPortion) app.askPortion(batch.asks); // 份量含糊：小人问一句，点一下就改
+      else if (kept && app.promiseCelebrate) app.promiseCelebrate(kept); // 约定达成：解锁一段加篇
       else if (app.makeUpAfter && app.makeUpAfter(result, batch)) { /* 闹着小别扭：好好吃饭了就和好 */ }
       else if (app.memoTip && app.memoTip(result, batch)) { /* 你说过有伤：练到那儿提醒一句 */ }
       else if (app.recordReact && app.recordReact(result, batch, 'big')) { /* 破纪录、吃撑了、蛋白够了、这周第 5 练、体重轻了：小人一张卡片（第一次是小剧情，v6.4） */ }
+      else if (app.storyBridge && app.storyBridge(result, batch)) { /* 有新剧情在等、正是它的时间：小人对这条有反应，顺着「对了——」邀请你进剧情（v8.0） */ }
       else if (app.newbieTip && app.newbieTip(result)) { /* 新手第一周：小人说一句小提示 */ }
       else if (app.coachTip && app.coachTip(result, batch)) { /* 该提醒的时候说一句：深夜还吃、晚上蛋白还差很多 */ }
       else if (app.askFeeling && app.askFeeling(result, batch)) { /* 练完问一句感受，下次加重量按这个来 */ }
@@ -277,6 +281,7 @@
         batch.before.push({ kind: r.kind, snapshot: JSON.parse(JSON.stringify(rec)) });
         Object.keys(u.set).forEach(k => {
           if (r.kind === 'meal' && ['mealType', 'foodSummary', 'calories', 'proteinG', 'carbsG', 'fatG'].includes(k)) rec[k] = u.set[k];
+          if (r.kind === 'meal' && k === 'mealType') rec.mealFixed = true; // 说了「这是午饭」：以后分顿照这个
           if (r.kind === 'workout' && ['exerciseName', 'muscleGroup', 'weightKg', 'sets', 'reps', 'durationMin', 'burnedCalories'].includes(k)) rec[k] = u.set[k];
         });
         // 挪到别的日子（「记错日子了，挪到前一天」）：整条改日期，不删了重加
@@ -360,6 +365,12 @@
           said: result.said ? String(result.said).slice(0, 200) : undefined // 原话：分得清是没听清还是理解错
         });
       });
+
+      // 分顿（v8.0）：没说顿的按吃的时间、你的作息、这顿多大重新判断，提示条也跟着写对
+      if (result.meals.length && app.fixMealTypes) {
+        app.fixMealTypes(date);
+        result.meals.forEach((m, i) => { const rec = app.diet.find(d => d.id === batch.dietIds[i]); if (rec) m.mealType = rec.mealType; });
+      }
 
       // 体重
       if (result.bodyWeight && app.setWeight) {

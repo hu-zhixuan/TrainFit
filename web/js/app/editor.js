@@ -191,7 +191,7 @@ Object.assign(FitnessApp.prototype, {
     let remembered = [];
     if (kind === 'meal') {
       const active = form.querySelector('#edit-meal-type .seg-btn.active');
-      rec.mealType = active ? active.dataset.value : rec.mealType;
+      if (active && active.dataset.value !== rec.mealType) { rec.mealType = active.dataset.value; rec.mealFixed = true; } // 手动改了顿：以后分顿照这个
       const summary = (val('foodSummary') || '').trim();
       const summaryTouched = summary && summary !== rec.foodSummary;
       rec.foodSummary = summary || rec.foodSummary;

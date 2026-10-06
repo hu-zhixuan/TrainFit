@@ -273,12 +273,13 @@ Object.assign(FitnessApp.prototype, {
     if (away) this._lastAway = away; // 离开了多久：打招呼时说不说「想你」（heart.js）
     // v6.4：饭前帮你挑一顿、图鉴介绍、你回来了、考题这些跟你刚做的事无关的，只在「话多」档说
     const more = this.talkLevel() === 'more';
+    if (this.promiseCheck) this.promiseCheck(true); // 剧情约定：做到了的标上（加篇在下面问）、过期的悄悄收起（v8.0）
     // v6.3：深夜的剧情排在「这么晚还没睡」前面；近况追问、小剧情、它低落、攒着的事排在饭点之后；v7.1 新的主线（问你有没有空听）排在小剧情前面
     return (this.bondUpNow && this.bondUpNow()) || (this.anniversary && this.anniversary()) || (this.festivalGreet && this.festivalGreet()) ||
       (this.storyEvent && this.storyEvent('night')) ||
       (this.lateNight && this.lateNight()) || (this.goodNight && this.goodNight()) || (this.sulkGreet && this.sulkGreet()) || this.greetToday() || this.firstGuide() ||
       (more && this.mealPick && this.mealPick()) || this.mealGapNudge() || (more && this.dexIntro && this.dexIntro()) ||
-      (this.lifeFollowUp && this.lifeFollowUp()) || (this.mainNudge && this.mainNudge()) || (this.storyEvent && this.storyEvent('open')) || (this.lowDay && this.lowDay()) || (this.savedTale && this.savedTale()) ||
+      (this.lifeFollowUp && this.lifeFollowUp()) || (this.bonusNudge && this.bonusNudge()) || (this.mainNudge && this.mainNudge()) || (this.storyEvent && this.storyEvent('open')) || (this.lowDay && this.lowDay()) || (this.savedTale && this.savedTale()) ||
       (more && this.welcomeBack(away)) || (this.askOnce && this.askOnce()) || (this.whisper && this.whisper()) || (more && this.quizNudge && this.quizNudge());
   },
 

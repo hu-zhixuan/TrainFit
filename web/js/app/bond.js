@@ -86,7 +86,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
   cast() { return TF.Cast[this.castKey()]; },
 
   /** jx 江叙 / xy 夏柚（美术清单、主线 id 都按这个分） */
-  castKey() { return this.buddyLook().char === 'girl' ? 'xy' : 'jx'; },
+  castKey() { return TF.Buddy.look(this.profile.buddy, this.profile.gender).char === 'girl' ? 'xy' : 'jx'; }, // 不经过 buddyLook（它要查衣服解锁了没有，会绕回来）
 
   /** 它的名字（v6.0 起是角色本来的名字，不再自己起） */
   buddyName() { return this.cast().name; },
@@ -104,7 +104,9 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     const b = this.bond();
     const wear = `样子：${TF.Buddy.STYLES[l.style].label}，今天穿${this.outfitLabel(l.outfit)}，身材${this.buildLabel(this.buddyBuild())}`;
     // v6.3：它现在的心情（想他、担心他、自己有点低落…）、你们的关系（暧昧 / 恋人 / 好搭子）、剧情里一起经历过的事
-    return { name: c.name, who: c.who, speech: c.speech, quirks: c.quirks, never: c.never, samples: c.samples, look: wear, facts: c.facts.concat(b.lv >= 4 ? [c.secret] : []),
+    // 秘密（肩伤 / 爸爸）在剧情第四章第一段说出来以后，聊天里才知道你知道（v8.0：小人和剧情对得上）
+    const told = this.storySeen ? this.storySeen(`${this.castKey()}4a`) : b.lv >= 4;
+    return { name: c.name, who: c.who, speech: c.speech, quirks: c.quirks, never: c.never, samples: c.samples, look: wear, facts: c.facts.concat(told ? [c.secret] : []),
       level: b.name, lv: b.lv, tone: c.tone[b.lv - 1], call: this.callName(), you: this.profile.gender === 'female' ? '她' : '他',
       mood: this.heartPrompt ? this.heartPrompt() : '', relation: this.relationPrompt ? this.relationPrompt() : '', shared: this.storyFacts ? this.storyFacts() : [] };
   },
@@ -153,13 +155,27 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
 
   bond() { return TF.Bond.info(this.bondXp()); },
 
-  /** 这件衣服解锁了没有 */
+  /**
+   * 这件衣服解锁了没有（v8.0：衣服跟着剧情走）：默认那件一直有；运动背心是练过那天自己换的；
+   * 剧情里的（cast.wardrobe）看过那一段才有；别的颜色的棒球服不让自己挑了。
+   */
   outfitOpen(id) {
     const o = TF.Buddy.OUTFITS[id];
-    return !!o && (!o.lv || this.bond().lv >= o.lv);
+    if (!o) return false;
+    if (id === TF.Buddy.DEFAULT_LOOK.outfit || id === 'tank') return true;
+    const w = (this.cast().wardrobe || {})[id];
+    if (w) return this.storySeen ? this.storySeen(w.scene || w.bonus) : false;
+    return false;
+  },
+
+  /** 衣柜：现在能穿的（默认那件 + 剧情解锁的），设置里只在这几件里挑 */
+  wardrobeList() {
+    return [TF.Buddy.DEFAULT_LOOK.outfit].concat(Object.keys(this.cast().wardrobe || {}).filter(k => this.outfitOpen(k)));
   },
 
   outfitLabel(id) {
+    const w = (this.cast().wardrobe || {})[id];
+    if (w) return w.label;
     const o = TF.Buddy.OUTFITS[id];
     return o ? (this.cast().sex === 'f' && o.girlLabel ? o.girlLabel : o.label) : '';
   },
@@ -243,7 +259,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     const b = this.bond();
     const build = this.buddyBuild();
     this.setBuddy({ lv: b.lv, seenBuild: build, lvAt: getTodayDateString() }); // lvAt：到这一级的日子（剧情「那句话」要到老搭子几天后才出）
-    const opened = Object.keys(TF.Buddy.OUTFITS).filter(k => { const lv = TF.Buddy.OUTFITS[k].lv; return lv && lv > up.from && lv <= b.lv; });
+    const opened = []; // v8.0：衣服不再跟着等级解锁，看完对应的那段剧情才有（wardrobeUnlock）
     let lead = up.first ? `我们已经是「${b.name}」了。` : this.cast().levelUp[b.lv - 1] || `我们是「${b.name}」了。`;
     if (up.first && build !== 'normal') lead += `跟着你练了这么久，我也练出${this.buildLabel(build)}了。`;
     this.voiceBudget('must', true);
@@ -489,10 +505,10 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       gap ? { lv: 3, key: 'miss', text: '你没来的那几天，我猜你在忙自己的事。挺好的，回来就行，我一直在。' } : null,
       heavy ? { lv: 4, key: 'heavy', text: `你练得最重的一次是${md(heavy.date)}，${heavy.exerciseName} ${round1(heavy.weightKg)}kg。那天我在旁边都替你使劲。` } : null,
       { lv: 4, key: 'afraid', text: c.whisper.afraid },
-      { lv: 4, key: 'secret', text: c.whisper.secret },
+      { lv: 4, key: 'secret', text: c.whisper.secret, need: `${this.castKey()}4a` }, // 剧情里说出来以后才提
       { lv: 5, key: 'why', text: `我想了很久，我在这儿，大概就是为了让${name || '你'}不用一个人坚持。` },
       { lv: 5, key: 'remember', text: '不管你以后练成什么样，我都会记得你一开始的样子。' }
-    ].filter(Boolean);
+    ].filter(x => x && (!x.need || !this.storySeen || this.storySeen(x.need)));
   },
 
   /** 说一句悄悄话（今天打过招呼以后、闲下来的时候；两天最多一条）。idle：发呆时说的，次数由那边记 */
@@ -702,6 +718,9 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     const pool = (h < 10 ? L.morning : h < 14 ? L.noon : h < 18 ? L.afternoon : h < 23 ? L.evening : L.night).slice();
     if (m >= 11 || m <= 3) pool.push(L.cold);
     if (m >= 6 && m <= 8) pool.push(L.hot);
+    // v8.0：剧情的余韵——最近看过的那几段，平时接着说（今天页的小人就是剧情里的 TA）
+    const echo = this.storyEcho ? this.storyEcho() : '';
+    if (echo && Math.random() < 0.4) return echo;
     // 一半的时候说「因为你，我也…」（有的话）
     const changed = this.changedLine ? this.changedLine() : '';
     if (changed && Math.random() < 0.5) return changed;

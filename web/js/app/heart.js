@@ -34,7 +34,8 @@ Object.assign(FitnessApp.prototype, {
     if ((this.profile.buddy || {}).comfort === today) return null;
     const h = [...today].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 11); // 每一步截到 32 位，不然乘大了丢精度、余数永远是偶数
     if (h % 6 !== 1) return null;
-    const why = this.cast().heart.low.why;
+    // 剧情里还没说过的事（肩伤、爸爸）不拿来当理由
+    const why = this.cast().heart.low.why.map(x => (this.castLine ? this.castLine(x) : Array.isArray(x) ? '' : x)).filter(Boolean);
     return { why: why[(h >>> 3) % why.length] };
   },
 

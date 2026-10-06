@@ -174,10 +174,11 @@ Object.assign(FitnessApp.prototype, {
     this._castPick = null;
     this._castMid = !!(opts && opts.mid); // 引导第一屏选了「和 TA 一起」：选好人接着选用途，不关引导页
     const fresh = this.needsOnboarding;
-    $('ob-cast-title').innerHTML = this._castMid ? '选一个<br>陪你的人' : fresh ? '最后一步：<br>要不要一个陪你记的搭子？' : '小人长大了：<br>选一个陪你记吧';
-    $('ob-cast-sub').textContent = this._castMid ? 'TA 记得你说过的事，看得见你每一点进步。你们会一章一章熟起来——点一下，听 TA 说句话。'
-      : fresh ? 'TA 记得你说过的事，看得见你每一点进步，在对的时候说一句。不要也行，极简模式最干净。'
-      : '以前那个像素小人，现在是两个人了。你们之前的亲密度、解锁的衣服都还在，换谁都一样。';
+    // v8.0（用户：「选定一个角色，后续就不可更改」）：选人时就说清楚，选了就是 TA
+    $('ob-cast-title').innerHTML = this._castMid ? '选一个<br>陪你的人' : fresh ? '最后一步：<br>要不要一个陪你记的搭子？' : '选一个<br>陪你记的人';
+    $('ob-cast-sub').textContent = this._castMid ? '选了就是 TA，之后不能换。TA 记得你说过的事，你们会一章一章熟起来——点一下，听 TA 说句话。'
+      : fresh ? '选了就是 TA，之后不能换。TA 记得你说过的事，在对的时候说一句。不要也行，极简模式最干净。'
+      : '选了就是 TA，之后不能换。TA 的样子跟着你们的故事变——点一下，听 TA 说句话。';
     $('ob-back3').classList.toggle('hidden', !this._castMid);
     $('ob-cast-off').classList.toggle('hidden', this._castMid);
     this.drawCastPick();
@@ -208,8 +209,8 @@ Object.assign(FitnessApp.prototype, {
   endCastPick(k) {
     const show = k !== 'off';
     const char = k === 'xy' ? 'girl' : 'boy';
-    const keep = (this.profile.buddy || {}).char === char; // 换了人：发型回到这个人默认的
-    this.profile.buddy = Object.assign({}, this.profile.buddy || {}, show ? Object.assign({ char, show: true, picked: 6 }, keep ? {} : { style: '' }) : { show: false, picked: 6 });
+    // 选了就锁住（charLocked）：设置里不能换人，只能关成极简再打开
+    this.profile.buddy = Object.assign({}, this.profile.buddy || {}, show ? { char, show: true, picked: 6, charLocked: true } : { show: false, picked: 6 });
     if (this._castMid && this.needsOnboarding) { // 引导中：接着选用途
       this._castMid = false;
       window.Haptics && window.Haptics.fire('success');
@@ -249,7 +250,7 @@ Object.assign(FitnessApp.prototype, {
       say.classList.add('said');
       if (this.typeOut) this.typeOut(say, TF.Cast[k].intro); else say.textContent = TF.Cast[k].intro;
       $('ob-cast-done').disabled = false;
-      $('ob-cast-done').textContent = `就选${TF.Cast[k].name}`;
+      $('ob-cast-done').textContent = `就选${TF.Cast[k].name}（选了不能换）`;
       window.Haptics && window.Haptics.fire('tap');
       window.Sound && window.Sound.play('blip');
     });

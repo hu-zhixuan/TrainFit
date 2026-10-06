@@ -193,42 +193,88 @@ Object.assign(FitnessApp.prototype, {
     if (tip) tip.classList.toggle('hidden', this.workouts.length + this.diet.length >= 3);
   },
 
-  /** 这条吃的算哪一顿：补剂单独一组；没写顿的按时间算 */
+  /**
+   * 这天的吃的分顿（v8.0，log/meals.js）：原话说了顿的照原话；没说的按吃的时间、你自己的作息（最近 4 周几点吃饭）、
+   * 这顿多大、吃的是不是零嘴来分，同一时间段只算一顿正餐，别的按时间算上午 / 下午加餐、夜宵。按记录算一次缓存起来。
+   */
+  mealClasses(date) {
+    const meals = this.diet.filter(d => d.date === date);
+    const key = date + '|' + meals.map(d => `${d.id}:${d.mealType}:${d.calories}:${d.mealFixed ? 1 : 0}`).join(',');
+    if (this._mealCls && this._mealCls.key === key) return this._mealCls.val;
+    const val = TF.Meals ? TF.Meals.classify(meals, { rhythm: this.mealRhythm() }) : {};
+    this._mealCls = { key, val };
+    return val;
+  },
+
+  /** 你几点吃饭（最近 4 周的中位数，一天算一次） */
+  mealRhythm() {
+    const today = getTodayDateString();
+    if (!this._rhythm || this._rhythm.day !== today || this._rhythm.n !== this.diet.length) {
+      this._rhythm = { day: today, n: this.diet.length, val: TF.Meals ? TF.Meals.rhythm(this.diet, today) : null };
+    }
+    return this._rhythm.val || undefined;
+  },
+
+  /** 这条吃的在今天页放哪组（「早餐」「加餐·pm」「夜宵」…的 key） */
   mealGroupOf(d) {
     if (isSuppOnly(d)) return '补剂';
-    const t = MEAL_TYPES.includes(d.mealType) ? d.mealType : (TF.mealTypeByHour ? TF.mealTypeByHour(new Date(recordTs(d)).getHours()) : '加餐/补剂');
-    return t === '加餐/补剂' ? '加餐' : t;
+    const c = this.mealClasses(d.date)[d.id];
+    if (c && TF.Meals) return TF.Meals.groupKey(c);
+    const t = MEAL_TYPES.includes(d.mealType) ? d.mealType : '加餐/补剂';
+    return t === '加餐/补剂' ? '加餐·pm' : t;
+  },
+
+  /** 记完以后：这天没说顿的记录按分顿结果改 mealType（别处按 mealType 算早饭连续几天、晚饭吃没吃，跟今天页一致） */
+  fixMealTypes(date) {
+    if (!TF.Meals) return;
+    this._mealCls = null;
+    const cls = this.mealClasses(date);
+    this.diet.forEach(d => {
+      const c = d.date === date && cls[d.id];
+      if (!c || c.why === 'said' || c.why === 'stored' || c.why === 'supp') return;
+      d.mealType = TF.Meals.storedType(c);
+    });
+    this._mealCls = null;
   },
 
   /**
    * 饮食按顿分组（v7.1，用户：「每天的饮食自动分个组，现在有点乱」——以前一条一张卡，加餐、补剂、计划散在各处）：
    * 每顿一张卡，头上写这顿几点、多少千卡、多少蛋白，下面一行一样（点开能改），这顿还没吃的计划虚线放在最后。
+   * v8.0 按吃的时间排：早餐 → 上午加餐 → 午餐 → 下午加餐 → 晚餐 → 夜宵 → 补剂。补记的（晚上说「中午吃了…」）不写成那顿的钟点。
    */
   renderMealGroups(date, plans) {
     const meals = this.diet.filter(d => d.date === date).sort((a, b) => recordTs(a) - recordTs(b));
-    const planGroup = (p) => (p.mealType || '').replace('/补剂', '');
-    return ['早餐', '午餐', '晚餐', '加餐', '补剂'].map(g => {
+    const cls = this.mealClasses(date);
+    const planGroup = (p) => { const t = (p.mealType || '').replace('/补剂', ''); return t === '加餐' ? '加餐·pm' : t; };
+    const order = TF.Meals ? TF.Meals.ORDER : ['早餐', '午餐', '晚餐', '加餐·pm', '补剂'];
+    return order.map(g => {
       const rows = meals.filter(d => this.mealGroupOf(d) === g);
       const plan = plans.filter(p => planGroup(p) === g);
       if (!rows.length && !plan.length) return '';
+      const name = TF.Meals ? TF.Meals.groupName(g) : g.replace(/·.*/, '');
       const kcal = rows.reduce((t, d) => t + (d.calories || 0), 0);
       const prot = rows.reduce((t, d) => t + (d.proteinG || 0), 0);
       const total = !rows.length ? `<span class="mg-total plan"><small>计划</small>${fmt(plan.reduce((t, p) => t + (p.calories || 0), 0))} kcal</span>`
         : g === '补剂' && !kcal ? `<span class="mg-total"><small>${rows.length} 样</small></span>`
         : `<span class="mg-total"><b>${fmt(kcal)}</b> kcal${prot ? `<small>蛋白 ${round1(prot)}g</small>` : ''}</span>`;
-      return `<section class="mgroup" data-group="${g}"><div class="mg-head"><span class="mg-ico ${g === '补剂' ? 'supp' : 'meal'}">${ICONS.meal}</span>` +
-        `<span class="mg-name">${g}${rows.length ? `<small>${esc(hhmm(recordTs(rows[0])))}${rows.length > 1 ? ` · ${rows.length} 样` : ''}</small>` : ''}</span>${total}</div>` +
-        rows.map(d => this.renderMealLine(d)).join('') + plan.map(p => this.renderPlanRow(p, true)).join('') + '</section>';
+      // 小字：这顿几点（补记的不写）、几样；加餐写上午 / 下午 / 练后
+      const first = rows.find(d => !(cls[d.id] || {}).late);
+      const label = rows.map(d => (cls[d.id] || {}).label).find(Boolean) || '';
+      const sub = [label, first ? hhmm(recordTs(first)) : '', rows.length > 1 ? `${rows.length} 样` : ''].filter(Boolean).join(' · ');
+      return `<section class="mgroup" data-group="${esc(g)}"><div class="mg-head"><span class="mg-ico ${g === '补剂' ? 'supp' : g.startsWith('加餐') || name === '夜宵' ? 'snack' : 'meal'}">${ICONS.meal}</span>` +
+        `<span class="mg-name">${name}${sub ? `<small>${esc(sub)}</small>` : ''}</span>${total}</div>` +
+        rows.map(d => this.renderMealLine(d, (cls[d.id] || {}).late)).join('') + plan.map(p => this.renderPlanRow(p, true)).join('') + '</section>';
     }).join('');
   },
 
-  renderMealLine(x) {
+  /** late：补记的（晚上说「中午吃了…」），时间写「补记 20:05」，免得看着像中午 8 点吃的 */
+  renderMealLine(x, late) {
     const supp = isSuppOnly(x);
     const macro = supp ? TF.nutrientsText(sumNutrients(x.items), 3)
       : this.isSimple() ? (x.proteinG ? `蛋白 ${round1(x.proteinG)}g` : '')
       : [x.proteinG ? `蛋白 ${round1(x.proteinG)}g` : '', x.carbsG ? `碳水 ${round1(x.carbsG)}g` : '', x.fatG ? `脂肪 ${round1(x.fatG)}g` : ''].filter(Boolean).join(' · ');
     return `<button class="mg-row" data-kind="meal" data-id="${esc(x.id)}" type="button"><span class="mg-main"><span class="mg-title">${esc(x.foodSummary)}</span>` +
-      `<span class="mg-sub">${esc(hhmm(recordTs(x)))}${macro ? ' · ' + macro : ''}</span></span><span class="mg-val">${supp && !x.calories ? '' : fmt(x.calories)}</span></button>`;
+      `<span class="mg-sub">${late ? '补记 ' : ''}${esc(hhmm(recordTs(x)))}${macro ? ' · ' + macro : ''}</span></span><span class="mg-val">${supp && !x.calories ? '' : fmt(x.calories)}</span></button>`;
   },
 
   /** 训练一张卡：头上写几个动作、消耗多少，下面一行一个动作（下次练多少写在下面），还没做的计划虚线放最后 */

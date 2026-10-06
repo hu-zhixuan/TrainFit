@@ -26,11 +26,14 @@ import java.util.Locale
  *  - 定时提醒：午餐 / 晚餐（这一餐已经记了就不提醒）、晚间小结（今天还能吃多少、蛋白还差多少）
  * 网页通过 NativeBridge 把提醒设置和「今天的状态」存进 SharedPreferences，闹钟响时在这里判断要不要提醒。
  * v5.6：「今天的状态」里还带着小人替你写好的话（say / sayNext / away），标题是小人的名字，有就用它的。
+ * v8.0：剧情里约好的时间（「明早七点，你手机会响。那是我。」）排一条一次性的通知（story），同时只有一条，新的替掉旧的。
  */
 object Reminders {
     private const val PREFS = "trainfit_reminders"
     private const val KEY_REMINDERS = "reminders"
     private const val KEY_DAY = "day_state"
+    private const val KEY_STORY = "story_push"
+    private const val STORY_ID = "story"
     const val CH_REMIND = "remind"
     const val CH_DONE = "done"
     private const val EXTRA_ID = "rid"
@@ -95,6 +98,31 @@ object Reminders {
         prefs(ctx).edit().putString(KEY_DAY, json).apply()
     }
 
+    /** 剧情里约好的那条：{"at": 毫秒时间戳, "title": "江叙", "body": "早。……七分钟。"} */
+    fun saveStoryPush(ctx: Context, json: String) {
+        prefs(ctx).edit().putString(KEY_STORY, json).apply()
+        scheduleStory(ctx)
+    }
+
+    private fun scheduleStory(ctx: Context) {
+        val am = ctx.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
+        val pi = alarmIntent(ctx, STORY_ID, code(STORY_ID))
+        am.cancel(pi)
+        val o = try { JSONObject(prefs(ctx).getString(KEY_STORY, "{}")) } catch (_: Exception) { return }
+        val at = o.optLong("at", 0L)
+        if (at <= System.currentTimeMillis() - 60 * 60 * 1000L) return // 过了一个多小时（关机错过了）就不补发了
+        // 约好的是「七点」，所以窗口小一点（5 分钟），也不用精确闹钟权限
+        am.setWindow(AlarmManager.RTC_WAKEUP, maxOf(at, System.currentTimeMillis() + 5_000L), 5 * 60 * 1000L, pi)
+    }
+
+    private fun showStory(ctx: Context) {
+        val o = try { JSONObject(prefs(ctx).getString(KEY_STORY, "{}")) } catch (_: Exception) { return }
+        val title = o.optString("title")
+        val body = o.optString("body")
+        prefs(ctx).edit().remove(KEY_STORY).apply()
+        if (title.isNotBlank() && body.isNotBlank()) show(ctx, CH_REMIND, 105, title, body)
+    }
+
     // ---------------- 闹钟 ----------------
     private fun alarmIntent(ctx: Context, id: String, requestCode: Int): PendingIntent {
         val i = Intent(ctx, ReminderReceiver::class.java).apply {
@@ -120,6 +148,7 @@ object Reminders {
             // 非精确闹钟（10 分钟窗口），不需要「精确闹钟」权限，也更省电
             am.setWindow(AlarmManager.RTC_WAKEUP, at, 10 * 60 * 1000L, pi)
         }
+        scheduleStory(ctx)
     }
 
     private fun nextTrigger(hhmm: String): Long {
@@ -160,6 +189,7 @@ object Reminders {
 
     /** 闹钟响了：看今天的状态决定要不要提醒 */
     fun onAlarm(ctx: Context, id: String) {
+        if (id == STORY_ID) { showStory(ctx); return }
         val state = try { JSONObject(prefs(ctx).getString(KEY_DAY, "{}")) } catch (_: Exception) { JSONObject() }
         val isToday = state.optString("date") == today()
         val meals = state.optJSONArray("meals")

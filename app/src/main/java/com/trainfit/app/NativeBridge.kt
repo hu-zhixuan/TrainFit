@@ -425,7 +425,13 @@ class NativeBridge(
         io.execute { Reminders.saveReminders(activity, json) }
     }
 
-    /** 今天的状态，提醒时用来判断要不要打扰你 */
+    /** 剧情里约好的时间响一下：{"at": 毫秒, "title": "江叙", "body": "…"}（v8.0） */
+    @JavascriptInterface
+    fun storyPush(json: String) {
+        io.execute { Reminders.saveStoryPush(activity, json) }
+    }
+
+        /** 今天的状态，提醒时用来判断要不要打扰你 */
     @JavascriptInterface
     fun updateDayState(json: String) {
         Reminders.saveDayState(activity, json)
