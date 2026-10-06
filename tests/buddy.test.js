@@ -145,6 +145,34 @@ test('身材：光膀子时看得出普通 / 薄肌 / 腹肌，穿棒球服看�
   assert.ok(girl[17].join('').includes('JJJ') && !girl[19].join('').includes('J'));
 });
 
+test('照着剧场立绘的两个人（v8.1）：江叙浅棕乱发、刘海压住一只眼、毛衣背心配波洛领带；夏柚黑短发、红挑染、红眼睛、长卫衣袖子盖住手', () => {
+  const jx = (o) => Buddy.compose(Object.assign({ char: 'boy', pose: 'stand', mood: 'ok' }, Buddy.CAST_LOOK.boy, o));
+  const xy = (o) => Buddy.compose(Object.assign({ char: 'girl', pose: 'stand', mood: 'ok' }, Buddy.CAST_LOOK.girl, o));
+  const eyes = (img) => (img.px[3 + 10].join('').match(/E/g) || []).length;
+  const j = jx();
+  assert.strictEqual(eyes(j), 2, '江叙只露一只眼');
+  assert.strictEqual(j.colors.H, Buddy.HAIR.latte.H);
+  assert.ok(j.px.flat().includes('W') && j.px.flat().includes('A'), '波洛领带：绿松石、金色绳头');
+  assert.strictEqual(eyes(jx({ marks: ['bangs'] })), 3, '剪了刘海：露出半只眼');
+  // 趴着也一样只露一只眼（趴着是平时最常见的样子）
+  assert.strictEqual(eyes(jx({ pose: 'lie' })), 2);
+  const x = xy();
+  assert.ok(x.px.flat().includes('D'), '红挑染');
+  assert.notStrictEqual(x.colors.E, Buddy.compose({ char: 'girl' }).colors.E, '红眼睛');
+  assert.ok(x.px[3 + 13].join('').includes('KKK'), '黑色项圈');
+  assert.ok(!x.px[3 + 19].includes('S') && x.px[3 + 19].includes('V'), '袖子盖住手');
+  assert.ok(x.px[3 + 21].includes('j') && !x.px[3 + 21].includes('P'), '卫衣长到大腿');
+  // 小变化只认自己的人；露出来的皮肤上不画
+  assert.deepStrictEqual(jx({ marks: ['clip', 'phones'] }).px, j.px);
+  assert.ok(!jx({ outfit: 'bare', marks: ['leaf'] }).px.flat().includes('G'));
+  // 每种衣服、姿势、小变化、装备都拼得出来，颜色都有
+  for (const char of ['boy', 'girl']) for (const outfit of Object.keys(Buddy.OUTFITS)) for (const pose of Buddy.POSES) for (const gear of [['towel'], ['cap']]) {
+    const img = Buddy.compose(Object.assign({ char }, Buddy.CAST_LOOK[char], { outfit, pose, gear, mood: 'love', marks: Object.keys(Buddy.MARKS) }));
+    assert.strictEqual(img.h, Buddy.heightOf(pose));
+    for (const c of new Set(img.px.flat().join('').replace(/\./g, ''))) assert.ok(img.colors[c], `${char} ${outfit} ${pose}: ${c}`);
+  }
+});
+
 test('「跟着我练」：最近 4 周练 4 天薄肌，10 天腹肌', () => {
   assert.strictEqual(Buddy.buildFor(0), 'normal');
   assert.strictEqual(Buddy.buildFor(4), 'lean');

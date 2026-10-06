@@ -315,6 +315,29 @@ test('今天页的小人就是剧情里的 TA（v8.0）：衣服跟着剧情解�
   assert.ok(Cast.xy.heart.low.why.some(x => Array.isArray(x) && /我爸/.test(x[0])), '夏柚的爸爸要等剧情里出现以后');
 });
 
+test('小人的样子跟着剧情小变化（v8.1）：每处挂在真的主线上、画得出来、只改几格、余韵里 TA 自己提一句', () => {
+  for (const [k, char] of [['jx', 'boy'], ['xy', 'girl']]) {
+    const c = Cast[k];
+    const ids = new Set(c.main.flat().map(sc => sc.id));
+    const M = c.marks;
+    assert.ok(Object.keys(M).length >= 2 && Object.keys(M).length <= 4, `${k} 小变化两到四处（用户：变化不要太大）`);
+    Object.entries(M).forEach(([m, x]) => {
+      assert.ok(Buddy.MARKS[m] && Buddy.MARKS[m].char === char, `${k} ${m} 画不出来`);
+      assert.ok(ids.has(x.scene), `${k} ${m} 对应的主线 ${x.scene} 不存在`);
+      assert.ok(x.label && [...x.label].length <= 14, `${k} ${m} 要有一句话说变了什么`);
+      assert.ok(c.echo[x.scene].length >= 2, `${k} ${m}：${x.scene} 的余韵里要有 TA 自己提一句`);
+      // 带上和不带不一样，但只差几格
+      for (const pose of ['stand', 'lie']) {
+        const base = Object.assign({ char, pose, mood: 'ok' }, Buddy.CAST_LOOK[char]);
+        const a = Buddy.compose(base).px.flat(), b = Buddy.compose(Object.assign({}, base, { marks: [m] })).px.flat();
+        const diff = a.filter((p, i) => p !== b[i]).length;
+        assert.ok(diff <= 12, `${k} ${m} ${pose} 改了 ${diff} 格，太多`);
+        if (pose === 'stand') assert.ok(diff > 0, `${k} ${m} 站着看不出来`);
+      }
+    });
+  }
+});
+
 test('新条件：结局路线、按过跳过、现在几点', () => {
   assert.ok(Theater.evalCond('route:near', { route: 'near' }));
   assert.ok(!Theater.evalCond('route:near', { route: 'soft' }));

@@ -643,26 +643,32 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
   },
 
   /**
-   * 看完这段剧情解锁的衣服（cast.wardrobe）：第一次看完时 TA 自己换上（wear: false 的只解锁），回到今天页冒一行提示。
-   * 返回 { k, label, worn } 或 null。重看不算。
+   * 看完这段剧情，TA 的样子跟着变：解锁的衣服（cast.wardrobe）第一次看完时 TA 自己换上（wear: false 的只解锁）；
+   * 小变化（cast.marks，v8.1：剪了刘海、夹了片叶子…）看过就一直带着，不用存（buddyMarks 按看过的剧情算）。回到今天页冒一行提示。
+   * 返回 { k, label, worn, mark } 或 null。重看不算。
    */
   wardrobeUnlock(id) {
     const W = this.cast().wardrobe || {};
+    const M = this.cast().marks || {};
+    const m = Object.keys(M).find(x => M[x].scene === id);
+    const out = m ? { mark: M[m].label } : null;
     const k = Object.keys(W).find(x => (W[x].scene || W[x].bonus) === id);
-    if (!k) return null;
+    if (!k) return out;
     const st = this.storyData();
-    if ((st.wore || []).includes(k)) return null;
+    if ((st.wore || []).includes(k)) return out;
     const w = W[k];
     const worn = w.wear !== false;
     this.setBuddy(Object.assign({ story: Object.assign({}, st, { wore: (st.wore || []).concat(k) }) }, worn ? { outfit: k } : {}));
-    return { k, label: w.label, worn };
+    return Object.assign({ k, label: w.label, worn }, out || {});
   },
 
   wardrobeToast(u) {
     if (!u || !this.showToast) return;
     const n = this.buddyName();
-    this.showToast(u.worn ? `${n}换上了「${u.label}」· 设置 → 外观里能换回来` : `解锁了「${u.label}」· 设置 → 外观里能换上`);
-    if (u.worn && this.buddyDo) setTimeout(() => this.buddyDo([['flex', 1100], ['stand', 300]]), 700);
+    if (!u.k) this.showToast(`${n}的样子变了一点：${u.mark}`);
+    else if (u.mark) this.showToast(`${n}${u.worn ? '换上了' : '解锁了'}「${u.label}」，${u.mark}`);
+    else this.showToast(u.worn ? `${n}换上了「${u.label}」· 设置 → 外观里能换回来` : `解锁了「${u.label}」· 设置 → 外观里能换上`);
+    if (this.buddyDo) setTimeout(() => this.buddyDo(u.worn ? [['flex', 1100], ['stand', 300]] : [['stand', 200], ['wave', 1000], ['stand', 300]]), 700);
   },
 
   /** 这个约定在哪几天里算：吃早饭从第二天开始，别的从约好那天开始，到 due 为止 */

@@ -263,7 +263,7 @@ Object.assign(FitnessApp.prototype, {
     const today = getTodayDateString();
     if (!this.workouts.some(w => w.date === today)) return { gear: [] };
     const cur = TF.Buddy.OUTFITS[this.buddyLook().outfit];
-    const covered = cur && (cur.type === 'jacket' || cur.type === 'shirt');
+    const covered = cur && ['jacket', 'shirt', 'vest', 'hoodie'].includes(cur.type);
     return Object.assign(covered ? { outfit: 'tank' } : {}, { gear: ['towel'] });
   }
 });

@@ -162,7 +162,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
   outfitOpen(id) {
     const o = TF.Buddy.OUTFITS[id];
     if (!o) return false;
-    if (id === TF.Buddy.DEFAULT_LOOK.outfit || id === 'tank') return true;
+    if (id === this.buddyBase().outfit || id === 'tank') return true;
     const w = (this.cast().wardrobe || {})[id];
     if (w) return this.storySeen ? this.storySeen(w.scene || w.bonus) : false;
     return false;
@@ -170,7 +170,13 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
 
   /** 衣柜：现在能穿的（默认那件 + 剧情解锁的），设置里只在这几件里挑 */
   wardrobeList() {
-    return [TF.Buddy.DEFAULT_LOOK.outfit].concat(Object.keys(this.cast().wardrobe || {}).filter(k => this.outfitOpen(k)));
+    return [this.buddyBase().outfit].concat(Object.keys(this.cast().wardrobe || {}).filter(k => this.outfitOpen(k)));
+  },
+
+  /** 剧情给 TA 添的小变化（v8.1，cast.marks：剪了刘海、夹了片叶子、挂着耳机…）：看过那一段就一直带着，不能关 */
+  buddyMarks() {
+    const M = this.cast().marks || {};
+    return Object.keys(M).filter(k => this.storySeen && this.storySeen(M[k].scene));
   },
 
   outfitLabel(id) {
@@ -194,7 +200,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
   /** 画小人要的样子（再叠上姿势、心情这些） */
   buddyArt(extra) {
     const l = this.buddyLook();
-    return Object.assign({ char: l.char, style: l.style, hair: l.hair, skin: l.skin, outfit: l.outfit, build: this.buddyBuild() }, extra || {});
+    return Object.assign({ char: l.char, style: l.style, hair: l.hair, skin: l.skin, outfit: l.outfit, build: this.buddyBuild(), marks: this.buddyMarks() }, extra || {});
   },
 
   /**
