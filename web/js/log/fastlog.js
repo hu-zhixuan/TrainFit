@@ -107,7 +107,7 @@
   }
 
   /** 「卧推80公斤4组8个」「深蹲 一百 五组五个」「引体向上4组10个」「卧推80 4x8」→ 一组训练；没把握返回 null */
-  function liftOf(seg, workouts) {
+  function liftOf(seg, workouts, bodyKg) {
     const s = seg.replace(/每组|一共|做了|练了|打了|的/g, '');
     const m = s.match(new RegExp(`^(.+?)(?:(${NUM})(公斤|kg|斤|KG)?)?(${NUM})(?:组|[x×*乘])(${NUM})(?:个|次|下)?$`, 'i'));
     if (!m) return null;
@@ -121,12 +121,12 @@
     if (!(kg >= 0 && kg <= 500)) return null;
     kg = round1(kg);
     return { exerciseName: last.exerciseName, muscleGroup: last.muscleGroup, weightKg: kg, sets: Math.round(sets), reps: Math.round(reps), durationMin: null,
-      burnedCalories: Math.round(sets * reps * (kg > 0 ? kg * 0.05 + 1.2 : 2.5)), estimated };
+      burnedCalories: TF.strengthBurn(last.exerciseName, kg, Math.round(sets), Math.round(reps), bodyKg), estimated };
   }
 
   /**
    * 能本机记就返回和大模型一样格式的结果（source: 'local'），不能就返回 null。
-   * data: { now, today, myFoods, diet, workouts, simple }
+   * data: { now, today, myFoods, diet, workouts, simple, bodyKg（算训练消耗用） }
    */
   function fastLog(text, data) {
     const raw = String(text || '').trim();
@@ -141,7 +141,7 @@
     const known = knownFoods(data.myFoods, data.diet, data.today);
     const items = [], lifts = [];
     for (const seg of segs) {
-      const lf = data.simple ? null : liftOf(seg.replace(/\s+/g, ''), data.workouts);
+      const lf = data.simple ? null : liftOf(seg.replace(/\s+/g, ''), data.workouts, data.bodyKg);
       if (lf) { lifts.push(lf); continue; }
       // 吃的：按空格分开；整段认不出，再在「两个鸡蛋一杯牛奶」这种数字量词开头的地方切开
       for (const chunk of seg.split(/\s+/).filter(Boolean)) {

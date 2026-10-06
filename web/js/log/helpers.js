@@ -171,6 +171,16 @@
     return Math.round((met || 5) * (kg > 30 ? kg : 65) * (minutes || 0) / 60);
   }
 
+  /**
+   * 力量训练一个动作的消耗（v9.2）：按做的时间算——每次约 4 秒、每组之后歇 75 秒，
+   * 代谢当量：下肢大复合（深蹲、硬拉、腿举、弓步、臀推、高翻…）6，别的带负重 5，自重 / 核心 3.8（Compendium 的抗阻训练常见值）。
+   */
+  function strengthBurn(name, weightKg, sets, reps, bodyKg) {
+    const minutes = (sets || 3) * ((reps || 10) * 4 + 75) / 60;
+    const met = /深蹲|硬拉|腿举|弓步|箭步|保加利亚|臀推|高翻|挺举|抓举|推雪橇|农夫/.test(String(name || '')) ? 6 : weightKg > 0 ? 5 : 3.8;
+    return Math.max(1, metBurn(met, minutes, bodyKg));
+  }
+
   /** 记录 / 计划上的小标签：有氧、运动、放松，别的（力量、静力）都是「训练」 */
   function workoutTag(w) {
     const info = exerciseInfo(w && w.exerciseName);
@@ -392,7 +402,7 @@
     return null;
   }
 
-  Object.assign(TF, { MUSCLES, MEAL_TYPES, num, cleanText, round1, mealTypeByHour, normMealType, mealTimes, mealSegments, NUTRIENTS, cleanNutrients, nutrientsText, toKg, quickWeight, findWeight, guessMuscle, exerciseInfo, metBurn, workoutTag, looksLikeQuestion, looksLikePlanEdit, looksLikeChat, lifeEvent, LIFE_EVENT, pureQuestion, noCard, needsHistory, saidWeight, saidMinutes, quickIntent });
+  Object.assign(TF, { MUSCLES, MEAL_TYPES, num, cleanText, round1, mealTypeByHour, normMealType, mealTimes, mealSegments, NUTRIENTS, cleanNutrients, nutrientsText, toKg, quickWeight, findWeight, guessMuscle, exerciseInfo, metBurn, strengthBurn, workoutTag, looksLikeQuestion, looksLikePlanEdit, looksLikeChat, lifeEvent, LIFE_EVENT, pureQuestion, noCard, needsHistory, saidWeight, saidMinutes, quickIntent });
 
   if (typeof module !== 'undefined' && module.exports) module.exports = TF;
 })(typeof window !== 'undefined' ? window : globalThis);

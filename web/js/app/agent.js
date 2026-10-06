@@ -4,7 +4,7 @@
  * 计划本 profile.planBook：[{ name, auto?, at, workouts: [...], meals: [...], days?: [{ offset, workouts }] }]，跟着备份合并。
  *   你说「把这个计划存起来叫练腿日」、点计划气泡里的「存起来」就存一份；把小人给的计划加到某天时也悄悄存一份（auto，留最近 6 份），
  *   所以「照上次那个练腿的计划」也找得到。以后说「明天练练腿日」就放到那天（本机认得出，不调大模型）。
- * 动作（act，大模型规则 12 / 本机技能 agent_intent.js 给的）：usePlan / savePlan / copyDay / movePlan / clearPlan /
+ * 动作（act，大模型规则 12 / 本机技能 agent_intent.js 给的）：usePlan / addPlan / savePlan / copyDay / movePlan / clearPlan / donePlan /
  *   renamePlan / dropPlan / goal / protein / remind。runActs 照着做，返回提示条上的几行和撤销。
  * 计划一次就准（calibratePlan）：小人给的训练计划，练过的动作按你的成绩定重量和次数（和「下次练多少」一样）；
  *   食谱按那天还剩的热量、还差的蛋白配平（多了少了 12% 以上才动，能按克数、个数改的才改）。用户不用再说「蛋白再多点」。
@@ -78,13 +78,17 @@ Object.assign(FitnessApp.prototype, {
     return { workouts: lifts, meals };
   },
 
-  /** 把一份计划放到某天（只换掉同类的：放训练不动那天的食谱）；多天的按 offset 往后排。返回放了几条 */
-  putPlan(date, entry) {
+  /**
+   * 把一份计划放到某天（只换掉同类的：放训练不动那天的食谱）；多天的按 offset 往后排。返回放了几条。
+   * raw：你自己写的计划第一次放上去（v9.2），照你写的数，不按成绩改
+   */
+  putPlan(date, entry, raw) {
     const days = entry.days && entry.days.length ? entry.days : [{ offset: 0, workouts: entry.workouts, meals: entry.meals }];
     let n = 0;
     days.forEach(d => {
       const at = shiftDateString(date, d.offset || 0);
-      const plan = this.calibratePlan({ workouts: d.workouts || [], meals: d.meals || [] }, at);
+      const src = { workouts: d.workouts || [], meals: d.meals || [] };
+      const plan = raw ? src : this.calibratePlan(src, at);
       n += this.addPlans(at, Object.assign(plan, { from: Date.now() }), true);
     });
     return n;
@@ -98,6 +102,7 @@ Object.assign(FitnessApp.prototype, {
     base = base || getTodayDateString();
     const lines = [];
     let jump = '', ok = 0;
+    const made = []; // 照计划记上的记录（撤销时删掉）
     const snap = { plans: JSON.stringify(this.plans || []), book: JSON.stringify(this.planBook()), goal: this.profile.goalType, deficit: this.profile.targetDeficitKcal,
       protein: this.profile.targetProteinG, touched: this.profile.proteinTouched, reminders: (() => { try { return localStorage.getItem('tf_reminders'); } catch (e) { return null; } })() };
     const at = (n) => shiftDateString(base, Math.round(+n || 0));
@@ -113,9 +118,20 @@ Object.assign(FitnessApp.prototype, {
         const n = this.putPlan(d, e);
         lines.push(`计划 · 「${e.name}」放到${dayWord(d)}（${n} 条，重量按你最近的成绩）`);
         jump = d; ok += 1;
+      } else if (a.do === 'addPlan') {
+        // 你自己发来的计划（「这是我的序列A上肢日，排到今天」，v9.2）：照你写的放到那天变成待办；给了名字就顺便存进计划本
+        const d = at(a.dayOffset || 0);
+        const src = { workouts: a.workouts || [], meals: a.meals || [] };
+        const e = a.name ? this.savePlanBook(src, a.name) : null;
+        const n = this.putPlan(d, src, true);
+        if (!n) { lines.push('这份计划里没认出动作和吃的，再发一次试试'); return; }
+        lines.push(`计划 · ${e ? `「${e.name}」` : ''}排进${dayWord(d)}的待办（${n} 条，做完点 ✓）`);
+        if (e) lines.push(`存好了 · 以后说「${dayWord(d) === '今天' ? '明天' : '今天'}练${TF.AgentIntent.shortName(e.name)}」就行`);
+        jump = d; ok += 1;
       } else if (a.do === 'savePlan') {
         let src = null;
-        if (a.from === 'plan') {
+        if (a.from === 'inline') src = { workouts: a.workouts || [], meals: a.meals || [] }; // 你自己发来的计划，只存不排
+        else if (a.from === 'plan') {
           const last = this._lastAnswer && this._lastAnswer.plan && Date.now() - this._lastAnswer.at < 30 * 60 * 1000 ? this._lastAnswer : null;
           if (last) {
             const p = last.plan;
@@ -126,24 +142,36 @@ Object.assign(FitnessApp.prototype, {
         }
         const e = src && this.savePlanBook(src, a.name);
         if (!e) { lines.push(a.from === 'plan' ? '刚才没有给过计划，先问「明天练什么」' : `${md(at(a.dayOffset))}没有可以存的`); return; }
-        lines.push(`存好了 · 「${e.name}」，以后说「明天练${e.name}」就行`);
+        lines.push(`存好了 · 「${e.name}」，以后说「明天练${TF.AgentIntent.shortName(e.name)}」就行`);
         ok += 1;
       } else if (a.do === 'copyDay') {
         const from = at(a.from), to = at(a.to);
-        const src = this.planFromDay(from, a.what || 'workouts');
+        let src = this.planFromDay(from, a.what || 'workouts');
+        // 那天没有记录、有计划（「把明天的食谱复制到今天」）：照搬计划
+        if (!src.workouts.length && !src.meals.length) src = this.planFromDay(from, a.what || 'workouts', true);
         if (!src.workouts.length && !src.meals.length) { lines.push(`${md(from)}没有${a.what === 'meals' ? '吃的' : '练的'}记录`); return; }
         const n = this.putPlan(to, src);
         lines.push(`计划 · ${md(from)}${a.what === 'meals' ? '吃的' : '练的'}照搬到${dayWord(to)}（${n} 条）`);
         jump = to; ok += 1;
       } else if (a.do === 'movePlan') {
         const from = at(a.from), to = at(a.to);
-        const moving = (this.plans || []).filter(p => p.date === from && !p.done);
-        if (!moving.length) { lines.push(`${dayWord(from)}没有计划可挪`); return; }
+        const pick = (p) => !a.what || a.what === 'all' || (a.what === 'meals') === (p.kind === 'meal'); // 只挪吃的 / 练的（「把明天的饮食搬到今天」）
+        const moving = (this.plans || []).filter(p => p.date === from && !p.done && pick(p));
+        if (!moving.length) { lines.push(`${dayWord(from)}没有${a.what === 'meals' ? '吃的' : a.what === 'workouts' ? '练的' : ''}计划可挪`); return; }
         const kinds = new Set(moving.map(p => p.kind));
         this.plans = this.plans.filter(p => !(p.date === to && !p.done && kinds.has(p.kind)));
         moving.forEach(p => { p.date = to; });
-        lines.push(`计划 · ${dayWord(from)}的 ${moving.length} 条挪到${dayWord(to)}`);
+        lines.push(`计划 · ${dayWord(from)}${a.what === 'meals' ? '吃的' : a.what === 'workouts' ? '练的' : '的'} ${moving.length} 条挪到${dayWord(to)}`);
         jump = to; ok += 1;
+      } else if (a.do === 'donePlan') {
+        // 那天的计划都做完了（「上肢日都练完了」「今天的计划都完成了」，v9.2）：一条条照计划记上，吃的加进已吃、练的加进训练消耗
+        const d = at(a.dayOffset || 0);
+        const todo = (this.plans || []).filter(p => p.date === d && !p.done && (!a.what || a.what === 'all' || (a.what === 'meals') === (p.kind === 'meal')));
+        if (!todo.length) { lines.push(`${dayWord(d)}没有还没做的${a.what === 'meals' ? '吃的' : a.what === 'workouts' ? '练的' : ''}计划`); return; }
+        let kcal = 0, burn = 0;
+        todo.forEach((p, i) => { const rec = this.planToRecord(p, i); made.push(rec.id); if (p.kind === 'meal') kcal += rec.calories || 0; else burn += rec.burnedCalories || 0; });
+        lines.push(`计划 · ${dayWord(d)}的 ${todo.length} 条都记上了` + (burn ? `，训练消耗 +${fmt(Math.round(burn))} 千卡` : '') + (kcal ? `，吃了 +${fmt(Math.round(kcal))} 千卡` : ''));
+        jump = d; ok += 1;
       } else if (a.do === 'clearPlan') {
         const d = at(a.dayOffset);
         const left = (this.plans || []).filter(p => p.date === d && !p.done && (!a.what || a.what === 'all' || (a.what === 'meals') === (p.kind === 'meal')));
@@ -188,6 +216,7 @@ Object.assign(FitnessApp.prototype, {
     });
     if (ok) { this.saveData(); this.render(); if (this.renderSettings && this.view === 'settings') this.renderSettings(); }
     const undo = () => {
+      if (made.length) { this.diet = this.diet.filter(x => !made.includes(x.id)); this.workouts = this.workouts.filter(x => !made.includes(x.id)); }
       this.plans = JSON.parse(snap.plans);
       this.profile.planBook = JSON.parse(snap.book);
       Object.assign(this.profile, { goalType: snap.goal, targetDeficitKcal: snap.deficit, targetProteinG: snap.protein, proteinTouched: snap.touched });
@@ -230,7 +259,10 @@ Object.assign(FitnessApp.prototype, {
   /** 给大模型看的：存好的计划（名字 + 练什么），说到计划、照着练、存起来的时候才带 */
   planBookContext(text) {
     const book = this.planBook();
-    if (!book.length || !/计划|那套|这套|那个练|存|照着|照搬|上次|之前|老样子|放到|排到|挪|改名|删/.test(String(text || ''))) return [];
+    const said = String(text || '');
+    // 说到计划的那些词，或者直接说了某份计划的名字（「今天练序列A」，v9.2）
+    if (!book.length || (!/计划|那套|这套|那个练|存|照着|照搬|上次|之前|老样子|放到|排到|挪|改名|删|待办|todo|序列|课表|清单/i.test(said) &&
+        !TF.AgentIntent.findName(said, book.map(e => e.name)))) return [];
     return book.slice(-12).map(e => {
       const lifts = (e.workouts || []).concat(...(e.days || []).map(d => d.workouts || []));
       const what = lifts.length ? lifts.slice(0, 4).map(w => w.exerciseName).join('、') + (lifts.length > 4 ? `等 ${lifts.length} 个` : '')

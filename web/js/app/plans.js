@@ -34,30 +34,41 @@ Object.assign(FitnessApp.prototype, {
     return meals.length + lifts.length;
   },
 
-  /** 计划做到了：变成记录，可以撤销 */
-  donePlan(id) {
-    const p = (this.plans || []).find(x => x.id === id);
-    if (!p) return;
-    const stamp = Date.now();
+  /**
+   * 一行计划 → 一条记录（吃的算进「已吃」，练的算进「训练消耗」），计划留着标成做完（「完成 2/5」要算）。返回那条记录。
+   * 练的没有消耗数的（老计划）按时间现算（v9.2，用户：「点一下完成，运动消耗的卡路里就加上去」）。
+   */
+  planToRecord(p, n) {
+    const stamp = Date.now() + (n || 0);
     let rec;
     if (p.kind === 'meal') {
       rec = { id: 'd_' + stamp, ts: stamp, date: p.date, mealType: p.mealType, foodSummary: p.foodSummary, calories: p.calories,
         proteinG: p.proteinG, carbsG: p.carbsG, fatG: p.fatG, items: p.items, said: '照计划' };
       this.diet.unshift(rec);
     } else {
+      const lw = this.latestWeight ? this.latestWeight() : null;
+      const burn = p.burnedCalories > 0 ? p.burnedCalories
+        : p.durationMin ? TF.metBurn(TF.exerciseInfo(p.exerciseName).met, p.durationMin, lw && lw.kg) : TF.strengthBurn(p.exerciseName, p.weightKg, p.sets, p.reps, lw && lw.kg);
       rec = { id: 'w_' + stamp, ts: stamp, date: p.date, exerciseName: p.exerciseName, muscleGroup: p.muscleGroup, weightKg: p.weightKg,
-        sets: p.sets, reps: p.reps, durationMin: p.durationMin, rpe: 8.0, burnedCalories: p.burnedCalories, notes: '照计划' };
+        sets: p.sets, reps: p.reps, durationMin: p.durationMin, rpe: 8.0, burnedCalories: burn, notes: '照计划' };
       this.workouts.unshift(rec);
     }
-    // 留着、标成做完：「计划」那行的进度条要算「完成 2/5」
     p.done = true;
     p.recId = rec.id;
+    return rec;
+  },
+
+  /** 计划做到了：变成记录，可以撤销 */
+  donePlan(id) {
+    const p = (this.plans || []).find(x => x.id === id);
+    if (!p) return;
+    const rec = this.planToRecord(p);
     this.saveData();
     this.render();
     window.Haptics && window.Haptics.fire('success');
     window.Sound && window.Sound.play('success');
     const line = p.kind === 'meal' ? `${p.mealType.replace('/补剂', '')} · ${p.foodSummary} ${p.calories} kcal`
-      : `训练 · ${p.exerciseName} ${p.durationMin ? p.durationMin + ' 分钟' : (p.weightKg > 0 ? p.weightKg + 'kg' : '自重') + ' ' + p.sets + '×' + p.reps}`;
+      : `训练 · ${p.exerciseName} ${p.durationMin ? p.durationMin + ' 分钟' : (p.weightKg > 0 ? p.weightKg + 'kg' : '自重') + ' ' + p.sets + '×' + p.reps} · 消耗 ${rec.burnedCalories} kcal`;
     const undo = () => {
       const list = p.kind === 'meal' ? this.diet : this.workouts;
       const i = list.findIndex(x => x.id === rec.id);
@@ -129,7 +140,7 @@ Object.assign(FitnessApp.prototype, {
       : `<span class="tag ${TF.workoutTag(p).cls}">${TF.workoutTag(p).label}</span>${inGroup ? '<span class="tag tag-plan">计划</span>' : ''}`;
     const title = tag + esc(meal ? p.foodSummary : p.exerciseName);
     const sub = meal ? [p.calories ? `${fmt(p.calories)} kcal` : '', p.proteinG ? `蛋白 ${round1(p.proteinG)}g` : ''].filter(Boolean).join(' · ')
-      : (p.durationMin ? `${p.durationMin} 分钟` : `${p.weightKg > 0 ? p.weightKg + 'kg' : '自重'} · ${p.sets}×${p.reps}`);
+      : (p.durationMin ? `${p.durationMin} 分钟` : `${p.weightKg > 0 ? p.weightKg + 'kg' : '自重'} · ${p.sets}×${p.reps}`) + (p.burnedCalories > 0 ? ` · 约 ${fmt(p.burnedCalories)} kcal` : ''); // 点 ✓ 以后加进训练消耗的数
     return `
         <div class="item plan${inGroup ? ' in-group' : ''}" data-plan="${esc(p.id)}">
           <div class="item-icon ${meal ? 'meal' : 'lift'}">${meal ? ICONS.meal : ICONS.lift}</div>
