@@ -117,7 +117,7 @@
         // 聊天：小人是谁、你们多熟、刚才聊了啥（最多 3 轮，15 分钟内）
         chat: !!p.chat, buddy: p.chat && app.buddyPersona ? app.buddyPersona() : null, talk: p.chat && app.chatThread ? app.chatThread() : [],
         life: p.chat && app.lifeList ? app.lifeList() : [], // v6.3：他最近说过的事（「周五面试」），小人接着上次聊
-        // v6.5：存好的计划（说到计划、照着练时才带）；回答用小人的口吻（极简模式不带）
+        // v6.5：存好的计划（说到计划、照着练时才带）；回答用小人的口吻（不要小人时不带）
         planBook: app.planBookContext ? app.planBookContext(p.text) : [],
         voice: !p.chat && app.buddyLook && app.buddyLook().show && app.cast ? { name: app.cast().name, speech: app.cast().speech } : null };
     },

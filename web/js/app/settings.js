@@ -238,7 +238,7 @@ Object.assign(FitnessApp.prototype, {
     $('set-haptics').checked = hap;
     $('set-sound').checked = !window.Sound || window.Sound.on();
     try { $('set-story-push').checked = localStorage.getItem('tf_story_push') !== '0'; } catch (e) {}
-    $('row-story-push').classList.toggle('hidden', !(this.buddyLook && this.buddyLook().show));
+    $('row-story-push').classList.toggle('hidden', !this.storyOn()); // 剧情模式才有（v9.1）
     $('rem-note').textContent = !this.hasNotifApi() ? '提醒只在安卓 App 里可用。' :
       (!granted && localStorage.getItem('tf_remind_asked') ? '通知权限没打开，提醒不会响。打开任意一个开关会请求权限。' : '');
   }

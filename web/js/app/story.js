@@ -107,7 +107,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
   storyEvent(trigger, info) {
     info = info || {};
     if (this.cast().main && !this.mainDone()) return false; // v9.0：主线没看完，零碎的小剧情先让路（别把故事打碎）
-    if (!(info.must ? this.buddyLook().show : this.chatty()) || this._touring || this.needsOnboarding || !this.cast().events) return false;
+    if (!this.storyOn() || !(info.must || this.chatty()) || this._touring || this.needsOnboarding || !this.cast().events) return false; // 极简模式没有剧情（v9.1）
     if (trigger !== 'record' && (!this.canChat() || Date.now() - (this._popAt || 0) < 60000)) return false;
     const pop = document.getElementById('buddy-pop');
     if (!pop || !pop.classList.contains('hidden')) return false;
@@ -437,7 +437,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
    */
   storyAuto(trigger, info) {
     info = info || {};
-    if (!this.buddyLook().show || !this.buddyChosen() || this._touring || this._scene || this.needsOnboarding || !this.cast().main) return false;
+    if (!this.storyOn() || !this.buddyChosen() || this._touring || this._scene || this.needsOnboarding || !this.cast().main || this.view !== 'today') return false;
     if (typeof document !== 'undefined' && document.body.classList.contains('onboarding')) return false;
     const next = this.mainNext();
     if (!next) return false;
@@ -448,6 +448,16 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     if (trigger === 'record' && info.recId) setTimeout(() => this.carryIntoStory(info.recId, info.bridge || '', go), 500);
     else setTimeout(go, trigger === 'record' ? 600 : 250);
     return true;
+  },
+
+  /**
+   * 在设置里刚切到剧情模式（v9.1）：告诉你回到今天页故事就来；回到今天页时（switchView）看一眼有没有能演的。
+   */
+  storyKickoff() {
+    this._storyKick = true;
+    const next = this.mainNext ? this.mainNext() : null;
+    const seen = this.storyData().seen || [];
+    if (this.showToast) this.showToast(next ? `回到今天页，${this.buddyName()}的故事就开始${this.mainList().some(x => seen.includes(x.sc.id)) ? '（接着上次）' : ''}` : '剧情模式打开了');
   },
 
   /** 记完一条：有能看的主线就顺着这条切进去（TA 先对这条说一句） */
@@ -637,7 +647,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
 
   /** 小人头上挂本小书：有解锁了还没看的主线 */
   mainReady() {
-    return !!(this.buddyLook().show && !this.needsOnboarding && this.cast().main && this.mainNext());
+    return !!(this.storyOn() && !this.needsOnboarding && this.cast().main && this.mainNext());
   },
 
   /**
@@ -646,7 +656,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
    */
   mainNudge() {
     const next = this.mainNext();
-    if (!next || !this.buddyLook().show || this._touring) return false;
+    if (!next || !this.storyOn() || this._touring) return false;
     if (!this.whenOk(next.sc.when) && this.mainWaited(next) < 2) return false;
     const today = getTodayDateString();
     let last = '';
@@ -692,7 +702,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
    * 返回 { kind: 'bonus' | 'main', id, line（TA 的那句）, label } 或 null
    */
   storyCue() {
-    if (!this.buddyLook().show || this.needsOnboarding || !this.cast().main) return null;
+    if (!this.storyOn() || this.needsOnboarding || !this.cast().main) return null;
     const b = this.bonusReady();
     if (b) return { kind: 'bonus', id: b.id, line: this.cast().sex === 'f' ? '约好的事你做到了！我有东西给你看～' : '约好的事，你做到了。……有东西给你看。', label: `约定达成 ·「${b.title}」` };
     const next = this.mainNext();
@@ -708,7 +718,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
   /** 打开 App 时：约定做到了、加篇还没看（记完那会儿小人在说别的），问一句；一天一次 */
   bonusNudge() {
     const B = this.bonusReady();
-    if (!B || !this.buddyLook().show || this._touring) return false;
+    if (!B || !this.storyOn() || this._touring) return false;
     const today = getTodayDateString();
     let last = '';
     try { last = localStorage.getItem('tf_bonus_nudge') || ''; } catch (e) {}
@@ -749,12 +759,13 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
 
   /** 台词表里的一句：字符串，或者 [话, 要先看过的剧情]——剧情里还没说过的事（肩伤、爸爸），小人不先说 */
   castLine(x) {
-    if (Array.isArray(x)) return this.storySeen(x[1]) ? String(x[0] || '') : '';
+    if (Array.isArray(x)) return this.storyOn() && this.storySeen(x[1]) ? String(x[0] || '') : ''; // 极简模式：剧情里的事不提
     return x ? String(x) : '';
   },
 
   /** 剧情的余韵（cast.echo）：最近看过的三段里挑一句，接着剧情说；刚说过的不重复 */
   storyEcho() {
+    if (!this.storyOn()) return '';
     const E = this.cast().echo || {};
     const seen = this.storyData().seen || [];
     const ids = seen.filter(id => E[id]).slice(-3);
@@ -828,6 +839,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
    * 过期了没做到的悄悄收起来，不提、不怪你（陪伴不绑架）。返回这次新做到的约定 id。
    */
   promiseCheck(quiet) {
+    if (!this.storyOn()) return null;
     const st = this.storyData();
     const list = Object.entries(st.promises || {});
     if (!list.length) return null;
@@ -846,7 +858,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
 
   promiseCelebrate(id) {
     const P = (this.cast().promises || {})[id];
-    if (!P || !this.buddyLook().show || this._touring) return;
+    if (!P || !this.storyOn() || this._touring) return;
     const B = (this.cast().bonus || {})[P.bonus];
     const f = this.cast().sex === 'f';
     setTimeout(() => {
@@ -1013,6 +1025,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
 
   /** 你们之间发生过的事（给聊天的大模型，最多 5 件，新的在后） */
   storyFacts() {
+    if (!this.storyOn()) return [];
     const st = this.storyData();
     const E = this.cast().events || {};
     const picks = st.picks || {};
@@ -1036,6 +1049,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
 
   /** 你们现在的关系（给聊天的大模型）：恋人 / 好搭子 / 有点暧昧 */
   relationPrompt() {
+    if (!this.storyOn()) return ''; // 极简模式：就是陪你记的搭子，不往暧昧、恋爱走
     const st = this.storyData();
     if (st.romance === true) return '你们在一起了（他在剧情里说也喜欢你）：可以更亲密，说喜欢他、想他；但不黏人、不吃醋、不管他和谁玩，鼓励他有自己的朋友和生活。';
     if (st.romance === false) return '他说你是他最好的搭子：很亲近、很在乎，但不往恋爱走，不说暧昧的话。';

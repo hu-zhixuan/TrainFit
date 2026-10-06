@@ -774,10 +774,25 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     return TF.Buddy.CAST_LOOK[TF.Buddy.look(this.profile.buddy, this.profile.gender).char];
   },
 
-  /** 选过陪你的人没有（选了就锁住，不能换；极简模式进来的还没选） */
+  /** 选过陪你的人没有（选了就锁住，不能换；以前选了「不要小人」的还没选） */
   buddyChosen() {
     const b = this.profile.buddy || {};
     return !!(b.charLocked || (b.picked && b.char));
+  },
+
+  /**
+   * 小人是哪种模式（v9.1，用户：「能不能只用小人，不参与 galgame」）：
+   *  story 剧情模式 —— 全部：主线故事、小剧情、相册、亲密度和升级、小纸条、小别扭、悄悄话、想你、剧情给的样子和衣服；
+   *  lite  极简模式 —— 只有小人：记完回一句、打招呼、饭点问一句、回答问题、陪你聊、摸头、图鉴，没有剧情和养成。
+   * 没存过的（v9.0 以前选了 TA 的老用户）算剧情模式，跟以前一样。
+   */
+  buddyMode() {
+    return (this.profile.buddy || {}).mode === 'lite' ? 'lite' : 'story';
+  },
+
+  /** 剧情那一套开着没有：小人在、是剧情模式（直接看存的，不经过 buddyLook——它查衣服要用这个，会绕回来） */
+  storyOn() {
+    return !!(TF.Buddy.look(this.profile.buddy, this.profile.gender).show && this.buddyMode() === 'story');
   },
 
   /** 有记录的日子（饮食、训练、体重都算） */
@@ -790,7 +805,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     const btn = document.getElementById('buddy');
     if (!btn) return;
     const look = this.buddyLook();
-    const show = look.show && this.view === 'today' && !this.needsOnboarding; // 极简模式：教程也不叫它出来
+    const show = look.show && this.view === 'today' && !this.needsOnboarding; // 不要小人：教程也不叫它出来
     btn.classList.toggle('hidden', !show);
     document.body.classList.toggle('has-buddy', show);
     if (!show) { this.buddyStop(); return; }
@@ -1028,7 +1043,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     pop.dataset.level = st.level == null ? 'none' : String(st.level);
     const name = this.callName ? this.callName() : '';
     const head = (name ? `${esc(name)}，` : '') + (st.streak ? `连续记录 <b>${st.streak}</b> 天` : '今天开始记吧');
-    const foot = [st.days ? `一共记了 ${st.days} 天` : '', st.next ? `再连续 ${st.next.days} 天拿${st.next.name}` : '头带、棒球帽、皇冠都拿到了'].filter(Boolean).join(' · ');
+    const foot = [st.days ? `一共记了 ${st.days} 天` : '', st.next ? `再连续 ${st.next.days} 天拿${st.next.name}` : '头带、棒球帽、皇冠都拿到了', this.storyOn() ? '' : '长按我摸摸头'].filter(Boolean).join(' · ');
     // 一句观察（最近一周蛋白够不够、吃没吃超）和一句训练建议，都是本机算的
     const obs = this.observation ? this.observation() : '';
     const tip = this.trainingTip ? this.trainingTip() : '';
@@ -1056,7 +1071,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
 
   /** 点小人看到的那一行亲密度：名字、第几章、离下一章还差几天、下一章是什么 */
   bondRow() {
-    if (!this.bond) return '';
+    if (!this.bond || !this.storyOn()) return ''; // 极简模式没有亲密度、章节（v9.1）
     const b = this.bond();
     const W = this.cast().wardrobe || {};
     const unlock = b.next && Object.keys(W).find(k => W[k].scene && +W[k].scene[2] === b.next.lv); // 下一章的剧情里会解锁的衣服
@@ -1763,7 +1778,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     pop.classList.remove('hidden');
     const place = () => {
       const bd = document.getElementById('buddy');
-      // 极简模式没有小人：对话框放在输入栏上面
+      // 不要小人：对话框放在输入栏上面
       const r = bd.classList.contains('hidden') ? document.getElementById('composer').getBoundingClientRect() : bd.getBoundingClientRect();
       pop.style.bottom = Math.round(window.innerHeight - r.top + 6) + 'px';
       pop.style.right = Math.max(12, Math.round(window.innerWidth - r.right)) + 'px';
@@ -1815,7 +1830,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
 
   /**
    * 设置 →「外观」里的小人（v8.0，用户：「选定一个角色后续就不可更改；服装、发型、身材不能由用户改，要由剧情推进来变；
-   * 设置端简单一点，最多剧情解锁之后有轻度的设置」）：是谁陪你（不能换，只能关成极简）、预览、走到第几章、剧情、
+   * 设置端简单一点，最多剧情解锁之后有轻度的设置」）：是谁陪你（不能换；v9.1 起剧情模式 / 极简模式 / 不要小人三选一）、预览、走到第几章、剧情、
    * 衣服（只列剧情里解锁了的，只有一件时不出）、TA 多黏你。
    */
   renderBuddySettings(pose) {
@@ -1827,11 +1842,18 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     const c = this.cast();
     const chosen = this.buddyChosen();
     const ta = c.sex === 'f' ? '她' : '他';
-    $('buddy-show').checked = !!look.show;
-    $('buddy-who-name').textContent = chosen ? `${c.name}陪你记` : '和 TA 一起';
-    $('buddy-who-note').textContent = look.show ? `选了就是${c.name}，不能换。关掉就是极简模式，再打开还是${ta}。`
-      : chosen ? `现在是极简模式。打开，${c.name}就回来，故事接着走。` : '现在是极简模式。打开会让你选一个人陪你记——选了就不能换。';
+    // v9.1 三选一：剧情模式（完整的故事）/ 极简模式（只有小人，没有剧情）/ 不要小人
+    const story = this.storyOn();
+    const mode = !look.show ? 'off' : story ? 'story' : 'lite';
+    document.querySelectorAll('#buddy-mode .seg-btn').forEach(x => x.classList.toggle('active', x.dataset.value === mode));
+    const seen = (this.storyData ? this.storyData().seen || [] : []).filter(id => /^(jx|xy)\d/.test(id)).length;
+    $('buddy-who-name').textContent = chosen ? `${c.name}陪你记` : '陪你记的 TA';
+    $('buddy-who-note').textContent = mode === 'story' ? `完整的故事：每天一段剧情、你的选择走向结局，还有相册、换装、亲密度。选了就是${c.name}，不能换。`
+      : mode === 'lite' ? `只有${ta}趴在按钮上：记完回你一句、打招呼、回答问题、陪你聊。没有剧情和养成。${seen ? '切回剧情模式，故事接着上次。' : ''}`
+      : chosen ? `只有一个按钮，最干净。想${ta}了，选上面任意一个，${c.name}就回来。` : '只有一个按钮，最干净。选上面任意一个，会让你选一个人陪你记——选了就不能换。';
     $('buddy-on').classList.toggle('hidden', !look.show);
+    $('buddy-on').classList.toggle('lite', !story);
+    if ($('row-story-push')) $('row-story-push').classList.toggle('hidden', !story); // 「剧情里约好的时间」也只在剧情模式
     if (!look.show) return;
     // 预览不戴连续记录的装备（帽子会把发型盖住），看得清头发和衣服
     $('buddy-preview').innerHTML = B.svg(this.buddyArt({ mood: pose === 'flex' ? 'great' : 'ok', gear: [], pose: pose || 'stand' }));
@@ -1876,9 +1898,9 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       (rel.romance != null ? `<button type="button" class="chip" data-rel-reset="1">${rel.romance ? '改回搭子' : '让 TA 再问一次'}</button>` : '') : '';
     const talk = this.talkLevel ? this.talkLevel() : 'normal';
     document.querySelectorAll('#buddy-talk .seg-btn').forEach(x => x.classList.toggle('active', x.dataset.value === talk));
-    $('buddy-talk-note').textContent = talk === 'quiet' ? '记完只做个动作，破纪录、吃撑这种大事和剧情还会有；卡住了才开口' :
-      talk === 'more' ? '再加上你逛的时候、发呆的时候凑过来聊几句、出个题，一天二十句以内' : '你记了什么 TA 都有反应，剧情照常走，打招呼、饭点问一句；你逛的时候不打扰';
-    $('buddy-note').textContent = (st.streak ? `连续记录 ${st.streak} 天。` : '') + `${c.name}趴在「按住说话」上面：点一下看今天（每天第一次点有张小纸条），长按摸摸头，打字跟 TA 说「早」「晚安」「抱抱」TA 马上接。连续记 3 天戴头带，7 天棒球帽，30 天皇冠。`;
+    $('buddy-talk-note').textContent = talk === 'quiet' ? `记完只做个动作，破纪录、吃撑这种大事${story ? '和剧情' : ''}还会有；卡住了才开口` :
+      talk === 'more' ? '再加上你逛的时候、发呆的时候凑过来聊几句、出个题，一天二十句以内' : `你记了什么 TA 都有反应，${story ? '剧情照常走，' : ''}打招呼、饭点问一句；你逛的时候不打扰`;
+    $('buddy-note').textContent = (st.streak ? `连续记录 ${st.streak} 天。` : '') + `${c.name}趴在「按住说话」上面：点一下看今天${story ? '（每天第一次点有张小纸条）' : ''}，长按摸摸头，打字跟${ta}说「早」「晚安」「抱抱」，${ta}马上接。连续记 3 天戴头带，7 天棒球帽，30 天皇冠。`;
   },
 
   bindBuddySettings() {
@@ -1895,15 +1917,29 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       if (!b || !this.outfitOpen(b.dataset.value)) return;
       set({ outfit: b.dataset.value }, 'flex');
     });
-    // 陪你的人不能换：只能关成极简、再打开；没选过的（一开始选了极简）打开时选一次
-    document.getElementById('buddy-show').addEventListener('change', (e) => {
-      const on = e.target.checked;
-      if (on && !this.buddyChosen()) {
-        e.target.checked = false;
-        this.showCastPick(() => { this.renderBuddySettings(); this.renderBuddy(); });
+    // 剧情模式 / 极简模式 / 不要小人（v9.1）：陪你的人不能换；没选过人的（以前选了不要小人）切过来时选一次
+    document.getElementById('buddy-mode').addEventListener('click', (e) => {
+      const b = e.target.closest('.seg-btn');
+      if (!b) return;
+      const v = b.dataset.value;
+      const wasStory = this.storyOn();
+      // 直接写存的（不经过 buddyLook：极简模式下它会把剧情给的衣服换回默认的，切回剧情模式就丢了）
+      const apply = (patch, pose) => {
+        this.setBuddy(patch);
+        this.renderBuddySettings(pose);
+        this.renderBuddy();
+        window.Haptics && window.Haptics.fire('tick');
+        if (pose) { clearTimeout(this._prevT); this._prevT = setTimeout(() => this.renderBuddySettings(), 1300); }
+      };
+      // 离开剧情模式：剧情里约好的那条通知也取消（那段剧情这会儿不演了）
+      if (v !== 'story' && wasStory && window.TrainFitNative && window.TrainFitNative.storyPush) { try { window.TrainFitNative.storyPush('{}'); } catch (err) {} }
+      if (v === 'off') { apply({ show: false, picked: 6 }); return; }
+      if (!this.buddyChosen()) {
+        this.showCastPick(() => { this.renderBuddySettings(); this.renderBuddy(); if (v === 'story') this.storyKickoff(); }, { mode: v });
         return;
       }
-      set({ show: on, picked: 6 }, on ? 'wave' : null);
+      apply({ show: true, picked: 6, mode: v }, 'wave');
+      if (v === 'story' && !wasStory) this.storyKickoff();
     });
     document.getElementById('buddy-preview').addEventListener('click', () => {
       this.renderBuddySettings('flex');

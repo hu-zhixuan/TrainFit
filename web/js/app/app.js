@@ -488,6 +488,12 @@ class FitnessApp {
     else if (!fromBack && prev !== 'today' && view === 'today' && history.state && history.state.v) history.back();
     window.scrollTo(0, 0);
     this.render();
+    // 在设置里刚切到剧情模式（v9.1）：回到今天页，故事就淡进来
+    if (view === 'today' && prev !== 'today' && this._storyKick) {
+      this._storyKick = false;
+      clearTimeout(this._greetT);
+      this._greetT = setTimeout(() => this.greetOrGuide && this.greetOrGuide(), 700);
+    }
   }
 
   shiftDate(delta) {
