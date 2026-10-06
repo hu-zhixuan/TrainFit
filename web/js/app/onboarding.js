@@ -214,7 +214,8 @@ Object.assign(FitnessApp.prototype, {
     // 选了就锁住（charLocked）：设置里不能换人；剧情模式 / 极简模式 / 不要小人随时能切
     const mode = this._castMode ? { mode: this._castMode } : {};
     this._castMode = null;
-    this.profile.buddy = Object.assign({}, this.profile.buddy || {}, show ? Object.assign({ char, show: true, picked: 6, charLocked: true }, mode) : { show: false, picked: 6 });
+    // v10：刚选的人就是从新故事开始的，以后不用再清（storyMigrate 认 v10）
+    this.profile.buddy = Object.assign({}, this.profile.buddy || {}, show ? Object.assign({ char, show: true, picked: 6, charLocked: true }, mode, char === 'boy' ? { v10: true } : {}) : { show: false, picked: 6 });
     if (this._castMid && this.needsOnboarding) { // 引导中：接着选用途
       this._castMid = false;
       window.Haptics && window.Haptics.fire('success');

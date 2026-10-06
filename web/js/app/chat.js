@@ -126,7 +126,7 @@ Object.assign(FitnessApp.prototype, {
     const pop = document.getElementById('buddy-pop');
     const cmp = document.getElementById('composer');
     const dex = document.getElementById('dex-overlay');
-    return this.chatty() && this.view === 'today' && !this._scene && !(dex && !dex.classList.contains('hidden')) && this.selectedDate === getTodayDateString() && !this._touring && !this.needsOnboarding &&
+    return this.chatty() && this.view === 'today' && !this._scene && !(dex && !dex.classList.contains('hidden')) && !(this.phoneIsOpen && this.phoneIsOpen()) && this.selectedDate === getTodayDateString() && !this._touring && !this.needsOnboarding &&
       !(this.quietNow && this.quietNow()) && // 正在练、深夜：安静陪着
       pop && pop.classList.contains('hidden') && !cmp.classList.contains('recording') && !(this.pending || []).some(p => p.status === 'working') &&
       (this.diet.length + this.workouts.length > 0) && this.chatBudget(false);
@@ -275,8 +275,9 @@ Object.assign(FitnessApp.prototype, {
     const more = this.talkLevel() === 'more';
     if (this.promiseCheck) this.promiseCheck(true); // 剧情约定：做到了的标上（加篇在下面问）、过期的悄悄收起（v8.0）
     // v6.3：深夜的剧情排在「这么晚还没睡」前面；近况追问、小剧情、它低落、攒着的事排在饭点之后；v7.1 新的主线（问你有没有空听）排在小剧情前面
-    // v9.0：有能看的主线，打开就直接淡进剧情（排在最前面）
-    return (this.storyAuto && this.storyAuto('open')) || (this.bondUpNow && this.bondUpNow()) || (this.anniversary && this.anniversary()) || (this.festivalGreet && this.festivalGreet()) ||
+    // v10.0（用户：「主线剧情用户自己点进去玩」）：不再自己淡进剧情；TA 的手机先收一下今天的消息（不占说话的次数），该打来的电话响一下
+    if (this.phoneSync) this.phoneSync();
+    return (this.phoneRing && this.phoneRing()) || (this.bondUpNow && this.bondUpNow()) || (this.anniversary && this.anniversary()) || (this.festivalGreet && this.festivalGreet()) ||
       (this.storyEvent && this.storyEvent('night')) ||
       (this.lateNight && this.lateNight()) || (this.goodNight && this.goodNight()) || (this.sulkGreet && this.sulkGreet()) || this.greetToday() || this.firstGuide() ||
       (more && this.mealPick && this.mealPick()) || this.mealGapNudge() || (more && this.dexIntro && this.dexIntro()) ||
@@ -643,7 +644,7 @@ Object.assign(FitnessApp.prototype, {
     if (Date.now() - (this._popAt || 0) < 60000) return false;
     if ((this.pending || []).some(p => p.status === 'working')) return false;
     const shown = (id) => { const el = document.getElementById(id); return el && !el.classList.contains('hidden'); };
-    if (['edit-overlay', 'share-overlay', 'rec-panel', 'ql-snackbar', 'gauge-pop', 'dex-overlay'].some(shown)) return false;
+    if (['edit-overlay', 'share-overlay', 'rec-panel', 'ql-snackbar', 'gauge-pop', 'dex-overlay', 'phone-overlay'].some(shown)) return false;
     const cmp = document.getElementById('composer');
     if (cmp && cmp.classList.contains('recording')) return false;
     const ae = document.activeElement;

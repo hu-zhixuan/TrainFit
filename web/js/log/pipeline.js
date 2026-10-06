@@ -245,6 +245,7 @@
       this.showSnack(batch, result);
       // 剧情里的约定（v8.0）：这条记录让哪个约定做到了，先标上；没有更要紧的话要说时，小人马上庆祝 + 问要不要看加篇
       const kept = app.promiseCheck ? app.promiseCheck(true) : null;
+      if (app.phoneAfterLog) app.phoneAfterLog(result, batch); // TA 的手机：他看见了，发一句（v10.0；在手机里打字记的，这句就是回你的）
       // 放了计划（「明天练计划A」）：跳到那天看
       if (batch.acts && batch.acts.jump && app.jumpToPlans && !result.answer) app.jumpToPlans(batch.acts.jump);
       if (result.answer && app.showBuddyAnswer) app.showBuddyAnswer(p.text, result.answer, answerOpts); // 又记又问
@@ -254,7 +255,6 @@
       else if (app.makeUpAfter && app.makeUpAfter(result, batch)) { /* 闹着小别扭：好好吃饭了就和好 */ }
       else if (app.memoTip && app.memoTip(result, batch)) { /* 你说过有伤：练到那儿提醒一句 */ }
       else if (app.recordReact && app.recordReact(result, batch, 'big')) { /* 破纪录、吃撑了、蛋白够了、这周第 5 练、体重轻了：小人一张卡片（第一次是小剧情，v6.4） */ }
-      else if (app.storyAfterLog && app.storyAfterLog(result, batch)) { /* 有能看的主线：TA 先对这条说一句，直接淡进剧情（v9.0） */ }
       else if (app.newbieTip && app.newbieTip(result)) { /* 新手第一周：小人说一句小提示 */ }
       else if (app.coachTip && app.coachTip(result, batch)) { /* 该提醒的时候说一句：深夜还吃、晚上蛋白还差很多 */ }
       else if (app.askFeeling && app.askFeeling(result, batch)) { /* 练完问一句感受，下次加重量按这个来 */ }

@@ -244,7 +244,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       '<div class="th-act"></div>' +
       '<div class="th-card" aria-hidden="true"><small class="th-card-label"></small><b class="th-card-title"></b><i class="th-card-line"></i><span class="th-card-sub"></span></div>' +
       '<div class="th-time" aria-hidden="true"><span></span></div><div class="th-flash" aria-hidden="true"></div>' +
-      '<div class="th-onair" aria-hidden="true">ON AIR</div><div class="th-glass" aria-hidden="true"></div>' +
+      '<div class="th-calltime" aria-hidden="true"></div><div class="th-onair" aria-hidden="true">ON AIR</div><div class="th-glass" aria-hidden="true"></div>' +
       '<div class="th-doc hidden" role="document"></div><div class="th-toast" aria-live="polite"></div>' +
       '<div class="th-log hidden"><div class="th-log-head">回看<button class="th-tool th-log-close" type="button">关闭</button></div><div class="th-log-list"></div></div>' +
       '<div class="th-credits hidden"></div>';
@@ -320,7 +320,17 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     el.querySelector('.th-tools').classList.toggle('hidden', !!sc.viewer);
     el.querySelector('.th-cgimg').style.backgroundImage = '';
     el.classList.remove('hidden', 'closing', 'choosing', 'narr', 'other', 'me', 'in-cg', 'cg-art', 'rolling', 'phone', 'acting', 'has-sprite', 'fx-close', 'fx-sepia', 'fx-dark', 'iris-out',
-      'sys-line', 'own-line', 'onair', 'glass-rain');
+      'sys-line', 'own-line', 'onair', 'glass-rain', 'twin', 'sysvoice', 'calling');
+    // 电话（v10.0，TA 的手机）：上面一条「通话中 0:12」，一秒一跳
+    el.classList.toggle('calling', !!sc.call);
+    clearInterval(this._callT);
+    const ct = el.querySelector('.th-calltime');
+    if (sc.call && ct) {
+      const t0 = Date.now();
+      const tick = () => { const n = Math.floor((Date.now() - t0) / 1000); ct.textContent = `通话中 ${Math.floor(n / 60)}:${String(n % 60).padStart(2, '0')}`; };
+      tick();
+      this._callT = setInterval(tick, 1000);
+    }
     el.querySelector('.th-doc').classList.add('hidden');
     document.body.classList.add('in-theater');
     // 从小人那儿圆形展开（没有位置就淡入）
@@ -510,28 +520,34 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     el.classList.toggle('sys-line', special === 'sys');
     el.classList.toggle('own-line', special === 'own');
     if (s.phone) { this.sceneBubble(face, text, special); return; }
-    const other = typeof face === 'string' && face[0] === '@';
+    // v10.0：「@标准版」是另一个 TA（同一张脸、一直在笑，立绘上一层冷色）；「@系统」是 App 后台的系统消息（红色名字牌、等宽字）
+    const twin = face === '@标准版';
+    const other = typeof face === 'string' && face[0] === '@' && !twin;
     const me = face === '你';
     // 表情写 null 的是旁白：不挂名字牌；「@老周」是别人在说：名字牌换成他，TA 退到后面；「你」是你说的
     el.classList.toggle('narr', face == null);
     el.classList.toggle('other', other);
     el.classList.toggle('me', me);
+    el.classList.toggle('twin', twin);
+    el.classList.toggle('sysvoice', face === '@系统');
     el.querySelector('.th-name').textContent = this.sceneWho(face);
     s.log.push({ who: this.sceneWho(face), text });
     if (face != null && !other && !me) {
       const actor = el.querySelector('.th-actor');
       if (look) s.look = Object.assign({}, s.look || {}, look);
       const cg = s.cg && this.cgDef(s.cg);
-      if (face !== s.face || !actor.innerHTML) actor.innerHTML = this.sceneActor(face, (cg && cg.pose) || pose, Object.assign({}, s.look || {}, cg && cg.outfit ? { outfit: cg.outfit } : {}));
+      const shown = twin ? '开心' : face;
+      if (face !== s.face || !actor.innerHTML) actor.innerHTML = this.sceneActor(shown, (cg && cg.pose) || pose, Object.assign({}, s.look || {}, cg && cg.outfit ? { outfit: cg.outfit } : {}));
       // 表情动起来：开心、得意蹦一下，不服抖一下，害羞、心动冒爱心，别的冒符号；同一个表情接着说就轻轻一顿
       actor.classList.remove('th-hop', 'th-shake', 'th-talk', 'th-enter');
       void actor.offsetWidth;
       actor.classList.remove('th-startle', 'th-droop', 'th-sway', 'th-lean', 'th-doze');
       if (face !== s.face) {
         // 立绘的动作：开心蹦一下、不服抖一下、惊讶往后一缩、担心低一下头、害羞晃一晃、心动往前凑、困了慢慢点头
-        const move = { 开心: 'th-hop', 得意: 'th-hop', 闪亮: 'th-hop', 不服: 'th-shake', 惊讶: 'th-startle', 担心: 'th-droop', 害羞: 'th-sway', 心动: 'th-lean', 困: 'th-doze', 哭: 'th-droop', 泪笑: 'th-sway' }[face];
+        const move = twin ? 'th-enter' : { 开心: 'th-hop', 得意: 'th-hop', 闪亮: 'th-hop', 不服: 'th-shake', 惊讶: 'th-startle', 担心: 'th-droop', 害羞: 'th-sway', 心动: 'th-lean', 困: 'th-doze', 哭: 'th-droop', 泪笑: 'th-sway' }[face];
         if (move) actor.classList.add(move);
-        if (/害羞|心动/.test(face)) this.sceneHearts();
+        if (twin) this.sceneEmote('');
+        else if (/害羞|心动/.test(face)) this.sceneHearts();
         else this.sceneEmote(face);
       } else actor.classList.add('th-talk');
       if (el.classList.contains('actor-out')) { el.classList.remove('actor-out'); actor.classList.add('th-enter'); }
@@ -654,7 +670,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       clearTimeout(this._phT);
       list.querySelectorAll('.ph-typing').forEach(n => n.remove());
       el.querySelector('.th-ph-state').textContent = '';
-      add(`<p class="ph-msg${other ? ' other' : ''}${special ? ' ' + special : ''}">${other ? `<b>${esc(who)}</b>` : ''}${esc(text)}</p>`);
+      add(`<p class="ph-msg${other ? ' other' : ''}${face === '@系统' ? ' sysmsg' : ''}${special ? ' ' + special : ''}">${other ? `<b>${esc(who)}</b>` : ''}${esc(text)}</p>`);
       if (window.Sound) window.Sound.play('pop');
       window.Haptics && window.Haptics.fire('tick');
       if (/害羞|心动/.test(face)) this.sceneHearts();
@@ -1306,6 +1322,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     const s = this._scene;
     this._scene = null;
     this.sceneTimersClear();
+    clearInterval(this._callT);
     if (window.Sound && window.Sound.amb) window.Sound.amb('');
     const btn = document.getElementById('buddy');
     const r = btn && !btn.classList.contains('hidden') ? btn.getBoundingClientRect() : null;
@@ -1320,7 +1337,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     }
     setTimeout(() => {
       el.classList.add('hidden');
-      el.classList.remove('closing', 'choosing', 'rolling', 'in-cg', 'iris-out', 'fade-out', 'phone', 'acting', 'act-card', 'fx-close', 'fx-sepia', 'fx-dark', 'sys-line', 'own-line', 'onair', 'glass-rain');
+      el.classList.remove('closing', 'choosing', 'rolling', 'in-cg', 'iris-out', 'fade-out', 'phone', 'acting', 'act-card', 'fx-close', 'fx-sepia', 'fx-dark', 'sys-line', 'own-line', 'onair', 'glass-rain', 'twin', 'sysvoice', 'calling');
       el.querySelector('.th-doc').classList.add('hidden');
       el.querySelector('.th-credits').classList.add('hidden');
       el.querySelector('.th-act').innerHTML = '';
