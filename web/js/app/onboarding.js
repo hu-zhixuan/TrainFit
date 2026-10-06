@@ -1,6 +1,7 @@
 /**
- * 第一次打开（v7.0）：先选怎么用——极简模式，还是和 TA 一起（选江叙 / 夏柚）；再选用途（想瘦一点 / 就记记吃了啥 / 在健身），
- * 简单填身体数据。选了 TA 的，进 App 先演第一章的开头（剧场），再由 TA 带三步教程。
+ * 第一次打开（v7.0，v9.1 改）：先选怎么用——极简模式（只有一个陪你记的小人，没有剧情）还是剧情模式（完整的故事），
+ * 两种都选江叙 / 夏柚；再选用途（想瘦一点 / 就记记吃了啥 / 在健身），简单填身体数据。
+ * 剧情模式进 App 先演第一章的开头（剧场），再由 TA 带三步教程；极简模式直接教程。
  */
 Object.assign(FitnessApp.prototype, {
   /** 在引导页从备份恢复了：用备份里的身体数据和用途，不用再填 */
@@ -18,11 +19,14 @@ Object.assign(FitnessApp.prototype, {
     ob.classList.remove('hidden');
     document.getElementById('ob-logo').innerHTML = brandIcon(30);
     this.obStep(0);
-    // 「和 TA 一起」那张卡片上画两个人
+    // 剧情模式那张卡片上画两个人；极简模式那张，一个小人趴在按钮上（就像今天页）
     const pals = document.getElementById('ob-mode-pals');
+    const pal = document.getElementById('ob-mode-pal');
     const mic = document.querySelector('.ob-mode-min i');
+    const art = (char, pose, mood) => TF.Buddy.svg(Object.assign({ char }, TF.Buddy.CAST_LOOK[char], { build: 'normal', pose, mood, gear: [], scale: 3 }));
     if (mic && typeof ICONS !== 'undefined') mic.innerHTML = ICONS.mic;
-    if (pals) pals.innerHTML = ['boy', 'girl'].map(char => TF.Buddy.svg(Object.assign({ char }, TF.Buddy.CAST_LOOK[char], { build: 'normal', pose: 'stand', mood: 'good', gear: [], scale: 3 }))).join('');
+    if (pals) pals.innerHTML = ['boy', 'girl'].map(char => art(char, 'stand', 'good')).join('');
+    if (pal) pal.innerHTML = art(this.profile.gender === 'female' ? 'girl' : 'boy', 'lie', 'ok');
     document.body.classList.add('onboarding');
   },
 
@@ -56,17 +60,12 @@ Object.assign(FitnessApp.prototype, {
     $('ob-gender').addEventListener('click', (e) => { const b = e.target.closest('.seg-btn'); if (b) { gender = b.dataset.value; setSeg('ob-gender', gender); } });
     $('ob-goal').addEventListener('click', (e) => { const b = e.target.closest('.seg-btn'); if (b) { goal = b.dataset.value; setSeg('ob-goal', goal); } });
     $('ob-back').addEventListener('click', () => this.obStep(1));
-    // 第一屏：极简 → 直接选用途；和 TA 一起 → 先选江叙 / 夏柚，选好了再选用途
+    // 第一屏：极简模式 / 剧情模式，都先选江叙 / 夏柚，选好了再选用途（v9.1：极简模式也有小人，只是没有剧情）
     $('ob-step-0').addEventListener('click', (e) => {
       const m = e.target.closest('[data-mode]');
       if (!m) return;
       window.Haptics && window.Haptics.fire('tap');
-      if (m.dataset.mode === 'min') {
-        this.profile.buddy = Object.assign({}, this.profile.buddy || {}, { show: false, picked: 6 });
-        this.obStep(1);
-        return;
-      }
-      this.showCastPick(() => this.obStep(1), { mid: true });
+      this.showCastPick(() => this.obStep(1), { mid: true, mode: m.dataset.mode === 'lite' ? 'lite' : 'story' });
     });
     $('ob-back1').addEventListener('click', () => this.obStep(0));
     $('ob-back3').addEventListener('click', () => { this._castDone = null; this._castMid = false; this.obStep(0); });
@@ -149,12 +148,11 @@ Object.assign(FitnessApp.prototype, {
         document.body.classList.remove('onboarding');
         this.render();
         this.renderBuddy();
-        // 选了 TA：先演第一章的开头（「第一章 · 初遇」，几句、能跳过），演完 TA 带着看三步；极简直接看三步
-        const b = this.profile.buddy || {};
-        if (b.show !== false && this.playChapter && this.playChapter(1, { after: () => this.maybeTour() })) return;
+        // 剧情模式：先演第一章的开头（能离开），演完 TA 带着看三步；极简模式直接看三步
+        if (this.storyOn() && this.playChapter && this.playChapter(1, { after: () => this.maybeTour() })) return;
         this.maybeTour();
       };
-      // 第一屏已经选过极简 / 选过人了就直接进；没选过的（老路子）最后问一次
+      // 第一屏已经选过模式和人了就直接进；没选过的（老路子）最后问一次
       if ((this.profile.buddy || {}).picked) enter();
       else this.showCastPick(() => { this.needsOnboarding = false; this.saveData(); this.render(); this.maybeTour(); });
     };
@@ -165,19 +163,23 @@ Object.assign(FitnessApp.prototype, {
   },
 
   /**
-   * 选搭子（v6.0）：新用户建档的最后一步；老用户升级后第一次打开也问一次（picked 记着选过了）。
-   * 江叙 / 夏柚：点一下卡片，TA 招手、说一句自我介绍；「就选 TA」确定。「极简模式」：不要小人，界面最干净，之后设置里能叫出来。
+   * 选搭子（v6.0）：新用户建档时选；老用户升级后第一次打开也问一次（picked 记着选过了）；设置里从「不要小人」切回来、还没选过的也选一次。
+   * 江叙 / 夏柚：点一下卡片，TA 招手、说一句自我介绍；「就选 TA」确定。「先不要小人」：只有一个按钮，之后设置里能叫出来。
+   * opts.mode：选完是剧情模式（story）还是极简模式（lite，v9.1）；没给的照旧（老用户算剧情模式）。
    */
   showCastPick(done, opts) {
     const $ = (id) => document.getElementById(id);
     this._castDone = done;
     this._castPick = null;
-    this._castMid = !!(opts && opts.mid); // 引导第一屏选了「和 TA 一起」：选好人接着选用途，不关引导页
+    this._castMid = !!(opts && opts.mid); // 引导第一屏选了模式：选好人接着选用途，不关引导页
+    this._castMode = (opts && opts.mode) || null;
     const fresh = this.needsOnboarding;
+    const lite = this._castMode === 'lite';
     // v8.0（用户：「选定一个角色，后续就不可更改」）：选人时就说清楚，选了就是 TA
-    $('ob-cast-title').innerHTML = this._castMid ? '选一个<br>陪你的人' : fresh ? '最后一步：<br>要不要一个陪你记的搭子？' : '选一个<br>陪你记的人';
-    $('ob-cast-sub').textContent = this._castMid ? '选了就是 TA，之后不能换。TA 记得你说过的事，你们会一章一章熟起来——点一下，听 TA 说句话。'
-      : fresh ? '选了就是 TA，之后不能换。TA 记得你说过的事，在对的时候说一句。不要也行，极简模式最干净。'
+    $('ob-cast-title').innerHTML = lite ? '选一个<br>陪你记的小人' : this._castMid ? '选一个<br>陪你的人' : fresh ? '最后一步：<br>要不要一个陪你记的搭子？' : '选一个<br>陪你记的人';
+    $('ob-cast-sub').textContent = lite ? 'TA 趴在按钮上面，你记了什么 TA 都回一句，记得你说过的事。没有剧情，选了就是 TA——点一下，听 TA 说句话。'
+      : this._castMid ? '选了就是 TA，之后不能换。你们的故事从第一次见面开始，一天一段——点一下，听 TA 说句话。'
+      : fresh ? '选了就是 TA，之后不能换。TA 记得你说过的事，在对的时候说一句。不要也行，只留一个按钮最干净。'
       : '选了就是 TA，之后不能换。TA 的样子跟着你们的故事变——点一下，听 TA 说句话。';
     $('ob-back3').classList.toggle('hidden', !this._castMid);
     $('ob-cast-off').classList.toggle('hidden', this._castMid);
@@ -209,8 +211,10 @@ Object.assign(FitnessApp.prototype, {
   endCastPick(k) {
     const show = k !== 'off';
     const char = k === 'xy' ? 'girl' : 'boy';
-    // 选了就锁住（charLocked）：设置里不能换人，只能关成极简再打开
-    this.profile.buddy = Object.assign({}, this.profile.buddy || {}, show ? { char, show: true, picked: 6, charLocked: true } : { show: false, picked: 6 });
+    // 选了就锁住（charLocked）：设置里不能换人；剧情模式 / 极简模式 / 不要小人随时能切
+    const mode = this._castMode ? { mode: this._castMode } : {};
+    this._castMode = null;
+    this.profile.buddy = Object.assign({}, this.profile.buddy || {}, show ? Object.assign({ char, show: true, picked: 6, charLocked: true }, mode) : { show: false, picked: 6 });
     if (this._castMid && this.needsOnboarding) { // 引导中：接着选用途
       this._castMid = false;
       window.Haptics && window.Haptics.fire('success');
@@ -262,7 +266,7 @@ Object.assign(FitnessApp.prototype, {
   maybeCastPick() {
     const b = this.profile.buddy || {};
     if (b.picked || this.needsOnboarding || this._touring) return false;
-    if (b.show === false) { this.profile.buddy = Object.assign({}, b, { picked: 6 }); this.saveData(); return false; } // 关过小人的：不打扰，还是极简
+    if (b.show === false) { this.profile.buddy = Object.assign({}, b, { picked: 6 }); this.saveData(); return false; } // 关过小人的：不打扰，还是不要小人
     this.showCastPick(null);
     return true;
   }

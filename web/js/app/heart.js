@@ -29,7 +29,7 @@ Object.assign(FitnessApp.prototype, {
 
   /** 今天是不是它自己有点低落的日子（Lv3 起，按日期算，大概六天一次）；你陪过它了就不是 */
   lowToday() {
-    if (!this.bond || this.bond().lv < 3) return null;
+    if (!this.storyOn() || this.bond().lv < 3) return null; // 它自己低落是剧情模式的（v9.1）
     const today = getTodayDateString();
     if ((this.profile.buddy || {}).comfort === today) return null;
     const h = [...today].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 11); // 每一步截到 32 位，不然乘大了丢精度、余数永远是偶数
@@ -53,7 +53,7 @@ Object.assign(FitnessApp.prototype, {
     if (low) return { key: 'low', why: low.why };
     const f = this.recentFeeling();
     if (f) return { key: 'worried', why: `他说过「${f.t}」` };
-    if (this._missOpen && !this.touchedToday()) return { key: 'miss', why: this._missOpen };
+    if (this._missOpen && !this.touchedToday() && this.storyOn()) return { key: 'miss', why: this._missOpen };
     if (this.touchedToday()) return { key: 'happy' };
     return { key: 'calm' };
   },
@@ -75,7 +75,7 @@ Object.assign(FitnessApp.prototype, {
   /** 你们离开了多久（这次打开前），给打招呼用 */
   missLine() {
     const away = this._lastAway || 0;
-    if (!this.bond || away < 18 * 3600 * 1000 || away > 72 * 3600 * 1000) return '';
+    if (!this.storyOn() || away < 18 * 3600 * 1000 || away > 72 * 3600 * 1000) return '';
     const lv = this.bond().lv;
     const line = this.cast().heart.miss[lv - 1];
     if (!line) return '';
@@ -86,7 +86,7 @@ Object.assign(FitnessApp.prototype, {
 
   /** 想你了之后找个空当：「对了，攒了件事想跟你说」（它的小日子），一天一次 */
   savedTale() {
-    if (!this.canChat() || Date.now() - (this._popAt || 0) < 60000) return false;
+    if (!this.storyOn() || !this.canChat() || Date.now() - (this._popAt || 0) < 60000) return false;
     const today = getTodayDateString();
     let miss = '', told = '';
     try { miss = localStorage.getItem('tf_miss') || ''; told = localStorage.getItem('tf_tale') || ''; } catch (e) {}

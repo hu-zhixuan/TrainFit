@@ -46,7 +46,7 @@ Object.assign(FitnessApp.prototype, {
 
   /**
    * 常说的话手机自己接（v7.0）：「晚安」「在吗」「想你了」「你在干嘛」「好累」……用 TA 自己的台词马上回（cast.talk，按亲密度、恋人线），
-   * 不等大模型，也不会「很 AI」。正在跟 TA 深聊（刚才在聊）的、说长了的、极简模式，照常走大模型。接上了返回 true。
+   * 不等大模型，也不会「很 AI」。正在跟 TA 深聊（刚才在聊）的、说长了的、不要小人的，照常走大模型。接上了返回 true。
    */
   localTalk(text) {
     // 刚跟 TA 深聊过（大模型接的，15 分钟内）：接着让大模型聊，别突然换成台词；只是本机台词接过的不算
@@ -55,7 +55,7 @@ Object.assign(FitnessApp.prototype, {
     const c = this.cast();
     if (!key || !c.talk) return false;
     let line = key === 'doing' && this.buddyLife && Math.random() < 0.5 ? this.buddyLife() : ''; // 问它在干嘛：一半说它自己的小日子
-    if (!line) line = TF.Talk.line(c.talk, key, { lv: this.bond().lv, romance: this.storyData ? this.storyData().romance : undefined, name: this.callName(), used: this._talkUsed || [] });
+    if (!line) line = TF.Talk.line(c.talk, key, { lv: this.bond().lv, romance: this.storyOn() ? this.storyData().romance : undefined, name: this.callName(), used: this._talkUsed || [] });
     if (!line) return false;
     this._talkUsed = (this._talkUsed || []).concat(line).slice(-12);
     const face = { love: '害羞', miss: '害羞', hug: '心动', praise: '害羞', tease: '不服', laugh: '开心', tired: '担心', morning: '开心', back: '开心', hi: '开心', thanks: '害羞' }[key] || '平静';
@@ -373,7 +373,7 @@ Object.assign(FitnessApp.prototype, {
     const lastDay = this.recordDates().reduce((m, d) => (d < today && d > m ? d : m), '');
     const gap = lastDay ? Math.round((new Date(today + 'T00:00:00') - new Date(lastDay + 'T00:00:00')) / 86400000) : 0;
     if (gap >= 3 && !this.recordDates().includes(today)) {
-      const missing = !miss && this.bond && this.bond().lv >= 2 ? '好几天没见，有点想你。' : '';
+      const missing = !miss && this.storyOn() && this.bond().lv >= 2 ? '好几天没见，有点想你。' : '';
       this.askUser(`${hi}${missing}有 ${gap - 1} 天没记了，没关系，从今天接着来就行。`, [
         { label: '先补一下昨天', pick: () => { this.selectedDate = shiftDateString(today, -1); this.render(); }, reply: '在这页按住说，就记在昨天。记不清的说个大概就行。', talk: true },
         { label: '从今天开始', reply: '好，吃了啥说一句就行。' }]);

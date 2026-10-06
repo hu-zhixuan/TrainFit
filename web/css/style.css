@@ -719,7 +719,9 @@ body.has-buddy .views { padding-bottom: calc(var(--cmp-h, 110px) + 60px + var(--
 .buddy-preview svg { flex: none; width: 90px; height: auto; border-bottom: 2px solid var(--line); box-sizing: content-box; }
 .buddy-opts { display: flex; flex-direction: column; gap: 10px; min-width: 0; flex: 1; }
 .buddy-who { margin: 16px 0 0; }
-.buddy-who.switch-row { display: flex; flex-direction: row; align-items: center; }
+.buddy-who { display: flex; flex-direction: column; gap: 8px; }
+/* 极简模式（v9.1）：剧情、关系、剧情给的样子都不显示 */
+.buddy-on.lite .story-only { display: none; }
 #buddy-outfit-row.hidden { display: none; }
 .buddy-blurb { margin: 0; font-size: 0.82rem; line-height: 1.5; color: var(--text-2); }
 .buddy-memories { display: flex; flex-direction: column; gap: 8px; margin: 4px 0 0; }
@@ -1522,18 +1524,21 @@ body.onboarding .rec-panel { z-index: 210; bottom: calc(24px + var(--sab)); }
 .ob-modes { display: flex; flex-direction: column; gap: 12px; margin-top: 6px; }
 .ob-mode { display: grid; grid-template-columns: 100px 1fr; grid-template-rows: auto 1fr; column-gap: 14px; row-gap: 3px; align-items: center; text-align: left; padding: 14px 16px; border: 2px solid var(--line); border-radius: var(--r-lg); background: var(--surface); color: var(--text); font: inherit; cursor: pointer; box-shadow: var(--shadow-sm); transition: border-color 0.15s ease, transform 0.1s ease; -webkit-tap-highlight-color: transparent; }
 .ob-mode:active { transform: scale(0.99); }
-.ob-mode[data-mode="min"]:active { border-color: var(--accent); }
-.ob-mode[data-mode="buddy"] { border-color: color-mix(in srgb, var(--love) 45%, var(--line)); background: linear-gradient(150deg, color-mix(in srgb, var(--love) 9%, var(--surface)), var(--surface) 70%); }
-.ob-mode[data-mode="buddy"]:active { border-color: var(--love); }
+.ob-mode[data-mode="lite"]:active { border-color: var(--accent); }
+.ob-mode[data-mode="story"] { border-color: color-mix(in srgb, var(--love) 45%, var(--line)); background: linear-gradient(150deg, color-mix(in srgb, var(--love) 9%, var(--surface)), var(--surface) 70%); }
+.ob-mode[data-mode="story"]:active { border-color: var(--love); }
 .ob-mode-art { grid-row: 1 / 3; display: flex; align-items: flex-end; justify-content: center; height: 84px; border-radius: var(--r-md); background: var(--surface-2); overflow: hidden; }
-.ob-mode[data-mode="buddy"] .ob-mode-art { background: radial-gradient(circle at 50% 60%, color-mix(in srgb, var(--love) 22%, transparent), transparent 72%); }
+.ob-mode[data-mode="story"] .ob-mode-art { background: radial-gradient(circle at 50% 60%, color-mix(in srgb, var(--love) 22%, transparent), transparent 72%); }
 .ob-mode-art svg { width: 48px; height: auto; margin: 0 -3px; }
-.ob-mode-min { align-items: center; }
+.ob-mode-min { flex-direction: column; align-items: center; justify-content: center; gap: 0; }
+/* 极简模式的卡片：小人趴在按钮上（就像今天页） */
+.ob-min-pal { display: flex; justify-content: center; margin-bottom: -6px; position: relative; z-index: 1; }
+.ob-min-pal svg { width: 44px; }
 .ob-mode-min i { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; background: var(--accent); color: var(--on-accent, #fff); box-shadow: 0 0 0 7px color-mix(in srgb, var(--accent) 18%, transparent); }
 .ob-mode-min i svg { width: 22px; height: 22px; margin: 0; }
 .ob-mode b { align-self: end; font-size: 1.08rem; }
 .ob-mode > span:last-child { align-self: start; font-size: 0.8rem; line-height: 1.5; color: var(--text-3); }
-.ob-mode[data-mode="buddy"] b { color: var(--love); }
+.ob-mode[data-mode="story"] b { color: var(--love); }
 #buddy-tour { margin-top: 10px; width: 100%; }
 /* 选搭子（v6.0）：江叙 / 夏柚 两张卡，点一下 TA 招手说一句；下面「极简模式」 */
 .ob-cast { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 4px; }

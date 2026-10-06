@@ -105,8 +105,11 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     const wear = `样子：${TF.Buddy.STYLES[l.style].label}，今天穿${this.outfitLabel(l.outfit)}，身材${this.buildLabel(this.buddyBuild())}`;
     // v6.3：它现在的心情（想他、担心他、自己有点低落…）、你们的关系（暧昧 / 恋人 / 好搭子）、剧情里一起经历过的事
     // 秘密（肩伤 / 爸爸）在剧情第四章第一段说出来以后，聊天里才知道你知道（v8.0：小人和剧情对得上）
-    const told = this.storySeen ? this.storySeen(`${this.castKey()}4a`) : b.lv >= 4;
-    return { name: c.name, who: c.who, speech: c.speech, quirks: c.quirks, never: c.never, samples: c.samples, look: wear, facts: c.facts.concat(told ? [c.secret] : []),
+    const story = this.storyOn();
+    const told = story && this.storySeen(`${this.castKey()}4a`);
+    // 极简模式（v9.1）：没有剧情，「知道自己是 App 里的角色、有台词表」这种剧情里的设定不带
+    const facts = c.facts.filter(f => story || !/里的角色/.test(f));
+    return { name: c.name, who: c.who, speech: c.speech, quirks: c.quirks, never: c.never, samples: c.samples, look: wear, facts: facts.concat(told ? [c.secret] : []),
       level: b.name, lv: b.lv, tone: c.tone[b.lv - 1], call: this.callName(), you: this.profile.gender === 'female' ? '她' : '他',
       mood: this.heartPrompt ? this.heartPrompt() : '', relation: this.relationPrompt ? this.relationPrompt() : '', shared: this.storyFacts ? this.storyFacts() : [] };
   },
@@ -164,7 +167,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     if (!o) return false;
     if (id === this.buddyBase().outfit || id === 'tank') return true;
     const w = (this.cast().wardrobe || {})[id];
-    if (w) return this.storySeen ? this.storySeen(w.scene || w.bonus) : false;
+    if (w) return this.storyOn() && this.storySeen(w.scene || w.bonus); // 极简模式：就是本来的样子
     return false;
   },
 
@@ -176,7 +179,8 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
   /** 剧情给 TA 添的小变化（v8.1，cast.marks：剪了刘海、夹了片叶子、挂着耳机…）：看过那一段就一直带着，不能关 */
   buddyMarks() {
     const M = this.cast().marks || {};
-    return Object.keys(M).filter(k => this.storySeen && this.storySeen(M[k].scene));
+    if (!this.storyOn()) return [];
+    return Object.keys(M).filter(k => this.storySeen(M[k].scene));
   },
 
   outfitLabel(id) {
@@ -228,7 +232,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
    * 顺便介绍新衣服；还是刚认识的，悄悄记下等级就行。
    */
   checkBond() {
-    if (this.needsOnboarding) return;
+    if (this.needsOnboarding || !this.storyOn()) return; // 极简模式没有亲密度等级（v9.1）；切到剧情模式以后补说一次
     const b = this.bond();
     const seen = (this.profile.buddy || {}).lv;
     if (seen == null) {
@@ -251,7 +255,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
   /** 升级了：小人秀一下、说一句，新解锁的衣服能一键换上（要紧的话，不占每天说话的次数） */
   bondCelebrate() {
     const up = this._bondUp;
-    if (!up) return false;
+    if (!up || !this.storyOn()) return false;
     const pop = document.getElementById('buddy-pop');
     const btn = document.getElementById('buddy');
     // 现在不合适（在说话、在录音、不在今天页）：等下次再说
@@ -371,7 +375,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
   patBuddy() {
     if (this.makeUp && this.makeUp('pat')) return; // 闹着小别扭：摸摸头就和好
     const b = this.bond();
-    const love = this.storyData && this.storyData().romance === true && this.cast().heart;
+    const love = this.storyOn() && this.storyData().romance === true && this.cast().heart;
     const lines = love && Math.random() < 0.5 ? this.cast().heart.patLove : this.cast().pat[b.lv - 1] || this.cast().pat[0];
     let text = lines[Math.floor(Math.random() * lines.length)];
     const name = this.callName();
@@ -520,7 +524,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
 
   /** 说一句悄悄话（今天打过招呼以后、闲下来的时候；两天最多一条）。idle：发呆时说的，次数由那边记 */
   whisper(idle) {
-    if (!this.canChat() || Date.now() - (this._popAt || 0) < 60000) return false;
+    if (!this.storyOn() || !this.canChat() || Date.now() - (this._popAt || 0) < 60000) return false;
     const today = getTodayDateString();
     let w;
     try { w = JSON.parse(localStorage.getItem('tf_whisper') || '{}'); } catch (e) { w = {}; }
@@ -802,7 +806,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
 
   /** 今天的小纸条还没拆（小人头上挂个小信封） */
   noteReady() {
-    if (!this.buddyLook().show || this.needsOnboarding) return false;
+    if (!this.storyOn() || this.needsOnboarding) return false; // 小纸条是剧情模式的
     return ((this.profile.buddy || {}).note || {}).day !== getTodayDateString();
   },
 
@@ -857,6 +861,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
 
   /** 闹着小别扭吗（两天没和好就自己消气，不记仇） */
   sulkNow() {
+    if (!this.storyOn()) return null; // 小别扭是剧情模式的
     const s = (this.profile.buddy || {}).sulk;
     if (!s || !s.kind) return null;
     if (s.date < shiftDateString(getTodayDateString(), -1)) { this.setBuddy({ sulk: null }); return null; }
