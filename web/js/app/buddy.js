@@ -1,5 +1,8 @@
 /**
- * 像素小人（照着用户本人画的男生：黑色蓬松乱发、刘海压眼、黑色棒球服白袖子；女生：长直发、齐刘海、眼角一点眼线）。
+ * 像素小人。v8.1 起照着剧场立绘画（STYLES 的 jx / xy，本来的样子在 CAST_LOOK）：江叙浅棕软乱发、一根呆毛、长刘海压住一只眼、
+ * 白毛衣背心配灰蓝衬衫和绿松石波洛领带；夏柚黑色短发、左边一缕挑染成红色、红眼睛、黑色项圈、长到大腿的白卫衣（袖子盖住手）。
+ * 看过某几段主线，样子跟着小变一点（MARKS：剪了刘海、夹了片叶子、挂着耳机…，哪段解锁写在剧本的 cast.marks）。
+ * 以前的样子（照着用户本人画的黑色乱发 + 棒球服、女生长直发）还留在 STYLES / OUTFITS 里，app 里不再用。
  * 学 Claude Code 里趴在输入框上的小家伙：平时趴在底部输入栏上沿；弹出「记好了」提示条、录音面板、修改 / 分享面板时，
  * 跳到最上面那一层的上沿趴着。别的界面一点不动。
  *
@@ -180,6 +183,55 @@
       frames: [['........................'], ['........................']],
       lie12: '....hHH..........HHHh...'
     },
+    // 江叙（v8.1，照着剧场立绘）：浅棕的软乱发、头顶一根呆毛（晃的那一帧）、长刘海从右边分过来压住一只眼，两边发尾往外翘；
+    // 只露一只眼睛，所以眼睛、脸红的位置写在 face 里（盖掉 CHARS 的）。眼睛是偏粉的紫。
+    jx: {
+      char: 'boy', label: '江叙',
+      head: [
+        '........................',
+        '........HHHHHHHH........',
+        '......HHHHLLLHHHHH......',
+        '.....HHHLLHHHHHHHHH.....',
+        '....HHHLHHHHHHHHHHHHH...',
+        '...HHHHHHHHHHHHHHHHHH...',
+        '..HHHHHHHHHHHHHHHHHHHH..',
+        '...HHHHHHHHHHHHHHHHHHHH.',
+        '..HHHHHHHHHHHhSShHHHHH..',
+        '...HHHHHHHHhsssssHHHH...',
+        '...HHHHHHHhSSSSSSHHH....',
+        '...hHHHhSSSSSSSSSHHh....',
+        '....hH.sSSSSSSSSs.Hh....'
+      ],
+      // 呆毛：比头顶高一格（frameY -1），左右晃
+      frameY: -1,
+      frames: [['............H...........', '...........HH...........'], ['..........H.............', '...........HH...........']],
+      face: { eyeX: 11, eyes: { chill: 'SSSEES', closed: 'SSSssS', left: 'SSEESS', right: 'SSSSEE' }, happy: ['...EE.', '..ESSE'], blushX: 8, blush: 'b.......b' },
+      colors: { E: '#8a3f5e', F: '#4a3132', P: '#383840', p: '#26262c' }
+    },
+    // 夏柚（v8.1，照着剧场立绘）：黑色短发到下巴，刘海有一缕垂在两眼中间，左边一缕长的里面挑染成红色（D），眼睛是红的
+    xy: {
+      char: 'girl', label: '夏柚',
+      head: [
+        '........................',
+        '.........HHHHHH.........',
+        '.......HHHLLHHHHH.......',
+        '......HHLLHHHHHHHH......',
+        '.....HHLHHHHHHHHHHH.....',
+        '.....HHHHHHHHHHHHHHH....',
+        '....HHHHHHHHHHHHHHHH....',
+        '....HHHHHHHHHHHHHHHHH...',
+        '....HHHhHHHHHhHHHhHHH...',
+        '....HHhsssHHssssshHHH...',
+        '....HHSSSSSHSSSSSSHHH...',
+        '....HHSSSSSSSSSSSSHHh...',
+        '....HHDsSSSSSSSSsHHh....'
+      ],
+      frames: [['........................'], ['........................']],
+      drapeLie: ['....HHD.................', '....HD..................', '.....D..................'],
+      drapeStand: ['....HHD.................', '....HHD.................', '....HD..................', '.....D..................'],
+      face: { eyeX: 6, eyes: { chill: 'SeEES.SSEEeS', closed: 'SessS.SSsseS', left: 'eEESS.SEEeSS', right: 'SSeEE.SSSEEe' }, happy: ['..EE....EE..', 'SESSE.SESSES'], blushX: 7, blush: 'b........b' },
+      colors: { E: '#a3243a', e: '#2a1d22', D: '#b52437', p: '#66444b' }
+    },
     // 丸子头：头顶扎一个团子，额头露出来，两边垂两缕
     bun: {
       char: 'girl', label: '丸子头',
@@ -219,7 +271,7 @@
       '......RRrJCCJJJJrRR.....',
       '......RRrJCCJJJJrRR.....',
       '......RRrJJJJJJJrRR.....',
-      '......SS.JJJJJJJ.SS.....',
+      '......WW.JJJJJJJ.WW.....',
       '.........PPPPPPP........'
     ],
     wave: [
@@ -229,7 +281,7 @@
       '......RRrJCCJJJJJRR.....',
       '......RRrJCCJJJJJ.......',
       '......RRrJJJJJJJJ.......',
-      '......SS.JJJJJJJJ.......',
+      '......WW.JJJJJJJJ.......',
       '.........PPPPPPP........'
     ],
     wave2: [
@@ -239,7 +291,7 @@
       '......RRrJCCJJJJJRR.....',
       '......RRrJCCJJJJJ.......',
       '......RRrJJJJJJJJ.......',
-      '......SS.JJJJJJJJ.......',
+      '......WW.JJJJJJJJ.......',
       '.........PPPPPPP........'
     ],
     // 伸懒腰 / 欢呼：手举过头（ARMS_UP 盖上去）
@@ -296,7 +348,10 @@
     tank: { J: 'J', n: 'S', m: 'S', T: 'S', C: 'J', R: 'S', r: 's', Q: 'S' },
     open: { J: 'J', n: 'j', m: 'V', T: 'S', C: 'J', R: 'V', r: 'v', Q: 'J', open: [10, 14] },
     bare: { J: 'S', n: 'S', m: 'S', T: 'S', C: 'S', R: 'S', r: 's', Q: 'S' },
-    shirt: { J: 'J', n: 'j', m: 'j', T: 'S', C: 'J', R: 'V', r: 'v', Q: 'J' }
+    shirt: { J: 'J', n: 'j', m: 'j', T: 'S', C: 'J', R: 'V', r: 'v', Q: 'J' },
+    // v8.1 照着立绘：江叙的毛衣背心（领口露出里面的衬衫 U），夏柚的卫衣（领口一圈黑色项圈 K）
+    vest: { J: 'J', n: 'U', m: 'U', T: 'U', C: 'J', R: 'V', r: 'v', Q: 'J' },
+    hoodie: { J: 'J', n: 'J', m: 'K', T: 'K', C: 'J', R: 'V', r: 'v', Q: 'J' }
   };
 
   // happy：笑眼 ^^（盖第 9、10 两行）；blush：脸红（眼睛下面一行，只涂两颊）
@@ -356,7 +411,10 @@
     wine: { label: '酒红', H: '#6e2a33', h: '#4a1a22', L: '#934550' },
     ash: { label: '灰', H: '#7d7570', h: '#5b544f', L: '#a39a93' },
     blond: { label: '金', H: '#c9a04e', h: '#9c7a35', L: '#e2c077' },
-    silver: { label: '银白', H: '#c8c6cf', h: '#9e9ba7', L: '#ebe9f0' }
+    silver: { label: '银白', H: '#c8c6cf', h: '#9e9ba7', L: '#ebe9f0' },
+    // v8.1 从立绘上取的颜色：江叙浅棕（偏灰的奶茶色），夏柚黑（偏冷）
+    latte: { label: '浅棕', H: '#c4a690', h: '#94786a', L: '#e0cbb8' },
+    ink: { label: '黑', H: '#3a3134', h: '#211b1d', L: '#5c4f54' }
   };
   const SKINS = {
     fair: { label: '白皙', S: '#f8dcc5', s: '#e8bea0', d: '#cf9f80' },
@@ -375,13 +433,41 @@
     open: Object.assign({ label: '敞开的外套', type: 'open', J: '#363843', j: '#24252c', lv: 2 }, WHITE),
     bare: { label: '光膀子', girlLabel: '运动内衣', type: 'bare', J: '#2b2d35', j: '#1b1c21', V: '#2b2d35', v: '#1b1c21', U: '#2b2d35', lv: 3 },
     shirt: { label: '白衬衫', type: 'shirt', J: '#f4f4f1', j: '#c9ccd2', V: '#f4f4f1', v: '#d9dbe0', U: '#f4f4f1', lv: 4 },
-    champ: { label: '冠军外套', type: 'jacket', J: '#c99a33', j: '#94701f', V: '#24252c', v: '#17181c', U: '#24252c', lv: 5 }
+    champ: { label: '冠军外套', type: 'jacket', J: '#c99a33', j: '#94701f', V: '#24252c', v: '#17181c', U: '#24252c', lv: 5 },
+    // v8.1 立绘上的衣服。deco：换成颜色以后再盖一层细节，[x, y, 几行, 只盖在哪些部位上]（部位看换颜色之前的字母，别盖到手和头发）
+    //   江叙：白色毛衣背心 + 灰蓝衬衫，胸口一颗绿松石的波洛领带（W），两根绳子（c）、金色的绳头（A），下摆一圈罗纹
+    vest: { label: '毛衣背心', type: 'vest', J: '#ece6e2', j: '#c9bcbe', V: '#7a95ab', v: '#55697f', U: '#8fa8bc',
+      deco: { stand: [[12, 14, ['W'], 'T'], [11, 15, ['c.c', 'A.A'], 'JC'], [9, 19, ['jjjjjjj'], 'J']], lie: [[10, 13, ['UWU'], 'r']] } },
+    //   夏柚：宽大的白卫衣，袖子盖住手（paws），两根黑抽绳、袖子上一道黑带子，下摆长到大腿（dress：裙子那两行也是卫衣），角上一个红标
+    hoodie: { label: '白卫衣', type: 'hoodie', J: '#f1efec', j: '#d3cfcd', V: '#f1efec', v: '#d3cfcd', U: '#f1efec', paws: true, dress: true,
+      deco: { stand: [[10, 14, ['K...K', 'K...K', 'k...k'], 'nTJC'], [6, 16, ['KKK'], 'Rr'], [16, 16, ['KKK'], 'Rr'], [14, 20, ['D'], 'P']] } }
+  };
+  // 跟着剧情变的小地方（v8.1，用户：「形象跟着剧情会有稍微的改变，变化不要太大」）：哪段剧情解锁写在剧本的 cast.marks 里。
+  //   head：盖在头上的几行；face：换眼睛的位置；stand / lie：[x, y, 几行, 只盖在哪些部位上]，没写部位的画在装备下面（帽子、毛巾会盖住）
+  const MARKS = {
+    // 江叙：阿薄的一片薄荷叶夹在胸口（jx1b）；回家被他妈说了，刘海剪短一点、露出半只眼（jx4b）；橘猫终于让他靠近，衣服上粘了猫毛（jx5c）
+    leaf: { char: 'boy', stand: [[14, 17, ['G', 'g'], 'J']] },
+    bangs: { char: 'boy',
+      head: [[], [], [], [], [], [], [], [], [], '...HHHHHHHhssssssHHHH...', '...HHHHHhSSSSSSSSHHH....', '...hHHhSSSSSSSSSSHHh....'],
+      face: { eyeX: 9, eyes: { chill: 'ESSSSEES', closed: 'sSSSSssS', left: 'ESSSEESS', right: 'SESSSSEE' }, happy: ['E....EE.', '.E..ESSE'], blushX: 7, blush: 'b........b' } },
+    fur: { char: 'boy', stand: [[10, 18, ['f'], 'J'], [17, 18, ['f'], 'R']], lie: [[5, 14, ['f'], 'R'], [17, 15, ['f'], 'R']] },
+    // 夏柚：电台的耳机挂在脖子上（xy2a）；柚子色的发夹（xy3b）；抽绳上挂着一只小鲸鱼（xy4b）
+    phones: { char: 'girl', stand: [[8, 13, ['DD.....DD', 'DD.....DD']]], lie: [[6, 13, ['DD........DD']]] },
+    clip: { char: 'girl', stand: [[17, 8, ['yy']]], lie: [[17, 8, ['yy']]] },
+    whale: { char: 'girl', stand: [[14, 16, ['B'], 'J']] }
+  };
+  // 两个人本来的样子（v8.1，照着剧场立绘）：设置里不能改，衣服之外都固定（app 的 buddyLook 用这个）
+  const CAST_LOOK = {
+    boy: { style: 'jx', hair: 'latte', skin: 'fair', outfit: 'vest' },
+    girl: { style: 'xy', hair: 'ink', skin: 'fair', outfit: 'hoodie' }
   };
   const BASE_COLORS = {
     E: '#241a15', K: '#141519', k: '#5b6170',
     G: '#10b981', g: '#0a7a56', A: '#e7b53c', a: '#fbe08a', Y: '#f2f1ed',
     B: '#7cc4f5', Z: '#9aa3b5', N: '#9aa3b5', X: '#ffd84d', I: '#f2557a', O: '#17120f',
-    P: '#2b2c33', p: '#1c1d22', b: '#ff8fa0'
+    P: '#2b2c33', p: '#1c1d22', b: '#ff8fa0',
+    // v8.1：W 绿松石（江叙的波洛领带）、c 领带绳、D 夏柚的红挑染 / 卫衣红标、e 眼线、f 橘色（猫毛）、y 柚子黄
+    W: '#06a0bd', c: '#3a2b31', D: '#b52437', e: '#241a15', f: '#e8913a', y: '#f2c94c'
   };
   const DEFAULT_LOOK = { show: true, hair: 'black', outfit: 'varsity', skin: 'natural', build: 'auto' };
   const BUILD_CHOICES = ['auto', 'normal', 'lean', 'ripped'];
@@ -441,6 +527,10 @@
     const l = look(o);
     const ch = CHARS[l.char];
     const st = STYLES[l.style];
+    // 跟着剧情多出来的小变化（v8.1，MARKS）：只认这个角色的
+    const marks = (o.marks || []).map(k => MARKS[k]).filter(m => m && m.char === l.char);
+    // 眼睛、脸红的位置：发型可以自己定（江叙只露一只眼），剧情里剪了刘海再盖一层
+    const face = Object.assign({}, ch, st.face || {}, ...marks.map(m => m.face || {}));
     const mood = MOODS[o.mood] || MOODS[FACE_MOOD[o.face]] || MOODS.idle;
     const pose = POSES.includes(o.pose) ? o.pose : 'lie';
     const lie = pose === 'lie';
@@ -470,7 +560,8 @@
     }
     // 头、头发晃的那一帧、趴着时下巴旁边的鬓角
     put(0, 0, st.head);
-    put(0, 0, st.frames[o.frame ? 1 : 0]);
+    marks.forEach(m => { if (m.head) put(0, 0, m.head); });
+    put(0, st.frameY || 0, st.frames[o.frame ? 1 : 0]);
     if (lie && st.lie12) put(0, 12, [st.lie12]);
     // 长发搭在肩上
     if (lie && st.drapeLie) put(0, 12, st.drapeLie);
@@ -478,17 +569,23 @@
     // 托腮想事：眼睛往上看
     const eyes = o.eyes || (pose === 'think' && mood.eyes === 'chill' ? 'right' : mood.eyes);
     if (eyes === 'shades') put(ART.shades.x, ART.shades.y, ART.shades.rows);
-    else if (eyes === 'happy') put(ch.eyeX, EYE_Y - 1, ch.happy);
-    else if (eyes === 'content') put(ch.eyeX, EYE_Y - 1, [ch.happy[1], ch.happy[0]]); // ∪∪：吃饱了眯着眼
-    else put(ch.eyeX, EYE_Y, [ch.eyes[eyes] || ch.eyes.chill]);
-    if (mood.blush) put(ch.eyeX, EYE_Y + 1, [ch.blush]);
+    else if (eyes === 'happy') put(face.eyeX, EYE_Y - 1, face.happy);
+    else if (eyes === 'content') put(face.eyeX, EYE_Y - 1, [face.happy[1], face.happy[0]]); // ∪∪：吃饱了眯着眼
+    else put(face.eyeX, EYE_Y, [face.eyes[eyes] || face.eyes.chill]);
+    if (mood.blush) put(face.blushX != null ? face.blushX : face.eyeX, EYE_Y + 1, [face.blush]);
+    // 头上、脖子上的小东西（发夹、耳机）：在装备下面，戴帽子、搭毛巾时被盖住
+    marks.forEach(m => (m[lie ? 'lie' : 'stand'] || []).forEach(([x, y, rows, on]) => { if (!on) put(x, y, rows); }));
     (o.gear || []).forEach(k => { let g = ART.gear[k]; if (g && g.lie) g = lie ? g.lie : g.stand; if (g) put(g.x, g.y, g.rows); });
     if (pose === 'stretch') put(ARMS_UP.x, ARMS_UP.y, ARMS_UP.rows);
     if (pose === 'flex') put(ARMS_FLEX.x, ARMS_FLEX.y, ARMS_FLEX.rows);
     // 部位 → 颜色：敞开的外套中间露肚子；女生光着肚子是运动内衣（胸口两行是衣服）
     const torsoTop = 13 + M + 1;
+    const part = px.map(r => r.slice()); // 换颜色之前的部位，细节（deco）按这个找地方
     for (let y = 0; y < H; y++) for (let x = 0; x < GW; x++) {
       const c = px[y][x];
+      if (c === 'W') { px[y][x] = outfit.paws ? 'V' : 'S'; continue; } // 手：袖子长的盖住手
+      // 长卫衣（夏柚）：裙子那两行也是卫衣，最下面一行是罗纹
+      if (c === 'P' && outfit.dress && l.char === 'girl' && !lie && (y - M === 20 || y - M === 21)) { px[y][x] = y - M === 21 ? 'j' : 'J'; continue; }
       if (!(c in type)) continue;
       let to = type[c];
       if (!lie && c !== 'R' && c !== 'r' && y >= torsoTop && y < torsoTop + 6) {
@@ -499,6 +596,14 @@
       if (lie && to === 's') to = 'd';                         // 趴着露胳膊：下巴底下、胳膊边上深一点，别和脸连成一片
       px[y][x] = to;
     }
+    // 衣服上的细节、剧情里多出来的小东西（只盖在指定的部位上）
+    const deco = (list) => (list || []).forEach(([x, y, rows, on]) => on && rows.forEach((r, dy) => [...r].forEach((c, dx) => {
+      const X = x + dx + M, Y = y + dy + M;
+      if (c === '.' || Y < 0 || Y >= H || X < 0 || X >= GW || !on.includes(part[Y][X]) || 'Ssd'.includes(px[Y][X])) return; // 露出来的皮肤上不画
+      px[Y][X] = c;
+    })));
+    deco(outfit.deco && outfit.deco[lie ? 'lie' : 'stand']);
+    marks.forEach(m => deco(m[lie ? 'lie' : 'stand']));
     // 身材：肚子露出来的地方画上线条
     if (!lie) {
       const pat = BUILDS[build][l.char];
@@ -514,7 +619,7 @@
     }
     const hair = HAIR[l.hair], skin = SKINS[l.skin];
     const colors = Object.assign({}, BASE_COLORS, { H: hair.H, h: hair.h, L: hair.L, S: skin.S, s: skin.s, d: skin.d,
-      J: outfit.J, j: outfit.j, V: outfit.V, v: outfit.v, U: outfit.U, F: BASE_COLORS.Y });
+      J: outfit.J, j: outfit.j, V: outfit.V, v: outfit.v, U: outfit.U, F: BASE_COLORS.Y }, st.colors || {});
     return { w: GW, h: H, px, colors };
   }
 
@@ -645,7 +750,7 @@
   }
   TF.liftOpts = liftOpts;
 
-  const Buddy = { CHARS, STYLES, HAIR, SKINS, ART, OUTFITS, TYPES, BUILDS, BUILD_ORDER, BUILD_CHOICES, DEFAULT_LOOK, MOODS, FACE_MOOD, LEVEL_MOOD, GEAR_STEPS, POSES, W: GW, H: GH, heightOf, look, buildFor, gearFor, compose, paths, svg, streakOf, bestStreak, nextGear, moodOf, liftOpts };
+  const Buddy = { CHARS, STYLES, HAIR, SKINS, ART, OUTFITS, TYPES, MARKS, CAST_LOOK, BUILDS, BUILD_ORDER, BUILD_CHOICES, DEFAULT_LOOK, MOODS, FACE_MOOD, LEVEL_MOOD, GEAR_STEPS, POSES, W: GW, H: GH, heightOf, look, buildFor, gearFor, compose, paths, svg, streakOf, bestStreak, nextGear, moodOf, liftOpts };
   TF.Buddy = Buddy;
   if (typeof module !== 'undefined' && module.exports) module.exports = Buddy;
 })(typeof window !== 'undefined' ? window : globalThis);
@@ -655,11 +760,18 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     const l = TF.Buddy.look(this.profile.buddy, this.profile.gender);
     // v8.0（用户：「服装、发型、身材都不能由用户来改，要由剧情推进来变」）：发型、发色、肤色就是这个人本来的样子，不看存的；
     // 衣服只能是剧情里解锁了的（没解锁的、以前自己挑的别的颜色，先穿回默认的）；身材一直跟着你练（buddyBuild）
-    l.style = TF.Buddy.CHARS[l.char].style;
-    l.hair = TF.Buddy.DEFAULT_LOOK.hair;
-    l.skin = TF.Buddy.DEFAULT_LOOK.skin;
-    if (this.outfitOpen && !this.outfitOpen(l.outfit)) l.outfit = TF.Buddy.DEFAULT_LOOK.outfit;
+    // v8.1：本来的样子照着剧场立绘（TF.Buddy.CAST_LOOK）：江叙浅棕乱发 + 毛衣背心，夏柚黑短发 + 白卫衣
+    const base = TF.Buddy.CAST_LOOK[l.char];
+    l.style = base.style;
+    l.hair = base.hair;
+    l.skin = base.skin;
+    if (this.outfitOpen && !this.outfitOpen(l.outfit)) l.outfit = base.outfit;
     return l;
+  },
+
+  /** 这个人本来的样子（不经过 buddyLook：outfitOpen 要用，绕回来会死循环） */
+  buddyBase() {
+    return TF.Buddy.CAST_LOOK[TF.Buddy.look(this.profile.buddy, this.profile.gender).char];
   },
 
   /** 选过陪你的人没有（选了就锁住，不能换；极简模式进来的还没选） */
@@ -786,7 +898,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     const over = this._moodOver;
     const face = over && TF.Buddy.FACE_MOOD[over] ? over : '';
     const mood = face ? st.mood : over || st.mood;
-    const key = [art.char, art.style, art.hair, art.skin, art.outfit, art.build, mood, face, gear.join('+'), pose].join('|');
+    const key = [art.char, art.style, art.hair, art.skin, art.outfit, art.build, (art.marks || []).join('+'), mood, face, gear.join('+'), pose].join('|');
     if (btn.dataset.key === key) return;
     const posed = btn.dataset.pose !== pose;
     btn.dataset.key = key;
@@ -1732,7 +1844,12 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     const built = B.BUILDS[this.buddyBuild()].label;
     const W = c.wardrobe || {};
     const more = Object.keys(W).filter(k => !this.outfitOpen(k)).length;
-    $('buddy-look-note').textContent = `现在穿：${this.outfitLabel(look.outfit)}。${more ? `还有 ${more} 件衣服在后面的剧情里。` : '衣服都解锁了。'}` +
+    // 剧情里添的小变化（v8.1）：看过的列出来，没看过的只说还有几处
+    const MK = c.marks || {};
+    const got = this.buddyMarks().map(k => MK[k].label);
+    const left = Object.keys(MK).length - got.length;
+    $('buddy-look-note').textContent = `现在穿：${this.outfitLabel(look.outfit)}。${got.length ? `剧情里变的：${got.join('、')}。` : ''}` +
+      (more || left ? `后面的剧情里还有 ${[more ? `${more} 件衣服` : '', left ? `${left} 处小变化` : ''].filter(Boolean).join('、')}。` : '剧情里的样子都解锁了。') +
       `身材跟着你练：最近 4 周练了 ${n} 天，现在是${built}` + (n < 10 ? `，练满 ${n < 4 ? 4 : 10} 天变${n < 4 ? '薄肌' : '腹肌'}` : '') + '（点上面的 TA 秀一下）。';
     const b = this.bond();
     const rel = this.storyData ? this.storyData() : {};

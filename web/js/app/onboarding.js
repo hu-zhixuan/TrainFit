@@ -22,7 +22,7 @@ Object.assign(FitnessApp.prototype, {
     const pals = document.getElementById('ob-mode-pals');
     const mic = document.querySelector('.ob-mode-min i');
     if (mic && typeof ICONS !== 'undefined') mic.innerHTML = ICONS.mic;
-    if (pals) pals.innerHTML = ['boy', 'girl'].map(char => TF.Buddy.svg({ char, outfit: 'varsity', build: 'normal', pose: 'stand', mood: 'good', gear: [], scale: 3 })).join('');
+    if (pals) pals.innerHTML = ['boy', 'girl'].map(char => TF.Buddy.svg(Object.assign({ char }, TF.Buddy.CAST_LOOK[char], { build: 'normal', pose: 'stand', mood: 'good', gear: [], scale: 3 }))).join('');
     document.body.classList.add('onboarding');
   },
 
@@ -201,7 +201,7 @@ Object.assign(FitnessApp.prototype, {
       const url = TF.Art ? TF.Art.sprite(k, on ? '开心' : '平静') : '';
       art.classList.toggle('sprite', !!url);
       art.innerHTML = url ? `<img class="ob-pal-sprite" src="${esc(url)}" alt="" onerror="TF.Art.fail(this.getAttribute('src'));app.drawCastPick()">`
-        : TF.Buddy.svg({ char: k === 'xy' ? 'girl' : 'boy', outfit: 'varsity', build: 'normal', pose: on ? 'wave' : 'stand', mood: on ? 'good' : 'ok', gear: [], scale: 4 });
+        : TF.Buddy.svg(Object.assign({ char: k === 'xy' ? 'girl' : 'boy' }, TF.Buddy.CAST_LOOK[k === 'xy' ? 'girl' : 'boy'], { build: 'normal', pose: on ? 'wave' : 'stand', mood: on ? 'good' : 'ok', gear: [], scale: 4 }));
     });
   },
 
