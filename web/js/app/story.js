@@ -77,13 +77,22 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
   },
 
   /**
-   * v9.0 剧情整个重写了（用户：「没有从头到尾一个完整的故事体验」）：以前看过的主线、选项、路线、加篇都清掉，从第一章重新开始；
-   * 小剧情（cast.events）看过的、关系（恋人 / 搭子）留着。只做一次（story.ver = 2）。
+   * 剧情存档升级（只做一次）：
+   *  v9.0（story.ver = 2，用户：「没有从头到尾一个完整的故事体验」）：以前看过的主线、选项、路线、加篇都清掉，从第一章重新开始；
+   *   小剧情（cast.events）看过的、关系（恋人 / 搭子）留着。
+   *  v10.0（ver = 3，用户：「剧情模式的老用户全部抹掉，重新开始」）：江叙的故事整个换了——剧情模式下的江叙，剧情、手机、关系（亲密度从头算）、
+   *   剧情给的衣服、小纸条、小别扭都清掉（storyReset）。极简模式的先不动，切到剧情模式那一刻再清（storyKickoff）。夏柚 v10.1 换故事时再清。
    */
   storyMigrate() {
     const b = this.profile.buddy || {};
     const st = b.story;
-    if (!st || typeof st !== 'object' || st.ver === 2) return;
+    // v10.0 只认一次（profile.buddy.v10）：有旧进度（看过剧情、记过东西）的清掉；什么都没有的（新用户）记一下就行
+    if (this.castKey() === 'jx' && this.storyOn() && !b.v10) {
+      if ((st && (st.seen || []).length) || b.phone || (this.bondXpRaw && this.bondXpRaw() > 0)) this.storyReset();
+      else this.setBuddy({ v10: true });
+      return;
+    }
+    if (!st || typeof st !== 'object' || st.ver >= 2) return;
     const E = this.cast().events || {};
     const keepSeen = (st.seen || []).filter(id => E[id] || id === 'confess');
     const keepPicks = {};
@@ -91,6 +100,16 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     const next = { ver: 2, seen: keepSeen, picks: keepPicks, seenOn: {} };
     ['romance', 'confessAfter', 'names'].forEach(k => { if (st[k] != null) next[k] = st[k]; });
     this.setBuddy({ story: next });
+  },
+
+  /** 剧情模式从头开始（v10.0）：故事、手机、关系、剧情给的样子都回到第一天；记录、小本本、近况、图鉴不动 */
+  storyReset() {
+    const raw = this.bondXpRaw ? this.bondXpRaw() : 0;
+    const base = this.buddyBase ? this.buddyBase().outfit : '';
+    this.setBuddy(Object.assign({ v10: true, story: { ver: 3, seen: [], picks: {}, seenOn: {} }, phone: {}, bondBase: raw || 0, lv: 1, lvAt: getTodayDateString(), note: null, sulk: null, sulkLast: '', comfort: 0 },
+      base ? { outfit: base } : {}));
+    try { ['tf_story', 'tf_story_left', 'tf_main_nudge', 'tf_bonus_nudge'].forEach(k => localStorage.removeItem(k)); } catch (e) {}
+    if (typeof window !== 'undefined' && window.TrainFitNative && window.TrainFitNative.storyPush) { try { window.TrainFitNative.storyPush('{}'); } catch (e) {} }
   },
 
   /** 到这一级几天了（升级那天记在 profile.buddy.lvAt；老用户没记的按 3 天算） */
@@ -250,7 +269,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     const pending = list.find(x => !seen.has(x.sc.id));
     if (!pending) return `故事看完了（${got}/${list.length}）。设置里随时能重看`;
     const st = this.mainStatus(pending);
-    return `看到第 ${got}/${list.length} 段 · 下一段「${pending.sc.title}」${st === 'ready' ? '可以看了，打开 App 或记完一条就开始' : '明天来'}`;
+    return `看到第 ${got}/${list.length} 段 · 下一段「${pending.sc.title}」${st === 'ready' ? '可以看了，点小人就能开始' : '明天来'}`;
   },
 
   /** 主线都看完了没有 */
@@ -310,7 +329,8 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     // 第一天连着看完第一章：这段看完、下一段也能看了，问一句接着看还是先去记录
     const list = this.mainList();
     const nxt = list[list.findIndex(x => x.sc.id === id) + 1];
-    const chain = !opts.replay && item.ch === 1 && item.k >= 1 && nxt && nxt.ch === 1 && !(st.seen || []).includes(nxt.sc.id);
+    // v10.0：剧情不再自己淡进来，第一段看完也问（不然第一天看完开场就断了）
+    const chain = !opts.replay && item.ch === 1 && nxt && nxt.ch === 1 && !(st.seen || []).includes(nxt.sc.id);
     if (chain) script.push({ ask: '_next', opts: [{ t: `接着看「${nxt.sc.title}」`, r: [] }, { t: '先去记一下', r: [] }] });
     let talk = null, unlocked = null, goNext = false;
     const first = !(st.seen || []).includes(id);
@@ -339,7 +359,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       },
       after: () => {
         this.renderBuddy();
-        if (goNext && nxt) { setTimeout(() => this.playMain(nxt.sc.id), 650); if (unlocked) setTimeout(() => this.wardrobeToast(unlocked), 400); return; }
+        if (goNext && nxt) { setTimeout(() => this.playMain(nxt.sc.id, { after: opts.after }), 650); if (unlocked) setTimeout(() => this.wardrobeToast(unlocked), 400); return; }
         if (!opts.replay && !this._touring) this.storyHandoff(first ? sc.after : '', item.ch, sc);
         if (unlocked) setTimeout(() => this.wardrobeToast(unlocked), 1800);
         if (opts.after) opts.after();
@@ -430,44 +450,13 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
   },
 
   /**
-   * 剧情自己淡入（v9.0，用户：「打开 App 时、记完一条之后，到了某个阶段自动淡入淡出，不要搞太复杂」）：
-   * 有一段能看的主线（第一天第一章、之后每天一段），打开 App 或者记完一条就直接演，不再问「现在有空吗」；
-   * 演到一半点了「离开」的，二十分钟内不再自己演（让你先去记录），之后从离开的地方接着演。
-   * trigger：'open' / 'record'；info：{ bridge（刚记的那条，TA 先说一句）, recId（那条从卡片里飞向小人） }
-   */
-  storyAuto(trigger, info) {
-    info = info || {};
-    if (!this.storyOn() || !this.buddyChosen() || this._touring || this._scene || this.needsOnboarding || !this.cast().main || this.view !== 'today') return false;
-    if (typeof document !== 'undefined' && document.body.classList.contains('onboarding')) return false;
-    const next = this.mainNext();
-    if (!next) return false;
-    let left = 0;
-    try { left = +localStorage.getItem('tf_story_left') || 0; } catch (e) {}
-    if (Date.now() - left < 20 * 60000) return false;
-    const go = () => { if (!this._scene) this.playMain(next.sc.id, { auto: trigger, bridge: info.bridge }); };
-    if (trigger === 'record' && info.recId) setTimeout(() => this.carryIntoStory(info.recId, info.bridge || '', go), 500);
-    else setTimeout(go, trigger === 'record' ? 600 : 250);
-    return true;
-  },
-
-  /**
    * 在设置里刚切到剧情模式（v9.1）：告诉你回到今天页故事就来；回到今天页时（switchView）看一眼有没有能演的。
    */
   storyKickoff() {
+    if (this.storyMigrate) this.storyMigrate(); // v10.0：以前的剧情进度（旧故事）清掉，从头开始
     this._storyKick = true;
     const next = this.mainNext ? this.mainNext() : null;
-    const seen = this.storyData().seen || [];
-    if (this.showToast) this.showToast(next ? `回到今天页，${this.buddyName()}的故事就开始${this.mainList().some(x => seen.includes(x.sc.id)) ? '（接着上次）' : ''}` : '剧情模式打开了');
-  },
-
-  /** 记完一条：有能看的主线就顺着这条切进去（TA 先对这条说一句） */
-  storyAfterLog(result, batch) {
-    const meal = (result.meals || [])[0];
-    const lift = (result.workouts || [])[0];
-    if (!meal && !lift) return false;
-    const rec = meal ? String(meal.foodSummary || '').slice(0, 16) : `${lift.exerciseName}${lift.durationMin ? ` ${lift.durationMin} 分钟` : lift.sets ? ` ${lift.sets}×${lift.reps}` : ''}`;
-    const ids = (meal ? batch.dietIds : batch.workoutIds) || [];
-    return this.storyAuto('record', { bridge: rec, recId: ids[0] });
+    if (this.showToast) this.showToast(next ? `回到今天页，点${this.buddyName()}就能开始看故事` : '剧情模式打开了');
   },
 
   /** 刚记的那条从卡片里飞向小人（像是你把它递给 TA），小人接住蹦一下，然后进剧场 */

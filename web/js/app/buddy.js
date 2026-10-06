@@ -828,6 +828,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     btn.setAttribute('aria-label', `小人：${st.say}`);
     btn.classList.toggle('has-note', !!(this.noteReady && this.noteReady())); // 今天的小纸条还没拆：头上挂个小信封
     btn.classList.toggle('has-story', !!(this.storyCue && this.storyCue())); // TA 有话想跟你说（新的主线、约定达成的加篇）：头上冒一个「…」气泡（v8.0）
+    if (this.phoneBadge) this.phoneBadge(); // TA 的手机有新消息（v10.0）：头上一个数字，替掉「…」
     this.placeBuddy();
     const pop = document.getElementById('buddy-pop');
     if (!pop.classList.contains('hidden') && !pop.dataset.mode) this.showBuddyPop();
@@ -919,7 +920,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     btn.dataset.key = key;
     btn.dataset.pose = pose;
     let move = btn.querySelector('.bd-move');
-    if (!move) { btn.innerHTML = '<span class="bd-move"></span><span class="bd-mail" aria-hidden="true">✉</span><span class="bd-story" aria-hidden="true"><i></i><i></i><i></i></span>'; move = btn.querySelector('.bd-move'); }
+    if (!move) { btn.innerHTML = '<span class="bd-move"></span><span class="bd-mail" aria-hidden="true">✉</span><span class="bd-story" aria-hidden="true"><i></i><i></i><i></i></span><span class="bd-phone" aria-hidden="true"><b></b></span>'; move = btn.querySelector('.bd-move'); }
     move.innerHTML = TF.Buddy.svg(Object.assign(art, { mood: face ? TF.Buddy.FACE_MOOD[face] : mood, gear, pose }));
     if (posed) this.placeBuddy(); // 站起来 / 趴下高度变了，底边还贴着那个框
   },
@@ -1060,9 +1061,12 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     pop.innerHTML = story + `<div class="buddy-pop-head">${head}</div>` + (rare ? `<p class="buddy-rare">${esc(rare)}</p>` : '') + this.bondRow() + `<p class="buddy-say">${esc(st.say)}</p>` +
       (obs ? `<p class="buddy-obs">${esc(obs)}</p>` : '') +
       (tip ? `<p class="buddy-train">${esc(tip)}</p>` : '') +
+      (this.phoneEntryHtml ? this.phoneEntryHtml() : '') +
       (this.dexEntryHtml ? this.dexEntryHtml() : '') +
       `<p class="buddy-foot">${esc(foot)}</p>`;
     pop.querySelector('.buddy-dex').addEventListener('click', (e) => { e.stopPropagation(); this.openDex && this.openDex(); });
+    const phone = pop.querySelector('.buddy-phone');
+    if (phone) phone.addEventListener('click', (e) => { e.stopPropagation(); this.openPhone(); });
     const row = pop.querySelector('.buddy-story-row');
     if (row) row.addEventListener('click', (e) => { e.stopPropagation(); pop.classList.add('hidden'); if (row.dataset.bonus) this.playBonus(row.dataset.bonus); else this.playMain(row.dataset.main); });
     this.positionBuddyPop();
@@ -1120,6 +1124,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
   showBuddyThinking(question, kind) {
     const pop = document.getElementById('buddy-pop');
     if (!pop) return;
+    if (this._phoneWait && this._phoneWait.q === String(question || '').trim() && this.phoneIsOpen && this.phoneIsOpen()) return; // 手机里问的：手机里「正在输入…」（v10.0）
     clearInterval(this._thinkT);
     const q = String(question || '').replace(/\s+/g, ' ').trim();
     const eat = /吃|食谱|菜谱|蛋白|热量|碳水|饿/.test(q), lift = /练|训练|健身|动作/.test(q);
@@ -1176,6 +1181,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     opts = opts || {};
     const pop = document.getElementById('buddy-pop');
     if (!pop) return;
+    if (this.phoneCatch && this.phoneCatch(question, answer, opts)) return; // 在 TA 的手机里问的：回答放进手机的对话（v10.0）
     const q = String(question || '').replace(/\s+/g, ' ').trim();
     const fresh = pop.dataset.mode !== 'answer' || pop.dataset.q !== q || pop.classList.contains('hidden');
     clearInterval(this._thinkT);
@@ -1625,6 +1631,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     const pop = document.getElementById('buddy-pop');
     if (!pop) return;
     clearInterval(this._thinkT);
+    if (this.phoneFailed && this.phoneFailed(p.text)) return; // 手机里问的：手机里说没收到，点一下再发（v10.0）
     pop.dataset.mode = 'answer';
     pop.dataset.q = '';
     pop.dataset.level = 'none';
@@ -1721,7 +1728,9 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       clearTimeout(this._greetT);
       this._greetT = setTimeout(() => this.greetOrGuide(), 1500);
     });
-    // 打开 App：小人打个招呼（每天第一次）
+    // 打开 App：TA 的手机先收一下今天的消息（头上马上有未读数，v10.0）；小人打个招呼（每天第一次）
+    if (this.storyMigrate) this.storyMigrate(); // 先把旧故事的进度清掉（v10.0），再收消息
+    if (this.phoneSync) this.phoneSync();
     clearTimeout(this._greetT);
     this._greetT = setTimeout(() => this.greetOrGuide(), 2200);
     // 逛的时候（发呆、翻以前的日子、翻记录、看趋势）有时凑过来说一句

@@ -71,8 +71,10 @@ function mergeBackupData(cur, bak) {
     const moreLife = lifeB.filter(x => x && x.t && !lifeC.some(y => y.t === x.t));
     if (moreLife.length) dex.life = lifeC.concat(moreLife).sort((a, b) => (a.at > b.at ? 1 : -1)).slice(-12);
     const sc = cb.story || {}, sb = bb.story || {};
-    const seenAll = [...new Set([].concat(sc.seen || [], sb.seen || []))];
-    if (seenAll.length !== (sc.seen || []).length || (sc.romance == null && sb.romance != null)) {
+    // 剧情换过版本（v10.0 江叙的新故事 ver 3）：旧备份里的剧情进度（同名的段落其实是旧故事）不合进来
+    const sameVer = !!cb.v10 === !!bb.v10;
+    const seenAll = sameVer ? [...new Set([].concat(sc.seen || [], sb.seen || []))] : (sc.seen || []);
+    if (sameVer && (seenAll.length !== (sc.seen || []).length || (sc.romance == null && sb.romance != null))) {
       dex.story = Object.assign({}, sb, sc, { seen: seenAll, picks: Object.assign({}, sb.picks || {}, sc.picks || {}) });
       if (sb.docAdds || sc.docAdds) dex.story.docAdds = [...new Set((sb.docAdds || []).concat(sc.docAdds || []))].slice(-6);
       if (sc.romance == null && sb.romance != null) dex.story.romance = sb.romance;

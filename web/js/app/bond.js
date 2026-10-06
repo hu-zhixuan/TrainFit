@@ -108,8 +108,11 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     const story = this.storyOn();
     const told = story && this.storySeen(`${this.castKey()}4a`);
     // 极简模式（v9.1）：没有剧情，「知道自己是 App 里的角色、有台词表」这种剧情里的设定不带
-    const facts = c.facts.filter(f => story || !/里的角色/.test(f));
-    return { name: c.name, who: c.who, speech: c.speech, quirks: c.quirks, never: c.never, samples: c.samples, look: wear, facts: facts.concat(told ? [c.secret] : []),
+    // v10.0 江叙的新故事：剧情模式下他住在 App 的后台（whoStory / factsStory，按看过的剧情一点点知道）；极简模式还是学长（factsLite）
+    const facts = c.facts.filter(f => story || !/里的角色/.test(f))
+      .concat(story ? (c.factsStory || []).filter(x => this.storySeen(x[1])).map(x => x[0]) : (c.factsLite || []))
+      .concat(story && !c.factsStory ? (c.factsLite || []) : []);
+    return { name: c.name, who: (story && c.whoStory) || c.who, speech: c.speech, quirks: c.quirks, never: c.never, samples: c.samples, look: wear, facts: facts.concat(told ? [c.secret] : []),
       level: b.name, lv: b.lv, tone: c.tone[b.lv - 1], call: this.callName(), you: this.profile.gender === 'female' ? '她' : '他',
       mood: this.heartPrompt ? this.heartPrompt() : '', relation: this.relationPrompt ? this.relationPrompt() : '', shared: this.storyFacts ? this.storyFacts() : [] };
   },
@@ -152,8 +155,16 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     this.saveData();
   },
 
-  bondXp() {
+  /** 记过的天数 × 10 + 互动分 */
+  bondXpRaw() {
     return new Set(this.recordDates()).size * 10 + Math.max(0, +(this.profile.buddy || {}).xp || 0);
+  },
+
+  /** 亲密度：v10.0 剧情模式从头开始的（storyReset 记下当时的分 bondBase），剧情模式里从那儿重新算；极简模式不受影响 */
+  bondXp() {
+    const raw = this.bondXpRaw();
+    const base = +(this.profile.buddy || {}).bondBase || 0;
+    return base && this.storyOn && this.storyOn() ? Math.max(0, raw - base) : raw;
   },
 
   bond() { return TF.Bond.info(this.bondXp()); },
