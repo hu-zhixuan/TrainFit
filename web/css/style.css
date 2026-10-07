@@ -1541,11 +1541,11 @@ body.onboarding .rec-panel { z-index: 210; bottom: calc(24px + var(--sab)); }
 .ob-mode[data-mode="story"] b { color: var(--love); }
 #buddy-tour { margin-top: 10px; width: 100%; }
 /* 选搭子（v6.0）：江叙 / 夏柚 两张卡，点一下 TA 招手说一句；下面「极简模式」 */
-.ob-cast { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 4px; }
+.ob-cast { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 4px; } /* 立绘宽窄不一样，minmax(0) 让两张卡一样宽 */
 .ob-pal { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 14px 10px 14px; border: 2px solid var(--line); border-radius: var(--r-lg); background: var(--surface); color: var(--text); font: inherit; cursor: pointer; box-shadow: var(--shadow-sm); transition: border-color 0.15s ease, transform 0.12s ease; -webkit-tap-highlight-color: transparent; }
 .ob-pal-art { display: flex; align-items: flex-end; justify-content: center; width: 100%; height: 146px; border-radius: var(--r-md); background: radial-gradient(circle at 50% 45%, color-mix(in srgb, var(--love) 18%, transparent), transparent 70%); }
 .ob-pal-art svg { width: 116px; height: auto; }
-.ob-pal-art.sprite { overflow: hidden; align-items: flex-start; }
+.ob-pal-art.sprite { overflow: hidden; align-items: flex-start; min-width: 0; }
 .ob-pal-sprite { display: block; height: 430px; width: auto; margin-top: 6px; filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.25)); -webkit-user-drag: none; }
 .ob-pal b { margin-top: 2px; font-size: 1.1rem; }
 .ob-pal small { font-size: 0.74rem; line-height: 1.45; color: var(--text-3); text-align: center; }

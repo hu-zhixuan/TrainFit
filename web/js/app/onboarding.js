@@ -198,9 +198,9 @@ Object.assign(FitnessApp.prototype, {
       const k = b.dataset.cast, on = this._castPick === k;
       b.classList.toggle('on', on);
       b.querySelector('small').textContent = TF.Cast[k].blurb;
-      // 有立绘（v7.2）就放立绘的上半身，点中了换笑脸；没有就是像素小人招手
+      // 有立绘（v7.2）就放立绘的上半身，点中了换表情（cast.pickFace：江叙笑一下，夏柚是看穿你的那种坏笑）；没有就是像素小人招手
       const art = b.querySelector('.ob-pal-art');
-      const url = TF.Art ? TF.Art.sprite(k, on ? '开心' : '平静') : '';
+      const url = TF.Art ? TF.Art.sprite(k, on ? (TF.Cast[k].pickFace || '开心') : '平静') : '';
       art.classList.toggle('sprite', !!url);
       art.innerHTML = url ? `<img class="ob-pal-sprite" src="${esc(url)}" alt="" onerror="TF.Art.fail(this.getAttribute('src'));app.drawCastPick()">`
         : TF.Buddy.svg(Object.assign({ char: k === 'xy' ? 'girl' : 'boy' }, TF.Buddy.CAST_LOOK[k === 'xy' ? 'girl' : 'boy'], { build: 'normal', pose: on ? 'wave' : 'stand', mood: on ? 'good' : 'ok', gear: [], scale: 4 }));
