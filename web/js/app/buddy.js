@@ -451,10 +451,10 @@
       head: [[], [], [], [], [], [], [], [], [], '...HHHHHHHhssssssHHHH...', '...HHHHHhSSSSSSSSHHH....', '...hHHhSSSSSSSSSSHHh....'],
       face: { eyeX: 9, eyes: { chill: 'ESSSSEES', closed: 'sSSSSssS', left: 'ESSSEESS', right: 'SESSSSEE' }, happy: ['E....EE.', '.E..ESSE'], blushX: 7, blush: 'b........b' } },
     fur: { char: 'boy', stand: [[10, 18, ['f'], 'J'], [17, 18, ['f'], 'R']], lie: [[5, 14, ['f'], 'R'], [17, 15, ['f'], 'R']] },
-    // 夏柚：电台的耳机挂在脖子上（xy2a）；柚子色的发夹（xy3b）；抽绳上挂着一只小鲸鱼（xy4b）
-    phones: { char: 'girl', stand: [[8, 13, ['DD.....DD', 'DD.....DD']]], lie: [[6, 13, ['DD........DD']]] },
-    clip: { char: 'girl', stand: [[17, 8, ['yy']]], lie: [[17, 8, ['yy']]] },
-    whale: { char: 'girl', stand: [[14, 16, ['B'], 'J']] }
+    // 夏柚（v11 新故事）：卫衣下摆蹭了粉笔灰（xy2a）；摔破的袖子补了一圈红布（xy4a）；抽绳上别着乌鸦的一根灰羽毛（xy5b）
+    chalk: { char: 'girl', stand: [[9, 20, ['Z.Z'], 'JP']] },
+    patch: { char: 'girl', stand: [[16, 17, ['DDD'], 'Rr']], lie: [[16, 14, ['DD'], 'Rr']] },
+    feather: { char: 'girl', stand: [[15, 17, ['Z', 'k'], 'J']] }
   };
   // 两个人本来的样子（v8.1，照着剧场立绘）：设置里不能改，衣服之外都固定（app 的 buddyLook 用这个）
   const CAST_LOOK = {

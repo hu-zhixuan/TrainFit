@@ -1758,7 +1758,7 @@ body.in-theater { overflow: hidden; }
 /* 天气、星星、水光 */
 .th-fx { position: absolute; inset: 0; pointer-events: none; }
 .theater[data-bg="rain"] .th-fx { background: repeating-linear-gradient(105.95deg, rgba(200, 220, 255, 0.22) 0 1px, transparent 1px 13.736px); background-size: 200px 200px; } /* 角度和间距算过：200px 的格子横正好 14 条、竖 4 条，接缝对得上 */
-.theater[data-bg="night"] .th-fx, .theater[data-bg="citynight"] .th-fx, .theater[data-bg="roomnight"] .th-fx, .theater[data-bg="dusk"] .th-fx {
+.theater[data-bg="night"] .th-fx, .theater[data-bg="citynight"] .th-fx, .theater[data-bg="roomnight"] .th-fx, .theater[data-bg="dusk"] .th-fx, .theater[data-bg="roof"] .th-fx {
   background-image: radial-gradient(1.5px 1.5px at 12% 14%, #fff, transparent), radial-gradient(1px 1px at 34% 8%, #fff, transparent), radial-gradient(1.5px 1.5px at 58% 18%, #fff, transparent),
     radial-gradient(1px 1px at 76% 6%, #fff, transparent), radial-gradient(1.5px 1.5px at 90% 22%, #fff, transparent), radial-gradient(1px 1px at 22% 30%, #fff, transparent), radial-gradient(1px 1px at 66% 34%, #fff, transparent); opacity: 0.8; }
 .theater[data-bg="dusk"] .th-fx { opacity: 0.35; }
@@ -2251,6 +2251,22 @@ button.sb-promise, button.sb-diary { cursor: pointer; }
   linear-gradient(180deg, #1b2130 0%, #121722 60%, #0b0e15 100%); }
 .theater[data-bg="tower"] .th-fx { background: repeating-linear-gradient(105.95deg, rgba(200, 220, 255, 0.2) 0 1px, transparent 1px 13.736px); background-size: 200px 200px; }
 @media (prefers-reduced-motion: no-preference) { .theater[data-bg="tower"] .th-fx { animation: thRain 0.6s linear infinite; } }
+/* v11 夏柚的地图：凌晨四点四十的屋顶（深蓝的天，天边一条没画日出的灰线，楼顶、水塔的剪影）；地图边缘（线框网格铺到天边） */
+.theater[data-bg="roof"] .th-bg, .cg-thumb[data-bg="roof"] { background:
+  linear-gradient(#0c111e, #0c111e) 6% 100% / 16% 34% no-repeat,
+  linear-gradient(#10172a, #10172a) 26% 100% / 12% 26% no-repeat,
+  radial-gradient(ellipse 50% 50% at 50% 50%, #0e1424 98%, transparent 100%) 33% 66% / 7% 6% no-repeat,
+  linear-gradient(#0e1424, #0e1424) 33.4% 74% / 1% 10% no-repeat,
+  linear-gradient(#0c111e, #0c111e) 72% 100% / 18% 30% no-repeat,
+  linear-gradient(#111a2d, #111a2d) 94% 100% / 14% 38% no-repeat,
+  linear-gradient(180deg, transparent 0 60%, rgba(200, 208, 222, 0.22) 63%, transparent 67%),
+  linear-gradient(180deg, #0b1124 0%, #182241 42%, #2c3755 62%, #141b30 76%, #0a0e1a 100%); }
+.theater[data-bg="edge"] .th-bg, .cg-thumb[data-bg="edge"] { background:
+  repeating-linear-gradient(0deg, rgba(150, 190, 240, 0.16) 0 1px, transparent 1px 28px) 0 100% / 100% 42% no-repeat,
+  repeating-linear-gradient(90deg, rgba(150, 190, 240, 0.16) 0 1px, transparent 1px 28px) 0 100% / 100% 42% no-repeat,
+  linear-gradient(180deg, transparent 0 56%, rgba(210, 214, 226, 0.26) 58%, transparent 61%),
+  linear-gradient(180deg, #121827 0%, #262d40 46%, #3b4256 58%, #1a2030 66%, #0d111b 100%); }
+.theater[data-bg="edge"] .th-fx { background: repeating-linear-gradient(90deg, rgba(150, 190, 240, 0.05) 0 1px, transparent 1px 56px); }
 /* 「@标准版」：同一张脸，一直在笑，冷一点、亮一点，边上有一圈不自然的光；「@系统」：红色名字牌、等宽字 */
 .theater.twin .th-actor svg { filter: saturate(0.5) hue-rotate(180deg) brightness(1.15) drop-shadow(0 0 12px rgba(140, 220, 255, 0.7)); }
 .theater.twin .th-actor img { filter: saturate(0.4) brightness(1.1) contrast(1.05) drop-shadow(0 0 14px rgba(140, 220, 255, 0.75)); }

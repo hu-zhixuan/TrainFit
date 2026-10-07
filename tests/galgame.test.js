@@ -38,11 +38,45 @@ test('两个人都有自己的台词：每种常说的话都有，喜欢你 / �
     const all = JSON.stringify(c.talk);
     assert.ok(!/作为AI|我理解你的感受|希望对你有帮助|建议你/.test(all), `${k} 台词里有 AI 腔`);
   }
-  // 一开口就分得出：江叙从不用感叹号、波浪号，常「……」；夏柚一大半带「！」「～」
+  // 一开口就分得出：江叙从不用感叹号、波浪号，常「……」；夏柚（v11，GALGAME.md）不用波浪号、不说「诶」「嘿嘿」「哼」「呀」，感叹号几乎没有，常反问、「嗤」
   const lines = (k) => Object.values(Cast[k].talk).flat(2).filter(x => typeof x === 'string');
   assert.ok(lines('jx').every(x => !/[！!～~]/.test(x)), '江叙不用感叹号和波浪号');
   assert.ok(lines('jx').filter(x => x.includes('……')).length >= lines('jx').length / 3);
-  assert.ok(lines('xy').filter(x => /[！～]/.test(x)).length >= lines('xy').length / 2);
+  assert.ok(lines('xy').every(x => !/[！!～~]|诶|嘿嘿|哼|呀|人家/.test(x)), '夏柚不撒娇、不嗲');
+  assert.ok(lines('xy').filter(x => /……|？|嗤/.test(x)).length >= lines('xy').length / 3, '夏柚的味道：停顿、反问、嗤');
+});
+
+test('v11 人设（GALGAME.md）：夏柚整个人不嗲、不讨好、不写身体；两个人第一章不掏心窝子；手机前两章不先黏人', () => {
+  // 夏柚说的每一句（台词、手机、朋友圈、剧本里她说的；写好的陪跑台词 sys 除外）：没有波浪号、没有「嘿嘿」「诶」「人家」「宝宝」
+  const xyTalk = [];
+  const take = (v) => { if (typeof v === 'string') xyTalk.push(v); else if (Array.isArray(v)) v.forEach(take); else if (v && typeof v === 'object') Object.values(v).forEach(take); };
+  const C = Cast.xy;
+  ['talk', 'pat', 'poke', 'life', 'rare', 'whisper', 'notes', 'sulk', 'sulkTap', 'makeup', 'moment', 'heart', 'dex', 'changed', 'story', 'levelUp', 'intro', 'late', 'pick', 'echo', 'samples'].forEach(k => take(C[k]));
+  take(C.phone.msgs); take(Object.values(C.phone.after));
+  C.main.flat().forEach(sc => walkLines(sc.script, ([face, text, pose]) => { if (face != null && face !== '你' && String(face)[0] !== '@' && pose !== 'sys') xyTalk.push(text); }));
+  xyTalk.forEach(t => assert.ok(!/[～~]|嘿嘿|诶|人家|宝宝|亲爱的|么么/.test(t), `夏柚嗲了：「${t}」`));
+  assert.ok(xyTalk.filter(t => /[！!]/.test(t)).length <= 3, '夏柚的感叹号只留给真吓到的时候');
+  // 不写身体（用户：「不要擦边」）：剧本、CG 说明里不出现这些
+  const body = /胸|腰|腿好|身材|锁骨|大腿|曲线|性感|贴身|内衣/;
+  C.main.flat().forEach(sc => walkLines(sc.script, ([, text]) => assert.ok(!body.test(text), `${sc.id} 写到身体：${text}`)));
+  Object.values(C.cgs).forEach(cg => assert.ok(!body.test(cg.caption), cg.caption));
+  assert.ok(!C.wardrobe.bare, '夏柚没有运动内衣');
+  // 温度表：第一章 TA 自己说的话里，不说「一直在」「你是第一个」「等你」「想你」「喜欢」
+  const hot = /会一直在|一直在这儿|一直都在|你是第一个|第一个告诉你|我等你|等着你|想你|喜欢你|陪着你/;
+  for (const k of ['jx', 'xy']) {
+    Cast[k].main[0].forEach(sc => walkLines(sc.script, ([face, text, pose]) => {
+      if (face == null || face === '你' || String(face)[0] === '@' || pose === 'sys') return;
+      assert.ok(!hot.test(String(text).replace(/「[^」]*」/g, '')), `${sc.id} 第一章就太热了：「${text}」`); // 引号里是在念别人写的话术，不算
+    }));
+    // 手机：前两章（stage ≤ 1）TA 不先说想你、等你、陪你
+    Object.values(Cast[k].phone.msgs).flat().filter(x => x[0] <= 1).forEach(x => assert.ok(!/想你|等你|陪你|一直在/.test(x[1]), `${k} 手机太早黏人：${x[1]}`));
+  }
+  // 江叙的小动作（领口的石头、拨刘海）在剧本里真的出现，刘海剪了以后拨了个空
+  const jxAll = JSON.stringify(Cast.jx.main);
+  assert.ok(/领口.{0,4}石头/.test(jxAll) && /拨刘海|刘海往下拨/.test(jxAll) && /拨了个空/.test(jxAll));
+  // 夏柚的小动作：手往袖子里缩、绕那缕红头发、歪头
+  const xyAll = JSON.stringify(C.main);
+  assert.ok(/袖子里缩/.test(xyAll) && /绕了一下那缕红头发/.test(xyAll) && /歪着头/.test(xyAll));
 });
 
 test('挑台词：按章节挑想你、恋人说喜欢你另有、刚说过的不重复、名字替进去', () => {
@@ -94,6 +128,8 @@ test('聊天的提示词带上人设：口头禅、绝不说的话、几句示�
 // ---------------- v7.1 主线 ----------------
 require('../web/js/app/script_jx.js');
 require('../web/js/app/script_xy.js');
+require('../web/js/app/phone_jx.js');
+require('../web/js/app/phone_xy.js');
 const Buddy = require('../web/js/app/buddy.js');
 
 // 剧本里所有台词（选项回应、互动做完以后、沉默、备用台词里的也算）
@@ -265,15 +301,14 @@ test('元设定（TA 知道自己在 App 里）：第一句说错两遍、人设
     assert.ok(infos.some(x => x.recalls), `${k} 有撤回的消息`);
     c.main.forEach((ch, i) => assert.ok(ch.map(sc => Theater.scriptInfo(sc.script).pushes.length).reduce((a, b) => a + b, 0) <= 1, `${k} 第 ${i + 1} 章通知最多一次`));
     assert.ok(c.main.flat().filter(sc => Theater.scriptInfo(sc.script).pushes.length).length >= 2, `${k} 剧情里约好的通知`);
-    // 第三、四章翻开的那行，就是虐点（江叙：经历；夏柚：表情 / 不应表现负面情绪）
+    // 第三、四章翻开的那行，就是虐点（江叙：经历；夏柚 v11：手没画完）
     const hl = c.main.slice(2, 4).flat().flatMap(sc => sc.script.filter(s => s && s.doc && s.hl != null).map(s => c.doc.lines[s.hl]));
-    assert.ok(hl.some(l => (k === 'jx' ? /经历/ : /表情|负面/).test(l)), `${k}：${hl}`);
+    assert.ok(hl.some(l => (k === 'jx' ? /经历/ : /手：待画/).test(l)), `${k}：${hl}`);
   }
-  // 夏柚有哭的那张（第五章你画的眼泪）
-  const tears = Cast.xy.main[4].flatMap(sc => sc.script.filter(s => s && s.touch && s.target === 'tear'));
-  assert.strictEqual(tears.length, 1);
-  assert.strictEqual(tears[0].dir, 'down');
-  assert.ok(JSON.stringify(Cast.xy.main[4][1].script).includes('"哭"'));
+  // 夏柚（v11）：第四章把线稿的手按在你的屏幕上（按住）；看见录像停在半空那段哭了
+  const hands = Cast.xy.main[3].flatMap(sc => sc.script.filter(s => s && s.touch === 'hold' && s.target === 'hand'));
+  assert.strictEqual(hands.length, 1);
+  assert.ok(JSON.stringify(Cast.xy.main[3][1].script).includes('"哭"'));
   // 江叙：第七天台词表替他说了喜欢；第十三天更新前用自己的嘴说
   assert.ok(Cast.jx.main[2][2].script.some(s => Array.isArray(s) && s[2] === 'sys' && /喜欢/.test(s[1])), '第七天');
 });
@@ -290,7 +325,8 @@ test('今天页的小人就是剧情里的 TA（v8.0）：衣服跟着剧情解�
       assert.ok(ids.has(w.scene || w.bonus), `${k} ${o} 对应的剧情 ${w.scene || w.bonus} 不存在`);
       assert.ok(w.label && w.label.length <= 14, `${k} ${o} 要有名字`);
     });
-    assert.strictEqual(W.bare.wear, false, `${k} 光膀子 / 运动内衣不自己换上`);
+    if (k === 'jx') assert.strictEqual(W.bare.wear, false, `${k} 光膀子不自己换上`);
+    Object.values(W).filter(w => w.wear === false).forEach(w => assert.ok(w.label, k));
     // 余韵：只挂在真的剧情上，口吻对
     Object.entries(c.echo).forEach(([id, lines]) => {
       assert.ok(ids.has(id), `${k} 余韵挂在不存在的剧情 ${id}`);
@@ -306,7 +342,7 @@ test('今天页的小人就是剧情里的 TA（v8.0）：衣服跟着剧情解�
     assert.ok(c.heart.low.why.some(x => typeof x === 'string'), `${k} 至少一条随时能说的低落理由`);
   }
   assert.ok(Cast.jx.heart.low.why.some(x => Array.isArray(x) && /肩膀/.test(x[0])), '江叙的肩伤要等老周说了以后');
-  assert.ok(Cast.xy.heart.low.why.some(x => Array.isArray(x) && /我爸/.test(x[0])), '夏柚的爸爸要等剧情里出现以后');
+  assert.ok(Cast.xy.heart.low.why.some(x => Array.isArray(x) && /4412|袖子/.test(x[0])), '夏柚的手、那个人影要等剧情里出现以后');
 });
 
 test('小人的样子跟着剧情小变化（v8.1）：每处挂在真的主线上、画得出来、只改几格、余韵里 TA 自己提一句', () => {

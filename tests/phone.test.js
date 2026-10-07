@@ -26,6 +26,7 @@ require('../web/js/app/cast.js');
 require('../web/js/app/script_jx.js');
 require('../web/js/app/script_xy.js');
 require('../web/js/app/phone_jx.js');
+require('../web/js/app/phone_xy.js');
 require('../web/js/app/buddy.js');
 require('../web/js/app/bond.js');
 require('../web/js/app/heart.js');
@@ -119,12 +120,30 @@ test('打开 App：看完那段第二天他提一句、下一段好了发消息�
   assert.ok(ready && ready.play === 'jx2a', '下一段好了：消息里带「去看」');
   assert.ok(ph.moments['m-bun'] && ph.moments['m-bun'].at, '第一章的朋友圈发出来了');
   assert.ok(!ph.moments['m-pool'], '第二章的还没有');
-  assert.strictEqual((ph.calls['c-night1'] || {}).state, 'missed', '三天没碰上晚上：未接，能回拨');
+  assert.deepStrictEqual(Object.keys(ph.calls), [], '第一章他不打电话（v11 温度表）');
   assert.ok(app.phoneUnread() >= 3);
   // 再打开一次：不重复发
   const n = ph.msgs.length;
   app.phoneSync();
   assert.strictEqual(app.phoneData().msgs.length, n);
+});
+
+test('电话（v11）：第一通在第三章（找了借口）；看完两天没碰上时间就算未接', () => {
+  const first = C.phone.calls.map(c => mainIds.indexOf(c.after)).sort((a, b) => a - b)[0];
+  assert.ok(first >= 6, '前两章不打电话');
+  const seen = mainIds.slice(0, 7);
+  const seenOn = Object.fromEntries(seen.map(id => [id, '2026-10-03']));
+  const app = makeApp({ mode: 'story', story: { ver: 3, seen, picks: {}, seenOn } });
+  app.phoneSync();
+  assert.strictEqual((app.phoneData().calls['c-test'] || {}).state, 'missed', '三天没碰上晚上：未接，能回拨');
+  assert.ok(/测/.test(JSON.stringify(C.phone.calls.find(c => c.id === 'c-test').lines)), '借口是测试');
+});
+
+test('名字下面那行小字按角色写：江叙早上在旧泳池（第二章起）、平时在后台', () => {
+  const app = makeApp({ mode: 'story', story: { ver: 3, seen: mainIds.slice(0, 4), picks: {}, seenOn: {} } });
+  assert.strictEqual(app.phoneStatus(6), '在旧泳池');
+  assert.strictEqual(app.phoneStatus(14), '在后台');
+  assert.strictEqual(app.phoneStatus(2), '还没睡');
 });
 
 test('记完一顿他发一句（一种一天一次），{food} 换成吃的；在手机里打字记的总会回一句', () => {
@@ -154,10 +173,63 @@ test('手机里问的：回答放进手机的对话（不弹小人的气泡）�
   assert.strictEqual(app.phoneCatch('别的问题', 'x', {}), false, '不是手机里问的照旧弹气泡');
 });
 
-test('极简模式、夏柚（v10.1 再做）没有手机', () => {
+test('极简模式没有手机；夏柚（v11）剧情模式有自己的手机', () => {
   assert.strictEqual(makeApp({ mode: 'lite' }).phoneOn(), false);
   assert.strictEqual(makeApp({ mode: 'lite' }).phoneSync(), false);
-  assert.strictEqual(makeApp({ char: 'girl', mode: 'story' }, {}).phoneOn(), false);
+  assert.strictEqual(makeApp({ char: 'girl', mode: 'lite', v11: true }).phoneOn(), false);
+  const xy = makeApp({ char: 'girl', mode: 'story', v11: true, story: { ver: 3, seen: ['xy1a', 'xy1b', 'xy1c'], picks: {}, seenOn: { xy1a: '2026-10-03', xy1b: '2026-10-03', xy1c: '2026-10-03' } } });
+  assert.strictEqual(xy.phoneOn(), true);
+  xy.phoneSync();
+  const ph = xy.phoneData();
+  assert.ok(ph.msgs.some(m => m.kind === 'after' && m.t === TF.Cast.xy.phone.after.xy1c[0]), '看完那段第二天她提一句');
+  assert.ok(ph.msgs.some(m => m.kind === 'ready' && m.play === 'xy2a'));
+  assert.ok(ph.moments['y-roof'] && !ph.moments['y-lin'], '林的旧动态第四章才翻出来');
+  assert.strictEqual(xy.phoneStatus(3), '在屋顶');
+  assert.strictEqual(xy.phoneStatus(14), '在你那页上');
+});
+
+test('夏柚的手机：每种消息都有、第一章就有；口吻不嗲（没有波浪号、嘿嘿、诶）；电话是能演的剧本、挂在真的剧情上', () => {
+  const P = TF.Cast.xy.phone;
+  const ids = TF.Cast.xy.main.flat().map(sc => sc.id);
+  for (const k of ['morning', 'night', 'breakfast', 'lunch', 'dinner', 'snack', 'late', 'over', 'train', 'pr', 'protein', 'weight', 'back', 'ready']) {
+    assert.ok(P.msgs[k].some(x => x[0] <= 1), `${k} 第一章就有`);
+    P.msgs[k].forEach(x => {
+      assert.ok(x[1].length <= 48 && !/[～~]|嘿嘿|诶|人家|宝宝/.test(x[1]), x[1]);
+      assert.ok(!/你不来|不要我了|我会难过|我会消失/.test(x[1]), x[1]);
+    });
+  }
+  ids.forEach(id => assert.ok((P.after[id] || []).length, `${id} 第二天的那句`));
+  const known = new Set(Theater.STEP_KEYS);
+  P.calls.forEach(c => {
+    assert.ok(ids.includes(c.after), c.id);
+    assert.ok(Theater.scriptInfo(c.lines).lines >= 5, c.id);
+    Theater.scriptInfo(c.lines).steps.forEach(s => Object.keys(s).forEach(k => assert.ok(known.has(k), `${c.id} 不认识 ${k}`)));
+  });
+  P.moments.forEach(m => assert.ok(m.re.length >= 2 && m.re.every(r => r[0] && r[1]), m.id));
+});
+
+test('夏柚剧情模式的老用户从头开始（v11）：旧故事（电台）的进度清掉，只做一次；新选的直接记 v11', () => {
+  const old = makeApp({ char: 'girl', v10: undefined, mode: 'story', xp: 200, lv: 3, story: { ver: 2, seen: ['xy1a', 'xy1b', 'xy2a'], picks: { xy1a: 0 }, romance: true, seenOn: {} } });
+  old.storyMigrate();
+  assert.strictEqual(old.profile.buddy.v11, true);
+  assert.deepStrictEqual(old.profile.buddy.story.seen, []);
+  assert.strictEqual(old.mainNext().sc.id, 'xy1a');
+  old.mainSeen('xy1a');
+  old.storyMigrate();
+  assert.deepStrictEqual(old.profile.buddy.story.seen, ['xy1a'], '只清一次');
+  const fresh = makeApp({ char: 'girl', v10: undefined, mode: 'story' });
+  fresh.storyMigrate();
+  assert.strictEqual(fresh.profile.buddy.v11, true);
+  assert.strictEqual(fresh.profile.buddy.bondBase, undefined);
+  // 江叙的用户不受影响
+  const jx = makeApp({ mode: 'story', story: { ver: 3, seen: ['jx1a'], picks: {}, seenOn: {} } });
+  jx.storyMigrate();
+  assert.deepStrictEqual(jx.profile.buddy.story.seen, ['jx1a']);
+  // 旧备份（没有 v11）里夏柚的进度不合进新故事
+  const empty = { fit_workouts: [], fit_weights: [], fit_my_foods: [], fit_plans: [] };
+  const cur = Object.assign({ fit_profile: { buddy: { char: 'girl', v11: true, story: { ver: 3, seen: ['xy1a'], picks: {} } } }, fit_diet: [{ id: 'a', date: TODAY }] }, empty);
+  const bak = Object.assign({ fit_profile: { buddy: { char: 'girl', story: { ver: 2, seen: ['xy1a', 'xy1b', 'xy4b'], picks: {}, romance: true } } }, fit_diet: [] }, empty);
+  assert.deepStrictEqual(mergeBackupData(cur, bak).data.fit_profile.buddy.story.seen, ['xy1a']);
 });
 
 test('剧情模式的老用户从头开始（v10.0）：剧情、手机、关系、剧情给的衣服都清掉；记录不动；只做一次', () => {

@@ -21,7 +21,7 @@
   // 没有这个表情的立绘时，先找相近的（心动 → 害羞 → 开心 → 平静）
   // 哭、泪笑（v8.0，加了眼泪的那两张）没有就退回担心、开心，剧场另外画一滴 CSS 眼泪
   const FALLBACK = { 哭: ['担心'], 泪笑: ['开心'], 心动: ['害羞', '开心'], 闪亮: ['得意', '开心'], 得意: ['开心'], 撑: ['开心'], 困: ['平静'], 不服: ['担心'], 惊讶: ['平静'], 害羞: ['开心'] };
-  const BGS = ['room', 'roomnight', 'gym', 'pool', 'studio', 'booth', 'cafe', 'street', 'citynight', 'rain', 'night', 'dusk', 'dawn', 'stage', 'backstage', 'archive', 'tower'];
+  const BGS = ['room', 'roomnight', 'gym', 'pool', 'studio', 'booth', 'cafe', 'street', 'citynight', 'rain', 'night', 'dusk', 'dawn', 'stage', 'backstage', 'archive', 'tower', 'roof', 'edge'];
 
   const broken = new Set(); // 加载失败的图（清单在、图没打进包时），以后不再用
 

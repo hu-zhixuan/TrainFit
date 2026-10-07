@@ -976,7 +976,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     try {
       const P = TF.Parser;
       if (!P || !P.sceneReply) throw new Error('NO_PARSER');
-      const ctx = { buddy: this.buddyPersona ? this.buddyPersona() : {}, scene: step.ctx || '', calm: this.castKey() === 'jx' };
+      const ctx = { buddy: this.buddyPersona ? this.buddyPersona() : {}, scene: step.ctx || '', calm: !!this.cast().calm };
       // v8.0 真实 Atria：中位 10 秒、最慢 26 秒（没开 7 秒补发）；20 秒还没回来就用写好的备用台词
       lines = await Promise.race([P.sceneReply(text, ctx), new Promise((_, rej) => setTimeout(() => rej(new Error('TIMEOUT')), 20000))]);
     } catch (e) { lines = null; }

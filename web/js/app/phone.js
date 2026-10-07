@@ -1,6 +1,6 @@
 /**
  * TA 的手机（v10.0，用户：「很多游戏是主线剧情加每天几条短信、电话、朋友圈……主线剧情用户自己点进去玩，然后每天几条短信、电话、朋友圈」）。
- * 只在剧情模式、这个角色写了 cast.phone 时有（现在是江叙，夏柚 v10.1 再做）。从点小人的气泡里「江叙的手机」进，小人头上冒未读数。
+ * 只在剧情模式、这个角色写了 cast.phone 时有（江叙 phone_jx.js，夏柚 v11 起 phone_xy.js）。从点小人的气泡里「江叙的手机」进，小人头上冒未读数。
  *
  * 四栏：消息（每天几条：早安、看到你记的那顿、晚安、下一段剧情好了、看完那段第二天提一句；第三章那几天标准版的消息会混进来）
  *       通话（看完某段以后，在对的时间打来；没接是未接来电，能回拨、能重听）
@@ -283,15 +283,13 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     this.renderBuddy && this.renderBuddy();
   },
 
-  /** 他现在在干嘛（名字下面那行小字）：早上在泳池、深夜还没睡…… */
-  phoneStatus() {
-    const h = new Date().getHours();
-    const stage = this.phoneStage();
+  /** TA 现在在干嘛（名字下面那行小字）：按角色写的 phone.status（[最早哪一章, 几点起, 几点前, 话]）挑第一个对上的 */
+  phoneStatus(h) {
+    if (h == null) h = new Date().getHours();
     if (this._phoneTyping) return '正在输入…';
-    if (h >= 5 && h < 7 && stage >= 2) return '在旧泳池';
-    if (h >= 0 && h < 5) return '还没睡';
-    if (h >= 23) return '快睡了';
-    return stage >= 1 ? '在后台' : '在线';
+    const stage = this.phoneStage();
+    const hit = (this.cast().phone.status || []).find(([st, from, to]) => stage >= st && h >= from && h < to);
+    return hit ? hit[3] : '在线';
   },
 
   renderPhone(opening) {
@@ -492,7 +490,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     const ph = this.phoneData();
     const replay = (ph.calls[id] || {}).state === 'done';
     const t0 = Date.now();
-    const bg = c.when === 'morning' ? 'pool' : c.when === 'day' ? 'backstage' : 'roomnight';
+    const bg = c.bg || (c.when === 'morning' ? 'pool' : c.when === 'day' ? 'backstage' : 'roomnight');
     return this.playScene({
       label: `通话 · ${this.buddyName()}`, bg, call: true, script: c.lines.slice(), replay, from: this.buddyCenter ? this.buddyCenter() : null,
       onChoose: () => { if (this.bondGain && !replay) this.bondGain('answer'); return null; },
@@ -515,7 +513,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     const P = this.cast().phone;
     const vars = this.storyVars ? this.storyVars() : {};
     const list = (P.moments || []).filter(m => (ph.moments[m.id] || {}).at).sort((a, b) => ph.moments[b.id].at - ph.moments[a.id].at);
-    if (!list.length) return `<p class="ph-empty">朋友圈还是空的。故事往下走，${esc(this.buddyName())}和后台的人会发点东西。</p>`;
+    if (!list.length) return `<p class="ph-empty">朋友圈还是空的。故事往下走，${esc(this.buddyName())}会发点东西。</p>`;
     const fill = (t) => TF.Theater.fill(t, vars) || '';
     return list.map(m => {
       const r = ph.moments[m.id];
