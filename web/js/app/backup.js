@@ -72,7 +72,7 @@ function mergeBackupData(cur, bak) {
     if (moreLife.length) dex.life = lifeC.concat(moreLife).sort((a, b) => (a.at > b.at ? 1 : -1)).slice(-12);
     const sc = cb.story || {}, sb = bb.story || {};
     // 剧情换过版本（v10.0 江叙的新故事 ver 3）：旧备份里的剧情进度（同名的段落其实是旧故事）不合进来
-    const sameVer = !!cb.v10 === !!bb.v10;
+    const sameVer = !!cb.v10 === !!bb.v10 && !!cb.v11 === !!bb.v11; // v11：夏柚的新故事
     const seenAll = sameVer ? [...new Set([].concat(sc.seen || [], sb.seen || []))] : (sc.seen || []);
     if (sameVer && (seenAll.length !== (sc.seen || []).length || (sc.romance == null && sb.romance != null))) {
       dex.story = Object.assign({}, sb, sc, { seen: seenAll, picks: Object.assign({}, sb.picks || {}, sc.picks || {}) });

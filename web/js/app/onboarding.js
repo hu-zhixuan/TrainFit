@@ -198,9 +198,9 @@ Object.assign(FitnessApp.prototype, {
       const k = b.dataset.cast, on = this._castPick === k;
       b.classList.toggle('on', on);
       b.querySelector('small').textContent = TF.Cast[k].blurb;
-      // 有立绘（v7.2）就放立绘的上半身，点中了换笑脸；没有就是像素小人招手
+      // 有立绘（v7.2）就放立绘的上半身，点中了换表情（cast.pickFace：江叙笑一下，夏柚是看穿你的那种坏笑）；没有就是像素小人招手
       const art = b.querySelector('.ob-pal-art');
-      const url = TF.Art ? TF.Art.sprite(k, on ? '开心' : '平静') : '';
+      const url = TF.Art ? TF.Art.sprite(k, on ? (TF.Cast[k].pickFace || '开心') : '平静') : '';
       art.classList.toggle('sprite', !!url);
       art.innerHTML = url ? `<img class="ob-pal-sprite" src="${esc(url)}" alt="" onerror="TF.Art.fail(this.getAttribute('src'));app.drawCastPick()">`
         : TF.Buddy.svg(Object.assign({ char: k === 'xy' ? 'girl' : 'boy' }, TF.Buddy.CAST_LOOK[k === 'xy' ? 'girl' : 'boy'], { build: 'normal', pose: on ? 'wave' : 'stand', mood: on ? 'good' : 'ok', gear: [], scale: 4 }));
@@ -214,8 +214,9 @@ Object.assign(FitnessApp.prototype, {
     // 选了就锁住（charLocked）：设置里不能换人；剧情模式 / 极简模式 / 不要小人随时能切
     const mode = this._castMode ? { mode: this._castMode } : {};
     this._castMode = null;
-    // v10：刚选的人就是从新故事开始的，以后不用再清（storyMigrate 认 v10）
-    this.profile.buddy = Object.assign({}, this.profile.buddy || {}, show ? Object.assign({ char, show: true, picked: 6, charLocked: true }, mode, char === 'boy' ? { v10: true } : {}) : { show: false, picked: 6 });
+    // 刚选的人就是从新故事开始的，以后不用再清（storyMigrate 认 STORY_GEN：江叙 v10、夏柚 v11）
+    const gen = TF.Story && TF.Story.STORY_GEN[char === 'girl' ? 'xy' : 'jx'];
+    this.profile.buddy = Object.assign({}, this.profile.buddy || {}, show ? Object.assign({ char, show: true, picked: 6, charLocked: true }, mode, gen ? { [gen]: true } : {}) : { show: false, picked: 6 });
     if (this._castMid && this.needsOnboarding) { // 引导中：接着选用途
       this._castMid = false;
       window.Haptics && window.Haptics.fire('success');

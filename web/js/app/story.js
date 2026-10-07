@@ -66,7 +66,9 @@
     confess: '这一章的某个晚上', date: '在一起以后的周末'
   };
 
-  TF.Story = { EVENTS, HINTS, pick, EVENT_INVITE };
+  // 每个人的故事换过几版：存档上记着这一版的标记，没有的（看的是旧故事）从头开始（storyMigrate）。江叙 v10.0 换的，夏柚 v11 换的
+  const STORY_GEN = { jx: 'v10', xy: 'v11' };
+  TF.Story = { EVENTS, HINTS, pick, EVENT_INVITE, STORY_GEN };
   if (typeof module !== 'undefined' && module.exports) module.exports = TF.Story;
 })(typeof window !== 'undefined' ? window : globalThis);
 
@@ -81,15 +83,17 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
    *  v9.0（story.ver = 2，用户：「没有从头到尾一个完整的故事体验」）：以前看过的主线、选项、路线、加篇都清掉，从第一章重新开始；
    *   小剧情（cast.events）看过的、关系（恋人 / 搭子）留着。
    *  v10.0（ver = 3，用户：「剧情模式的老用户全部抹掉，重新开始」）：江叙的故事整个换了——剧情模式下的江叙，剧情、手机、关系（亲密度从头算）、
-   *   剧情给的衣服、小纸条、小别扭都清掉（storyReset）。极简模式的先不动，切到剧情模式那一刻再清（storyKickoff）。夏柚 v10.1 换故事时再清。
+   *   剧情给的衣服、小纸条、小别扭都清掉（storyReset）。极简模式的先不动，切到剧情模式那一刻再清（storyKickoff）。
+   *  v11（夏柚的故事整个换了，用户：「不要直播间、不要讨好」）：剧情模式下的夏柚一样从头开始，认 profile.buddy.v11。
    */
   storyMigrate() {
     const b = this.profile.buddy || {};
     const st = b.story;
-    // v10.0 只认一次（profile.buddy.v10）：有旧进度（看过剧情、记过东西）的清掉；什么都没有的（新用户）记一下就行
-    if (this.castKey() === 'jx' && this.storyOn() && !b.v10) {
+    // 每个人认自己的那一版（STORY_GEN：江叙 v10、夏柚 v11），只认一次：有旧进度（看过剧情、记过东西）的清掉；什么都没有的（新用户）记一下就行
+    const gen = TF.Story.STORY_GEN[this.castKey()];
+    if (gen && this.storyOn() && !b[gen]) {
       if ((st && (st.seen || []).length) || b.phone || (this.bondXpRaw && this.bondXpRaw() > 0)) this.storyReset();
-      else this.setBuddy({ v10: true });
+      else this.setBuddy({ [gen]: true });
       return;
     }
     if (!st || typeof st !== 'object' || st.ver >= 2) return;
@@ -106,7 +110,8 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
   storyReset() {
     const raw = this.bondXpRaw ? this.bondXpRaw() : 0;
     const base = this.buddyBase ? this.buddyBase().outfit : '';
-    this.setBuddy(Object.assign({ v10: true, story: { ver: 3, seen: [], picks: {}, seenOn: {} }, phone: {}, bondBase: raw || 0, lv: 1, lvAt: getTodayDateString(), note: null, sulk: null, sulkLast: '', comfort: 0 },
+    const gen = TF.Story.STORY_GEN[this.castKey()] || 'v10';
+    this.setBuddy(Object.assign({ [gen]: true, story: { ver: 3, seen: [], picks: {}, seenOn: {} }, phone: {}, bondBase: raw || 0, lv: 1, lvAt: getTodayDateString(), note: null, sulk: null, sulkLast: '', comfort: 0 },
       base ? { outfit: base } : {}));
     try { ['tf_story', 'tf_story_left', 'tf_main_nudge', 'tf_bonus_nudge'].forEach(k => localStorage.removeItem(k)); } catch (e) {}
     if (typeof window !== 'undefined' && window.TrainFitNative && window.TrainFitNative.storyPush) { try { window.TrainFitNative.storyPush('{}'); } catch (e) {} }
