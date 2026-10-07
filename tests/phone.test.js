@@ -129,16 +129,16 @@ test('打开 App：看完那段第二天他提一句、下一段好了发消息�
 
 test('记完一顿他发一句（一种一天一次），{food} 换成吃的；在手机里打字记的总会回一句', () => {
   const app = makeApp({ mode: 'story', story: { ver: 3, seen: ['jx1a'], picks: {}, seenOn: { jx1a: TODAY } } });
-  app.phoneAfterLog({ meals: [{ foodSummary: '番茄牛腩面', mealType: '晚餐', proteinG: 20 }], workouts: [] }, {});
+  app.phoneAfterLog({ meals: [{ foodSummary: '番茄牛腩面', mealType: '晚餐', proteinG: 20 }], workouts: [] }, {}, 19);
   const ph = app.phoneData();
   const m = ph.msgs[ph.msgs.length - 1];
   assert.strictEqual(m.kind, 'dinner');
   assert.ok(!/\{/.test(m.t));
   const n = ph.msgs.length;
-  app.phoneAfterLog({ meals: [{ foodSummary: '苹果', mealType: '晚餐' }], workouts: [] }, {});
+  app.phoneAfterLog({ meals: [{ foodSummary: '苹果', mealType: '晚餐' }], workouts: [] }, {}, 19);
   assert.strictEqual(app.phoneData().msgs.length, n, '同一种一天一次');
   app._phoneWait = { q: '又吃了个苹果', at: Date.now() };
-  app.phoneAfterLog({ meals: [{ foodSummary: '苹果', mealType: '晚餐' }], workouts: [] }, {});
+  app.phoneAfterLog({ meals: [{ foodSummary: '苹果', mealType: '晚餐' }], workouts: [] }, {}, 19);
   assert.strictEqual(app.phoneData().msgs.length, n + 1, '手机里记的：回一句「记上了」');
   assert.strictEqual(app._phoneWait, null);
 });

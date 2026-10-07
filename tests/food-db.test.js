@@ -70,3 +70,44 @@ test('自己整理和 USDA 的条目：4×蛋白 + 4×碳水 + 9×脂肪 和热�
     assert.ok(q > 0.8 && q < 1.2, `${r[0]} ${r[2]} 千卡，算出来 ${Math.round(q * r[2])}`);
   });
 });
+
+test('中餐按菜谱算（v10.1）：常见家常菜都在、数在合理范围；旧表「一道顶好几道」的拆开了', () => {
+  const f = (n) => FoodDB.find(n);
+  // [名字, 每 100 克千卡范围, 蛋白范围]：油算进去以后的常见范围
+  const RANGE = [['番茄炒蛋', 90, 140, 5, 8], ['宫保鸡丁', 180, 260, 12, 20], ['鱼香肉丝', 140, 210, 8, 13], ['麻婆豆腐', 120, 180, 6, 11],
+    ['红烧肉', 380, 500, 12, 20], ['回锅肉', 250, 350, 9, 14], ['地三鲜', 140, 220, 1.5, 4], ['酸辣土豆丝', 110, 170, 2, 4],
+    ['清蒸鲈鱼', 100, 150, 15, 21], ['酸菜鱼', 55, 110, 7, 13], ['蛋炒饭', 140, 200, 4, 7], ['兰州牛肉拉面', 60, 110, 2.5, 5],
+    ['黄焖鸡米饭', 110, 160, 6, 11], ['可乐鸡翅', 200, 290, 16, 23]];
+  RANGE.forEach(([n, k1, k2, p1, p2]) => {
+    const e = f(n);
+    assert.ok(e && e.src === 'dish', n);
+    assert.ok(e.k >= k1 && e.k <= k2, `${n} ${e.k} 千卡`);
+    assert.ok(e.p >= p1 && e.p <= p2, `${n} 蛋白 ${e.p}`);
+  });
+  // 以前：酸菜鱼、水煮鱼按水煮牛肉算；锅包肉按糖醋里脊；手撕包菜、土豆丝按干锅花菜；炸鸡按汉堡；所有炒青菜按蒜蓉西兰花
+  assert.notStrictEqual(f('酸菜鱼'), f('水煮牛肉'));
+  assert.notStrictEqual(f('水煮鱼'), f('水煮牛肉'));
+  assert.notStrictEqual(f('手撕包菜'), f('酸辣土豆丝'));
+  assert.notStrictEqual(f('炒青菜'), f('蒜蓉西兰花'));
+  assert.ok(!f('炸鸡') || f('炸鸡').name !== '汉堡', '炸鸡不是汉堡');
+  assert.strictEqual(f('卤肉饭').name, '卤肉饭');
+  assert.strictEqual(f('热干面').name, '热干面');
+  // 整份说的成品菜照旧交给大模型（库里的数给它参考），说了克数按库
+  assert.strictEqual(groundItem({ name: '宫保鸡丁', amount: '1份', grams: 250, whole: true, calories: 500, proteinG: 30 }, []).src, '估算');
+  const g = groundItem({ name: '宫保鸡丁', amount: '200g', grams: 200, calories: 300, proteinG: 20 }, []);
+  assert.strictEqual(g.src, '菜品库');
+  assert.ok(g.proteinG >= 28 && g.proteinG <= 36, g.proteinG);
+});
+
+test('饺子包子这类熟食用台湾食品营养成分资料库的实测（v10.1）：名字、别名都认得，标「台湾成分库」，整份也按库算', () => {
+  const f = (n) => FoodDB.find(n);
+  for (const n of ['水饺', '饺子', '锅贴', '小笼包', '肉包', '包子', '菜包', '烧卖', '粽子', '葱油饼', '汤圆', '叉烧']) {
+    const e = f(n);
+    assert.ok(e && e.src === 'tfda', n);
+  }
+  assert.strictEqual(FoodDB.label(f('小笼包')), '台湾成分库');
+  assert.strictEqual(f('水饺').k, 196);
+  const g = groundItem({ name: '猪肉白菜水饺', amount: '15个', grams: 300, whole: true, calories: 700, proteinG: 30 }, []);
+  assert.strictEqual(g.src, '台湾成分库');
+  assert.strictEqual(g.calories, 588);
+});

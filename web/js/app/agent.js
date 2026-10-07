@@ -25,6 +25,32 @@ Object.assign(FitnessApp.prototype, {
       book.filter(e => e.auto).reverse().find(e => k(e).includes(n) || n.includes(k(e).replace(/（.*$/, ''))) || null;
   },
 
+  /**
+   * 序列轮着练（v10.1，用户：「序列A 上肢日、序列B 全身复合日」）：存了两份以上自己起名的训练计划时，按最近 21 天的训练记录
+   * 认出每份上次是哪天练的（那天做了这份里六成以上的动作，或者至少三个），最久没练的那份就是「轮到」的；从没练过的排最前。
+   * 返回 { entry, last: 上次练这份的日期 | '', done: 今天已经练了的那份 | null, others: [{ entry, last }] } 或 null（不到两份）。
+   */
+  nextSequence() {
+    const book = this.planBook().filter(e => !e.auto && (e.workouts || []).length >= 2);
+    if (book.length < 2) return null;
+    const key = (n) => String(n || '').replace(/^(杠铃|哑铃|器械|史密斯|坐姿|站姿|绳索|俯身|上斜|下斜)/, '').replace(/\s+/g, '');
+    const from = shiftDateString(getTodayDateString(), -21);
+    const byDate = {};
+    this.workouts.filter(w => w.date >= from).forEach(w => { (byDate[w.date] = byDate[w.date] || new Set()).add(key(w.exerciseName)); });
+    const dates = Object.keys(byDate).sort().reverse();
+    const lastOf = (e) => {
+      const want = [...new Set(e.workouts.map(w => key(w.exerciseName)))];
+      const d = dates.find(day => { const hit = want.filter(n => byDate[day].has(n)).length; return hit >= 3 || hit >= Math.ceil(want.length * 0.6); });
+      return d || '';
+    };
+    const rows = book.map((e, i) => ({ entry: e, last: lastOf(e), i }));
+    const today = getTodayDateString();
+    const done = rows.find(r => r.last === today) || null;
+    const pool = rows.filter(r => r !== done);
+    pool.sort((a, b) => (a.last === b.last ? a.i - b.i : !a.last ? -1 : !b.last ? 1 : a.last < b.last ? -1 : 1));
+    return { entry: pool[0].entry, last: pool[0].last, done: done && done.entry, others: rows.filter(r => r.entry !== pool[0].entry) };
+  },
+
   /** 按动作的部位起个名字：练腿 / 胸+肩 / 全身 / 有氧；只有吃的叫「食谱」 */
   planAutoName(entry) {
     const lifts = (entry.workouts || []).concat(...(entry.days || []).map(d => d.workouts || []));

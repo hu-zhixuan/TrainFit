@@ -176,7 +176,7 @@
   ];
   const TONE = { good: '放心吃', ok: '看份量', treat: '少量吃' };
   // 每 100 克的数从哪来（详情里写一行）
-  const SOURCE = { cfct: '中国食物成分表（第6版）', usda: 'USDA 食物数据库', food: '常见做法整理', dish: '常见做法整理' };
+  const SOURCE = { cfct: '中国食物成分表（第6版）', usda: 'USDA 食物数据库', tfda: '台湾食品营养成分资料库（实测）', food: '常见做法整理', dish: '按菜谱算（成分表 + 用油）' };
 
   /** 所有条目（带上属于哪一栏、哪一组），同一样出现两次的（三文鱼）各算一个 */
   function all() {
@@ -682,7 +682,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     const rows = Object.keys(map).map(n => `<li><b>${esc(n)}</b><span>${esc(map[n][1])} · ${esc(map[n][2])} · ${esc(map[n][3])}</span></li>`).join('');
     return `<div class="dex-detail"><button type="button" class="dex-back" data-back="1">‹ 返回</button>` +
       `<p class="dex-credit-head">图鉴里的照片都是开放授权的实拍图（经 Openverse 检索，来自 Flickr、Wikimedia），裁成方形、缩小后使用。谢谢这些作者：</p>` +
-      `<ul class="dex-credits">${rows}</ul><p class="dex-foot">完整链接见项目里的 web/img/food/CREDITS.md。营养数据来自《中国食物成分表（第6版）》和 USDA FoodData Central。</p></div>`;
+      `<ul class="dex-credits">${rows}</ul><p class="dex-foot">完整链接见项目里的 web/img/food/CREDITS.md。营养数据来自《中国食物成分表（第6版）》、USDA FoodData Central，饺子包子这类熟食来自台湾卫福部食药署「食品营养成分资料库」（政府资料开放授权）。</p></div>`;
   },
 
   dexDetailHtml(it) {

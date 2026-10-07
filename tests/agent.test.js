@@ -165,3 +165,36 @@ test('训练消耗更准：力量按做的时间算，大模型给的离谱就�
   assert.deepStrictEqual([plank.durationMin, plank.sets, plank.reps], [3, 1, 0], '平板支撑 3 组共 3 分钟，不是 3×10');
   assert.ok(TF.Parser.buildMessages('卧推', { date: '2026-10-05' })[0].content.includes('"burnedCalories":40'), '例子里的数也改了');
 });
+
+test('序列轮着练（v10.1）：「今天练什么」本机认得；按最近的训练记录看哪份最久没练，今天练过的说下次', () => {
+  assert.deepStrictEqual(TF.quickIntent('今天练什么', []), { kind: 'nextPlan', day: 0 });
+  assert.deepStrictEqual(TF.quickIntent('明天该练啥', []), { kind: 'nextPlan', day: 1 });
+  assert.deepStrictEqual(TF.quickIntent('轮到哪个序列了', []), { kind: 'nextPlan', day: 0 });
+  assert.strictEqual(TF.quickIntent('今天练什么好呢，腿还酸', []), null, '带别的意思的交给大模型');
+  // 一个最小的 app：只有计划本和训练记录
+  global.getTodayDateString = () => '2026-10-07';
+  global.shiftDateString = (d, n) => { const t = new Date(d + 'T00:00:00Z'); t.setUTCDate(t.getUTCDate() + n); return t.toISOString().slice(0, 10); };
+  global.FitnessApp = global.FitnessApp || class {};
+  require('../web/js/app/agent.js');
+  const W = (names) => names.map(n => ({ exerciseName: n, weightKg: 40, sets: 4, reps: 8 }));
+  const A = { name: '序列A 上肢日', workouts: W(['杠铃卧推', '杠铃划船', '哑铃推举', '引体向上']) };
+  const B = { name: '序列B 全身复合日', workouts: W(['杠铃深蹲', '硬拉', '杠铃卧推', '哑铃弓步']) };
+  const app = Object.create(FitnessApp.prototype);
+  app.profile = { planBook: [A, B, { name: '练腿（10月1日）', auto: true, workouts: W(['杠铃深蹲', '腿举']) }] };
+  const rec = (date, names) => names.map(n => ({ date, exerciseName: n }));
+  app.workouts = rec('2026-10-05', ['杠铃卧推', '杠铃划船', '哑铃推举']).concat(rec('2026-10-03', ['杠铃深蹲', '硬拉', '卧推']));
+  let q = app.nextSequence();
+  assert.strictEqual(q.entry, B, 'A 是 5 号练的，B 是 3 号练的：轮到 B');
+  assert.strictEqual(q.last, '2026-10-03');
+  assert.strictEqual(q.others[0].last, '2026-10-05');
+  // 今天练了 B：下次轮到 A
+  app.workouts = app.workouts.concat(rec('2026-10-07', ['杠铃深蹲', '硬拉', '哑铃弓步']));
+  q = app.nextSequence();
+  assert.strictEqual(q.done, B);
+  assert.strictEqual(q.entry, A);
+  // 从没练过的排最前；只有一份序列（auto 的不算）不轮
+  app.profile.planBook = [A, B, { name: '序列C 有氧', workouts: W(['跑步', '跳绳']) }];
+  assert.strictEqual(app.nextSequence().entry.name, '序列C 有氧');
+  app.profile.planBook = [A];
+  assert.strictEqual(app.nextSequence(), null);
+});
