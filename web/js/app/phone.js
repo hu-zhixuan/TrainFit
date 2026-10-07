@@ -154,11 +154,11 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
   },
 
   /** 记完一条：他看见了，发一句（一种一天一次）；你在手机里打字记的，这句就是回你的 */
-  phoneAfterLog(result, batch) {
+  phoneAfterLog(result, batch, hour) {
     if (!this.phoneOn()) return false;
     const ph = this.phoneData();
     const today = getTodayDateString();
-    const hour = new Date().getHours();
+    if (hour == null) hour = new Date().getHours(); // 测试传进来，免得深夜跑测试时「晚饭」变成「深夜还吃」
     const meal = (result.meals || [])[0];
     const lift = (result.workouts || [])[0];
     const vars = { food: meal ? String(meal.foodSummary || '').split(/[、，,]/)[0].slice(0, 12) : '', lift: lift ? lift.exerciseName : '' };

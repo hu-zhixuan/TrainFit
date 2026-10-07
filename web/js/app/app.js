@@ -211,6 +211,7 @@ class FitnessApp {
     if (!it) return null;
     const answer = this.quickAnswerText(it);
     if (!answer) return null;
+    if (typeof answer === 'object') return answer; // 自带「接着问」的（轮到哪个序列）
     // 「接着问」：顺着这个问题，下一句最可能想问的
     const short = (it.name || '').replace(/^(杠铃|哑铃|器械|史密斯|坐姿|站姿|绳索)/, '');
     const NEXT = {
@@ -232,6 +233,21 @@ class FitnessApp {
   quickAnswerText(it) {
     const today = getTodayDateString();
     const md = (d) => `${+d.slice(5, 7)}月${+d.slice(8)}日`;
+    // 「今天练什么」：存了两份以上自己的序列，按最近的训练记录看轮到哪份（v10.1）；没有序列的交给大模型排
+    if (it.kind === 'nextPlan') {
+      const q = this.nextSequence ? this.nextSequence() : null;
+      if (!q) return '';
+      const short = (e) => TF.AgentIntent.shortName(e.name);
+      // 重量按你的成绩算好（和放进待办时一样，calibratePlan），不是存的时候写的数
+      const lifts = (e) => { const ws = this.calibratePlan ? this.calibratePlan({ workouts: e.workouts, meals: [] }).workouts : e.workouts;
+        return ws.slice(0, 4).map(w => w.exerciseName.replace(/^(杠铃|哑铃|器械)/, '') + (w.weightKg > 0 ? ` ${w.weightKg}kg` : '')).join('、') + (ws.length > 4 ? ` 等 ${ws.length} 个` : ''); };
+      const day = it.day === 1 ? '明天' : '今天';
+      const head = q.done && it.day !== 1 ? `今天已经练了「${q.done.name}」。下次轮到「${q.entry.name}」` : `${day}轮到「${q.entry.name}」`;
+      const why = q.others.filter(o => o.last).map(o => `「${short(o.entry)}」上次是${md(o.last)}`).join('，');
+      const text = `${head}：${lifts(q.entry)}。` + (why ? `\n${why}${q.last ? `，「${short(q.entry)}」是${md(q.last)}` : `，「${short(q.entry)}」最近还没练`}。` : '');
+      const other = q.others[0] && short(q.others[0].entry);
+      return { text, next: q.done && it.day !== 1 ? [`明天练${short(q.entry)}`, '这周练了几次'] : [`${day}练${short(q.entry)}`].concat(other ? [`${day}练${other}`] : []) };
+    }
     const s = this.getDaySummary(today);
     const simple = this.isSimple();
     if (it.kind === 'protein') {
