@@ -1,0 +1,21 @@
+name: API Check (temporary)
+on:
+  push:
+    branches: [ claude/api-check ]
+jobs:
+  atria:
+    runs-on: ubuntu-latest
+    timeout-minutes: 80
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: v11 夏柚复测（只用 Atria）
+        env:
+          TZ: Asia/Shanghai
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
+          LLM_MODEL: ${{ vars.LLM_MODEL }}
+        run: |
+          ONLY_XY=1 GAP=15000 ROUNDS=2 node .github/api_v11.js
