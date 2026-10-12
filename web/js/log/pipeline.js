@@ -123,7 +123,27 @@
         life: p.chat && app.lifeList ? app.lifeList() : [], // v6.3：他最近说过的事（「周五面试」），小人接着上次聊
         // v6.5：存好的计划（说到计划、照着练时才带）；回答用小人的口吻（不要小人时不带）
         planBook: app.planBookContext ? app.planBookContext(p.text) : [],
+        // v12.2：问到练、计划、某个练过的动作时，带上本机算好的「下次练多少」，大模型排的和今天页说的对得上
+        overload: p.ask && !p.chat ? this.overloadLines(p.text) : [],
         voice: !p.chat && app.buddyLook && app.buddyLook().show && app.cast ? { name: app.cast().name, speech: app.cast().speech } : null };
+    },
+
+    /** 「杠铃卧推：最近 80kg 4×7（10-08）→ 先退到 72.5kg × 10，再加回来（连着 3 次卡在 80kg…）」；没问到练的不带 */
+    overloadLines(text) {
+      const app = root.app;
+      if (!app || !app.exerciseProgress) return [];
+      const names = [];
+      app.workouts.filter(w => !w.durationMin).sort((a, b) => (b.date === a.date ? (b.ts || 0) - (a.ts || 0) : (b.date > a.date ? 1 : -1)))
+        .forEach(w => { if (!names.includes(w.exerciseName)) names.push(w.exerciseName); });
+      const t = String(text || '');
+      const named = names.filter(n => t.includes(n) || t.includes(n.replace(/^(杠铃|哑铃|器械|史密斯|坐姿|站姿|绳索)/, '')));
+      if (!named.length && !/练|训练|计划|课表|序列|重量|加重|突破|瓶颈|平台期|卡住|涨|力量|增肌|几组|多重|渐进/.test(t)) return [];
+      return named.concat(names.filter(n => !named.includes(n))).slice(0, 8).map(n => {
+        const q = app.exerciseProgress(n);
+        if (!q) return '';
+        const l = q.last;
+        return `${n}：最近 ${l.weightKg > 0 ? round1(l.weightKg) + 'kg' : '自重'} ${l.sets}×${l.reps}（${l.date.slice(5)}）→ ${q.next.text.replace(/^下次/, '')}（${q.next.why}）`;
+      }).filter(Boolean);
     },
 
     /** 健康大脑要知道他是谁：「男，28岁，175cm，开始时 72kg，目标减脂，每天蛋白目标 120g」 */

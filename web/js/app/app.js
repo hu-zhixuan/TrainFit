@@ -125,31 +125,25 @@ class FitnessApp {
     };
   }
 
-  /** 某个动作：最近一次成绩 + 下次建议（双重累进） */
-  exerciseProgress(name) {
+  /**
+   * 某个动作：最近一次成绩 + 下次练多少（渐进超负荷，算法在 log/overload.js 的 TF.Overload.next，v12.2）。
+   * opts：{ date（练的那天，默认今天；隔了两周以上先轻一点）, extra（排好几天计划时前面几天假设做到了的） }。
+   * last 是最近一次的正式组（那天最重的重量，几条加起来几组、最少几次）；isLatest(id) 是不是这个动作最新的那条记录。
+   */
+  exerciseProgress(name, opts) {
+    opts = opts || {};
     const logs = this.workouts
       .filter(w => w.exerciseName === name && !w.durationMin)
       .sort((a, b) => (b.date === a.date ? recordTs(b) - recordTs(a) : (b.date > a.date ? 1 : -1)));
-    if (!logs.length) return null;
-    const last = logs[0];
-    const compound = isCompound(name);
-    const cap = compound ? 8 : 12;
-    const step = compound ? 2.5 : 1;
-    let next;
-    // 练完说的感受（小人问的）：很吃力就先保持，还能加就多加一档
-    const easy = last.rpe && last.rpe <= 7, hard = last.rpe && last.rpe >= 9.5;
-    if (hard) {
-      next = { kind: 'keep', text: `保持 ${last.weightKg > 0 ? round1(last.weightKg) + 'kg' : '这个'}，练扎实了再加`, weightKg: last.weightKg, reps: last.reps };
-    } else if (last.weightKg > 0 && (last.reps >= cap || (easy && last.reps >= cap - 2)) && last.sets >= 3) {
-      const up = easy ? step * 2 : step;
-      next = { kind: 'weight', text: `下次${easy ? '直接' : ''}试 ${round1(last.weightKg + up)}kg`, weightKg: round1(last.weightKg + up), reps: Math.max(6, last.reps - 2) };
-    } else if (last.reps < cap) {
-      next = { kind: 'reps', text: `下次冲 ${last.reps + 1} 次`, weightKg: last.weightKg, reps: last.reps + 1 };
-    } else {
-      next = { kind: 'keep', text: '保持，练扎实', weightKg: last.weightKg, reps: last.reps };
-    }
+    if (!logs.length || !window.TF || !TF.Overload) return null;
+    const next = TF.Overload.next(logs, name, { today: opts.date || getTodayDateString(), cut: (this.profile.goalType || 'fat_loss') === 'fat_loss', extra: opts.extra });
+    if (!next) return null;
+    const ss = TF.Overload.sessions(logs.filter(w => !/估计/.test(w.notes || '')).length ? logs.filter(w => !/估计/.test(w.notes || '')) : logs);
+    const s = ss[ss.length - 1];
+    const last = Object.assign({}, s.top, { sets: s.sets, reps: s.reps });
     const best = logs.reduce((m, w) => Math.max(m, w.weightKg || 0), 0);
-    return { last, next, count: logs.length, best, isLatest: (id) => id === last.id };
+    const latest = logs[0].id;
+    return { last, next, count: logs.length, sessions: ss.length, best, isLatest: (id) => id === latest };
   }
 
   /**
@@ -306,7 +300,7 @@ class FitnessApp {
       const best = logs.reduce((m, w) => (!m || w.weightKg > m.weightKg || (w.weightKg === m.weightKg && w.reps > m.reps) ? w : m), null);
       const fmtSet = (w) => `${w.weightKg > 0 ? round1(w.weightKg) + 'kg' : '自重'} ${w.sets}×${w.reps}`;
       return `${it.name}：上次 ${fmtSet(p.last)}（${md(p.last.date)}）` +
-        (best && best.id !== p.last.id ? `，最重 ${fmtSet(best)}（${md(best.date)}）` : '，就是你目前最重的') + `。\n${p.next.text}。`;
+        (best && (best.weightKg > p.last.weightKg || (best.weightKg === p.last.weightKg && best.reps > p.last.reps)) ? `，最重 ${fmtSet(best)}（${md(best.date)}）` : '，就是你目前最重的') + `。\n${p.next.text}——${p.next.why}。`;
     }
     return '';
   }

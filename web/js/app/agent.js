@@ -301,19 +301,29 @@ Object.assign(FitnessApp.prototype, {
    * 计划一次就准：练过的动作按你的成绩定重量、次数（和「下次练多少」一样）；食谱按那天还剩的热量、还差的蛋白配平。
    * plan：{ dayOffset?, meals, workouts } 或者 { days: [{ dayOffset, … }] }；base：dayOffset 从哪天算。返回校准过的新计划（不改原来的）。
    */
-  calibratePlan(plan, base) {
+  calibratePlan(plan, base, sim) {
     if (!plan) return plan;
     base = base || getTodayDateString();
-    // 好几天的：一天一天算（dayOffset 相对 base）
-    if (plan.days) return Object.assign({}, plan, { days: plan.days.map(d => Object.assign({}, d, this.calibratePlan({ workouts: d.workouts, meals: d.meals }, shiftDateString(base, d.dayOffset || 0)))) });
+    // 好几天的：按日子先后一天一天算（dayOffset 相对 base）；同一个动作排了两次，第二次按第一次做到了再往上加（v12.2）
+    if (plan.days) {
+      const chain = {};
+      const order = plan.days.map((d, i) => i).sort((a, b) => (plan.days[a].dayOffset || 0) - (plan.days[b].dayOffset || 0));
+      const out = plan.days.slice();
+      order.forEach(i => { const d = plan.days[i]; out[i] = Object.assign({}, d, this.calibratePlan({ workouts: d.workouts, meals: d.meals }, shiftDateString(base, d.dayOffset || 0), chain)); });
+      return Object.assign({}, plan, { days: out });
+    }
     const date = shiftDateString(base, plan.dayOffset || 0);
     const out = Object.assign({}, plan);
     const today = getTodayDateString();
-    // 训练：按你的成绩（今天已经练过的不动）
+    // 训练：按你的成绩定重量、次数（今天已经练过的不动）；一档跨太大、要一组一组换的写进要点
     out.workouts = (plan.workouts || []).map(w => {
-      const p = !w.durationMin && this.exerciseProgress ? this.exerciseProgress(w.exerciseName) : null;
+      const key = w.exerciseName;
+      const p = !w.durationMin && this.exerciseProgress ? this.exerciseProgress(key, { date, extra: sim && sim[key] }) : null;
       if (!p || !p.next || (date === today && p.last.date === today)) return w;
-      return Object.assign({}, w, { weightKg: p.next.weightKg, reps: p.next.reps, sets: w.sets || p.last.sets });
+      const n = p.next;
+      if (sim) sim[key] = (sim[key] || []).concat(TF.Overload.asSession(n.kind === 'mix' ? { weightKg: n.up, sets: n.sets, reps: n.upReps } : n, date));
+      const sets = n.kind === 'sets' || n.kind === 'mix' || /都用/.test(n.text) ? n.sets : (w.sets || n.sets);
+      return Object.assign({}, w, { weightKg: n.weightKg, reps: n.reps, sets }, n.kind === 'mix' || n.kind === 'harder' ? { tip: n.text.replace(/^下次/, '') } : {});
     });
     out.meals = this.balanceMeals(plan.meals || [], date, out.workouts);
     return out;

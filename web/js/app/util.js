@@ -125,6 +125,3 @@ function hhmm(ts) {
   const d = new Date(ts);
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
-function isCompound(name) {
-  return /卧推|深蹲|硬拉|划船|推举|倒蹬|腿举/.test(name || '');
-}
