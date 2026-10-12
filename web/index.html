@@ -104,22 +104,25 @@
 
       <!-- ============ 趋势（v12.1：照 Arena 的样子；只看热量赤字、蛋白质、训练——一句话 + 三行 + 一张图 + 30 天卡片） ============ -->
       <section class="view" id="view-trend">
-        <div class="ar-tabs" id="trend-range" role="tablist" aria-label="看多少天">
+        <div class="seg tr-range" id="trend-range" role="tablist" aria-label="看多少天">
           <button class="seg-btn" data-range="3" type="button" role="tab">3 天</button>
           <button class="seg-btn active" data-range="7" type="button" role="tab">7 天</button>
           <button class="seg-btn" data-range="10" type="button" role="tab">10 天</button>
           <button class="seg-btn" data-range="30" type="button" role="tab">30 天</button>
         </div>
 
-        <header class="ar-hero tr-card" id="trend-buddy"></header>
+        <header class="tr-hero tr-card" id="trend-buddy"></header>
 
-        <div class="ar-label tr-card" id="tr-cmp">和上 7 天比</div>
-        <div class="ar-list tr-card" id="tr-kpis" role="tablist"></div>
+        <div class="tr-kpis tr-card" id="tr-kpis" role="tablist"></div>
 
-        <div class="ar-card tr-card" id="tr-panel"></div>
+        <div class="card tr-panel tr-card" id="tr-panel"></div>
 
-        <div class="ar-label tr-card ar-days-head"><span>过去 30 天</span><small>往左划</small></div>
+        <div class="tr-sec tr-card"><b>趋势分析</b><small id="tr-ins-sub"></small></div>
+        <div class="tr-ins tr-card" id="tr-insights"></div>
+
+        <div class="tr-sec tr-card"><b>每一天</b><small id="tr-days-count">左右划</small></div>
         <div class="tr-days tr-card" id="tr-days"></div>
+        <div class="tr-dots tr-card" id="tr-dots" aria-hidden="true"></div>
       </section>
 
       <!-- ============ 设置 ============ -->

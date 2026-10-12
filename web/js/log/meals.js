@@ -221,7 +221,8 @@
       if (x.group !== '加餐') return;
       if (x.slot === 'pm' || x.slot === 'night') return;
       const m = x.m;
-      const slot = m == null ? 'pm' : m < at('午餐') ? 'am' : m < at('晚餐') ? 'pm' : 'night';
+      // 凌晨四点半以前吃的是夜宵（v12.5，用户截图：00:25 吃的写成「加餐 上午」）
+      const slot = m == null ? 'pm' : m < 270 ? 'night' : m < at('午餐') ? 'am' : m < at('晚餐') ? 'pm' : 'night';
       if (x.slot !== 'train') x.label = slot === 'am' ? '上午' : slot === 'pm' ? '下午' : '';
       x.slot = slot;
     });

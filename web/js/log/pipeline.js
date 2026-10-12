@@ -424,6 +424,11 @@
         batch.dietIds.push(id);
         // 份量说得含糊的那几样：选项不存进记录，记好后小人问一句（「一瓶甜牛奶多大？」）
         const items = (m.items || []).map((it, k) => {
+          // 加工零食 / 熟食按一类估的（牌子差很多）：记好后问一句包装上写的多少，念了就按包装记住（v12.5）
+          if (!it.opts && it.src === '估算' && it.grams > 0 && TF.FoodDB && TF.FoodDB.isProcessed && TF.FoodDB.isProcessed(it.name) &&
+            !batch.asks.some(a => a.kind === 'label') && !/包装|每\s*100/.test(String(result.said || ''))) {
+            batch.asks.push({ kind: 'label', id, index: k, name: it.name, grams: it.grams, calories: it.calories, proteinG: it.proteinG });
+          }
           if (!it.opts) return it;
           batch.asks.push({ kind: 'food', id, index: k, name: it.name, amount: it.amount || '', grams: it.grams, opts: it.opts });
           const rest = Object.assign({}, it);

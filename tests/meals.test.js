@@ -94,3 +94,9 @@ test('分组顺序按时间：早餐、上午加餐、午餐、下午加餐、�
   assert.strictEqual(Meals.storedType({ group: '加餐' }), '加餐/补剂');
   assert.strictEqual(Meals.storedType({ group: '午餐' }), '午餐');
 });
+
+test('v12.5 用户截图：半夜 00:25 吃的算夜宵，不是「上午加餐」', () => {
+  assert.deepStrictEqual(groupOf([rec('0:25', '薄脆鸡胸肉', 300)]), ['夜宵']);
+  assert.deepStrictEqual(groupOf([rec('3:40', '泡面', 480)]), ['夜宵']);
+  assert.deepStrictEqual(groupOf([rec('5:30', '香蕉', 90), rec('8:00', '肉包', 460)]), ['早餐', '早餐'], '五点半以后的还是早上');
+});
