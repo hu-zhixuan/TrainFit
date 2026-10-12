@@ -1321,6 +1321,18 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       foot = `先按 ${round1(rec.weightKg)}kg 记了，差不多就行`;
       apply = (o) => this.applyLiftWeight(a, o.kg);
       done = (o) => `✓ 好，下次就从 ${o.kg}kg 往上加`;
+    } else if (a.kind === 'label') {
+      // 加工零食按一类估的（v12.5）：问包装上写的多少；念一下就按包装记、记住，下次不问
+      const rec = this.diet.find(d => d.id === a.id);
+      const item = rec && rec.items && rec.items[a.index];
+      if (!item || item.name !== a.name || (this.myFoods || []).some(f => f.name === a.name)) { next(); return; }
+      const per = (v) => Math.round(v * 100 / a.grams);
+      opts = [{ label: '差不多，就这样', keep: true }, { label: '我念一下包装', read: true }];
+      near = opts[0];
+      q = `${a.name}不同牌子差很多，我按每 100 克约 ${per(item.calories)} 千卡、蛋白 ${per(item.proteinG || 0)}g 估的。包装上写的多少？`;
+      foot = '念一下包装上的「每 100 克」，我就按它记、以后都按它';
+      apply = (o) => { if (o.read && window.QuickLog) setTimeout(() => window.QuickLog.openWithText(`刚才的${a.name}，包装上每100克`), 200); };
+      done = (o) => (o.read ? '在下面填上数，点发送' : '✓ 好，就这么记');
     } else {
       const rec = this.diet.find(d => d.id === a.id);
       const item = rec && rec.items && rec.items[a.index];

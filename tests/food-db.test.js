@@ -111,3 +111,25 @@ test('饺子包子这类熟食用台湾食品营养成分资料库的实测（v1
   assert.strictEqual(g.src, '台湾成分库');
   assert.strictEqual(g.calories, 588);
 });
+
+test('v12.5 用户截图：「70 克薄脆鸡胸肉」不给生鸡胸肉的参考数，按加工零食的范围提示', () => {
+  const names = (t) => FoodDB.candidates(t, 6).map(e => e.name);
+  assert.ok(!names('薄脆鸡胸肉70克').includes('鸡胸肉'), '前面带「薄脆」');
+  assert.ok(!names('鸡胸肉薄脆70克').includes('鸡胸肉'), '后面带「薄脆」');
+  assert.ok(!names('鸡肉肠2根').some(n => /鸡/.test(n)), '鸡肉肠不是鸡肉');
+  // 普通的照旧给
+  assert.ok(names('鸡胸肉200克').includes('鸡胸肉'));
+  assert.ok(names('鸡胸肉沙拉').includes('鸡胸肉'));
+  // 加工的认得出来，参考范围对得上（每 100g 的热量、蛋白）
+  assert.ok(FoodDB.isProcessed('薄脆鸡胸肉') && FoodDB.isProcessed('牛肉干') && FoodDB.isProcessed('鸭胗') && FoodDB.isProcessed('卤鸭脖'));
+  assert.ok(!FoodDB.isProcessed('鸡胸肉') && !FoodDB.isProcessed('牛肉面') && !FoodDB.isProcessed('米饭'));
+  const h = FoodDB.processedHints('薄脆鸡胸肉70克');
+  assert.strictEqual(h.length, 1);
+  const [lo, hi] = h[0].match(/(\d+)～(\d+)千卡/).slice(1).map(Number);
+  assert.ok(lo >= 350 && hi <= 500, h[0]);
+  assert.deepStrictEqual(FoodDB.processedHints('鸡胸肉200克，米饭一碗'), []);
+  // 大模型照零食估的（300 千卡）不被成分表的生鸡胸肉改回 83
+  const g = groundItem({ name: '薄脆鸡胸肉', amount: '70g', grams: 70, calories: 300, proteinG: 30 }, []);
+  assert.strictEqual(g.src, '估算');
+  assert.strictEqual(g.calories, 300);
+});

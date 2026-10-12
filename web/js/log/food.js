@@ -19,6 +19,44 @@
   // 食物营养库（每 100 克）：中国食物成分表第6版 + 常见成品菜 + USDA（成分表没有的），见 js/data/food_db.js
   // 成分表里的「(生)」「(干)」条目是生重 / 干重，只有用户明确说时才用，免得「糯米鸡」被当成生糯米算
   // ---------------------------------------------------------------------------
+  /** 名字前后挨着加工、零食的字：薄脆鸡胸肉、鸡胸肉脆片、牛肉干、猪肉松、鸡肉肠、牛肉丸、炸鸡腿…… */
+  const PROC_BEFORE = /(薄脆|脆皮|香酥|酥|油炸|炸|风干|即食)$/;
+  const PROC_AFTER = /^(薄脆|脆片|脆|干|松|脯|肠|丸|饼干|酥|罐头|粒)/;
+  /**
+   * 加工零食 / 熟食的常见范围（每 100 克；不同牌子、做法差很多，所以给范围不给一个数）。说到了就带进提示词，
+   * 让大模型按这一类估、别套生肉的数；记好后小人问一句包装上写的多少（v12.5，用户：「零食这种肉什么的本来差距就很大」）。
+   */
+  const PROCESSED = [
+    [/鸡胸肉?(薄脆|脆片|片)|薄脆鸡胸|鸡肉(脆|薄脆|片)/, '鸡胸肉薄脆 / 脆片（零食，烤或炸）', 380, 480, 30, 55],
+    [/(牛|猪|鸡|鸭)肉干|风干牛肉|牛肉粒/, '肉干（牛肉干、猪肉干）', 400, 550, 35, 50],
+    [/肉松|肉酥/, '肉松', 390, 450, 20, 30],
+    [/肉脯|猪肉铺|猪肉脯/, '肉脯', 350, 420, 25, 35],
+    [/鸡(胸)?肉肠|鸡胸肠|低脂肠/, '鸡肉肠（低脂即食）', 100, 170, 14, 22],
+    [/火腿肠|淀粉肠|烤肠|香肠|腊肠/, '火腿肠 / 烤肠 / 香肠（腊肠更高）', 200, 500, 10, 25],
+    [/(卤|酱|麻辣|香辣)?(鸭|鸡)(胗|肫)/, '鸭胗 / 鸡胗（卤的稍高）', 90, 160, 18, 26],
+    [/(卤|麻辣|香辣)?鸭(脖|锁骨|架|翅|掌|爪)|鸡(爪|翅尖)|凤爪/, '卤鸭脖、鸭翅、鸡爪（带骨，按带骨重量）', 150, 250, 12, 20],
+    [/炸鸡|鸡排|鸡米花|鸡块|炸鸡腿/, '炸鸡、鸡排、鸡块（裹粉油炸）', 240, 320, 15, 22],
+    [/辣条|面筋/, '辣条', 450, 550, 8, 12],
+    [/蛋白棒|能量棒/, '蛋白棒', 340, 420, 20, 33],
+    [/牛肉丸|鱼丸|虾丸|贡丸|撒尿牛丸/, '肉丸、鱼丸（含淀粉）', 120, 220, 8, 14],
+    [/午餐肉|罐头肉/, '午餐肉', 230, 330, 9, 14]
+  ];
+  function processedHints(text) {
+    const t = String(text || '');
+    return PROCESSED.filter(x => x[0].test(t)).slice(0, 4).map(x => `${x[1]} 每100g ${x[2]}～${x[3]}千卡 蛋白${x[4]}～${x[5]}g`);
+  }
+  function isProcessed(name) { return PROCESSED.some(x => x[0].test(String(name || ''))); }
+
+  function processedAround(t, k) {
+    let i = t.indexOf(k);
+    while (i >= 0) {
+      // 「鸡胸」后面跟着「肉薄脆」也算：跳过一个「肉」字再看
+      if (PROC_BEFORE.test(t.slice(Math.max(0, i - 3), i)) || PROC_AFTER.test(t.slice(i + k.length, i + k.length + 4).replace(/^肉/, ''))) return true;
+      i = t.indexOf(k, i + 1);
+    }
+    return false;
+  }
+
   const FoodDB = {
     _built: false,
     entries: [],
@@ -63,7 +101,9 @@
       this.entries.forEach(e => {
         if (!saysRaw && /\((生|干)\)$/.test(e.name)) return;
         const keys = [e.name.replace(/\(生\)$/, '')].concat(e.aliases).map(x => this.norm(x)).filter(x => x.length >= 2);
-        const best = keys.filter(k => t.includes(k)).sort((a, b) => b.length - a.length)[0];
+        // 加工过的零食 / 熟食（「薄脆鸡胸肉」「牛肉干」「肉松面包」「鸡肉肠」）不是这样生的食材，别给生肉的数（v12.5，
+        // 用户截图：「70 克薄脆鸡胸肉」被按生鸡胸肉算成 83 千卡，DeepSeek 直接拿参考数去乘）
+        const best = keys.filter(k => t.includes(k) && !processedAround(t, k)).sort((a, b) => b.length - a.length)[0];
         if (best && !found.has(e.name)) found.set(e.name, { e, len: best.length });
       });
       const list = [...found.values()]
@@ -74,6 +114,8 @@
       if (oil && !list.includes(oil)) list.push(oil);
       return list;
     },
+
+    processedHints, isProcessed,
 
     line(e) {
       return `${e.name} ${e.k}千卡 蛋白${e.p} 碳水${e.c} 脂肪${e.f}${e.g ? ` 常见一份约${e.g}g` : ''}`;

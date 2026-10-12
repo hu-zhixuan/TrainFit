@@ -1,12 +1,11 @@
 /**
- * 趋势页（v12 做了一版带很多卡片的，v12.1 用户：「还是复杂了，可视化不美观，去看 Arena 的审美」）。
- * 照 arena.ai 的样子收简单：暖白底、白卡片一根细边、不加阴影；大标题用衬线体、一个词斜体；数字用等宽；
- * 数据只用一种柔和的蓝，「排行」那种整行就是一根条（条在字后面），好的数绿色 ▲、超了红色 ▲。
- *   用户又说「再简单一点，注重热量赤字、蛋白质和训练，训练的重量更新和趋势记录要做好」：
- *   一句话（小人说的，衬线大字）→ 三行（热量赤字、蛋白质、训练，和上一段比；点一行，下面的图就换成它）
- *   → 一张图（≤10 天一天一行条；30 天一根根细柱；训练 = 动作排行：重量从多少涨到多少、新纪录、下次练多少，点开看重量曲线）
- *   → 过去 30 天划卡片（赤字、蛋白、练了什么）。体重不在这页（今天页说一句就记）。
- * 动效克制：条从左边伸出来、数字滚上去、线一笔画出来；减少动态效果时都不动。
+ * 趋势页（v12.5 重做，用户：「审美交给你重构，最好和主页面契合」「热量赤字每天还是柱状图」「卡片一张一张像社交软件 Profile 那样左右滑」
+ * 「再搞几个有逼格、动效精美的趋势分析」）。布局不变：一句话 → 三个数（点一个换下面的图）→ 一张图 → 趋势分析 → 每一天。
+ * 样子跟今天页一套：深色底、圆角卡片一根细边、右上角一点品牌绿的光、粗体数字；数据颜色：热量赤字用品牌绿（多吃了的用红、往下长），
+ * 蛋白 / 碳水 / 脂肪用验证过的三色（--m-pro / --m-carb / --m-fat），日历用一种绿由浅到深。
+ * 趋势分析四张：累计热量赤字（折线 + 面积，和「照目标走」的虚线比）、三大营养素（环形）、练了哪些部位（雷达）、五周打卡（日历）。
+ * 每一天：一张一张左右划，像个人主页——封面、头像位置是这天吃了多少的圆环、一句话、三个数、吃了哪几顿、练了什么。
+ * 动效：卡片浮上来、柱子长出来、线一笔画出来、环转一圈、雷达从中间撑开、日历一格格亮起；减少动态效果时都不动。
  */
 Object.assign(FitnessApp.prototype, {
   /**
@@ -82,7 +81,7 @@ Object.assign(FitnessApp.prototype, {
     return { head, lines: lines.slice(0, 3) };
   },
 
-  /** 最上面一句话：「这 7 天，很稳」（衬线大字，最后一个词斜体）+ 小人说的第一句；右边是小人 */
+  /** 最上面一张卡：「这 7 天，很稳」（评价那个词用品牌绿）+ 小人说的一句 + 让 AI 细看；小人在右边 */
   renderTrendBuddy() {
     const el = document.getElementById('trend-buddy');
     if (!el) return;
@@ -91,16 +90,17 @@ Object.assign(FitnessApp.prototype, {
     const look = this.buddyLook();
     const st = this.buddyState();
     const art = look.show ? TF.Buddy.svg(this.buddyArt({ mood: st.mood, gear: st.gear, pose: this._coachWave ? 'wave' : 'stand' })) : '';
-    // 「这一周记了 6 天，很稳」→ 标题「这 7 天，很稳」：逗号后面那个评价斜体
     const word = (r.head.match(/，([^，]+)$/) || [])[1] || '';
     const praise = /记了 \d+ 天/.test(word) ? '' : word;
     const x = this._trendExtra && this._trendExtra.days === n ? this._trendExtra : null;
     const line = x ? x.text : r.lines[0] || '';
-    el.innerHTML = `<div class="ar-hero-text"><h1 class="ar-title">这 ${n} 天${praise ? `，<em>${esc(praise)}</em>` : ''}</h1>` +
-      (line ? `<p class="ar-sub">${esc(line)}</p>` : '') +
-      `<button type="button" class="ar-link ar-ai" data-q="帮我细看这${n}天吃练得怎么样，哪里最该改？">让 AI 细看这 ${n} 天 →</button></div>` +
+    el.classList.toggle('meh', /断/.test(praise));
+    el.innerHTML = `<div class="th-text"><span class="th-eye">这 ${n} 天 · 和上 ${n} 天比</span>` +
+      `<h1 class="th-title">${praise ? `<em>${esc(praise)}</em>` : `记了 ${this._trendCur ? this._trendCur.logged : 0} 天`}</h1>` +
+      (line ? `<p class="th-sub">${esc(line)}</p>` : '') +
+      `<button type="button" class="th-ai" data-q="帮我细看这${n}天吃练得怎么样，哪里最该改？"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.5l1.4 3.6 3.6 1.4-3.6 1.4L8 11.5 6.6 7.9 3 6.5l3.6-1.4zM12.5 10.5l.6 1.4 1.4.6-1.4.6-.6 1.4-.6-1.4-1.4-.6 1.4-.6z"/></svg>让 AI 细看这 ${n} 天</button></div>` +
       (art ? `<button type="button" class="coach-buddy" aria-label="小人">${art}</button>` : '');
-    el.querySelectorAll('.ar-ai').forEach(b => b.addEventListener('click', (e) => {
+    el.querySelectorAll('.th-ai').forEach(b => b.addEventListener('click', (e) => {
       e.stopPropagation();
       if (b.disabled) return;
       b.disabled = true;
@@ -171,23 +171,16 @@ Object.assign(FitnessApp.prototype, {
     this._trendDays = days;
     this._trendCur = cur;
     this.renderTrendBuddy();
-    $('tr-cmp').textContent = `和上 ${n} 天比`;
     this.renderTrendKpis($('tr-kpis'), days, cur, prev);
     this.renderTrendPanel();
+    this.renderInsights($('tr-insights'), days);
     this.renderDayCards($('tr-days'));
     this.trendCountUp(sec);
   },
 
-  /** 热量赤字 / 盈余（增肌的人看盈余）：这天的数（没记吃的是 null）、叫法、目标 */
-  trendGap() {
-    const gain = (this.profile.goalType || 'fat_loss') === 'muscle_gain';
-    const target = (this.profile.targetDeficitKcal || 0) * (gain ? -1 : 1);
-    return { gain, label: gain ? '热量盈余' : '热量赤字', target: target > 0 ? target : 0, val: (d) => (d.hasDiet ? Math.round(gain ? -d.s.deficit : d.s.deficit) : null) };
-  },
-
   /**
-   * 三行（Arena「New release rankings」那种列表）：热量赤字、蛋白质、训练（只记吃的模式：吃了多少、蛋白质）。
-   * 左边一个小图标，中间大字 + 一行小字，右边和上一段比（好的绿、不好的红）。点一行 = 下面那张图换成它（选中的暖米色底）。
+   * 三个数（今天页大卡片下面那排「已吃 / 训练消耗 / 蛋白质」的样子）：热量赤字、蛋白质、训练（只记吃的模式：吃了多少、蛋白质）。
+   * 每个：小标签、大数（滚上去）、单位、和上一段比（好的绿、不好的红）、一行小字。点一个 = 下面那张图换成它。
    */
   renderTrendKpis(el, days, cur, prev) {
     const simple = this.isSimple();
@@ -195,44 +188,42 @@ Object.assign(FitnessApp.prototype, {
     if (simple && this._trendKind === 'train') this._trendKind = '';
     const kind = this._trendKind || (simple ? 'energy' : 'gap');
     const delta = (a, b, unit, goodUp) => {
-      if (a == null || b == null) return '<span class="ar-d">—</span>';
+      if (a == null || b == null) return '<span class="tk-d">—</span>';
       const d = Math.round(a - b);
-      if (!d) return '<span class="ar-d">持平</span>';
+      if (!d) return '<span class="tk-d">持平</span>';
       const cls = goodUp == null ? '' : (d > 0) === goodUp ? ' up' : ' down';
-      return `<span class="ar-d${cls}"><i>${d > 0 ? '▲' : '▼'}</i>${Math.abs(d)}${unit}</span>`;
+      return `<span class="tk-d${cls}">${d > 0 ? '▲' : '▼'} ${Math.abs(d)}${unit}</span>`;
     };
-    const num = (v, text) => `<b class="ar-v" data-count="${v}" data-text="${esc(text)}">${esc(text)}</b>`;
+    const num = (v, text) => `<b class="tk-v" data-count="${v}" data-text="${esc(text)}">${esc(text)}</b>`;
     const avgGap = (sum) => (sum.deficit == null ? null : gap.gain ? -sum.deficit : sum.deficit);
     const g = avgGap(cur), gp = avgGap(prev);
-    const rows = [];
-    if (simple) rows.push(['energy', '吃', cur.intake == null ? '<b class="ar-v">–</b>' : num(Math.round(cur.intake), fmt(cur.intake)), 'kcal / 天',
-      cur.budget ? `预算 ${fmt(cur.budget)}${cur.over ? ` · 超了 ${cur.over} 天` : ''}` : '', delta(cur.intake, prev.intake, '', false)]);
-    else rows.push(['gap', gap.label, g == null ? '<b class="ar-v">–</b>' : num(Math.round(g), fmt(g)), 'kcal / 天',
-      g == null ? '记几顿饭就有' : `${gap.target ? `目标 ${fmt(gap.target)} · ` : ''}${gap.gain ? '' : `折合脂肪 ${round1(Math.max(0, g) * cur.eatDays / 7700)} kg`}`, delta(g, gp, '', true)]);
-    rows.push(['protein', '蛋白质', cur.protein == null ? '<b class="ar-v">–</b>' : num(Math.round(cur.protein), String(Math.round(cur.protein))), 'g / 天',
-      cur.proteinTarget ? `目标 ${cur.proteinTarget}g · 够了 ${cur.proteinOk} / ${cur.eatDays} 天` : '', delta(cur.protein, prev.protein, 'g', true)]);
+    const tiles = [];
+    if (simple) tiles.push(['energy', '吃了', cur.intake == null ? '<b class="tk-v">–</b>' : num(Math.round(cur.intake), fmt(cur.intake)), 'kcal/天',
+      cur.budget ? `预算 ${fmt(cur.budget)}` : '', delta(cur.intake, prev.intake, '', false)]);
+    else tiles.push(['gap', gap.label, g == null ? '<b class="tk-v">–</b>' : num(Math.round(g), fmt(g)), 'kcal/天',
+      gap.target ? `目标 ${fmt(gap.target)}` : '', delta(g, gp, '', true)]);
+    tiles.push(['protein', '蛋白质', cur.protein == null ? '<b class="tk-v">–</b>' : num(Math.round(cur.protein), String(Math.round(cur.protein))), 'g/天',
+      cur.proteinTarget ? `够了 ${cur.proteinOk}/${cur.eatDays} 天` : '', delta(cur.protein, prev.protein, 'g', true)]);
     if (!simple) {
       const lift = this.trendLiftRows(days);
-      const up = lift.rows.filter(r => r.gain > 0.001).length, prs = lift.rows.filter(r => r.pr).length;
-      rows.push(['train', '训练', num(cur.trainDays, String(cur.trainDays)), `/ ${days.length} 天`,
-        lift.rows.length && !lift.recent ? `${up ? `${up} 个动作涨了` : '重量没涨'}${prs ? ` · ${prs} 个新纪录` : ''}` : (cur.minutes ? `有氧 ${cur.minutes} 分` : '还没练力量'),
-        delta(cur.trainDays, prev.trainDays, ' 天', true)]);
+      const prs = lift.rows.filter(r => r.pr).length;
+      tiles.push(['train', '训练', num(cur.trainDays, String(cur.trainDays)), `/ ${days.length} 天`,
+        prs ? `${prs} 个新纪录` : cur.minutes ? `有氧 ${cur.minutes} 分` : '', delta(cur.trainDays, prev.trainDays, '', true)]);
     }
-    const ICON = { gap: 'M4 14c0-4 4-6 4-10 3 2 6 6 6 10a5 5 0 0 1-10 0z', energy: 'M4 14c0-4 4-6 4-10 3 2 6 6 6 10a5 5 0 0 1-10 0z', protein: 'M5 9a4 4 0 1 1 8 0v5H5zM7 14v3h4v-3', train: 'M2 9h3M13 9h3M5 6v6M13 6v6M5 9h8' };
-    el.innerHTML = rows.map(([k, label, v, unit, sub, d]) => `<button type="button" class="ar-row${k === kind ? ' on' : ''}" data-k="${k}" role="tab" aria-selected="${k === kind}">` +
-      `<span class="ar-ic"><svg viewBox="0 0 18 18" aria-hidden="true"><path d="${ICON[k]}"/></svg></span>` +
-      `<span class="ar-main"><span class="ar-top"><span class="ar-l">${label}</span>${v}<small>${unit}</small></span><span class="ar-s">${esc(sub)}</span></span>` +
-      `${d}<span class="ar-chev" aria-hidden="true">›</span></button>`).join('');
-    el.querySelectorAll('.ar-row').forEach(b => b.addEventListener('click', () => {
+    el.style.setProperty('--n', tiles.length);
+    el.innerHTML = tiles.map(([k, label, v, unit, sub, d]) => `<button type="button" class="tr-kpi${k === kind ? ' on' : ''}" data-k="${k}" role="tab" aria-selected="${k === kind}">` +
+      `<span class="tk-l"><i class="tk-dot ${k}"></i>${label}</span><span class="tk-num">${v}<small>${unit}</small></span>${d}` +
+      `<span class="tk-s">${esc(sub)}</span></button>`).join('');
+    el.querySelectorAll('.tr-kpi').forEach(b => b.addEventListener('click', () => {
       if (this._trendKind === b.dataset.k) return;
       this._trendKind = b.dataset.k;
       window.Haptics && window.Haptics.fire('tick');
-      el.querySelectorAll('.ar-row').forEach(x => { x.classList.toggle('on', x === b); x.setAttribute('aria-selected', x === b); });
+      el.querySelectorAll('.tr-kpi').forEach(x => { x.classList.toggle('on', x === b); x.setAttribute('aria-selected', x === b); });
       this.renderTrendPanel(true);
     }));
   },
 
-  /** 那一张图：吃 / 蛋白 / 练 / 体重，按上面选中的那行 */
+  /** 那一张图：热量赤字 / 吃了多少 / 蛋白 / 训练，按上面选中的那个 */
   renderTrendPanel(swap) {
     const el = document.getElementById('tr-panel');
     if (!el) return;
@@ -245,106 +236,97 @@ Object.assign(FitnessApp.prototype, {
     const html = kind === 'protein' ? this.panelProtein(days, cur) : kind === 'train' ? this.panelTrain(days, cur) : kind === 'gap' ? this.panelGap(days, cur) : this.panelEnergy(days, cur);
     el.dataset.kind = kind;
     el.innerHTML = html;
-    if (swap) { el.classList.remove('ar-swap'); void el.offsetWidth; el.classList.add('ar-swap'); }
-    el.querySelectorAll('.ar-bar[data-date]').forEach(b => b.addEventListener('click', () => { window.Haptics && window.Haptics.fire('tick'); this.trendFocusDay(b.dataset.date); }));
-    el.querySelectorAll('.ar-bar[data-lift]').forEach(b => b.addEventListener('click', () => this.openLiftSheet(b.dataset.lift)));
-    if (el._hover) { el._hover(); el._hover = null; }
+    if (swap) { el.classList.remove('tp-swap'); void el.offsetWidth; el.classList.add('tp-swap'); }
+    el.querySelectorAll('[data-lift]').forEach(b => b.addEventListener('click', () => this.openLiftSheet(b.dataset.lift)));
+    const chart = el.querySelector('.chart');
+    if (chart && chart._bind) chart._bind();
     this.trendCountUp(el);
   },
 
-  /** 卡片头：标题 + 一个小标签（Arena 的「Best Overall」那种） */
-  panelHead(title, chip) {
-    return `<div class="ar-head"><h2>${esc(title)}</h2>${chip ? `<span class="ar-chip">${esc(chip)}</span>` : ''}</div>`;
+  /** 卡片头：标题 + 一行说明，右边一个小标签 */
+  panelHead(title, sub, chip) {
+    return `<div class="tp-head"><div><h2>${esc(title)}</h2>${sub ? `<p>${sub}</p>` : ''}</div>${chip ? `<span class="tp-chip">${esc(chip)}</span>` : ''}</div>`;
   },
 
   /**
-   * 一天一行（≤10 天）：条就是这一行的底色，长短 = 这个数 / 最大的那个；左边日子的数字放在小方框里，右边等宽字写数。
-   * marks：每行一根细竖线（预算 / 目标的位置）；tone(d) 'over' 时这一行用淡红
+   * 一天一根柱子（v12.5：「热量赤字每天还是柱状图」）。≤10 天柱子宽、顶上写数；30 天细柱。
+   * opts：{ target（虚线）, tone(d, v) → 'pos' | 'over' | 'pro' | 'low', label(d, v)（顶上的字）, tip(d, v), aria }
+   * 往下的（多吃了）从 0 往下长。点一根：看这天的数，下面的卡片划到这天。
    */
-  dayRows(days, val, opts) {
-    const vals = days.map(val).filter(v => v != null);
-    const max = Math.max(opts.mark || 0, ...vals) * 1.04 || 1;
-    const today = getTodayDateString();
-    return `<div class="ar-bars">` + days.slice().reverse().map((d, i) => {
-      const v = val(d);
-      const wd = d.date === today ? '今天' : '周' + WEEKDAYS[new Date(d.date + 'T00:00:00').getDay()];
-      const w = v == null ? 0 : Math.max(0.02, v / max);
-      const tone = v != null && opts.tone ? opts.tone(d) : '';
-      const mk = opts.mark ? `<i class="ar-mark" style="--m:${(opts.mark / max).toFixed(3)}"></i>` : '';
-      return `<button type="button" class="ar-bar${tone ? ' ' + tone : ''}${v == null ? ' empty' : ''}" data-date="${d.date}" style="--p:${w.toFixed(3)}; --d:${i * 45}ms">` +
-        `<span class="ar-fill"></span>${mk}<span class="ar-rank">${+d.date.slice(8)}</span><span class="ar-name">${wd}</span>` +
-        `<span class="ar-val">${v == null ? '<em>没记</em>' : opts.right(d, v)}</span></button>`;
-    }).join('') + '</div>';
-  },
-
-  /** 30 天：一根根细柱（同一个蓝，超了的淡红），一根横线是预算 / 目标；手指划过看那天 */
-  dayColumns(days, val, opts) {
+  trendColumns(days, val, opts) {
     const vals = days.map(val).filter(v => v != null);
     if (!vals.length) return '';
-    const f = this.trendFrame(days.length, 0, Math.max(opts.mark || 0, ...vals) * 1.08, { h: 160 });
-    const bw = Math.min(10, f.slot * 0.62);
+    const n = days.length, wide = n <= 10;
+    const lo = Math.min(0, ...vals), hi = Math.max(opts.target || 0, ...vals);
+    const f = this.trendFrame(n, lo < 0 ? lo * 1.25 : 0, hi * (wide ? 1.22 : 1.1), { h: wide ? 196 : 176 });
+    const bw = wide ? Math.min(28, f.slot * 0.56) : Math.min(9, f.slot * 0.62);
     const base = f.y(0);
-    const bars = days.map((d, i) => { const v = val(d); return v == null ? '' : this.trendBar(f.cx(i) - bw / 2, bw, base, f.y(v), opts.tone && opts.tone(d) ? 'over' : 'pos', i); }).join('');
-    const mark = opts.mark ? `<line class="target draw-h" x1="${f.padL}" x2="${f.W - f.padR}" y1="${f.y(opts.mark).toFixed(1)}" y2="${f.y(opts.mark).toFixed(1)}"/>` : '';
+    const today = getTodayDateString();
+    const uid = 'g' + Math.random().toString(36).slice(2, 7);
+    const grad = (id, a, b) => `<linearGradient id="${uid}${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(${a})"/><stop offset="1" style="stop-color:var(${a});stop-opacity:${b}"/></linearGradient>`;
+    const defs = `<defs>${grad('pos', '--accent', 0.45)}${grad('pro', '--m-pro', 0.45)}${grad('over', '--danger', 0.4)}</defs>`;
+    let labels = '';
+    const bars = days.map((d, i) => {
+      const v = val(d);
+      if (v == null) return wide ? `<circle class="nodata" cx="${f.cx(i).toFixed(1)}" cy="${base - 4}" r="2"/>` : '';
+      const tone = opts.tone ? opts.tone(d, v) : 'pos';
+      const bar = this.trendBar(f.cx(i) - bw / 2, bw, base, f.y(v), tone + (d.date === today ? ' today' : ''), i)
+        .replace('<path ', `<path fill="url(#${uid}${tone === 'over' ? 'over' : tone === 'pro' || tone === 'low' ? 'pro' : 'pos'})" `);
+      if (wide && opts.label) {
+        const y = v < 0 ? f.y(v) + 13 : f.y(v) - 6;
+        labels += `<text class="bar-val${v < 0 ? ' neg' : ''}" style="--d:${i * 40 + 350}ms" x="${f.cx(i).toFixed(1)}" y="${y.toFixed(1)}" text-anchor="middle">${esc(opts.label(d, v))}</text>`;
+      }
+      return bar;
+    }).join('');
+    const ty = opts.target ? f.y(opts.target) : 0;
+    const mark = opts.target ? `<line class="target draw-h" x1="${f.padL}" x2="${f.W - f.padR}" y1="${ty.toFixed(1)}" y2="${ty.toFixed(1)}"/>` +
+      `<text class="target-l" x="${f.W - f.padR}" y="${(ty - 5).toFixed(1)}" text-anchor="end">目标 ${fmt(opts.target)}</text>` : '';
+    const id = 'c' + uid;
     setTimeout(() => {
-      const el = document.querySelector('#tr-panel .chart');
-      if (el) this.trendHover(el, f, days, (i) => { const v = val(days[i]); return v == null ? null : opts.tip(days[i], v); });
+      const el = document.getElementById(id);
+      if (el) el._bind = () => this.trendHover(el, f, days, (i) => { const v = val(days[i]); return v == null ? null : opts.tip(days[i], v); });
+      if (el && el.isConnected) el._bind();
     }, 0);
-    return `<div class="chart"><svg viewBox="0 0 ${f.W} ${f.H}" role="img" aria-label="${esc(opts.aria)}">${f.grid}<line class="base" x1="${f.padL}" x2="${f.W - f.padR}" y1="${base}" y2="${base}"/>${bars}${mark}` +
-      `${this.trendXLabels(days, f)}<line class="xhair hidden" y1="${f.padT}" y2="${base}"/></svg><div class="chart-tip hidden"></div></div>`;
+    return `<div class="chart cols${wide ? ' wide' : ''}" id="${id}"><svg viewBox="0 0 ${f.W} ${f.H}" role="img" aria-label="${esc(opts.aria)}">${defs}${f.grid}` +
+      `<line class="base" x1="${f.padL}" x2="${f.W - f.padR}" y1="${base}" y2="${base}"/>${bars}${mark}${labels}` +
+      `${this.trendXLabels(days, f)}<line class="xhair hidden" y1="${f.padT}" y2="${f.H - f.padB}"/></svg><div class="chart-tip hidden"></div></div>`;
   },
 
-  /** 热量赤字：一天一行（多吃了的那天淡红、写「超 N」），虚线是每天的目标赤字；30 天是细柱（正的往上、多吃的往下） */
+  /** 热量赤字：一天一根（多吃了的往下、红色），虚线是目标 */
   panelGap(days, cur) {
     const gap = this.trendGap();
-    if (!cur.eatDays) return this.panelHead(gap.label) + '<p class="ar-empty">记几顿饭，这里一天一行画出每天的热量赤字</p>';
-    const bad = (v) => v < 0;
-    const right = (d, v) => (v < 0 ? `<i class="ar-dn">${gap.gain ? '少吃' : '多吃'}</i>${fmt(-v)}` : fmt(v));
-    let body;
-    if (days.length <= 10) {
-      body = this.dayRows(days, d => { const v = gap.val(d); return v == null ? null : Math.abs(v); },
-        { mark: gap.target, tone: d => (bad(gap.val(d)) ? 'over' : ''), right: (d) => right(d, gap.val(d)) });
-    } else {
-      const vals = days.map(gap.val).filter(v => v != null);
-      const f = this.trendFrame(days.length, Math.min(0, ...vals) * 1.1, Math.max(gap.target, ...vals) * 1.1, { h: 170 });
-      const bw = Math.min(10, f.slot * 0.62);
-      const base = f.y(0);
-      const bars = days.map((d, i) => { const v = gap.val(d); return v == null ? '' : this.trendBar(f.cx(i) - bw / 2, bw, base, f.y(v), v < 0 ? 'over' : 'pos', i); }).join('');
-      const mark = gap.target ? `<line class="target draw-h" x1="${f.padL}" x2="${f.W - f.padR}" y1="${f.y(gap.target).toFixed(1)}" y2="${f.y(gap.target).toFixed(1)}"/>` : '';
-      setTimeout(() => {
-        const el = document.querySelector('#tr-panel .chart');
-        if (el) this.trendHover(el, f, days, (i) => { const v = gap.val(days[i]); return v == null ? null : [[v < 0 ? 'neg' : 'pos', v < 0 ? (gap.gain ? '少吃了' : '多吃了') : gap.label, fmt(Math.abs(v)) + ' kcal'], ['', `吃了 ${fmt(days[i].intake)}`, '']]; });
-      }, 0);
-      body = `<div class="chart"><svg viewBox="0 0 ${f.W} ${f.H}" role="img" aria-label="${gap.label}">${f.grid}<line class="base" x1="${f.padL}" x2="${f.W - f.padR}" y1="${base}" y2="${base}"/>${bars}${mark}` +
-        `${this.trendXLabels(days, f)}<line class="xhair hidden" y1="${f.padT}" y2="${f.H - f.padB}"/></svg><div class="chart-tip hidden"></div></div>`;
-    }
+    if (!cur.eatDays) return this.panelHead(gap.label) + '<p class="tp-empty">记几顿饭，这里一天一根柱子画出每天的热量赤字</p>';
     const sum = days.reduce((a, d) => a + Math.max(0, gap.val(d) || 0), 0);
-    const neg = days.filter(d => bad(gap.val(d) || 0)).length;
-    return this.panelHead(gap.label, gap.target ? `目标 ${fmt(gap.target)}` : '') + body +
-      `<p class="ar-foot">${gap.target ? `${days.length <= 10 ? '竖线' : '横线'}是目标 · ` : ''}${neg ? `<span class="ar-sw over"></span>${gap.gain ? '少吃' : '多吃'}了 ${neg} 天 · ` : ''}${gap.gain ? '' : `一共 ${fmt(sum)} kcal，折合脂肪 ${round1(sum / 7700)} kg`}</p>`;
+    const neg = days.filter(d => (gap.val(d) || 0) < 0).length;
+    const avg = Math.round(days.filter(d => gap.val(d) != null).reduce((a, d) => a + gap.val(d), 0) / cur.eatDays);
+    const body = this.trendColumns(days, gap.val, {
+      target: gap.target, aria: gap.label,
+      tone: (d, v) => (v < 0 ? 'over' : 'pos'),
+      label: (d, v) => (v < 0 ? '−' + fmt(-v) : fmt(v)),
+      tip: (d, v) => [[v < 0 ? 'neg' : 'pos', v < 0 ? (gap.gain ? '少吃了' : '多吃了') : gap.label, fmt(Math.abs(v)) + ' kcal'], ['', `吃了 ${fmt(d.intake)} / 预算 ${fmt(d.budget)}`, '']]
+    });
+    return this.panelHead(gap.label, `平均每天 <b>${fmt(avg)}</b> kcal${gap.target ? ` · 目标 ${fmt(gap.target)}` : ''}`, gap.gain ? '' : `≈ ${round1(sum / 7700)} kg 脂肪`) + body +
+      `<p class="tp-foot">${neg ? `<i class="sw over"></i>${gap.gain ? '少吃' : '多吃'}了 ${neg} 天 · ` : ''}${gap.gain ? '' : `一共 ${fmt(sum)} kcal`} · 点一根看那天</p>`;
   },
 
   panelEnergy(days, cur) {
-    if (!cur.eatDays) return this.panelHead('每天吃了多少') + '<p class="ar-empty">记几顿饭，这里一天一行画出吃了多少、超没超预算</p>';
+    if (!cur.eatDays) return this.panelHead('每天吃了多少') + '<p class="tp-empty">记几顿饭，这里一天一根柱子画出吃了多少、超没超预算</p>';
     const over = (d) => d.intake > d.budget + 50;
-    const right = (d, v) => `${fmt(v)}${over(d) ? `<i class="ar-dn">▲${fmt(v - d.budget)}</i>` : ''}`;
-    const body = days.length <= 10
-      ? this.dayRows(days, d => (d.hasDiet ? d.intake : null), { mark: cur.budget, tone: d => (over(d) ? 'over' : ''), right })
-      : this.dayColumns(days, d => (d.hasDiet ? d.intake : null), { mark: cur.budget, tone: over, aria: '每天吃了多少',
-        tip: (d, v) => [[over(d) ? 'neg' : 'pos', '吃了', fmt(v) + ' kcal'], ['target', d.budget - v >= 0 ? '还剩' : '超了', fmt(Math.abs(d.budget - v))]] });
-    const simple = this.isSimple();
-    const fat = !simple && cur.deficit > 0 ? ` · 赤字折合脂肪 ${round1((cur.deficit * cur.eatDays) / 7700)} kg` : '';
-    return this.panelHead('每天吃了多少', `预算 ${fmt(cur.budget)}`) + body +
-      `<p class="ar-foot">${days.length <= 10 ? '竖线' : '横线'}是预算 · <span class="ar-sw over"></span>超了的那天${fat}</p>`;
+    const body = this.trendColumns(days, d => (d.hasDiet ? d.intake : null), {
+      target: cur.budget, aria: '每天吃了多少', tone: (d) => (over(d) ? 'over' : 'pos'), label: (d, v) => fmt(v),
+      tip: (d, v) => [[over(d) ? 'neg' : 'pos', '吃了', fmt(v) + ' kcal'], ['', d.budget - v >= 0 ? `还剩 ${fmt(d.budget - v)}` : `超了 ${fmt(v - d.budget)}`, '']]
+    });
+    return this.panelHead('每天吃了多少', `平均 <b>${fmt(cur.intake)}</b> kcal · 预算 ${fmt(cur.budget)}`, cur.over ? `超了 ${cur.over} 天` : '') + body +
+      '<p class="tp-foot">虚线是预算 · 点一根看那天</p>';
   },
 
   panelProtein(days, cur) {
-    if (!cur.eatDays) return this.panelHead('蛋白质') + '<p class="ar-empty">记几顿饭，这里画出每天吃够蛋白没有</p>';
+    if (!cur.eatDays) return this.panelHead('蛋白质') + '<p class="tp-empty">记几顿饭，这里画出每天吃够蛋白没有</p>';
     const t = cur.proteinTarget;
-    const right = (d, v) => `${Math.round(v)}g${t && v >= t ? '<i class="ar-up">✓</i>' : ''}`;
-    const body = days.length <= 10
-      ? this.dayRows(days, d => (d.hasDiet ? d.protein : null), { mark: t, right })
-      : this.dayColumns(days, d => (d.hasDiet ? d.protein : null), { mark: t, aria: '每天的蛋白质', tip: (d, v) => [['pro', '蛋白', round1(v) + 'g']] });
+    const body = this.trendColumns(days, d => (d.hasDiet ? d.protein : null), {
+      target: t, aria: '每天的蛋白质', tone: (d, v) => (t && v < t * 0.9 ? 'low' : 'pro'), label: (d, v) => String(Math.round(v)),
+      tip: (d, v) => [['pro', '蛋白', round1(v) + 'g'], ['', t ? (v >= t * 0.9 ? '够了' : `还差 ${Math.round(t - v)}g`) : '', '']]
+    });
     // 主要靠哪几样（这几天每一样加起来）
     const since = days[0].date;
     const sum = new Map();
@@ -352,8 +334,15 @@ Object.assign(FitnessApp.prototype, {
       .forEach(it => { if (it.supp) return; const k = String(it.name || '').slice(0, 10); if (k) sum.set(k, (sum.get(k) || 0) + (it.proteinG || 0)); }));
     const tot = [...sum.values()].reduce((a, v) => a + v, 0) || 1;
     const top = [...sum.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3).filter(x => x[1] > 0);
-    return this.panelHead('蛋白质', t ? `目标 ${t}g` : '') + body +
-      `<p class="ar-foot">${days.length <= 10 ? '竖线' : '横线'}是目标${top.length ? ' · 主要靠 ' + top.map(([k, v]) => `${esc(k)} ${Math.round((v / tot) * 100)}%`).join('、') : ''}</p>`;
+    return this.panelHead('蛋白质', `平均每天 <b>${Math.round(cur.protein)}</b> g${t ? ` · 目标 ${t}g` : ''}`, t ? `够了 ${cur.proteinOk}/${cur.eatDays} 天` : '') + body +
+      `<p class="tp-foot">${top.length ? '主要靠 ' + top.map(([k, v]) => `${esc(k)} ${Math.round((v / tot) * 100)}%`).join('、') : '点一根看那天'}</p>`;
+  },
+
+  /** 热量赤字 / 盈余（增肌的人看盈余）：这天的数（没记吃的是 null）、叫法、目标 */
+  trendGap() {
+    const gain = (this.profile.goalType || 'fat_loss') === 'muscle_gain';
+    const target = (this.profile.targetDeficitKcal || 0) * (gain ? -1 : 1);
+    return { gain, label: gain ? '热量盈余' : '热量赤字', target: target > 0 ? target : 0, val: (d) => (d.hasDiet ? Math.round(gain ? -d.s.deficit : d.s.deficit) : null) };
   },
 
   /**
@@ -387,12 +376,12 @@ Object.assign(FitnessApp.prototype, {
   },
 
   /**
-   * 训练：动作排行（Arena 的 Top 10：名次越前条越深）。每行：动作、重量从多少到多少（重量没变写次数从几到几）、新纪录、
-   * 右边一条最近几次的小走势 + 涨了百分之几，下面一行小字是下次练多少。点一行看这个动作的重量曲线和每次的明细。
+   * 训练：动作排行。每行：名次、动作（新纪录小标签）、重量从多少到多少、一根细条（涨了多少）、右边最近几次的小走势 + 百分比，
+   * 下面一行「下次 · …」。点一行看这个动作的重量曲线和每次的明细。
    */
   panelTrain(days, cur) {
     const { rows: all, recent } = this.trendLiftRows(days);
-    if (!all.length) return this.panelHead('动作排行') + '<p class="ar-empty">练完说一句「卧推 60 公斤 4 组 8 个」，这里记下每个动作的重量怎么涨的</p>';
+    if (!all.length) return this.panelHead('动作排行') + '<p class="tp-empty">练完说一句「卧推 60 公斤 4 组 8 个」，这里记下每个动作的重量怎么涨的</p>';
     const rows = all.slice(0, 8);
     const max = Math.max(0.02, ...rows.map(r => r.gain));
     const kg = (w) => (w > 0 ? round1(w) + 'kg' : '自重');
@@ -404,25 +393,168 @@ Object.assign(FitnessApp.prototype, {
       return `${kg(b.weightKg)} × ${b.reps}`;
     };
     const spark = (pts) => {
-      if (pts.length < 2) return '<span class="ar-spark"></span>';
+      if (pts.length < 2) return '<span class="tl-spark"></span>';
       const lo = Math.min(...pts), hi = Math.max(...pts);
-      return `<svg class="ar-spark" viewBox="0 0 44 16" aria-hidden="true"><path class="draw" pathLength="1" d="${pts.map((v, k) => `${k ? 'L' : 'M'}${(k / (pts.length - 1) * 40 + 2).toFixed(1)},${(13 - ((v - lo) / Math.max(1e-6, hi - lo)) * 10).toFixed(1)}`).join(' ')}"/></svg>`;
+      return `<svg class="tl-spark" viewBox="0 0 44 16" aria-hidden="true"><path class="draw" pathLength="1" d="${pts.map((v, k) => `${k ? 'L' : 'M'}${(k / (pts.length - 1) * 40 + 2).toFixed(1)},${(13 - ((v - lo) / Math.max(1e-6, hi - lo)) * 10).toFixed(1)}`).join(' ')}"/></svg>`;
     };
-    const body = `<div class="ar-bars rank lift">` + rows.map((r, i) => {
+    const body = '<div class="tl-list">' + rows.map((r, i) => {
       const g = Math.round(r.gain * 100);
-      const w = r.ref ? Math.max(0.22, Math.max(0, r.gain) / max) : 0.22;
-      return `<button type="button" class="ar-bar r${Math.min(i, 7)}" data-lift="${esc(r.name)}" style="--p:${w.toFixed(3)}; --d:${i * 45}ms">` +
-        `<span class="ar-fill"></span><span class="ar-rank">${i + 1}</span>` +
-        `<span class="ar-name"><span class="ar-n1">${esc(r.name)}${r.pr ? '<em class="ar-new">新纪录</em>' : ''}</span><small>${esc(change(r))}</small></span>` +
-        `<span class="ar-val">${spark(r.spark)}${r.ref ? (g > 0 ? `<i class="ar-up">▲</i>${g}%` : g < 0 ? `<i class="ar-dn">▼</i>${-g}%` : '0%') : '新'}</span></button>` +
-        (r.next ? `<div class="ar-next">下次 · ${esc(r.next.text.replace(/^下次/, ''))}</div>` : '');
+      const w = r.ref ? Math.max(0.04, Math.max(0, r.gain) / max) : 0;
+      return `<button type="button" class="tl-row" data-lift="${esc(r.name)}" style="--p:${w.toFixed(3)}; --d:${i * 45}ms">` +
+        `<span class="tl-rank${i < 3 ? ' top' : ''}">${i + 1}</span>` +
+        `<span class="tl-main"><b>${esc(r.name)}${r.pr ? '<em class="tl-new">新纪录</em>' : ''}</b><small>${esc(change(r))}</small><span class="tl-trk"><i></i></span></span>` +
+        `<span class="tl-side">${spark(r.spark)}<span class="tl-g${g > 0 ? ' up' : g < 0 ? ' down' : ''}">${r.ref ? (g > 0 ? `▲${g}%` : g < 0 ? `▼${-g}%` : '0%') : '新'}</span></span></button>` +
+        (r.next ? `<div class="tl-next">下次 · ${esc(r.next.text.replace(/^下次/, ''))}</div>` : '');
     }).join('') + '</div>';
     const today = getTodayDateString();
     const gap = ['胸部', '背部', '腿部', '肩部'].map(g => ({ g, last: this.workouts.filter(w => w.muscleGroup === g).reduce((m, w) => (w.date > m ? w.date : m), '') }))
       .filter(x => x.last).map(x => Object.assign(x, { n: Math.round((new Date(today + 'T00:00:00') - new Date(x.last + 'T00:00:00')) / 86400000) }))
       .sort((a, b) => b.n - a.n)[0];
-    return this.panelHead('动作排行', recent ? '最近练过的' : `练了 ${cur.trainDays} 天`) + body +
-      `<p class="ar-foot">按估算的一次最大重量涨了多少排 · 点一行看重量曲线${gap && gap.n >= 6 ? ` · ${gap.g.replace('部', '')}已经 ${gap.n} 天没练` : ''}</p>`;
+    return this.panelHead('动作排行', recent ? '最近练过的' : `练了 <b>${cur.trainDays}</b> 天`, gap && gap.n >= 6 ? `${gap.g.replace('部', '')} ${gap.n} 天没练` : '') + body +
+      '<p class="tp-foot">按估算的一次最大重量涨了多少排 · 点一行看重量曲线</p>';
+  },
+
+  // ---------------------------------------------------------------------------
+  // 趋势分析（v12.5）：累计热量赤字、三大营养素、练了哪些部位、五周打卡
+  // ---------------------------------------------------------------------------
+  renderInsights(el, days) {
+    if (!el) return;
+    const simple = this.isSimple();
+    const cards = [simple ? '' : this.insCumulative(days.length < 7 ? this.trendDaysData(7) : days), this.insMacros(days),
+      simple ? '' : this.insRadar(Math.max(14, days.length)), this.insCalendar()].filter(Boolean);
+    const sub = document.getElementById('tr-ins-sub');
+    if (sub) sub.textContent = days.length < 7 ? '至少按 7 天看' : `这 ${days.length} 天`;
+    el.innerHTML = cards.join('');
+    el.querySelectorAll('.chart').forEach(c => c._bind && c._bind());
+    el.querySelectorAll('[data-cal]').forEach(b => b.addEventListener('click', () => { window.Haptics && window.Haptics.fire('tick'); this.trendFocusDay(b.dataset.cal, true); }));
+  },
+
+  /** 一张分析卡：小标题、一句结论（大字）、图、脚注 */
+  insCard(cls, title, take, body, foot) {
+    return `<article class="card ti ${cls}"><div class="ti-head"><span>${esc(title)}</span></div><p class="ti-take">${take}</p>${body}${foot ? `<p class="tp-foot">${foot}</p>` : ''}</article>`;
+  },
+
+  /** 累计热量赤字：一天天加起来的线（面积渐变），和「每天照目标走」的虚线比；最后一个点在呼吸 */
+  insCumulative(days) {
+    const gap = this.trendGap();
+    let acc = 0, started = false;
+    const pts = [], goal = [];
+    days.forEach((d, i) => {
+      const v = gap.val(d);
+      if (v != null) { started = true; acc += v; }
+      if (started) { pts.push([i, acc]); goal.push([i, gap.target * (goal.length + 1)]); }
+    });
+    if (pts.length < 2) return '';
+    const vals = pts.map(p => p[1]).concat(gap.target ? goal.map(p => p[1]) : []);
+    const f = this.trendFrame(days.length, Math.min(0, ...vals) * 1.1, Math.max(...vals, 1) * 1.12, { h: 168 });
+    const line = this.trendLine(f, pts);
+    const g = gap.target ? this.trendLine(f, goal) : null;
+    const last = pts[pts.length - 1];
+    const uid = 'cu' + Math.random().toString(36).slice(2, 7);
+    const total = Math.round(last[1]);
+    const pace = gap.target && goal.length ? Math.round((total / goal[goal.length - 1][1]) * 100) : 0;
+    const svg = `<svg viewBox="0 0 ${f.W} ${f.H}" role="img" aria-label="累计${gap.label}">` +
+      `<defs><linearGradient id="${uid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--accent);stop-opacity:0.38"/><stop offset="1" style="stop-color:var(--accent);stop-opacity:0"/></linearGradient></defs>` +
+      `${f.grid}<path class="cu-area" fill="url(#${uid})" d="${line.area}"/>` +
+      (g ? `<path class="line goal" d="${g.d}"/>` : '') +
+      `<path class="line cu draw" pathLength="1" d="${line.d}"/>` +
+      `<circle class="cu-pulse" cx="${f.cx(last[0]).toFixed(1)}" cy="${f.y(last[1]).toFixed(1)}" r="5"/><circle class="cu-dot" cx="${f.cx(last[0]).toFixed(1)}" cy="${f.y(last[1]).toFixed(1)}" r="4"/>` +
+      `${this.trendXLabels(days, f)}<line class="xhair hidden" y1="${f.padT}" y2="${f.H - f.padB}"/></svg>`;
+    const id = uid + 'c';
+    const byI = new Map(pts.map((p, k) => [p[0], [p[1], goal[k] && goal[k][1]]]));
+    setTimeout(() => {
+      const el = document.getElementById(id);
+      if (el) el._bind = () => this.trendHover(el, f, days, (i) => { const x = byI.get(i); return x ? [['pos', '累计', fmt(Math.round(x[0])) + ' kcal']].concat(gap.target ? [['', `照目标该是 ${fmt(x[1])}`, '']] : []) : null; });
+      if (el && el.isConnected && el._bind) el._bind();
+    }, 0);
+    const take = gap.gain ? `累计多吃了 <b data-count="${Math.max(0, total)}" data-text="${fmt(Math.max(0, total))}">${fmt(Math.max(0, total))}</b> kcal`
+      : total >= 0 ? `累计少吃了 <b data-count="${total}" data-text="${fmt(total)}">${fmt(total)}</b> kcal<br>≈ <b>${round1(total / 7700)}</b> kg 脂肪`
+        : `累计多吃了 <b>${fmt(-total)}</b> kcal`;
+    const foot = gap.target ? (pace >= 95 ? `比「每天 ${fmt(gap.target)}」的节奏还快 ${pace - 100}%` : `是目标节奏的 ${pace}%`) + ' · 虚线是照目标走' : '';
+    return this.insCard('ti-cum', `累计${gap.label}`, take, `<div class="chart" id="${id}">${svg}<div class="chart-tip hidden"></div></div>`, foot);
+  },
+
+  /** 三大营养素：这几天吃进来的热量里，蛋白 / 碳水 / 脂肪各占多少（环形，三段之间留 2px 缝，一段段转出来） */
+  insMacros(days) {
+    const eat = days.filter(d => d.hasDiet);
+    if (eat.length < 1) return '';
+    const sum = (k) => eat.reduce((a, d) => a + (d[k] || 0), 0) / eat.length;
+    const g = { pro: sum('protein'), carb: sum('carbs'), fat: sum('fat') };
+    const kc = { pro: g.pro * 4, carb: g.carb * 4, fat: g.fat * 9 };
+    const tot = kc.pro + kc.carb + kc.fat;
+    if (tot < 50) return '';
+    const share = { pro: kc.pro / tot, carb: kc.carb / tot, fat: kc.fat / tot };
+    const R = 46, C = 2 * Math.PI * R, gapLen = 3;
+    let off = 0, k = 0;
+    const NAME = { pro: '蛋白质', carb: '碳水', fat: '脂肪' };
+    const segs = ['pro', 'carb', 'fat'].map(key => {
+      const len = Math.max(0, share[key] * C - gapLen);
+      const s = `<circle class="mc-seg ${key}" r="${R}" cx="60" cy="60" stroke-dasharray="${len.toFixed(2)} ${C.toFixed(2)}" stroke-dashoffset="${(-off).toFixed(2)}" style="--len:${len.toFixed(2)}; --off:${(-off).toFixed(2)}; --d:${k++ * 260}ms"/>`;
+      off += share[key] * C;
+      return s;
+    }).join('');
+    const p = Math.round(share.pro * 100), f = Math.round(share.fat * 100), c = Math.round(share.carb * 100);
+    const take = p >= 25 && p <= 40 ? `蛋白占 <b>${p}%</b>，刚好` : p < 25 ? `蛋白只占 <b>${p}%</b>，偏少` : `蛋白占 <b>${p}%</b>，很高`;
+    const foot = f > 35 ? '脂肪超过三成五：油、肥肉、坚果少一点' : c > 60 ? '碳水超过六成：主食换一半成肉蛋奶' : p < 25 ? '每顿加一样肉蛋奶，蛋白就上来了' : '减脂期蛋白 25～35%、脂肪 20～30% 比较稳';
+    const legend = ['pro', 'carb', 'fat'].map(key => `<li><i class="mc-key ${key}"></i><span>${NAME[key]}</span><b>${Math.round(g[key])}g</b><small>${Math.round(share[key] * 100)}%</small></li>`).join('');
+    const body = `<div class="mc"><svg class="mc-ring" viewBox="0 0 120 120" role="img" aria-label="三大营养素占比：蛋白 ${p}%，碳水 ${c}%，脂肪 ${f}%">` +
+      `<circle class="mc-track" r="${R}" cx="60" cy="60"/><g transform="rotate(-90 60 60)">${segs}</g>` +
+      `<text class="mc-num" x="60" y="62" text-anchor="middle">${p}%</text><text class="mc-lab" x="60" y="78" text-anchor="middle">蛋白</text></svg>` +
+      `<ul class="mc-legend">${legend}<li class="mc-tot"><span>平均每天</span><b>${fmt(Math.round(tot))}</b><small>kcal</small></li></ul></div>`;
+    return this.insCard('ti-mac', '吃进来的热量从哪儿来', take, body, foot);
+  },
+
+  /** 练了哪些部位：最近几天每个部位练了几天（雷达，从中间撑开）；最久没练的大肌群点出来 */
+  insRadar(n) {
+    const today = getTodayDateString();
+    const since = shiftDateString(today, -(n - 1));
+    const AX = [['胸部', '胸'], ['背部', '背'], ['腿部', '腿'], ['肩部', '肩'], ['手臂', '手臂'], ['核心', '核心']];
+    const lifts = this.workouts.filter(w => !w.durationMin && w.date >= since && w.date <= today);
+    if (!lifts.length) return '';
+    const cnt = AX.map(([g]) => new Set(lifts.filter(w => w.muscleGroup === g || w.muscleGroup === '全身').map(w => w.date)).size);
+    const max = Math.max(2, ...cnt);
+    const cx = 120, cy = 96, R = 70;
+    const pt = (i, r) => { const a = -Math.PI / 2 + (i * 2 * Math.PI) / AX.length; return [cx + Math.cos(a) * r, cy + Math.sin(a) * r]; };
+    const ring = (k) => AX.map((_, i) => pt(i, (R * k) / 3).map(v => v.toFixed(1)).join(',')).join(' ');
+    const grid = [1, 2, 3].map(k => `<polygon class="rd-ring" points="${ring(k)}"/>`).join('') +
+      AX.map((_, i) => { const [x, y] = pt(i, R); return `<line class="rd-axis" x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}"/>`; }).join('');
+    const poly = AX.map((_, i) => pt(i, Math.max(4, (R * cnt[i]) / max)).map(v => v.toFixed(1)).join(',')).join(' ');
+    const dots = AX.map((_, i) => { const [x, y] = pt(i, Math.max(4, (R * cnt[i]) / max)); return `<circle class="rd-dot" style="--d:${500 + i * 60}ms" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3.2"/>`; }).join('');
+    const labels = AX.map(([, s], i) => { const [x, y] = pt(i, R + 15); return `<text class="rd-lab" x="${x.toFixed(1)}" y="${(y + 4).toFixed(1)}" text-anchor="middle">${s} <tspan>${cnt[i]}</tspan></text>`; }).join('');
+    // 最久没练的大肌群（胸背腿肩）
+    const lastOf = (g) => this.workouts.filter(w => w.muscleGroup === g && w.date <= today).reduce((m, w) => (w.date > m ? w.date : m), '');
+    const big = ['胸部', '背部', '腿部', '肩部'].map(g => ({ g, last: lastOf(g) }))
+      .map(x => Object.assign(x, { d: x.last ? Math.round((new Date(today + 'T00:00:00') - new Date(x.last + 'T00:00:00')) / 86400000) : 99 }))
+      .sort((a, b) => b.d - a.d)[0];
+    const spread = cnt.filter(v => v > 0).length;
+    const take = big && big.d >= 7 ? `<b>${big.g.replace('部', '')}</b>${big.d >= 99 ? '还没练过' : ` ${big.d} 天没练了`}` : spread >= 5 ? '练得<b>挺均衡</b>' : `主要在练<b>${AX[cnt.indexOf(Math.max(...cnt))][1]}</b>`;
+    const body = `<svg class="rd" viewBox="0 0 240 190" role="img" aria-label="最近 ${n} 天各部位练了几天">${grid}<polygon class="rd-shape" points="${poly}"/>${dots}${labels}</svg>`;
+    return this.insCard('ti-rad', `最近 ${n} 天练了哪儿`, take, body, '数字是练了几天 · 「全身」算进每个部位');
+  },
+
+  /** 五周打卡：一格一天（周一开头），颜色一种绿由浅到深 = 热量赤字离目标多近，红 = 多吃了，小点 = 练了；点一格，下面的卡片划到那天 */
+  insCalendar() {
+    const today = getTodayDateString();
+    const gap = this.trendGap();
+    const dow = (d) => (new Date(d + 'T00:00:00').getDay() + 6) % 7;
+    const start = shiftDateString(today, -(28 + dow(today)));
+    const cells = [];
+    let logged = 0, trained = 0;
+    for (let i = 0; i < 35; i++) {
+      const d = shiftDateString(start, i);
+      if (d > today) { cells.push('<span class="cal-c future"></span>'); continue; }
+      const t = this.trendDay(d);
+      const v = gap.val(t);
+      if (t.hasLogs) logged++;
+      if (t.ws.length) trained++;
+      const lv = !t.hasLogs ? 'none' : v == null ? 'l1' : v < 0 ? 'over' : !gap.target ? 'l3' : v >= gap.target * 0.8 ? 'l4' : v >= gap.target * 0.4 ? 'l3' : 'l2';
+      cells.push(`<button type="button" class="cal-c ${lv}${d === today ? ' now' : ''}" data-cal="${d}" style="--d:${i * 18}ms" aria-label="${+d.slice(5, 7)}月${+d.slice(8)}日">${t.ws.length ? '<i></i>' : ''}</button>`);
+    }
+    const st = this.buddyState ? this.buddyState() : {};
+    const take = st.streak >= 2 ? `连续记了 <b>${st.streak}</b> 天` : `这五周记了 <b>${logged}</b> 天`;
+    const body = `<div class="cal"><div class="cal-w">${'一二三四五六日'.split('').map(x => `<span>${x}</span>`).join('')}</div><div class="cal-g">${cells.join('')}</div></div>` +
+      `<div class="cal-key"><span><i class="cal-c none"></i>没记</span><span><i class="cal-c l2"></i><i class="cal-c l3"></i><i class="cal-c l4"></i>离${gap.gain ? '盈余' : '赤字'}目标越近越深</span><span><i class="cal-c over"></i>${gap.gain ? '少吃' : '多吃'}</span><span><i class="cal-dot"></i>练了</span></div>`;
+    return this.insCard('ti-cal', '五周打卡', take, body, `五周里记了 ${logged} 天、练了 ${trained} 天 · 点一格看那天`);
   },
 
   /** 数字从 0 滚上去（0.7 秒，先快后慢）；减少动态效果时直接显示 */
@@ -609,7 +741,7 @@ Object.assign(FitnessApp.prototype, {
     const list = ss.slice(-12).map((s, k, arr) => {
       const i = ss.indexOf(s), p0 = i > 0 ? ss[i - 1].top : null, t = s.top;
       const dw = p0 ? round1((t.weightKg || 0) - (p0.weightKg || 0)) : 0, dr = p0 && !dw ? (t.reps || 0) - (p0.reps || 0) : 0;
-      const ch = !p0 ? '<i class="ar-up">第一次</i>' : dw > 0 ? `<i class="ar-up">▲${dw}kg</i>` : dw < 0 ? `<i class="ar-dn">▼${-dw}kg</i>` : dr > 0 ? `<i class="ar-up">▲${dr} 次</i>` : dr < 0 ? `<i class="ar-dn">▼${-dr} 次</i>` : '';
+      const ch = !p0 ? '<i class="lr-up">第一次</i>' : dw > 0 ? `<i class="lr-up">▲${dw}kg</i>` : dw < 0 ? `<i class="lr-dn">▼${-dw}kg</i>` : dr > 0 ? `<i class="lr-up">▲${dr} 次</i>` : dr < 0 ? `<i class="lr-dn">▼${-dr} 次</i>` : '';
       return `<div class="lift-row"><span>${+s.date.slice(5, 7)}月${+s.date.slice(8)}日</span>` +
         `<b>${s.sets.map(w => `${w.weightKg > 0 ? round1(w.weightKg) + 'kg' : '自重'} ${w.sets}×${w.reps}`).join('，')}${ch}</b><small>${fmt(s.volume)}kg</small></div>`;
     }).reverse().join('');
@@ -640,54 +772,85 @@ Object.assign(FitnessApp.prototype, {
       (st.best.w > st.now.w || st.best.reps > st.now.reps ? ` · 最好 ${kgs(st.best.w)} × ${st.best.reps}` : '') + ' · 每记一次自动更新</p>' : '';
     return `<div class="lift-next"><span>下次</span><div><b>${esc(n.text.replace(/^下次/, ''))}</b><small>${esc(n.why)}</small></div></div>` + now;
   },
+  /** 一天的一句话（卡片上的「签名」）：多吃了 / 赤字达标 / 蛋白够了 / 练了哪儿，挑最多三样 */
+  dayBio(d, gap, target) {
+    const parts = [];
+    const v = gap.val(d);
+    if (!d.hasLogs) return '这天没记';
+    if (v != null) {
+      if (v < 0) parts.push(gap.gain ? `少吃了 ${fmt(-v)}，增肌得吃够` : `多吃了 ${fmt(-v)}，第二天少吃一口就回来`);
+      else if (gap.target && v >= gap.target * 0.8) parts.push(gap.gain ? '热量盈余到位' : '热量赤字达标');
+    }
+    if (d.hasDiet && target && d.protein >= target * 0.9) parts.push('蛋白吃够了');
+    else if (d.hasDiet && target && d.protein < target * 0.6) parts.push(`蛋白差 ${Math.round(target - d.protein)}g`);
+    const groups = [...new Set(d.lifts.map(w => (w.muscleGroup || '').replace(/部$/, '')).filter(Boolean))];
+    if (groups.length) parts.push(`练了${groups.slice(0, 3).join('、')}`);
+    else if (d.cardio.length) parts.push(`${d.cardio[0].exerciseName} ${d.cardio[0].durationMin} 分钟`);
+    if (!d.hasDiet) parts.push('吃的没记');
+    return parts.slice(0, 3).join('，') || '记了';
+  },
+
   /**
-   * 过去 30 天：一天一张卡片（Arena 的「Model Capabilities」卡片那种：白卡片、细边、衬线的日子、一个大数）。
-   * 大数是热量赤字（只记吃的模式是吃了多少），细条是吃了多少对预算；蛋白对目标一行；练了什么一行（每个动作最重的一组）；
-   * 练过的那天能「存成计划」「今天照这天练」。
+   * 每一天（v12.5：「卡片一张一张，像社交软件的 Profile 那样左右划」）：今天在最前，往左划往前翻。
+   * 一张卡：封面（这天好不好决定颜色）、头像位置是吃了多少对预算的圆环、日子、一句话、三个数（赤字 / 蛋白 / 动作）、
+   * 吃了哪几顿、练了什么（每个动作最重的一组）、按钮（看这天 / 存成计划 / 今天照这天练）。
    */
   renderDayCards(el) {
+    if (!el) return;
     const today = getTodayDateString();
     const simple = this.isSimple();
     const gap = this.trendGap();
     const target = Math.round(this.gaugeProteinTarget ? this.gaugeProteinTarget() : (this.profile.targetProteinG || 0));
+    const R = 30, C = 2 * Math.PI * R;
     const cards = [];
     for (let i = 0; i < 30; i++) {
       const d = this.trendDay(shiftDateString(today, -i));
       const wd = '周' + WEEKDAYS[new Date(d.date + 'T00:00:00').getDay()];
-      const head = `<div class="dc-head"><b>${+d.date.slice(5, 7)}月${+d.date.slice(8)}日</b><span>${i === 0 ? '今天 · ' : i === 1 ? '昨天 · ' : ''}${wd}</span></div>`;
-      if (!d.hasLogs) {
-        cards.push(`<article class="day-card empty" data-date="${d.date}">${head}<p class="dc-empty">这天没记</p><div class="dc-acts"><button type="button" class="ar-link" data-dc="open">去补一笔 →</button></div></article>`);
-        continue;
-      }
-      const over = d.intake > d.budget + 50;
-      const gv = gap.val(d);
-      // 一天：大数是热量赤字（只记吃的模式是吃了多少），一行蛋白对目标，练了的每个动作写最重的一组
+      const when = i === 0 ? '今天' : i === 1 ? '昨天' : `${i} 天前`;
+      const v = gap.val(d);
+      const over = d.hasDiet && d.intake > d.budget + 50;
+      const tone = !d.hasLogs ? 'empty' : over ? 'over' : v != null && gap.target && v >= gap.target * 0.8 ? 'good' : 'ok';
+      const pct = d.hasDiet && d.budget ? Math.min(1, d.intake / d.budget) : 0;
+      const ring = `<svg class="dp-ring" viewBox="0 0 72 72" aria-hidden="true"><circle class="dp-track" cx="36" cy="36" r="${R}"/>` +
+        `<circle class="dp-arc" cx="36" cy="36" r="${R}" transform="rotate(-90 36 36)" stroke-dasharray="${(pct * C).toFixed(1)} ${C.toFixed(1)}" style="--len:${(pct * C).toFixed(1)}"/></svg>`;
+      const center = !d.hasDiet ? `<b>${d.hasLogs ? '—' : '?'}</b><small>${d.hasLogs ? '没记吃' : '没记'}</small>`
+        : simple ? `<b>${fmt(d.intake)}</b><small>kcal</small>`
+          : `<b>${fmt(Math.abs(v))}</b><small>${v < 0 ? (gap.gain ? '少吃' : '多吃') : gap.gain ? '盈余' : '赤字'}</small>`;
       const top = new Map();
       d.lifts.forEach(w => { const t = top.get(w.exerciseName); if (!t || (w.weightKg || 0) > (t.weightKg || 0)) top.set(w.exerciseName, w); });
-      const lifts = [...top.values()].map(w => `${w.exerciseName} ${w.weightKg > 0 ? round1(w.weightKg) + 'kg' : '自重'}×${w.reps}`)
-        .concat(d.cardio.map(w => `${w.exerciseName} ${w.durationMin}分`));
-      cards.push(`<article class="day-card" data-date="${d.date}">${head}` +
-        (d.hasDiet ? (simple
-          ? `<div class="dc-num"><b>${fmt(d.intake)}</b><small>/ ${fmt(d.budget)} kcal</small>${over ? `<i class="ar-dn">▲${fmt(d.intake - d.budget)}</i>` : ''}</div>`
-          : `<div class="dc-num"><b class="${gv < 0 ? 'neg' : ''}">${fmt(Math.abs(gv))}</b><small>${gv < 0 ? (gap.gain ? '少吃了' : '多吃了') : gap.label} kcal</small></div>`) +
-          `<div class="dc-trk"><i class="${over ? 'over' : ''}" style="--w:${Math.min(100, (d.intake / (d.budget || 1)) * 100).toFixed(1)}%"></i></div>` +
-          `<p class="dc-line"><span>蛋白</span>${Math.round(d.protein)}${target ? ` / ${target}` : ''}g${target && d.protein >= target * 0.9 ? ' <i class="ar-up">✓</i>' : ''}</p>` : '') +
-        (lifts.length ? `<p class="dc-line"><span>练</span>${esc(lifts.join('、'))}</p>` : '') +
-        `<div class="dc-acts"><button type="button" class="ar-link" data-dc="open">看这天 →</button>` +
-        (d.ws.length && !simple ? `<button type="button" class="ar-link" data-dc="save">存成计划</button>${i ? '<button type="button" class="ar-link" data-dc="redo">今天照这天练</button>' : ''}` : '') +
-        `</div></article>`);
+      const lifts = [...top.values()].map(w => `<li><span>${esc(w.exerciseName)}</span><b>${w.weightKg > 0 ? round1(w.weightKg) + 'kg' : '自重'} × ${w.reps}</b></li>`)
+        .concat(d.cardio.map(w => `<li><span>${esc(w.exerciseName)}</span><b>${w.durationMin} 分钟</b></li>`));
+      const meals = {};
+      d.meals.forEach(m => { const k = String(m.mealType || '').replace('/补剂', ''); meals[k] = (meals[k] || 0) + (m.calories || 0); });
+      const mealPills = Object.keys(meals).map(k => `<span class="dp-pill"><i>${esc(k)}</i>${fmt(meals[k])}</span>`).join('');
+      const stats = [
+        d.hasDiet ? [fmt(d.intake), `吃了 / ${fmt(d.budget)}`] : ['—', '吃了'],
+        d.hasDiet ? [`${Math.round(d.protein)}g`, target ? `蛋白 / ${target}` : '蛋白'] : ['—', '蛋白'],
+        [String(top.size + d.cardio.length), d.ws.length ? '个动作' : '没练']
+      ].map(([a, b]) => `<div><b>${a}</b><span>${b}</span></div>`).join('');
+      cards.push(`<article class="dp ${tone}" data-date="${d.date}" data-i="${i}">` +
+        `<div class="dp-cover"><span class="dp-tag">${when}</span></div>` +
+        `<div class="dp-id"><div class="dp-avatar">${ring}<span class="dp-c">${center}</span></div>` +
+        `<div class="dp-name"><b>${+d.date.slice(5, 7)}月${+d.date.slice(8)}日</b><span>${wd}${d.weight ? ` · ${round1(d.weight)}kg` : ''}</span></div></div>` +
+        `<p class="dp-bio">${esc(this.dayBio(d, gap, target))}</p>` +
+        (d.hasLogs ? `<div class="dp-stats">${stats}</div>` : '') +
+        (mealPills ? `<div class="dp-pills">${mealPills}</div>` : '') +
+        (lifts.length ? `<ul class="dp-lifts">${lifts.slice(0, 4).join('')}${lifts.length > 4 ? `<li class="more">还有 ${lifts.length - 4} 个</li>` : ''}</ul>` : '') +
+        `<div class="dp-acts">${d.hasLogs ? '<button type="button" class="dp-btn" data-dc="open">看这天</button>' : '<button type="button" class="dp-btn" data-dc="open">去补一笔</button>'}` +
+        (d.ws.length && !simple ? '<button type="button" class="dp-btn" data-dc="save">存成计划</button>' + (i ? '<button type="button" class="dp-btn main" data-dc="redo">今天照这天练</button>' : '') : '') +
+        '</div></article>');
     }
     el.innerHTML = cards.join('');
     el.scrollLeft = 0;
     el.querySelectorAll('[data-dc]').forEach(b => b.addEventListener('click', (e) => {
       e.stopPropagation();
-      const date = b.closest('.day-card').dataset.date;
+      const date = b.closest('.dp').dataset.date;
       const act = b.dataset.dc;
       window.Haptics && window.Haptics.fire('tick');
       if (act === 'open') { this.selectedDate = date; this.switchView('today'); return; }
       const ws = this.workouts.filter(w => w.date === date);
       if (act === 'save') {
-        // 这天练的存进计划本（v12：「运动计划的保存」）：以后说「明天练 X」就放过去
+        // 这天练的存进计划本：以后说「明天练 X」就放过去
         const e2 = this.savePlanBook && this.savePlanBook({ workouts: ws.map(w => ({ exerciseName: w.exerciseName, muscleGroup: w.muscleGroup, weightKg: w.weightKg, sets: w.sets, reps: w.reps, durationMin: w.durationMin, burnedCalories: w.burnedCalories })) }, '');
         if (!e2) return;
         this.saveData();
@@ -703,17 +866,55 @@ Object.assign(FitnessApp.prototype, {
         this.jumpToPlans(getTodayDateString());
       }
     }));
+    this.bindDayCarousel(el);
   },
 
-  /** 图上点了某天：下面的卡片划到这天，亮一下 */
-  trendFocusDay(date) {
+  /**
+   * 划卡片：离中间越远的越小、越淡（--k 0～1）；下面一根细条跟着走，右上写「今天 · 1 / 30」；
+   * 划到哪张，那张的圆环转一圈（.seen）。
+   */
+  bindDayCarousel(el) {
+    const dots = document.getElementById('tr-dots');
+    const count = document.getElementById('tr-days-count');
+    const cards = [...el.querySelectorAll('.dp')];
+    if (dots) dots.innerHTML = '<i></i>';
+    const update = () => {
+      this._dcRaf = 0;
+      const box = el.getBoundingClientRect();
+      const mid = box.left + box.width / 2;
+      let best = 0, bestD = Infinity;
+      cards.forEach((c, i) => {
+        const r = c.getBoundingClientRect();
+        const dist = Math.abs(r.left + r.width / 2 - mid) / (r.width || 1);
+        c.style.setProperty('--k', Math.min(1, dist).toFixed(3));
+        if (dist < bestD) { bestD = dist; best = i; }
+      });
+      const c = cards[best];
+      if (c && !c.classList.contains('seen')) c.classList.add('seen');
+      if (count) count.textContent = `${best === 0 ? '今天' : best === 1 ? '昨天' : `${+c.dataset.date.slice(5, 7)}月${+c.dataset.date.slice(8)}日`} · ${best + 1} / ${cards.length}`;
+      if (dots) {
+        const max = el.scrollWidth - el.clientWidth;
+        dots.style.setProperty('--x', max > 0 ? (el.scrollLeft / max).toFixed(3) : 0);
+        dots.style.setProperty('--w', (1 / cards.length).toFixed(3));
+      }
+    };
+    if (el._onScroll) el.removeEventListener('scroll', el._onScroll);
+    el._onScroll = () => { if (!this._dcRaf) this._dcRaf = requestAnimationFrame(update); };
+    el.addEventListener('scroll', el._onScroll, { passive: true });
+    requestAnimationFrame(update);
+  },
+
+  /** 图上点了某天：下面的卡片悄悄划到这天、亮一下（页面不跳，免得看数的时候被拽走）；日历点一格（reveal）才把页面带到卡片那儿 */
+  trendFocusDay(date, reveal) {
     const box = document.getElementById('tr-days');
-    const card = box && box.querySelector(`.day-card[data-date="${date}"]`);
+    const card = box && box.querySelector(`.dp[data-date="${date}"]`);
     if (!card) return;
-    box.scrollTo({ left: card.offsetLeft - box.offsetLeft - 16, behavior: this.reducedMotion && this.reducedMotion() ? 'auto' : 'smooth' });
-    box.querySelectorAll('.day-card.focus').forEach(c => c.classList.remove('focus'));
+    box.scrollTo({ left: card.offsetLeft - (box.clientWidth - card.offsetWidth) / 2, behavior: this.reducedMotion && this.reducedMotion() ? 'auto' : 'smooth' });
+    box.querySelectorAll('.dp.focus').forEach(c => c.classList.remove('focus'));
     card.classList.add('focus');
     clearTimeout(this._focusT);
     this._focusT = setTimeout(() => card.classList.remove('focus'), 1600);
+    const sec = document.getElementById('tr-dots');
+    if (reveal && sec && sec.getBoundingClientRect().top > window.innerHeight - 40) box.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 });
