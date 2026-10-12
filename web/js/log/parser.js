@@ -918,7 +918,7 @@
       // 关掉「先推理再回答」：Atria 实测 26 秒 → 3.6 秒，结果一样。
       // 换成不认这个参数的服务商时，自动去掉再试一次。
       const attempts = [Object.assign({ thinking: { type: 'disabled' } }, base), base];
-      const waits = this.retryWaits || [3000, 8000]; // 限流 / 超时 / 网络断了：等一等再试，最多两次
+      const waits = this.retryWaits || [1000, 5000]; // 限流 / 超时 / 网络断了：等一等再试（重试先走另一条线路，不用等太久），最多两次
       let lastErr;
       let retries = 0;
       // 边想边出字：onDelta 拿到的是这一次请求到目前为止的全部文字（卡住重试时从头算，不和上一次的半截拼在一起）
@@ -937,7 +937,7 @@
           // 实测 Atria 偶尔回到一半就断了（JSON 不完整）：和超时一样，再发一次
           if ((Parser.isTransient(msg) || /^(NO_JSON|BAD_JSON)/.test(msg)) && retries < waits.length) {
             // 回到一半断了不是限流，马上再发；限流、超时、网络断了才等一等
-            const ms = /^(NO_JSON|BAD_JSON)/.test(msg) ? 0 : waits[retries];
+            const ms = /^(NO_JSON|BAD_JSON)|STALL/.test(msg) ? 0 : waits[retries];
             retries += 1;
             await new Promise(r => setTimeout(r, ms));
             i -= 1; // 同一种请求再试
@@ -961,7 +961,8 @@
       const order = LlmRoute ? LlmRoute.order(override) : ['main'];
       const k = (rotate || 0) % order.length;
       const lines = order.slice(k).concat(order.slice(0, k));
-      const wait = this.hedgeMs == null ? (lines.length > 1 ? 4500 : 7000) : this.hedgeMs;
+      // 先走备用（DeepSeek 一般 1～2 秒出字）时 3 秒没动静就补发主线路；先走主线路时 4.5 秒；只有一条 7 秒
+      const wait = this.hedgeMs == null ? (lines.length > 1 ? (lines[0] === 'backup' ? 3000 : 4500) : 7000) : this.hedgeMs;
       const spare = lines.slice(1);
       return new Promise((resolve, reject) => {
         let done = false, running = 0, timer = null, leader = null;

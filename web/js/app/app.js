@@ -46,6 +46,9 @@ class FitnessApp {
     this.render();
     if (this.needsOnboarding) this.showOnboarding();
 
+    // 打开 / 切回 App 就先和大模型接口握个手（一分钟最多一次），第一句话少等一次连接（v12.4）
+    if (window.TF && TF.Native && TF.Native.warm) setTimeout(() => TF.Native.warm(), 1500);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden && window.TF && TF.Native && TF.Native.warm) TF.Native.warm(); });
     // 跨天了自动回到今天
     document.addEventListener('visibilitychange', () => {
       if (!document.hidden && this.lastToday && this.lastToday !== getTodayDateString() && this.selectedDate === this.lastToday) {
