@@ -84,6 +84,53 @@ function specificName(name, summary) {
 
 /** 「怎么算的」里来源标签的颜色 */
 const SRC_CLASS = { '估算': 'est', '补剂': 'est', '我的': 'mine', '包装': 'mine' };
+/** 来源标签点一下，说一句这个数是哪来的（v12.7：以前写成面板底下一大段，用户嫌字多） */
+const SRC_INFO = {
+  '成分表': '《中国食物成分表》第 6 版',
+  'USDA': '美国农业部食物数据库（成分表里没有的）',
+  '台湾成分库': '台湾食药署实测的熟食（饺子、包子这类）',
+  '菜品库': '按菜谱和用油算的家常菜',
+  '估算': 'AI 按常见大小估的；改了数会记住',
+  '我的': '你改过的数，下次说到同样的就用它',
+  '包装': '按你念的包装上的数',
+  '补剂': '补剂按常见一粒算'
+};
+
+/** 明细拼回「吃了什么」：「小鱼干2包、豆浆1杯」 */
+function draftSummary(rows) {
+  return rows.filter(r => r.name && r.name.trim()).map(r => r.name.trim() + (r.amount || '').trim()).join('、').slice(0, 60);
+}
+
+/**
+ * 新加的一样（v12.7）：先看你记住的、再查库，按份量算出热量蛋白碳水脂肪；都没有返回 null（交给 AI 估）。
+ * 份量写了克数按克数，写「2个」按库里常见一份的克数 × 个数。
+ */
+function lookupLocal(name, amount, myFoods) {
+  name = String(name || '').trim();
+  if (!name || !TF.FoodDB) return null;
+  const g = gramsIn(amount);
+  const my = TF.MyFoods && TF.MyFoods.match(myFoods || [], name);
+  if (my) {
+    const f = TF.MyFoods.factor(g || null, amount || my.amount, my);
+    return { calories: Math.round(my.calories * f), proteinG: round1((my.proteinG || 0) * f), carbsG: round1((my.carbsG || 0) * f), fatG: round1((my.fatG || 0) * f),
+      src: '我的', grams: my.grams ? Math.round(my.grams * f) : null };
+  }
+  const e = TF.FoodDB.find(name);
+  if (!e) return null;
+  const grams = g || (amount ? TF.countOf(amount) : 1) * (e.g || 100);
+  return { calories: Math.round(e.k * grams / 100), proteinG: round1(e.p * grams / 100), carbsG: round1(e.c * grams / 100), fatG: round1(e.f * grams / 100),
+    src: TF.FoodDB.label(e), grams: Math.round(grams), dbName: e.name };
+}
+
+/** 明细存回记录时去掉面板里用的记号 */
+function cleanRow(r) {
+  const o = Object.assign({}, r);
+  ['_base', '_mine', '_new', '_found', 'opts'].forEach(k => delete o[k]);
+  o.name = String(o.name || '').trim();
+  if (o.amount != null) o.amount = String(o.amount).trim() || undefined;
+  if (r._mine) { o.src = '我的'; delete o.dbName; }
+  return o;
+}
 
 /**
  * 修改一条饮食或训练记录的弹层（体重的弹层在 weight.js）。
@@ -94,6 +141,7 @@ Object.assign(FitnessApp.prototype, {
     const rec = list.find(r => r.id === id);
     if (!rec) return;
     this.editing = { kind, id };
+    this._draft = null;
     document.getElementById('edit-delete').classList.remove('hidden');
     const f = document.getElementById('edit-fields');
     const input = (name, label, value, type = 'number', extra = '') =>
@@ -109,60 +157,18 @@ Object.assign(FitnessApp.prototype, {
         ${input('foodSummary', '吃了什么', rec.foodSummary, 'text', 'maxlength="60"')}
         ${rec.said ? `<div class="said">你说的：「${esc(rec.said)}」</div>` : ''}
         ${hasItems ? `<div class="breakdown">
-          <div class="breakdown-head">怎么算的</div>
-          ${rec.items.map((i, idx) => `<div class="breakdown-row">
-            <div class="bd-top">
-              <span class="bd-name">${esc(i.name)}${i.grams && !String(i.amount || '').replace('克', 'g').includes(i.grams + 'g') ? `<small>${i.grams}g</small>` : ''}</span>
-              <em class="src ${SRC_CLASS[i.src] || ''}">${esc(i.src || '')}</em>
-            </div>
-            ${i.supp && i.nutrients ? `<div class="bd-nut">${esc(TF.nutrientsText(i.nutrients))}</div>` : ''}
-            <div class="bd-fields">
-              <label class="bd-f bd-f-amt"><span>份量</span><input class="bd-input bd-amt" name="amt_${idx}" type="text" maxlength="12" value="${esc(amountOf(i))}" aria-label="${esc(i.name)} 份量"></label>
-              <label class="bd-f"><input class="bd-input" name="item_${idx}" type="number" inputmode="numeric" min="0" value="${Math.round(i.calories || 0)}" aria-label="${esc(i.name)} 热量"><span>kcal</span></label>
-              ${i.supp ? '' : `<label class="bd-f"><input class="bd-input" name="prot_${idx}" type="number" inputmode="decimal" step="0.1" min="0" value="${round1(i.proteinG || 0)}" aria-label="${esc(i.name)} 蛋白质"><span>g 蛋白</span></label>`}
-            </div>
-          </div>`).join('')}
+          <div class="breakdown-head"><span>明细</span><button type="button" class="bd-add" id="bd-add">＋ 加一样</button></div>
+          <div class="bd-ai hidden" id="bd-ai" role="status"><span id="bd-ai-text"></span><button type="button" id="bd-ai-go"></button></div>
+          <div class="bd-list" id="bd-list"></div>
           <div class="bd-total" id="bd-total"></div>
-          <div class="breakdown-note">吃的量不一样就改份量（比如 2个 改成 1个），按比例重算；这东西本身的热量、蛋白质不一样（比如包装上写的）就改数，会记住，下次说到同样的东西就用你的数；热量填 0 去掉这一样。「成分表」来自《中国食物成分表（第6版）》，「USDA」来自美国农业部食物数据库（成分表里没有的），「台湾成分库」是台湾卫福部食药署实测的饺子包子这类熟食，「菜品库」是按菜谱和用油算的家常菜，「估算」是 AI 按常见大小估的；肉按生重算。</div>
+          <div class="breakdown-note">改份量按比例算；改了数会记住，下次照你的。点来源标签看数是哪来的。</div>
         </div>` : `<div class="field-grid field-grid-2">
           ${input('calories', '热量 kcal', rec.calories)}
           ${input('proteinG', '蛋白质 g', rec.proteinG || 0)}
           ${input('carbsG', '碳水 g', rec.carbsG || 0)}
           ${input('fatG', '脂肪 g', rec.fatG || 0)}
         </div>`}`;
-      if (hasItems) {
-        const form = f.closest('form');
-        // 合计永远是每一样加起来
-        const showTotal = () => {
-          const t = TF.sumItems(this.itemsFromForm(rec, form).items);
-          document.getElementById('bd-total').innerHTML = `合计 <b>${fmt(t.calories)}</b> kcal · 蛋白 <b>${round1(t.proteinG)}</b>g · 碳水 ${round1(t.carbsG)}g · 脂肪 ${round1(t.fatG)}g`;
-        };
-        // 改份量：这一样的热量、蛋白质按比例跟着变
-        f.querySelectorAll('.bd-amt').forEach(el => el.addEventListener('input', () => {
-          const idx = +el.name.slice(4);
-          const it = scaleItem(rec.items[idx], el.value.trim() || amountOf(rec.items[idx]));
-          form.elements['item_' + idx].value = Math.round(it.calories);
-          if (form.elements['prot_' + idx]) form.elements['prot_' + idx].value = round1(it.proteinG);
-        }));
-        f.querySelectorAll('.bd-input').forEach(el => el.addEventListener('input', showTotal));
-        // 改标题里的数（「米饭1碗」→「米饭2碗」）：下面每一样的份量、热量跟着变（v12）；自己改过份量的那一样不动
-        f.querySelectorAll('.bd-amt').forEach(el => el.addEventListener('input', () => { el.dataset.touched = '1'; }));
-        form.elements.foodSummary.addEventListener('input', () => {
-          const amts = summaryAmounts(rec, form.elements.foodSummary.value.trim());
-          rec.items.forEach((it, idx) => {
-            const el = form.elements['amt_' + idx];
-            if (!el || el.dataset.touched) return;
-            const amt = amts ? amts[idx] : amountOf(it);
-            if (el.value === amt) return;
-            el.value = amt;
-            const sc = scaleItem(it, amt);
-            form.elements['item_' + idx].value = Math.round(sc.calories);
-            if (form.elements['prot_' + idx]) form.elements['prot_' + idx].value = round1(sc.proteinG);
-          });
-          showTotal();
-        });
-        showTotal();
-      }
+      if (hasItems) this.bindMealDraft(rec, f.closest('form'));
       f.querySelector('#edit-meal-type').addEventListener('click', (e) => {
         const b = e.target.closest('.seg-btn');
         if (!b) return;
@@ -192,47 +198,203 @@ Object.assign(FitnessApp.prototype, {
   },
 
   /**
-   * 读出每一样改后的样子：
-   *  · 份量变了（2个 → 1个）：按比例重算，不记住——是吃的量不一样，不是这东西的数不对
-   *  · 热量 / 蛋白质改了：这东西本身不一样（比如包装上写的），标成「我的」并记住；热量改成 0 就去掉这一样
+   * 饮食明细（v12.7，用户：「让用户也能改下面的食物信息，或者改上面自动对应下面；现在接了 AI，但改的还不是很清楚」）：
+   * 每一样都能改名字、份量、热量、蛋白、碳水、脂肪，能删、能加一样；改了份量按比例算，改了数标成「我的」、保存时记住。
+   * 上下两边对着走：
+   *  · 上面只改了数（「小鱼干2包」→「1包」）：下面每一样的份量、数跟着变（`summaryAmounts`）；
+   *  · 上面换了吃的：明细上面冒一条「换成「…」了 · AI 重算明细」，点了当场让 AI 估（`fastLog` 能秒记的先秒记），结果直接填进下面；
+   *    不点就保存，照旧保存后让 AI 按新的说法重估这一条；
+   *  · 下面改名字、份量、加一样、删一样：上面跟着拼出来（上面换了字、还没重算的，留着你写的）；
+   *  · 新加的一样先查你记住的和食物库，查不到冒「「X」库里没有 · AI 估一下」。
+   * 草稿在 `this._draft`，保存时 `saveEditor` 从这里取。
    */
-  itemsFromForm(rec, form) {
-    const items = [];
-    const changed = [];
-    let dirty = false;
-    let reshaped = false; // 份量改了或去掉了某一样：标题要跟着变
-    (rec.items || []).forEach((it, idx) => {
-      const amtEl = form.elements['amt_' + idx];
-      const scaled = scaleItem(it, amtEl ? amtEl.value.trim() || amountOf(it) : amountOf(it));
-      const kEl = form.elements['item_' + idx];
-      const pEl = form.elements['prot_' + idx];
-      const kIn = kEl ? parseFloat(kEl.value) : NaN;
-      const pIn = pEl ? parseFloat(pEl.value) : NaN;
-      const kChanged = Number.isFinite(kIn) && kIn >= 0 && Math.round(kIn) !== Math.round(scaled.calories);
-      const pChanged = Number.isFinite(pIn) && pIn >= 0 && round1(pIn) !== round1(scaled.proteinG || 0);
-      if (kChanged && Math.round(kIn) === 0) { dirty = reshaped = true; return; } // 填 0：去掉这一样
-      if (scaled !== it) reshaped = true;
-      let next = scaled;
-      if (kChanged || pChanged) {
-        const k = kChanged && scaled.calories > 0 ? kIn / scaled.calories : 1;
-        next = Object.assign({}, scaled, {
-          calories: kChanged ? Math.round(kIn) : scaled.calories,
-          proteinG: pChanged ? round1(pIn) : round1((scaled.proteinG || 0) * k),
-          carbsG: round1((scaled.carbsG || 0) * k), fatG: round1((scaled.fatG || 0) * k), src: '我的',
-          name: specificName(scaled.name, rec.foodSummary)
-        });
-        delete next.dbName;
-        changed.push(next);
+  bindMealDraft(rec, form) {
+    const list = form.querySelector('#bd-list');
+    const top = form.elements.foodSummary;
+    const bar = form.querySelector('#bd-ai');
+    const d = this._draft = {
+      rows: rec.items.map(it => Object.assign({}, it, { _base: it })),
+      base: rec.foodSummary || '', // 下面这些明细对应的说法
+      words: false, // 上面换了吃的、下面还没重算
+      busy: false, fail: '', token: 0
+    };
+    const NUMS = [['calories', 'kcal', 0], ['proteinG', '蛋白 g', 1], ['carbsG', '碳水 g', 1], ['fatG', '脂肪 g', 1]];
+    const v = (n, dec) => (n == null || n === '' ? '' : dec ? round1(n) : Math.round(n));
+    const rowHtml = (r, i) => {
+      const gramsHint = r.grams && !String(r.amount || '').replace('克', 'g').includes(r.grams + 'g') ? `≈${r.grams}g` : '';
+      const nums = (r.supp ? NUMS.slice(0, 1) : NUMS).map(([k, label, dec]) =>
+        `<label class="bd-num"><input class="bd-input" data-i="${i}" data-k="${k}" type="number" inputmode="decimal" step="any" min="0" value="${v(r[k], dec)}" placeholder="0" aria-label="${esc(r.name || '这一样')} ${label}"><span>${label}</span></label>`).join('');
+      return `<div class="bd-row${r._new ? ' new' : ''}" data-i="${i}">
+        <div class="bd-line">
+          <input class="bd-input bd-name-in" data-i="${i}" data-k="name" type="text" maxlength="20" value="${esc(r.name || '')}" placeholder="吃的什么" aria-label="名字">
+          <input class="bd-input bd-amt-in" data-i="${i}" data-k="amount" type="text" maxlength="12" value="${esc(r.amount != null ? r.amount : amountOf(r))}" placeholder="份量" aria-label="份量">
+          <button type="button" class="bd-src ${r._mine ? 'mine' : SRC_CLASS[r.src] || ''}${r.src || r._mine ? '' : ' hidden'}" data-i="${i}" data-act="src">${esc(r._mine ? '我的' : r.src || '')}</button>
+          <button type="button" class="bd-del" data-i="${i}" data-act="del" aria-label="去掉这一样">×</button>
+        </div>
+        ${gramsHint || (r.supp && r.nutrients) ? `<div class="bd-sub">${esc([gramsHint, r.supp && r.nutrients ? TF.nutrientsText(r.nutrients) : ''].filter(Boolean).join(' · '))}</div>` : ''}
+        <div class="bd-nums${r.supp ? ' one' : ''}">${nums}</div>
+      </div>`;
+    };
+    const render = () => { list.innerHTML = d.rows.map(rowHtml).join(''); total(); };
+    const fillRow = (i) => {
+      const r = d.rows[i];
+      NUMS.forEach(([k, , dec]) => { const el = list.querySelector(`input[data-i="${i}"][data-k="${k}"]`); if (el && document.activeElement !== el) el.value = v(r[k], dec); });
+      const tag = list.querySelector(`.bd-src[data-i="${i}"]`);
+      if (tag) { const t = r._mine ? '我的' : r.src || ''; tag.textContent = t; tag.className = `bd-src ${r._mine ? 'mine' : SRC_CLASS[r.src] || ''}${t ? '' : ' hidden'}`; }
+    };
+    const total = () => {
+      const t = TF.sumItems(d.rows.filter(r => r.name).map(cleanRow));
+      form.querySelector('#bd-total').innerHTML = `合计 <b>${fmt(t.calories)}</b> kcal · 蛋白 <b>${round1(t.proteinG)}</b>g · 碳水 ${round1(t.carbsG)}g · 脂肪 ${round1(t.fatG)}g`;
+    };
+    const missing = () => d.rows.findIndex(r => r._new && r.name && r.name.trim() && !r._found && !r._mine && !(r.calories > 0));
+    const showBar = () => {
+      const text = form.querySelector('#bd-ai-text'), go = form.querySelector('#bd-ai-go');
+      const m = missing();
+      let msg = '', btn = '';
+      if (d.busy) msg = 'AI 在算…';
+      else if (d.fail) { msg = d.fail; btn = '再试一次'; }
+      else if (d.words) { msg = `换成「${top.value.trim()}」了`; btn = 'AI 重算明细'; }
+      else if (m >= 0) { msg = `「${d.rows[m].name.trim()}」库里没有`; btn = 'AI 估一下'; }
+      bar.classList.toggle('hidden', !msg);
+      bar.classList.toggle('busy', d.busy);
+      text.textContent = msg;
+      go.textContent = btn;
+      go.classList.toggle('hidden', !btn);
+    };
+    // 下面动了名字 / 份量 / 加 / 删：上面跟着拼；上面换了字还没重算的，留着你写的、当你在下面自己对（不再提示重算）
+    const reshaped = () => {
+      if (!d.words) top.value = draftSummary(d.rows) || top.value;
+      d.base = top.value;
+      d.words = false; d.fail = '';
+      total(); showBar();
+    };
+    const local = (i) => {
+      const r = d.rows[i];
+      const hit = lookupLocal(r.name, r.amount, this.myFoods);
+      r._found = !!hit;
+      if (hit) { Object.assign(r, hit); r._base = cleanRow(r); }
+      else if (!r._mine) Object.assign(r, { calories: 0, proteinG: 0, carbsG: 0, fatG: 0, src: '' });
+      fillRow(i);
+    };
+
+    list.addEventListener('input', (e) => {
+      const el = e.target.closest('input[data-k]');
+      if (!el) return;
+      const i = +el.dataset.i, k = el.dataset.k, r = d.rows[i];
+      if (!r) return;
+      if (k === 'name') {
+        r.name = el.value;
+        if (r._new && !r._mine) local(i);
+        reshaped();
+      } else if (k === 'amount') {
+        r.amount = el.value;
+        if (r._new && !r._mine && !r._base.name) local(i);
+        else {
+          const sc = scaleItem(r._base, el.value.trim() || amountOf(r._base));
+          ['calories', 'proteinG', 'carbsG', 'fatG', 'grams', 'nutrients'].forEach(x => { if (sc[x] !== undefined) r[x] = sc[x]; });
+          fillRow(i);
+        }
+        reshaped();
+      } else {
+        const n = parseFloat(el.value);
+        r[k] = Number.isFinite(n) && n >= 0 ? (k === 'calories' ? Math.round(n) : round1(n)) : 0;
+        r._mine = true;
+        r._base = Object.assign(cleanRow(r), { amount: r.amount });
+        fillRow(i);
+        total(); showBar();
       }
-      if (next !== it) dirty = true;
-      items.push(next);
     });
-    return { items, changed, dirty, reshaped };
+    list.addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-act]');
+      if (!b) return;
+      const i = +b.dataset.i;
+      if (b.dataset.act === 'del') {
+        d.rows.splice(i, 1);
+        window.Haptics && window.Haptics.fire('tick');
+        render(); reshaped();
+      } else if (b.dataset.act === 'src') {
+        const r = d.rows[i];
+        const t = r && (r._mine ? '我的' : r.src);
+        if (t && SRC_INFO[t]) this.showToast(`${t}：${SRC_INFO[t]}`);
+      }
+    });
+    form.querySelector('#bd-add').addEventListener('click', () => {
+      d.rows.push({ name: '', amount: '', calories: 0, proteinG: 0, carbsG: 0, fatG: 0, src: '', _new: true, _base: {} });
+      render(); showBar();
+      const el = list.querySelector(`input[data-i="${d.rows.length - 1}"][data-k="name"]`);
+      if (el) el.focus();
+    });
+    // 上面改了：只改了数 → 下面跟着按比例；换了吃的 → 冒「AI 重算明细」
+    top.addEventListener('input', () => {
+      const now = top.value.trim();
+      const amts = summaryAmounts({ foodSummary: d.base, items: d.rows.map(cleanRow) }, now);
+      if (amts) d.rows.forEach((r, i) => {
+        if (amts[i] === amountOf(r)) return;
+        r.amount = amts[i];
+        const sc = scaleItem(r._base.name ? r._base : r, amts[i]);
+        ['calories', 'proteinG', 'carbsG', 'fatG', 'grams'].forEach(x => { if (sc[x] !== undefined) r[x] = sc[x]; });
+        const a = list.querySelector(`input[data-i="${i}"][data-k="amount"]`);
+        if (a) a.value = amts[i];
+        fillRow(i);
+      });
+      d.words = !!now && bareSummary(now) !== bareSummary(d.base);
+      d.fail = '';
+      total(); showBar();
+    });
+    // AI：上面换了吃的就整份重算；新加的一样库里没有就只估那一样
+    form.querySelector('#bd-ai-go').addEventListener('click', async () => {
+      if (d.busy) return;
+      const m = missing();
+      const whole = d.words || (d.fail && d._lastWhole);
+      const text = whole ? top.value.trim() : m >= 0 ? `${d.rows[m].name.trim()}${(d.rows[m].amount || '').trim()}` : '';
+      if (!text) return;
+      d.busy = true; d.fail = ''; d._lastWhole = whole; showBar();
+      const token = ++d.token;
+      try {
+        const items = await this.estimateFood(text);
+        if (token !== d.token || this._draft !== d) return; // 面板关了 / 又点了一次
+        if (!items.length) throw new Error('EMPTY');
+        if (whole) {
+          d.rows = items.map(it => Object.assign({}, it, { _base: it }));
+          d.base = top.value.trim();
+          d.words = false;
+        } else {
+          const r = d.rows[m];
+          const t = TF.sumItems(items);
+          Object.assign(r, { calories: t.calories, proteinG: t.proteinG, carbsG: t.carbsG, fatG: t.fatG, src: items.length === 1 ? items[0].src : '估算', _found: true });
+          if (items.length === 1 && items[0].grams) r.grams = items[0].grams;
+          r._base = cleanRow(r);
+        }
+        d.busy = false;
+        render(); showBar();
+        list.classList.remove('flash'); void list.offsetWidth; list.classList.add('flash');
+        window.Haptics && window.Haptics.fire('success');
+      } catch (e) {
+        if (token !== d.token) return;
+        d.busy = false;
+        d.fail = '没算出来';
+        showBar();
+      }
+    });
+    render(); showBar();
+  },
+
+  /** 估一句吃的（不记）：吃过的先本机秒记，不然问 AI；返回整理好、按库算过的明细 */
+  async estimateFood(text) {
+    const said = '吃了' + text;
+    const now = new Date();
+    let r = null;
+    try {
+      r = TF.fastLog ? TF.fastLog(said, { now, today: getTodayDateString(), myFoods: this.myFoods, diet: this.diet, workouts: this.workouts, simple: this.isSimple() }) : null;
+    } catch (e) { r = null; }
+    if (!r || !(r.meals || []).length) r = await TF.Parser.parse(said, { now, history: [], myFoods: this.myFoods });
+    return [].concat(...((r && r.meals) || []).map(m => m.items || [])).map(it => cleanRow(it));
   },
 
   closeEditor(fromBack) {
     if (!this.editing) return;
     this.editing = null;
+    this._draft = null;
     document.getElementById('edit-overlay').classList.add('hidden');
     if (!fromBack && history.state && history.state.edit) { this._editorBack = true; history.back(); }
   },
@@ -267,19 +429,24 @@ Object.assign(FitnessApp.prototype, {
       const summary = (val('foodSummary') || '').trim();
       const summaryTouched = summary && summary !== rec.foodSummary;
       rec.foodSummary = summary || rec.foodSummary;
-      if (Array.isArray(rec.items) && rec.items.length) {
-        // 有明细：合计永远由每一样加出来，不会两边对不上
+      const d = this._draft;
+      if (d && Array.isArray(rec.items) && rec.items.length) {
         const oldSummary = rec._oldSummary || '';
-        const r = this.itemsFromForm(rec, form);
-        Object.assign(rec, TF.sumItems(r.items)); // 以前两边对不上的记录，保存一下也会对齐
-        if (r.dirty) {
-          rec.items = r.items.length ? r.items : undefined;
-          if (!summaryTouched && r.reshaped && r.items.length) rec.foodSummary = r.items.map(it => it.name + (it.amount || '')).join('、').slice(0, 60);
-          r.changed.forEach(x => this.rememberFood(x));
-          remembered = r.changed.map(x => x.name);
-        } else if (summaryTouched && oldSummary && bareSummary(summary) !== bareSummary(oldSummary) && window.QuickLog) {
-          // 换了吃的（「牛肉面1碗」→「牛肉面1碗加个蛋」）：标题先改上，再让 AI 按新的说法重估这一条（v12，以前数一直不跟着变）
+        if (d.words && summaryTouched && window.QuickLog) {
+          // 上面换了吃的、没点「AI 重算明细」：标题先改上，保存后让 AI 按新的说法重估这一条（v12）
           reestimate = `把「${oldSummary}」改成「${summary}」`;
+        } else {
+          // 明细就是面板里的草稿；合计永远由每一样加出来
+          const rows = d.rows.filter(r => r.name && r.name.trim());
+          const items = rows.map(r => {
+            const o = cleanRow(r);
+            if (r._mine) o.name = specificName(o.name, summary);
+            return o;
+          });
+          rows.forEach((r, i) => { if (r._mine && !r.supp) { this.rememberFood(items[i]); remembered.push(items[i].name); } });
+          rec.items = items.length ? items : undefined;
+          Object.assign(rec, items.length ? TF.sumItems(items) : { calories: 0, proteinG: 0, carbsG: 0, fatG: 0 });
+          rec.foodSummary = summary || draftSummary(items) || rec.foodSummary; // 下面改了名字 / 份量时上面已经跟着拼好了
         }
       } else {
         rec.calories = Math.round(numv('calories', rec.calories));
@@ -340,4 +507,4 @@ Object.assign(FitnessApp.prototype, {
   }
 });
 
-if (typeof module !== 'undefined' && module.exports) module.exports = { scaleItem, summaryAmounts, gramsIn, bareSummary };
+if (typeof module !== 'undefined' && module.exports) module.exports = { scaleItem, summaryAmounts, gramsIn, bareSummary, draftSummary, lookupLocal, cleanRow };
