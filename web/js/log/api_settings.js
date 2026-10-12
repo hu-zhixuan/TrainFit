@@ -84,7 +84,7 @@
         const a = LlmRoute.median('main'), b = LlmRoute.median('backup');
         const speed = [a && `${name.main} ${sec(a)}`, b && `${name.backup} ${sec(b)}`].filter(Boolean).join(' · ');
         note.textContent = `现在先用 ${name[first]}：慢了（4.5 秒没出字）或出错，马上换另一条。` +
-          (m === 'auto' ? '自动 = 先用主线路，这台手机上实测另一条快得多、或主线路刚连着出错，就先用另一条。' : '') +
+          (m === 'auto' ? '自动 = 先用备用（DeepSeek，实测快两三倍），3 秒没动静同时问主线路，谁先出字用谁；这台手机上主线路实测快得多、或备用刚连着出错，就先用主线路。' : '') +
           (speed ? `最近写完一次：${speed}。` : '');
       };
       seg.addEventListener('click', (e) => {

@@ -102,7 +102,8 @@
         const limit = timeoutMs || 75000; // 原生那边连接 15 秒 + 读取 60 秒
         // 一直在出字也有个头：大模型偶尔停不下来（一直出字，上面的计时一直被重置），「正在整理」就永远转下去
         const p = { resolve, reject, timer: setTimeout(expire, limit), hard: setTimeout(() => expire('TOO_LONG'), this.hardMs || 150000) };
-        if (stream) p.onDelta = (chunk) => { clearTimeout(p.timer); p.timer = setTimeout(expire, limit); onDelta(chunk); };
+        // 出了字以后中途卡住（v12.4：Atria 偶尔写到一半停住，以前要干等 75 秒）：20 秒没新字就算卡住，换一条线路重来
+        if (stream) p.onDelta = (chunk) => { clearTimeout(p.timer); p.timer = setTimeout(() => expire('TIMEOUT_STALL'), this.stallMs || 20000); onDelta(chunk); };
         this._pending[id] = p;
         if (handle) {
           handle.cancel = () => {
@@ -193,9 +194,10 @@
       const fm = this.recentFails('main', now), fb = this.recentFails('backup', now);
       if (fm >= 2 && fb === 0) return ['backup', 'main'];
       if (fb >= 2 && fm === 0) return ['main', 'backup'];
+      // v12.4：自动先走备用（DeepSeek 实测写完中位 2.6 秒，Atria 6～8 秒）；这台手机上主线路实测反而快很多才换回来
       const a = this.median('main', now), b = this.median('backup', now);
-      if (a && b && b < a * 0.75) return ['backup', 'main'];
-      return ['main', 'backup'];
+      if (a && b && a < b * 0.75) return ['main', 'backup'];
+      return ['backup', 'main'];
     },
     /** 这条线路用的 override：备用只写 provider，别的不看 */
     overrideFor(id, override) {

@@ -1048,7 +1048,8 @@ test('两条线路（v12）：主线路出错马上换备用；慢了补发走�
   const ok = (reply) => JSON.stringify({ choices: [{ message: { content: JSON.stringify({ reply }) } }] });
   const later = (ms, v, fail) => new Promise((res, rej) => setTimeout(() => (fail ? rej(new Error(v)) : res(v)), ms));
   try {
-    assert.deepStrictEqual(LlmRoute.order({}), ['main', 'backup']);
+    assert.deepStrictEqual(LlmRoute.order({}), ['backup', 'main'], 'v12.4：自动先走备用（实测快得多）');
+    LlmRoute.setMode('main'); // 下面按「先走主线路」测换线、补发
     // 主线路马上 429：不等补发的计时，直接换备用
     let calls = [];
     Parser.send = (body, ov) => { calls.push(ov.provider || 'main'); return ov.provider ? later(5, ok('备用')) : later(1, 'HTTP 429 busy', true); };
@@ -1087,6 +1088,7 @@ test('两条线路（v12）：主线路出错马上换备用；慢了补发走�
     await Parser.parse('随便', {});
     assert.deepStrictEqual(calls, ['main+t', 'main']);
   } finally {
+    LlmRoute.setMode('auto');
     Parser.send = origSend;
     delete Parser.hedgeMs;
     delete Parser.retryWaits;
@@ -1100,11 +1102,14 @@ test('两条线路（v12）：主线路出错马上换备用；慢了补发走�
     LlmRoute.note('main', false, 100); LlmRoute.note('main', false, 100);
     assert.deepStrictEqual(LlmRoute.order({}, now), ['backup', 'main']);
     delete store.tf_llm_stats;
-    [9000, 8000, 10000].forEach(ms => LlmRoute.note('main', true, ms));
-    [3000, 2500].forEach(ms => LlmRoute.note('backup', true, ms));
-    assert.deepStrictEqual(LlmRoute.order({}, now), ['main', 'backup'], '备用不到 3 次不算数');
-    LlmRoute.note('backup', true, 2800);
-    assert.deepStrictEqual(LlmRoute.order({}, now), ['backup', 'main']);
+    // 这台手机上主线路反而快得多（各 3 次以上）：先走主线路
+    [2000, 1800, 2200].forEach(ms => LlmRoute.note('main', true, ms));
+    [6000, 5500].forEach(ms => LlmRoute.note('backup', true, ms));
+    assert.deepStrictEqual(LlmRoute.order({}, now), ['backup', 'main'], '备用不到 3 次不算数');
+    LlmRoute.note('backup', true, 5800);
+    assert.deepStrictEqual(LlmRoute.order({}, now), ['main', 'backup']);
+    LlmRoute.note('backup', false, 100); LlmRoute.note('backup', false, 100);
+    assert.deepStrictEqual(LlmRoute.order({}, now), ['main', 'backup'], '备用连着出错：先走主线路');
     LlmRoute.setMode('main');
     assert.deepStrictEqual(LlmRoute.order({}, now), ['main', 'backup']);
     LlmRoute.setMode('auto');
@@ -1134,4 +1139,19 @@ test('v12 口喷更准更快：常听错的健身词先改对；练过的有氧 
   assert.strictEqual(fl('跑步一个小时').workouts[0].durationMin, 60);
   for (const t of ['椭圆机20分钟', '跑步5公里', '走了8000步', '跑了半小时'])
     assert.strictEqual(fl(t), null, '没练过 / 说的是距离步数：交给大模型 ' + t);
+});
+
+test('v12.4：出了字以后中途卡住，20 秒（这里 30 毫秒）没新字就算卡住，不干等 75 秒', async () => {
+  const { Native } = TF;
+  globalThis.TrainFitNative = { llmChatStream: (id) => setTimeout(() => globalThis.__tfLlmDelta(id, '{"rep'), 5), llmCancel: () => {} };
+  Native.stallMs = 30;
+  try {
+    const t0 = Date.now();
+    await assert.rejects(Native.chat({ messages: [] }, {}, 5000, () => {}), /TIMEOUT_STALL/);
+    assert.ok(Date.now() - t0 < 500);
+    assert.ok(TF.Parser.isTransient('TIMEOUT_STALL'), '算可重试的');
+  } finally {
+    delete Native.stallMs;
+    delete globalThis.TrainFitNative;
+  }
 });
