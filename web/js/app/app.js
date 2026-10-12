@@ -414,7 +414,7 @@ class FitnessApp {
     this.bindDex && this.bindDex();
     $('date-label').addEventListener('click', () => { this.selectedDate = getTodayDateString(); this.render(); });
     $('setup-hint').addEventListener('click', () => this.switchView('settings'));
-    $('weight-log').addEventListener('click', () => this.openWeightEditor(getTodayDateString()));
+    if ($('weight-log')) $('weight-log').addEventListener('click', () => this.openWeightEditor(getTodayDateString())); // v12.1 趋势页不放体重了
     this.bindOnboarding();
 
     // 左右滑动切换日期
