@@ -2716,3 +2716,16 @@ body.phone-open .buddy-pop { visibility: hidden; }
 .theater.has-sprite .th-stage { transition: transform 1.1s cubic-bezier(0.25, 0.8, 0.25, 1); }
 .theater.auto-close.has-sprite:not(.fx-close) .th-stage { transform: scale(1.12); transform-origin: 50% calc(env(safe-area-inset-top, 0px) + min(11dvh, 110px) + 9vh); }
 @media (prefers-reduced-motion: reduce) { .theater.has-sprite .th-stage { transition: none; } .theater.auto-close.has-sprite:not(.fx-close) .th-stage { transform: none; } }
+
+/* =====================================================================
+   设置「AI 模型」（v12.7）：一行「现在在用」（logo + 名字 + 版本 + 几秒），下面照旧三栏
+   ===================================================================== */
+.ai-now { display: flex; align-items: center; gap: 12px; padding: 12px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface-2); }
+.ai-logo { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; background: var(--surface-3); color: var(--text-2); }
+.ai-logo.ds { background: #ffffff; }
+.ai-logo svg { width: 26px; height: 26px; }
+.ai-name { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.ai-name b { font-size: 1rem; font-weight: 750; }
+.ai-name small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.76rem; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.ai-state { flex: none; display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 999px; background: var(--accent-soft); color: var(--accent-text); font-size: 0.74rem; font-weight: 700; }
+.ai-state::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }

@@ -1048,8 +1048,9 @@ test('两条线路（v12）：主线路出错马上换备用；慢了补发走�
   const ok = (reply) => JSON.stringify({ choices: [{ message: { content: JSON.stringify({ reply }) } }] });
   const later = (ms, v, fail) => new Promise((res, rej) => setTimeout(() => (fail ? rej(new Error(v)) : res(v)), ms));
   try {
-    assert.deepStrictEqual(LlmRoute.order({}), ['backup', 'main'], 'v12.4：自动先走备用（实测快得多）');
-    LlmRoute.setMode('main'); // 下面按「先走主线路」测换线、补发
+    assert.deepStrictEqual(LlmRoute.order({}), ['backup', 'main'], 'v12.4：先走备用（DeepSeek 实测快得多）');
+    store.tf_llm_override = JSON.stringify({ apiKey: 'sk-own' }); // 自己填了 key：先走主线路，下面按这个测换线、补发
+    assert.deepStrictEqual(LlmRoute.order({ apiKey: 'sk-own' }), ['main', 'backup'], 'v12.7：自己填的先用');
     // 主线路马上 429：不等补发的计时，直接换备用
     let calls = [];
     Parser.send = (body, ov) => { calls.push(ov.provider || 'main'); return ov.provider ? later(5, ok('备用')) : later(1, 'HTTP 429 busy', true); };
@@ -1069,9 +1070,9 @@ test('两条线路（v12）：主线路出错马上换备用；慢了补发走�
         setTimeout(() => { onDelta('{"reply"'); resolve(ok('快的')); }, 5);
       });
     };
-    store.tf_llm_override = JSON.stringify({ model: 'my-model' });
+    store.tf_llm_override = JSON.stringify({ apiKey: 'sk-own', model: 'my-model' });
     r = await Parser.parse('随便', {});
-    delete store.tf_llm_override;
+    store.tf_llm_override = JSON.stringify({ apiKey: 'sk-own' });
     assert.strictEqual(r.reply, '快的');
     assert.deepStrictEqual(calls, ['main', 'backup']);
     assert.strictEqual(bodies[0].model, 'my-model');
@@ -1088,13 +1089,13 @@ test('两条线路（v12）：主线路出错马上换备用；慢了补发走�
     await Parser.parse('随便', {});
     assert.deepStrictEqual(calls, ['main+t', 'main']);
   } finally {
-    LlmRoute.setMode('auto');
+    delete store.tf_llm_override;
     Parser.send = origSend;
     delete Parser.hedgeMs;
     delete Parser.retryWaits;
     delete globalThis.TrainFitNative;
   }
-  // 自动模式：主线路刚连着出错两次 → 先走备用；这台手机上备用快得多 → 先走备用；设置里定了就照设置
+  // v12.7 不让选了：DeepSeek（备用）能用就先走它，主线路实测再快也不换；DeepSeek 刚连着出错两次（主线路没错）才先走主线路
   try {
     globalThis.TrainFitNative = { getLlmInfo: () => JSON.stringify({ hasKey: true, backup: { hasKey: true } }) };
     for (const k of Object.keys(store)) delete store[k];
@@ -1102,17 +1103,18 @@ test('两条线路（v12）：主线路出错马上换备用；慢了补发走�
     LlmRoute.note('main', false, 100); LlmRoute.note('main', false, 100);
     assert.deepStrictEqual(LlmRoute.order({}, now), ['backup', 'main']);
     delete store.tf_llm_stats;
-    // 这台手机上主线路反而快得多（各 3 次以上）：先走主线路
+    // 这台手机上主线路反而快得多：还是 DeepSeek 先（用户：「DeepSeek OK 就默认 DeepSeek」）
     [2000, 1800, 2200].forEach(ms => LlmRoute.note('main', true, ms));
-    [6000, 5500].forEach(ms => LlmRoute.note('backup', true, ms));
-    assert.deepStrictEqual(LlmRoute.order({}, now), ['backup', 'main'], '备用不到 3 次不算数');
-    LlmRoute.note('backup', true, 5800);
-    assert.deepStrictEqual(LlmRoute.order({}, now), ['main', 'backup']);
-    LlmRoute.note('backup', false, 100); LlmRoute.note('backup', false, 100);
-    assert.deepStrictEqual(LlmRoute.order({}, now), ['main', 'backup'], '备用连着出错：先走主线路');
-    LlmRoute.setMode('main');
-    assert.deepStrictEqual(LlmRoute.order({}, now), ['main', 'backup']);
-    LlmRoute.setMode('auto');
+    [6000, 5500, 5800].forEach(ms => LlmRoute.note('backup', true, ms));
+    assert.deepStrictEqual(LlmRoute.order({}, now), ['backup', 'main']);
+    assert.strictEqual(LlmRoute.why({}, now), '');
+    LlmRoute.note('backup', false, 100);
+    assert.deepStrictEqual(LlmRoute.order({}, now), ['backup', 'main'], '错一次不换');
+    LlmRoute.note('backup', false, 100);
+    assert.deepStrictEqual(LlmRoute.order({}, now), ['main', 'backup'], 'DeepSeek 连着出错：先走主线路');
+    assert.strictEqual(LlmRoute.why({}, now), 'down');
+    assert.deepStrictEqual(LlmRoute.order({}, now + 11 * 60000), ['backup', 'main'], '十分钟后换回 DeepSeek');
+    assert.strictEqual(LlmRoute.why({ apiKey: 'sk-own' }, now), 'own');
     // 没有备用 key：只有主线路
     globalThis.TrainFitNative = { getLlmInfo: () => JSON.stringify({ hasKey: true, backup: { hasKey: false } }) };
     assert.deepStrictEqual(LlmRoute.order({}, now), ['main']);
