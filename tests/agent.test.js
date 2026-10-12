@@ -198,3 +198,19 @@ test('序列轮着练（v10.1）：「今天练什么」本机认得；按最近
   app.profile.planBook = [A];
   assert.strictEqual(app.nextSequence(), null);
 });
+
+test('贴来一整段计划（v12.3）：认得出是计划，交给大模型认成几份 savePlan；它写成今天练了的，改成一份计划', () => {
+  const H = require('../web/js/log/helpers.js');
+  assert.ok(H.looksLikePlanText('计划A：卧推60kg 4x8，划船50kg 4x10\n计划B：深蹲80kg 5x5，硬拉100kg 3x5'));
+  assert.ok(H.looksLikePlanText('Day1 胸：卧推 4x8 / 夹胸 3x12'));
+  assert.ok(H.looksLikePlanText('卧推80kg 4x8\n深蹲100kg 5x5\n硬拉120kg 3x5\n引体 4x8'), '一口气列了四个动作、好几行');
+  for (const t of ['卧推60公斤4组8个，划船50公斤4组10个', '今天练了卧推和深蹲', '明天练什么', '卧推'])
+    assert.strictEqual(H.looksLikePlanText(t), false, t);
+  const ctx = { importPlan: true, said: '计划A：卧推60kg 4x8，划船50kg 4x10' };
+  const u = TF.Parser.buildMessages(ctx.said, Object.assign({ date: '2026-10-05' }, ctx))[1].content;
+  assert.ok(u.includes('贴来的自己的训练计划'), '上下文明说这是他的计划');
+  const r = TF.Parser.normalize({ reply: 'x', dayOffset: 0, add: { workouts: [{ exerciseName: '杠铃卧推', muscleGroup: '胸部', weightKg: 60, sets: 4, reps: 8 }] } }, ctx);
+  assert.deepStrictEqual([r.workouts.length, r.acts[0].do, r.acts[0].from, r.acts[0].workouts.length], [0, 'savePlan', 'inline', 1]);
+  const many = TF.Parser.cleanActs([1, 2, 3, 4, 5, 6].map(i => ({ do: 'savePlan', name: '计划' + i, workouts: [{ exerciseName: '卧推' }] })));
+  assert.strictEqual(many.length, 6, '一次能存好几份');
+});

@@ -288,6 +288,8 @@
       }
       const book = (ctx.planBook || []).slice(0, 12);
       if (book.length) lines.push('存好的计划（act 用这里的名字）：' + book.join('；'));
+      // v12.3：整段贴进来的训练计划，一份一个 savePlan，先给他看表格、点了才存
+      if (ctx.importPlan) lines.push('这句是他贴来的自己的训练计划（可能有好几份：计划A、计划B、Day1、推拉腿…）：每一份写一个 {"do":"savePlan","name":"计划A 胸肩","workouts":[和 add.workouts 一样的格式]}，名字照他写的（没写就按练的部位起），动作写标准名字，重量组数次数照抄，没写重量的按最近成绩填、没练过的按常见的填；他明说了排到哪天的那一份改成 addPlan 带 dayOffset。不写 add、不写 answer、不写 plan，reply 一句「认出 N 份计划」。');
       const d = ctx.day;
       if (d) lines.push(`今天的情况：目标${GOALS[d.goal] || '减脂'}；热量预算 ${d.budget} 千卡（含训练消耗 ${d.burn}），已吃 ${d.intake}，还能吃 ${d.budget - d.intake}；蛋白质目标 ${d.proteinTarget}g，已吃 ${d.protein}g。` +
         (ctx.ask && d.base ? `别的日子（没算训练）热量预算约 ${d.base} 千卡、蛋白 ${d.proteinTarget}g；排一天的吃的大概早餐 27%、午餐 35%、晚餐 30%、加餐 8%。` : ''));
@@ -499,7 +501,7 @@
           case 'remind': return ['weigh', 'lunch', 'dinner', 'night'].includes(a.kind) ? { do: 'remind', kind: a.kind, time: /^\d{1,2}:\d{2}$/.test(String(a.time || '')) ? String(a.time) : '', on: a.on !== false } : null;
           default: return null;
         }
-      }).filter(Boolean).slice(0, 4);
+      }).filter(Boolean).slice(0, 8);
     },
 
     /** 聊天的回答：一段话、两句他可能回的、表情、小本本、最近的事（v6.3） */
@@ -882,6 +884,15 @@
       out.meals = separateSupps(splitByTime(out.meals, ctx.said));
       // 拆开了：大模型那句「已记早餐…」就不对了
       if (out.meals.length !== n) out.reply = '分开记了' + [...new Set(out.meals.map(m => m.mealType.replace('/补剂', '')))].join('、');
+      // 贴来的计划（v12.3）：大模型没写 savePlan、把动作写成今天练了的，改成一份计划；写了 savePlan 的，计划里有的不记
+      if (ctx.importPlan && !ctx._inPlan) {
+        if (!out.acts.some(a => a.from === 'inline' || a.do === 'addPlan') && out.workouts.length) {
+          out.acts = out.acts.concat({ do: 'savePlan', name: '', from: 'inline', workouts: out.workouts, meals: [] });
+          out.workouts = [];
+        }
+        const pw = new Set([].concat(...out.acts.map(a => (a.workouts || []).map(w => w.exerciseName))));
+        out.workouts = out.workouts.filter(w => !pw.has(w.exerciseName));
+      }
       // 「明天照这个练：跑步30分钟…」：大模型排了计划，又把同样几样当成今天做了记上（实测 1/3）。没说练了 / 吃了的，计划里有的就不记
       const planned = out.acts.filter(a => a.do === 'addPlan');
       if (planned.length && !/(练|做|跑|游|吃|喝|跳)(了|完)|刚(练|吃|跑)|已经/.test(String(ctx.said || ''))) {

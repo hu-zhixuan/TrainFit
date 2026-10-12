@@ -323,6 +323,23 @@
    * 只是在问、不是要排安排、也不是要动手：交给健康大脑（v12）。
    * 「尿酸高能吃什么」「膝盖疼怎么练」是健康的事 → 大脑；「晚上吃点啥」「明天练什么」是要排一天 → 记录的提示词（会给能加进计划的 plan）。
    */
+  /**
+   * 发来的是一整段训练计划（v12.3，用户：「整块的文字计划，计划 A、计划 B，一整个吞进去，识别成表格，一键设置好」）：
+   * 说了计划 / 序列 / 课表 / Day1 / 推拉腿这类、又列了两个以上动作；或者没说但一口气列了四个以上带数字的动作、好几行。
+   * 说了「练了 / 做完」的是在报今天练的，不算。
+   */
+  const PLAN_LIFT = /卧推|深蹲|硬拉|划船|推举|引体|下拉|弯举|飞鸟|夹胸|侧平举|前平举|臂屈伸|下压|腿举|倒蹬|臀推|箭步|弓步|分腿蹲|卷腹|平板|俯卧撑|面拉|提踵|腿屈伸|腿弯举|耸肩|山羊挺身|罗马尼亚|跑步|跳绳|单车|椭圆/g;
+  function looksLikePlanText(text) {
+    const t = String(text || '');
+    if (t.length < 12) return false;
+    const lifts = (t.match(PLAN_LIFT) || []).length;
+    if (lifts < 2) return false;
+    if (/(练|做|跑|跳)(了|完)|刚练|今天练的|已经练/.test(t) && !/计划|课表|序列/.test(t)) return false;
+    const named = /计划|序列|课表|方案|训练日|day\s*\d|第[一二三四五六七1-7]天|周[一二三四五六日天][:：]|推日|拉日|腿日|上肢日|下肢日|[ABCD]\s*[:：日]/i.test(t);
+    const lines = t.split(/\n|；|;/).filter(l => l.trim()).length;
+    return named || (lifts >= 4 && lines >= 3);
+  }
+
   function brainQuestion(text, asked) {
     const t = String(text || '');
     // asked：点的「接着问」（「那晚上能喝酒吗」不一定带问号），一定当成在问；但报了吃了练了的还是交给记录
@@ -432,7 +449,7 @@
     return null;
   }
 
-  Object.assign(TF, { MUSCLES, MEAL_TYPES, num, cleanText, round1, mealTypeByHour, normMealType, mealTimes, mealSegments, NUTRIENTS, cleanNutrients, nutrientsText, toKg, quickWeight, findWeight, guessMuscle, exerciseInfo, metBurn, strengthBurn, workoutTag, looksLikeQuestion, looksLikePlanEdit, looksLikeChat, lifeEvent, LIFE_EVENT, HEALTH, brainQuestion, pureQuestion, noCard, needsHistory, saidWeight, saidMinutes, quickIntent });
+  Object.assign(TF, { MUSCLES, MEAL_TYPES, num, cleanText, round1, mealTypeByHour, normMealType, mealTimes, mealSegments, NUTRIENTS, cleanNutrients, nutrientsText, toKg, quickWeight, findWeight, guessMuscle, exerciseInfo, metBurn, strengthBurn, workoutTag, looksLikeQuestion, looksLikePlanEdit, looksLikePlanText, looksLikeChat, lifeEvent, LIFE_EVENT, HEALTH, brainQuestion, pureQuestion, noCard, needsHistory, saidWeight, saidMinutes, quickIntent });
 
   if (typeof module !== 'undefined' && module.exports) module.exports = TF;
 })(typeof window !== 'undefined' ? window : globalThis);

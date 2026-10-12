@@ -135,7 +135,7 @@ Object.assign(FitnessApp.prototype, {
     const md = (d) => `${+d.slice(5, 7)}月${+d.slice(8)}日`;
     const dayWord = (d) => (d === getTodayDateString() ? '今天' : d === shiftDateString(getTodayDateString(), 1) ? '明天' : md(d));
     const names = () => this.planBook().filter(e => !e.auto).map(e => `「${e.name}」`).join('、');
-    (acts || []).slice(0, 4).forEach(a => {
+    (acts || []).slice(0, 8).forEach(a => {
       if (!a || !a.do) return;
       if (a.do === 'usePlan') {
         const e = this.planBookFind(a.name);
@@ -273,6 +273,67 @@ Object.assign(FitnessApp.prototype, {
   },
 
   /** 放了计划：跳到那天，计划一行行落下来 */
+  /**
+   * 贴来的整段计划（v12.3）：画成一张张表（每份一个名字 + 动作 / 重量 / 组数 × 次数），点「一键存好」才存进计划本
+   * （说了排到哪天的那份顺便放进那天的待办）。以后说「今天练计划A」就排进今天，重量按你最近的成绩往上加。
+   */
+  showPlanImport(question, acts, base) {
+    const pop = document.getElementById('buddy-pop');
+    if (!pop || !acts.length) return;
+    base = base || getTodayDateString();
+    const q = String(question || '').replace(/\s+/g, ' ').trim();
+    const dayWord = (d) => (d === getTodayDateString() ? '今天' : d === shiftDateString(getTodayDateString(), 1) ? '明天' : `${+d.slice(5, 7)}月${+d.slice(8)}日`);
+    const kg = (w) => (w > 0 ? round1(w) + 'kg' : '自重');
+    const named = acts.map(a => Object.assign({}, a, { name: a.name || this.planAutoName({ workouts: a.workouts || [], meals: a.meals || [] }) }));
+    const put = named.filter(a => a.do === 'addPlan');
+    let k = 0;
+    const tables = named.map(a => {
+      const ws = a.workouts || [], ms = a.meals || [];
+      const where = a.do === 'addPlan' ? ` → 排到${dayWord(shiftDateString(base, a.dayOffset || 0))}` : '';
+      const rows = ws.map(w => ({ name: w.exerciseName, val: w.durationMin ? `${w.durationMin} 分钟` : `${kg(w.weightKg)} · ${w.sets}×${w.reps}` }))
+        .concat(ms.map(m => ({ name: `${m.mealType.replace('/补剂', '')} ${m.foodSummary}`, val: `${m.calories} kcal` })));
+      return `<div class="pp-day"><div class="pp-head"><b>${esc(a.name)}${esc(where)}</b><span>${ws.length ? ws.length + ' 个动作' : ''}</span></div>` +
+        rows.map(r => `<div class="pp-row" style="--i:${k++}"><span class="pp-tick"></span><div class="pp-main"><div class="pp-title">${esc(r.name)}</div></div><span class="pp-val">${esc(r.val)}</span></div>`).join('') + '</div>';
+    }).join('');
+    pop.dataset.mode = 'answer';
+    pop.dataset.kind = 'import';
+    pop.dataset.q = q;
+    pop.dataset.level = 'none';
+    pop.innerHTML = `<div class="buddy-pop-head">${esc(q.length > 26 ? q.slice(0, 25) + '…' : q)}</div>` +
+      `<p class="buddy-answer notes">认出 ${named.length} 份训练计划，对一下：</p>` +
+      `<div class="plan-preview">${tables}</div>` +
+      `<p class="buddy-tip">存好以后说「今天练${esc(TF.AgentIntent.shortName(named[0].name))}」就排进今天，重量按你最近练的自动往上加。</p>` +
+      `<div class="buddy-acts"><button class="buddy-act" type="button" data-pi="log">其实是今天练的</button>` +
+      `<button class="buddy-act primary" type="button" data-pi="save">${put.length ? `一键存好，排到${esc(dayWord(shiftDateString(base, put[0].dayOffset || 0)))}` : '一键存好'}</button></div>`;
+    pop.querySelectorAll('[data-pi]').forEach(b => b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (b.dataset.pi === 'log') {
+        this.closeBuddyPop('answer');
+        if (window.QuickLog) window.QuickLog.submit('今天练了：' + question, { noImport: true });
+        return;
+      }
+      const r = this.runActs(named, base);
+      this.saveData();
+      this.render();
+      b.disabled = true;
+      b.textContent = '✓ 存好了';
+      window.Haptics && window.Haptics.fire('success');
+      window.Sound && window.Sound.play('success');
+      const rows = [...pop.querySelectorAll('.pp-row')];
+      const quick = this.reducedMotion();
+      rows.forEach((x, i) => (quick ? x.classList.add('in') : setTimeout(() => x.classList.add('in'), 100 + i * 50)));
+      setTimeout(() => {
+        this.closeBuddyPop('answer');
+        if (r.jump) this.jumpToPlans(r.jump);
+        this.showToast(named.length > 1 ? `存好了 ${named.length} 份计划：${named.map(a => '「' + a.name + '」').join('')}` : (r.lines[0] || '存好了'));
+      }, quick ? 300 : 100 + rows.length * 50 + 600);
+    }));
+    this.positionBuddyPop();
+    pop.scrollTop = 0;
+    this.popIn(pop);
+    this.buddyBang && this.buddyBang();
+  },
+
   jumpToPlans(date) {
     if (!date) return;
     if (this.view !== 'today' && this.switchView) this.switchView('today');
@@ -315,15 +376,15 @@ Object.assign(FitnessApp.prototype, {
     const date = shiftDateString(base, plan.dayOffset || 0);
     const out = Object.assign({}, plan);
     const today = getTodayDateString();
-    // 训练：按你的成绩定重量、次数（今天已经练过的不动）；一档跨太大、要一组一组换的写进要点
+    // 训练：按你的成绩定重量、次数（今天已经练过的不动）；该换难一点的写进要点
     out.workouts = (plan.workouts || []).map(w => {
       const key = w.exerciseName;
       const p = !w.durationMin && this.exerciseProgress ? this.exerciseProgress(key, { date, extra: sim && sim[key] }) : null;
       if (!p || !p.next || (date === today && p.last.date === today)) return w;
       const n = p.next;
-      if (sim) sim[key] = (sim[key] || []).concat(TF.Overload.asSession(n.kind === 'mix' ? { weightKg: n.up, sets: n.sets, reps: n.upReps } : n, date));
-      const sets = n.kind === 'sets' || n.kind === 'mix' || /都用/.test(n.text) ? n.sets : (w.sets || n.sets);
-      return Object.assign({}, w, { weightKg: n.weightKg, reps: n.reps, sets }, n.kind === 'mix' || n.kind === 'harder' ? { tip: n.text.replace(/^下次/, '') } : {});
+      if (sim) sim[key] = (sim[key] || []).concat(TF.Overload.asSession(n, date));
+      const sets = n.kind === 'sets' || /都用/.test(n.text) ? n.sets : (w.sets || n.sets);
+      return Object.assign({}, w, { weightKg: n.weightKg, reps: n.reps, sets }, n.kind === 'harder' ? { tip: n.text.replace(/^下次/, '') } : {});
     });
     out.meals = this.balanceMeals(plan.meals || [], date, out.workouts);
     return out;

@@ -415,7 +415,7 @@ Object.assign(FitnessApp.prototype, {
         `<span class="ar-fill"></span><span class="ar-rank">${i + 1}</span>` +
         `<span class="ar-name"><span class="ar-n1">${esc(r.name)}${r.pr ? '<em class="ar-new">新纪录</em>' : ''}</span><small>${esc(change(r))}</small></span>` +
         `<span class="ar-val">${spark(r.spark)}${r.ref ? (g > 0 ? `<i class="ar-up">▲</i>${g}%` : g < 0 ? `<i class="ar-dn">▼</i>${-g}%` : '0%') : '新'}</span></button>` +
-        (r.next ? `<div class="ar-next">${this.liftNextTag(r.next)}${esc(r.next.text.replace(/^下次/, ''))}</div>` : '');
+        (r.next ? `<div class="ar-next">下次 · ${esc(r.next.text.replace(/^下次/, ''))}</div>` : '');
     }).join('') + '</div>';
     const today = getTodayDateString();
     const gap = ['胸部', '背部', '腿部', '肩部'].map(g => ({ g, last: this.workouts.filter(w => w.muscleGroup === g).reduce((m, w) => (w.date > m ? w.date : m), '') }))
@@ -618,7 +618,7 @@ Object.assign(FitnessApp.prototype, {
       `<div><span>估算一次最大</span><b>${bestE ? round1(bestE) + '<small>kg</small>' : '–'}</b><small>按重量和次数算</small></div>` +
       `<div><span>练过</span><b>${ss.length}<small>次</small></b><small>${+ss[0].date.slice(5, 7)}/${+ss[0].date.slice(8)} 起</small></div></div>` +
       chart +
-      (p ? this.liftNextHtml(p) : '') +
+      (p ? this.liftNextHtml(p, name) : '') +
       `<div class="lift-list">${list}</div>`;
     ov.classList.remove('hidden');
     history.pushState({ liftSheet: true }, '');
@@ -630,19 +630,15 @@ Object.assign(FitnessApp.prototype, {
     ov.onclick = (e) => { if (e.target === ov) close(); };
     this._liftSheetClose = () => ov.classList.add('hidden');
   },
-  /** 下次那行前面的小标签：往上走的（加重量、加次数…）绿字，往回收的（退一步、找回来、保持）灰字 */
-  liftNextTag(n) {
-    const TAG = { weight: '加重量', reps: '加次数', sets: '加一组', mix: '换重量', load: '加负重', harder: '加难度', deload: '退一步', back: '找回来', keep: '保持' };
-    return TAG[n.kind] ? `<em class="nx ${/deload|back|keep/.test(n.kind) ? 'hold' : 'up'}">${TAG[n.kind]}</em>` : '下次 · ';
-  },
   /** 动作详情里的「下次」：练多少 + 为什么 + 按你的习惯定的节奏（几个一组、每次加多少，v12.2） */
-  liftNextHtml(p) {
+  liftNextHtml(p, name) {
     const n = p.next;
-    const bw = !(p.last.weightKg > 0) && !(n.weightKg > 0);
-    const rule = (n.fixed ? `每次 ${n.lo} 个，${n.sets} 组做满就加` : `${n.lo}～${n.hi} 个一组，做到 ${n.hi} 个${bw ? '加难度' : '加重量'}`) +
-      (bw ? '' : ` · 每次加 ${n.inc}kg`);
-    return `<div class="lift-next"><span>下次</span><div><b>${esc(n.text.replace(/^下次/, ''))}</b><small>${esc(n.why)}</small></div></div>` +
-      `<p class="lift-rule">按你的习惯：${esc(rule)}${p.sessions >= 3 ? '' : '（多练几次会更准）'}</p>`;
+    const st = TF.Overload && name ? TF.Overload.status(this.workouts.filter(w => w.exerciseName === name)) : null;
+    const kgs = (w) => (w > 0 ? round1(w) + 'kg' : '自重');
+    // 你现在的水平：每记一次自动更新（v12.3：不用自己设，自己加了重量就按新重量）
+    const now = st ? `<p class="lift-rule">你现在：<b>${kgs(st.now.w)}</b>，平常 ${st.now.sets} 组 × ${st.now.reps} 个` +
+      (st.best.w > st.now.w || st.best.reps > st.now.reps ? ` · 最好 ${kgs(st.best.w)} × ${st.best.reps}` : '') + ' · 每记一次自动更新</p>' : '';
+    return `<div class="lift-next"><span>下次</span><div><b>${esc(n.text.replace(/^下次/, ''))}</b><small>${esc(n.why)}</small></div></div>` + now;
   },
   /**
    * 过去 30 天：一天一张卡片（Arena 的「Model Capabilities」卡片那种：白卡片、细边、衬线的日子、一个大数）。
