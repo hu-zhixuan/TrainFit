@@ -1,0 +1,23 @@
+name: API Check (temporary)
+on:
+  push:
+    branches: [ claude/api-check ]
+jobs:
+  food:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: 热量准不准：Atria 对 DeepSeek（16 句 × 3）
+        env:
+          TZ: Asia/Shanghai
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
+          LLM_MODEL: ${{ vars.LLM_MODEL }}
+          LLM_BACKUP_API_KEY: ${{ secrets.LLM_BACKUP_API_KEY || secrets.TOKENPLAN_API_KEY }}
+          ROUNDS: '3'
+          GAP: '12000'
+        run: node .github/api_food.js
