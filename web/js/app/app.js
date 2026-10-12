@@ -161,8 +161,8 @@ class FitnessApp {
     const best = earlier.reduce((m, w) => Math.max(m, w.weightKg || 0), 0);
     const w = rec.weightKg || 0, pw = prev.weightKg || 0;
     let how;
-    if (best > 0 && w > best) how = `新纪录 ${round1(w)}kg（以前最多 ${round1(best)}kg）`;
-    else if (w > pw) how = `比上次重 ${round1(w - pw)}kg`;
+    if (best > 0 && w > best) how = `加到 ${round1(w)}kg 了，新纪录（以前最多 ${round1(best)}kg）`;
+    else if (w > pw) how = `加到 ${round1(w)}kg 了（上次 ${round1(pw)}kg）`;
     else if (w === pw && rec.reps > prev.reps) how = `比上次多 ${rec.reps - prev.reps} 次`;
     else if (w === pw && rec.reps === prev.reps && rec.sets > prev.sets) how = `比上次多 ${rec.sets - prev.sets} 组`;
     else if (w === pw && rec.reps === prev.reps && rec.sets === prev.sets) how = '和上次一样';

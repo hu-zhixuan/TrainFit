@@ -93,22 +93,21 @@ test('隔了两周以上先轻一点：两周 10%、四周 15%', () => {
   assert.strictEqual(next('杠铃卧推', [R('2026-09-20', 80, 4, 8)], { today: '2026-09-25' }).kind, 'reps', '按练的那天算');
 });
 
-test('组数不够先加组；一档跨太大（6kg 侧平举）先加组，再一组一组换上去', () => {
+test('组数不够先加组；一档跨太大（6kg 侧平举）先加组，够了直接试；你自己加了重量就照新重量算（v12.3 不让你挑）', () => {
   let r = next('杠铃卧推', [R('2026-10-10', 80, 2, 10)]);
   assert.deepStrictEqual([r.kind, r.sets], ['sets', 3]);
   r = next('哑铃侧平举', [R('2026-10-06', 6, 3, 18), R('2026-10-10', 6, 3, 20)]);
   assert.deepStrictEqual([r.kind, r.sets, r.weightKg], ['sets', 4, 6]);
   r = next('哑铃侧平举', [R('2026-10-06', 6, 4, 18), R('2026-10-10', 6, 4, 20)]);
-  assert.deepStrictEqual([r.kind, r.up, r.upSets, r.weightKg, r.sets], ['mix', 8, 1, 6, 4]);
-  assert.strictEqual(r.text, '下次第一组试 8kg，其余 6kg');
-  // 照着做了：第一组 8kg 做了 12 个 → 前两组 8kg
-  const mix1 = [R('2026-10-06', 6, 4, 18), R('2026-10-08', 6, 4, 20), R('2026-10-10', 8, 1, 12), R('2026-10-10', 6, 3, 20)];
-  r = next('哑铃侧平举', mix1);
-  assert.deepStrictEqual([r.kind, r.upSets, r.up], ['mix', 2, 8]);
-  assert.strictEqual(r.text, '下次前 2 组 8kg，其余 6kg');
-  r = next('哑铃侧平举', mix1.concat(R('2026-10-12', 8, 3, 12), R('2026-10-12', 6, 1, 20)), { today: '2026-10-14' });
-  assert.deepStrictEqual([r.kind, r.weightKg, r.sets], ['reps', 8, 4], '三组都换上去了：四组都用 8kg');
-  assert.match(r.text, /4 组都用 8kg/);
+  assert.deepStrictEqual([r.kind, r.weightKg, r.sets], ['weight', 8, 4]);
+  assert.strictEqual(r.text, '下次试 8kg，能做几个做几个');
+  // 自己从 7.5 加到 10kg，只有第一组用了 10kg：下次四组都按 10kg 算
+  const self = [R('2026-10-06', 7.5, 4, 12), R('2026-10-10', 10, 1, 8), R('2026-10-10', 7.5, 3, 12)];
+  r = next('哑铃弯举', self);
+  assert.deepStrictEqual([r.kind, r.weightKg, r.sets, r.reps], ['reps', 10, 4, 9]);
+  assert.match(r.text, /4 组都用 10kg/);
+  const st = O.status(self);
+  assert.deepStrictEqual([st.now.w, st.now.sets, st.now.reps, st.up, st.best.w], [10, 4, 8, 7.5, 10], '现在 10kg 4 组，上次 7.5kg');
 });
 
 test('自重：次数到顶，引体挂负重、俯卧撑加组再换难的；助力引体越练助力越少', () => {
@@ -152,7 +151,7 @@ test('跟着它练三个月：一直在往上走，卡住了会退，不会原�
   assert.ok(O.sessions(recs).every(s => s.sets >= 3 && s.sets <= 5), '组数不会乱跳');
 });
 
-test('排计划（calibratePlan）：好几天里同一个动作接着往上加；一档跨太大的写进要点', () => {
+test('排计划（calibratePlan）：好几天里同一个动作接着往上加', () => {
   global.getTodayDateString = () => '2026-10-12';
   global.shiftDateString = global.shiftDateString || ((d, k) => { const t = new Date(d + 'T00:00:00Z'); t.setUTCDate(t.getUTCDate() + k); return t.toISOString().slice(0, 10); });
   global.FitnessApp = global.FitnessApp || class {};
@@ -171,7 +170,7 @@ test('排计划（calibratePlan）：好几天里同一个动作接着往上加�
   assert.deepStrictEqual([first.workouts[0].weightKg, first.workouts[0].reps], [80, 10], '明天：80kg 冲 10 个');
   assert.deepStrictEqual([later.workouts[0].weightKg, later.workouts[0].reps], [82.5, 9], '后面那天按明天做到了，加重量');
   const lat = first.workouts[1];
-  assert.deepStrictEqual([lat.weightKg, lat.sets, lat.tip], [6, 4, '第一组试 8kg，其余 6kg']);
+  assert.deepStrictEqual([lat.weightKg, lat.sets], [8, 3], '侧平举 6kg 做满 4×20：明天直接排 8kg（组数照计划写的）');
 });
 
 test('你以前就这么跳过、次数没掉：照你的来，不当成跨太大', () => {

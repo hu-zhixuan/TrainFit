@@ -1136,7 +1136,8 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     const eat = /吃|食谱|菜谱|蛋白|热量|碳水|饿/.test(q), lift = /练|训练|健身|动作/.test(q);
     // 聊天：不说「算算蛋白」这种干活的话，就是在听、在想怎么回你
     const steps = kind === 'chat' ? ['嗯…', '我在听', '想想怎么说…', '嗯，我想好了…'] :
-      kind === 'brain' ? ['我想想…', '翻翻你这两周的记录…', '对一下你的身体数据和目标…', '在理清楚怎么说…', '快好了，再等一下下…'] : ['我想想…', '先看看你今天吃了多少…', eat ? '算算还差多少蛋白、还能吃多少…' : '翻翻你最近的训练…',
+      kind === 'brain' ? ['我想想…', '翻翻你这两周的记录…', '对一下你的身体数据和目标…', '在理清楚怎么说…', '快好了，再等一下下…'] :
+      kind === 'import' ? ['在看你的计划…', '一个个动作认出来…', '整理成表格…', '对一下你练过的重量…', '快好了，再等一下下…'] : ['我想想…', '先看看你今天吃了多少…', eat ? '算算还差多少蛋白、还能吃多少…' : '翻翻你最近的训练…',
       eat && lift ? '把吃和练一起排一排…' : eat ? '在排吃什么、吃多少…' : lift ? '在排动作、重量和组数…' : '快好了…', '快好了，再等一下下…'];
     pop.dataset.mode = 'thinking';
     pop.dataset.level = 'none';
@@ -1648,9 +1649,9 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       `<div class="buddy-acts"><button class="buddy-act primary" type="button" data-pa="retry">再试一次</button></div>`;
     pop.querySelector('[data-pa="retry"]').addEventListener('click', (e) => {
       e.stopPropagation();
-      this.showBuddyThinking(p.text);
+      this.showBuddyThinking(p.text, p.importPlan ? 'import' : '');
       if (this.pending.some(x => x.id === p.id)) this.retryPending(p.id);
-      else if (window.QuickLog) window.QuickLog.submit(p.text, { ask: true, again: true }); // 点了「再试一次」：不算重复
+      else if (window.QuickLog) window.QuickLog.submit(p.text, p.importPlan ? { again: true } : { ask: true, again: true }); // 点了「再试一次」：不算重复
     });
     this.positionBuddyPop();
     this.popIn(pop);

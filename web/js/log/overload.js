@@ -10,16 +10,17 @@
  *    腿举臀推 8～12、手臂 / 夹胸 / 腿屈伸 10～15、侧平举面拉卷腹 12～20。
  *  - 每次加多少按你的器械：用过的重量的公约数（哑铃 10、12、14 → 2kg；7.5、10 → 2.5kg；器械 45、50 → 5kg），
  *    一次不超过重量的 3.5%（深蹲硬拉 6%），至少一档。加了重量做几次按估算一次最大（Epley，算上还剩几个的余力）推，不是一律少两次；
- *    一档跨太大（6kg 的侧平举加到 8kg）先加组，组数够了第一组先换上去。
+ *    一档跨太大（6kg 的侧平举加到 8kg）先加组，组数够了就直接试，能做几个做几个。
+ *  - v12.3 不让你挑：只给一句下次练多少。你自己加了重量（哪怕只有一两组），就按新重量往下算。
  *  - 没到区间顶：每次多一个（还能加的多两个）；到顶了组数不到 3 组先加组。
  *  - 很吃力、或者同一个重量比上次少做了：这次先保持 / 冲回上次；连着两次 → 退 10% 再往上冲。
  *  - 同一个重量连着三次没多做一个（卡住了）：减脂期能保住就是赚（四次再退），别的退 10% 再冲。
  *  - 比你之前最好的重量轻（隔久了回来、退过一次）：按上次的成绩直接往回加，不用一档一档爬。
  *  - 隔了两周以上：先轻 10%（四周 15%、八周 20%）找回感觉。
  *  - 自重（引体、双杠、俯卧撑、卷腹）：次数到顶了，引体双杠挂负重，别的加组、再放慢下放；助力引体的助力越练越少。
- * 返回 { kind, text, why, weightKg, reps, sets, lo, hi, inc, fixed, stuck?, up?, upSets?, upReps? }：text 一句短的（今天页、提示条、趋势页），
- * why 为什么（趋势页的动作详情、问「卧推下次多少」）。kind：weight / reps / sets / keep / deload / back / load / harder /
- * mix（一档跨太大：前 upSets 组用 up 做 upReps 个，其余照旧 weightKg）。
+ * 返回 { kind, text, why, weightKg, reps, sets, lo, hi, inc, fixed, stuck? }：text 一句短的（今天页、提示条、趋势页），
+ * why 为什么（趋势页的动作详情、问「卧推下次多少」）。kind：weight / reps / sets / keep / deload / back / load / harder。
+
  */
 (function (root) {
   const TF = root.TF = root.TF || {};
@@ -211,14 +212,11 @@
       return out('keep', `保持 ${kg(s.w)} × ${s.reps}，练扎实了再加`, '上次说很吃力', s.w, s.reps);
     }
 
-    // 正在一组一组换重量（上次前几组用了新的重量，剩下的还是原来的）：做够了就多换一组，全换上去以后照常
-    const fromW = prev && s.backSets > 0 && (prev.w === s.backW || (prev.w === s.w && prev.backW === s.backW)) ? s.backW : 0;
-    if (fromW && s.w > fromW) {
+    // 你自己加了重量（7.5 → 10kg，哪怕只有前一两组用了新重量）：就按新重量算，剩下几组也按新重量排
+    if (s.backSets > 0 && prev && s.w > prev.w && s.backW >= prev.w * 0.95) {
       const total = s.sets + s.backSets;
-      const head = (k) => (k === 1 ? '第一组' : `前 ${k} 组`);
-      if (s.reps < lo) return out('mix', `下次${head(s.sets)} ${kg(s.w)} 冲 ${s.reps + 1} 个`, `${kg(s.w)} 先做到 ${lo} 个，再多换一组`, fromW, s.backReps, total, { up: s.w, upSets: s.sets, upReps: s.reps + 1 });
-      if (s.sets + 1 >= total) return out('reps', `下次 ${total} 组都用 ${kg(s.w)}`, `${kg(s.w)} 能做 ${s.reps} 个了，全换上去`, s.w, Math.max(lo, s.reps - 1), total);
-      return out('mix', `下次${head(s.sets + 1)} ${kg(s.w)}，其余 ${kg(fromW)}`, `${kg(s.w)} 能做 ${s.reps} 个了，再多换一组`, fromW, s.backReps, total, { up: s.w, upSets: s.sets + 1, upReps: s.reps });
+      const to = s.reps >= hi ? s.reps : Math.min(hi, s.reps + 1);
+      return out('reps', `下次 ${total} 组都用 ${kg(s.w)}${s.reps < hi ? `，冲 ${to} 个` : ''}`, `你上次加到 ${kg(s.w)} 了，按新重量来`, s.w, s.reps >= hi ? s.reps : to, total);
     }
 
     // 比之前最好的轻（隔久了回来、退过一次）：按上次的成绩直接往回加
@@ -246,10 +244,10 @@
       const match = repsAt(s, w2);
       // 你以前就这么跳过、次数没掉（器械 45 → 50 → 55 都是 4×10）：照你的来
       const proven = ss.some((x, i) => i > 0 && x.w - ss[i - 1].w >= w2 - s.w - 1e-6 && x.w > ss[i - 1].w && x.reps >= ss[i - 1].reps);
-      // 一档就跨很多（6kg 的哑铃加到 8kg）：先多一组；组数够了就第一组先换上去，一组一组换
+      // 一档就跨很多（6kg 的哑铃加到 8kg）：组数不到 4 组先多一组；够了就直接试，能做几个做几个
       if (match < lo - 2 && !proven) {
         if (s.sets < 4) return out('sets', `下次做 ${s.sets + 1} 组 × ${s.reps}`, `往上一档就是 ${kg(w2)}，跨度大，先多做一组`, s.w, s.reps, s.sets + 1);
-        return out('mix', `下次第一组试 ${kg(w2)}，其余 ${kg(s.w)}`, `${kg(s.w)} 往上一档就是 ${kg(w2)}，跨度大，一组一组换上去`, s.w, s.reps, 0, { up: w2, upSets: 1, upReps: Math.max(lo, match) });
+        return out('weight', `下次试 ${kg(w2)}，能做几个做几个`, `${kg(s.w)} 已经做满 ${s.sets}×${s.reps}，往上一档是 ${kg(w2)}`, w2, Math.max(5, match));
       }
       const r = fixed && (w2 / s.w <= 1.075 || proven) ? lo : Math.max(lo, Math.min(match, fixed ? lo : hi - 1));
       return out('weight', `下次${easy ? '直接' : ''}试 ${kg(w2)} × ${r}`,
@@ -270,11 +268,28 @@
     return out('reps', `下次冲 ${to} 次`, fixed ? `每次 ${lo} 个，做满 ${s.sets} 组就加重量` : `${range}，做到 ${hi} 个就加重量`, s.w, to);
   }
 
+  /**
+   * 现在的水平（v12.3，用户：「每次记录新的重量，它就自动更新我能做的最大的、我平常做的组数跟次数」）：
+   * now = 最近一次的正式重量 + 在这个重量上平常做几组几个（最近几次的中位数）；best = 做过最重的一组（同重量取次数多的）。
+   */
+  function status(records) {
+    const all = (records || []).filter(r => r && !r.durationMin);
+    const real = all.filter(r => !isEst(r));
+    const ss = sessions(real.length ? real : all);
+    if (!ss.length) return null;
+    const s = ss[ss.length - 1];
+    const same = ss.filter(x => x.w === s.w).slice(-4);
+    const now = { w: s.w, sets: median(same.map(x => x.sets + (x.backSets || 0))), reps: median(same.map(x => x.reps)), date: s.date };
+    const top = ss.reduce((m, x) => (!m || x.w > m.w || (x.w === m.w && x.reps > m.reps) ? x : m), null);
+    const prev = ss[ss.length - 2];
+    return { now, best: { w: top.w, reps: top.reps, date: top.date }, up: prev && s.w > prev.w ? prev.w : 0, count: ss.length };
+  }
+
   /** 排好几天的计划：假设这次照着做到了，当成一次记录接在后面 */
   function asSession(n, date) {
     return { date, w: n.weightKg || 0, sets: n.sets || 3, reps: n.reps || 8, rpe: 8, e1: e1rm(n.weightKg, n.reps), sim: true };
   }
 
-  TF.Overload = { next, sessions, profileOf, incOf, bandOf, e1rm, asSession };
+  TF.Overload = { next, status, sessions, profileOf, incOf, bandOf, e1rm, asSession };
   if (typeof module !== 'undefined' && module.exports) module.exports = TF.Overload;
 })(typeof window !== 'undefined' ? window : globalThis);

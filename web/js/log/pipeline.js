@@ -37,6 +37,13 @@
         this.process(p);
         return;
       }
+      // 发来一整段训练计划（计划 A、计划 B…）：交给大模型认成表格，先给你看，点一下才存（v12.3）
+      if (!(opts && (opts.ask || opts.chat || opts.noImport)) && TF.looksLikePlanText && TF.looksLikePlanText(text)) {
+        const p = root.app.addPending(text, true, { importPlan: true });
+        if (root.app.showBuddyThinking) root.app.showBuddyThinking(text, 'import');
+        this.process(p);
+        return;
+      }
       // 本机认得出的动手说法（「明天练计划A」「把明天的计划挪到后天」「明天不练了」）：直接做，不调大模型（v6.5）
       if (root.app.runSkill && root.app.runSkill(text)) return;
       // 手机自己就能答的（「还差多少蛋白」「卧推最好多少」）：马上答，不问大模型
@@ -122,7 +129,7 @@
         chat: !!p.chat, buddy: p.chat && app.buddyPersona ? app.buddyPersona() : null, talk: (p.chat || p.brain) && app.chatThread ? app.chatThread(p.brain ? 'ask' : '') : [],
         life: p.chat && app.lifeList ? app.lifeList() : [], // v6.3：他最近说过的事（「周五面试」），小人接着上次聊
         // v6.5：存好的计划（说到计划、照着练时才带）；回答用小人的口吻（不要小人时不带）
-        planBook: app.planBookContext ? app.planBookContext(p.text) : [],
+        planBook: app.planBookContext ? app.planBookContext(p.text) : [], importPlan: !!p.importPlan,
         // v12.2：问到练、计划、某个练过的动作时，带上本机算好的「下次练多少」，大模型排的和今天页说的对得上
         overload: p.ask && !p.chat ? this.overloadLines(p.text) : [],
         voice: !p.chat && app.buddyLook && app.buddyLook().show && app.cast ? { name: app.cast().name, speech: app.cast().speech } : null };
@@ -265,6 +272,14 @@
         if (life.length && app.addLife) app.addLife(life);
         if (app.noteFeeling) app.noteFeeling(p.text);
         if (app.showBuddyAnswer) app.showBuddyAnswer(p.text, result.answer, { next: result.next, chat: true, face: result.face });
+        return;
+      }
+      // 发来的计划（v12.3）：先画成表格给你看，点「一键存好」才存 / 排；认出来的不是计划就照常走
+      const imports = (result.acts || []).filter(a => (a.do === 'savePlan' && a.from === 'inline') || a.do === 'addPlan');
+      if (imports.length && imports.length === result.acts.length && !result.meals.length && !result.workouts.length && !(result.updates || []).length && !(result.deletes || []).length && !result.bodyWeight && app.showPlanImport) {
+        app.finishPending(p.id);
+        app.render();
+        app.showPlanImport(p.text, imports, p.date);
         return;
       }
       const changes = result.workouts.length + result.meals.length + (result.updates || []).length + (result.deletes || []).length + (result.bodyWeight ? 1 : 0) + (result.remember || []).length + (result.memo || []).length + (result.forget || []).length + (result.acts || []).length;
