@@ -38,3 +38,23 @@ test('改标题里的数：每一样跟着变；只有一个数的整份一起�
   assert.strictEqual(summaryAmounts(meal, '菜包2个、米饭1碗'), null);
   assert.strictEqual(summaryAmounts(meal, '肉包2个、米饭1碗'), null, '没改');
 });
+
+test('v12.7 明细能改：下面拼回上面；新加的一样先查记住的和食物库', () => {
+  const { draftSummary, lookupLocal, cleanRow } = require('../web/js/app/editor.js');
+  assert.strictEqual(draftSummary([{ name: '小鱼干', amount: '2包' }, { name: '豆浆', amount: '1杯' }, { name: '  ' }]), '小鱼干2包、豆浆1杯');
+  // 库里有的：按份量算（写了克数按克数）
+  const egg = lookupLocal('鸡蛋', '100g', []);
+  assert.ok(egg && egg.calories > 100 && egg.calories < 170, JSON.stringify(egg));
+  assert.ok(egg.proteinG > 10 && egg.proteinG < 15);
+  assert.strictEqual(egg.grams, 100);
+  // 你记住的优先，按个数比
+  const mine = lookupLocal('小鱼干', '1包', [{ name: '小鱼干', amount: '2包', grams: 60, calories: 240, proteinG: 30, carbsG: 6, fatG: 10 }]);
+  assert.strictEqual(mine.src, '我的');
+  assert.strictEqual(mine.calories, 120);
+  assert.strictEqual(mine.proteinG, 15);
+  // 库里没有：交给 AI
+  assert.strictEqual(lookupLocal('外星人能量块', '1块', []), null);
+  // 存回去不带面板里的记号；改过数的标「我的」
+  const r = cleanRow({ name: ' 小鱼干 ', amount: '2包', calories: 200, src: '估算', dbName: 'x', _mine: true, _base: {}, _new: true, opts: [] });
+  assert.deepStrictEqual(r, { name: '小鱼干', amount: '2包', calories: 200, src: '我的' });
+});

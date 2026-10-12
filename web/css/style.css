@@ -1396,23 +1396,33 @@ body.no-composer .snackbar { bottom: calc(20px + var(--sab)); }
 .rec-panel.canceling .rec-time, .rec-panel.canceling .rec-hint { color: var(--text-2); }
 @media (prefers-reduced-motion: reduce) { .composer.busy .talk-btn svg { animation: none; } }
 
-/* ---------- 饮食明细 ---------- */
-.breakdown { background: var(--surface-2); border-radius: var(--r-md); padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; }
-.breakdown-head { font-size: 0.78rem; font-weight: 700; color: var(--text-2); }
-.breakdown-row { display: flex; flex-direction: column; gap: 6px; padding: 9px 0 10px; border-top: 1px solid var(--line); font-size: 0.85rem; font-variant-numeric: tabular-nums; }
-.breakdown-head + .breakdown-row { border-top: 0; padding-top: 4px; }
-.breakdown-row em.src { font-style: normal; font-size: 0.7rem; font-weight: 700; color: var(--accent-text); background: var(--accent-soft); border-radius: 5px; padding: 0 5px; margin-left: auto; flex: none; }
-.breakdown-row em.src.est { color: var(--meal); background: var(--meal-soft); }
-.breakdown-row em.src.mine { color: var(--lift); background: var(--lift-soft); }
-.bd-top { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
-.bd-name { font-weight: 650; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.bd-name small { margin-left: 6px; font-size: 0.72rem; font-weight: 500; color: var(--text-3); }
-.bd-nut { font-size: 0.72rem; color: var(--text-3); margin-top: -3px; }
-/* 每一样：份量 / 热量 / 蛋白质 */
-.bd-fields { display: grid; grid-template-columns: 1.15fr 1fr 1fr; gap: 8px; }
-.bd-f { display: flex; align-items: center; gap: 4px; min-width: 0; font-size: 0.72rem; color: var(--text-3); white-space: nowrap; }
-.bd-f .bd-input { flex: 1; min-width: 0; width: auto; }
-.bd-f-amt .bd-input { text-align: left; }
+/* ---------- 饮食明细（v12.7：每一样都能改名字、份量、四个数，能删能加；上下两边对着走） ---------- */
+.breakdown { background: var(--surface-2); border-radius: var(--r-md); padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
+.breakdown-head { display: flex; align-items: center; justify-content: space-between; font-size: 0.78rem; font-weight: 700; color: var(--text-2); }
+.bd-add { padding: 4px 10px; border: 1px dashed var(--line); border-radius: 999px; background: none; color: var(--accent-text); font: inherit; font-size: 0.78rem; font-weight: 700; cursor: pointer; }
+/* 上面换了吃的 / 新加的库里没有：一条 + 一个按钮 */
+.bd-ai { display: flex; align-items: center; gap: 8px; padding: 8px 8px 8px 12px; border-radius: 10px; background: var(--accent-soft); font-size: 0.8rem; color: var(--text); }
+.bd-ai span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bd-ai button { flex: none; padding: 6px 12px; border: 0; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font: inherit; font-size: 0.78rem; font-weight: 750; cursor: pointer; }
+.bd-ai.busy span::after { content: ""; display: inline-block; width: 10px; height: 10px; margin-left: 6px; vertical-align: -1px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; }
+.bd-list { display: flex; flex-direction: column; }
+.bd-row { display: flex; flex-direction: column; gap: 6px; padding: 10px 0; border-top: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+.bd-row:first-child { border-top: 0; padding-top: 4px; }
+.bd-line { display: grid; grid-template-columns: minmax(0, 1fr) 78px auto 28px; align-items: center; gap: 6px; }
+.bd-line .bd-input { width: 100%; text-align: left; }
+.bd-name-in { font-weight: 700; }
+.bd-src { flex: none; padding: 1px 6px; border: 0; border-radius: 5px; background: var(--accent-soft); color: var(--accent-text); font: inherit; font-size: 0.7rem; font-weight: 700; cursor: pointer; white-space: nowrap; }
+.bd-src.est { color: var(--meal); background: var(--meal-soft); }
+.bd-src.mine { color: var(--lift); background: var(--lift-soft); }
+.bd-del { width: 28px; height: 28px; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--text-3); font-size: 1.1rem; line-height: 1; cursor: pointer; }
+.bd-del:active { background: var(--surface-3); }
+.bd-sub { margin-top: -2px; font-size: 0.72rem; color: var(--text-3); }
+.bd-nums { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.bd-nums.one { grid-template-columns: minmax(0, 1fr) 3fr; }
+.bd-num { display: flex; flex-direction: column; gap: 2px; min-width: 0; font-size: 0.68rem; color: var(--text-3); }
+.bd-num .bd-input { width: 100%; text-align: left; }
+.bd-row.new .bd-name-in:placeholder-shown { border-color: color-mix(in srgb, var(--accent) 50%, var(--line)); }
+@media (prefers-reduced-motion: no-preference) { .bd-list.flash .bd-row { animation: trSwap 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both; } }
 .bd-total { padding-top: 8px; border-top: 1px solid var(--line); font-size: 0.8rem; color: var(--text-2); font-variant-numeric: tabular-nums; }
 .bd-total b { color: var(--text); font-weight: 750; }
 .bd-input {
