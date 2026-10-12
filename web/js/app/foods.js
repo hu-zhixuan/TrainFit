@@ -72,6 +72,34 @@ Object.assign(FitnessApp.prototype, {
     return m ? m[1] : '';
   },
 
+  /**
+   * 列表太长就折起来（v12.6，用户：「本地记录列表太长加一个伸缩表」）：超过 n 条只露前 n 条，
+   * 下面「展开全部 N 条」/「收起」；展开过的删了一条重画还是展开的（`_fold` 按列表记）。
+   */
+  foldList(el, n) {
+    const rows = [...el.querySelectorAll(':scope > .myfood-row')];
+    const max = n || 5;
+    if (rows.length <= max + 1) return;
+    this._fold = this._fold || {};
+    const open = !!this._fold[el.id];
+    rows.forEach((r, i) => r.classList.toggle('fold-hide', !open && i >= max));
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'fold-btn' + (open ? ' open' : '');
+    btn.setAttribute('aria-expanded', String(open));
+    btn.innerHTML = open ? '收起<i></i>' : `展开全部 ${rows.length} 条<i></i>`;
+    btn.addEventListener('click', () => {
+      this._fold[el.id] = !this._fold[el.id];
+      const on = this._fold[el.id];
+      rows.forEach((r, i) => { if (i >= max) { r.classList.toggle('fold-hide', !on); r.classList.toggle('fold-in', on); } });
+      btn.classList.toggle('open', on);
+      btn.setAttribute('aria-expanded', String(on));
+      btn.innerHTML = on ? '收起<i></i>' : `展开全部 ${rows.length} 条<i></i>`;
+      if (!on) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    });
+    rows[rows.length - 1].after(btn);
+  },
+
   renderMemo() {
     const el = document.getElementById('memo-list');
     if (!el) return;
@@ -82,6 +110,7 @@ Object.assign(FitnessApp.prototype, {
       : '<p class="field-note">跟小人说说你自己，比如「我叫阿程，健身新手，不吃辣」，会记在这里，以后回答、估热量、排计划都照顾到。</p>') +
       // 画像：按记录看出来的，不用删，记录变了它跟着变
       (pic.length ? `<div class="portrait"><b>按你的记录看出来的</b><p>${pic.map(esc).join('；')}</p><small>问小人问题时会带上这几句，记录变了它跟着变。</small></div>` : '');
+    this.foldList(el);
   },
 
   /** 「最近的事」：聊天时小人记下的（面试、考试…），到日子它会问；能删 */
@@ -91,6 +120,7 @@ Object.assign(FitnessApp.prototype, {
     const list = ((this.profile.buddy || {}).life || []).slice().reverse();
     el.innerHTML = list.length ? list.map(x => `<div class="myfood-row"><div class="myfood-main"><b>${esc(x.t)}</b><small>${+x.at.slice(5, 7)}月${+x.at.slice(8)}日说的${x.due ? (x.asked ? ' · 问过了' : ` · ${+x.due.slice(5, 7)}月${+x.due.slice(8)}日问你`) : ''}</small></div><button type="button" class="chip" data-life-del="${esc(x.t)}">删除</button></div>`).join('')
       : '<p class="field-note">跟小人聊聊最近的事（「周五要面试」「下周考试」），它会记在这里，到了日子主动问你怎么样了。</p>';
+    this.foldList(el);
   },
 
   /** 「存好的计划」（v6.5）：说「明天练练腿日」就放到那天；能删。自动存的（加计划时悄悄存的）写着「最近用过」 */
@@ -103,6 +133,7 @@ Object.assign(FitnessApp.prototype, {
       const what = lifts.length ? lifts.slice(0, 3).map(w => w.exerciseName).join('、') + (lifts.length > 3 ? ` 等 ${lifts.length} 个动作` : '') : (e.meals || []).map(m => m.mealType.replace('/补剂', '')).join('、');
       return `<div class="myfood-row"><div class="myfood-main"><b>${esc(e.name)}</b><small>${e.auto ? '最近用过 · ' : ''}${esc(what)}</small></div><button type="button" class="chip" data-plan-del="${esc(e.name)}">删除</button></div>`;
     }).join('') : '<p class="field-note">小人给的计划点「存起来」，或者说「把这个计划存起来叫练腿日」，就会存在这里。以后说「明天练练腿日」「把练腿日排到周五」，它直接帮你放好。</p>';
+    this.foldList(el);
   },
 
   renderMyFoods() {
@@ -118,5 +149,6 @@ Object.assign(FitnessApp.prototype, {
         <span class="myfood-kcal">${fmt(f.calories)}<small>kcal</small></span>
         <button type="button" class="chip" data-forget="${esc(f.name)}">删除</button>
       </div>`).join('');
+    this.foldList(el);
   }
 });
