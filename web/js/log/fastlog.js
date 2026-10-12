@@ -43,8 +43,25 @@
     return { n: m[1] === '半' ? 0.5 : (m[1] ? cnNum(m[1]) : 1) || 1, unit: m[2] || '' };
   }
 
-  // 这些说法要大模型来：在问、在改、说到别的日子、说了克数 / 热量、没吃、跑步多久这类
-  const NEEDS_LLM = /改|删|不对|其实|记错|挪|换成|去掉|撤|算了|不算|昨|前天|明天|后天|大前天|记住|包装|克|\dg|毫升|ml|千卡|大卡|卡路里|热量|没吃|没喝|不吃|没练|一半|分钟|小时|公里|步/i;
+  // 这些说法要大模型来：在问、在改、说到别的日子、说了克数 / 热量、没吃、跑了多远这类
+  // v12：「跑步 30 分钟」「椭圆机半小时」这种练过的有氧 + 时长本机记（cardioOf），分钟 / 小时不再一律交给大模型
+  const NEEDS_LLM = /改|删|不对|其实|记错|挪|换成|去掉|撤|算了|不算|昨|前天|明天|后天|大前天|记住|包装|克|\dg|毫升|ml|千卡|大卡|卡路里|热量|没吃|没喝|不吃|没练|一半|公里|[\d千万]步|步数/i;
+
+  /**
+   * 语音识别常听错的健身词（v12，口喷更准）：只换「这几个字连在一起本来就不是一个词」的，换了不会错——
+   * 卧腿→卧推、划川→划船、深吨→深蹲、硬啦→硬拉、哑玲→哑铃、杠玲→杠铃、引体象上→引体向上、蛋白份→蛋白粉、茶叶大→茶叶蛋、
+   * 公金→公斤、四组八哥→4组8个（「X组Y哥」）。秒记和大模型都吃这个改过的字。
+   */
+  const ASR_FIX = [
+    [/卧腿|握推|卧退/g, '卧推'], [/划川|滑船|华船/g, '划船'], [/深吨|深顿|深敦/g, '深蹲'], [/硬啦|硬垃/g, '硬拉'], [/哑玲|亚铃|哑零/g, '哑铃'], [/杠玲|钢铃|杠零/g, '杠铃'],
+    [/引体象上|引体像上|引体项上/g, '引体向上'], [/飞鸟机/g, '蝴蝶机'], [/高位下啦/g, '高位下拉'], [/蛋白份|蛋白分/g, '蛋白粉'], [/乳青蛋白|乳情蛋白/g, '乳清蛋白'],
+    [/茶叶大/g, '茶叶蛋'], [/鸡胸柔/g, '鸡胸肉'], [/公金/g, '公斤'], [/([\d一二两三四五六七八九十]+)组([\d一二两三四五六七八九十]+)哥/g, '$1组$2个']
+  ];
+  function asrFix(text) {
+    let t = String(text || '');
+    ASR_FIX.forEach(([re, to]) => { t = t.replace(re, to); });
+    return t;
+  }
   const FILLER = /呃+|嗯+|啊+|哦+|那个|就是|的话|吧|呀|啦|噢/g; // 别去「哈」，哈密瓜
 
   /** 吃过的东西：记住的食物优先，其次是最近 60 天记录里同名的最近一次 */
@@ -124,6 +141,25 @@
       burnedCalories: TF.strengthBurn(last.exerciseName, kg, Math.round(sets), Math.round(reps), bodyKg), estimated };
   }
 
+  /** 「跑步30分钟」「椭圆机半小时」「跳绳二十分钟」→ 一次有氧（只认练过的有氧，按你的体重算消耗）；没把握返回 null */
+  function cardioOf(seg, workouts, bodyKg) {
+    const s = seg.replace(/了|的|一共|大概|差不多|左右/g, '');
+    const m = s.match(new RegExp(`^(.+?)((?:${NUM}|半)\\s*个?\\s*(?:分钟|分|小时|钟头)半?)$`));
+    if (!m) return null;
+    const mins = TF.saidMinutes ? TF.saidMinutes(m[2].replace(/钟头/, '小时').replace(/分$/, '分钟')) : null;
+    const minutes = mins && (mins.total || mins.per);
+    if (!(minutes >= 3 && minutes <= 300)) return null;
+    const n = FoodDB.norm(m[1]);
+    const done = (workouts || []).filter(w => w.durationMin && w.exerciseName);
+    const names = [...new Set(done.map(w => w.exerciseName))];
+    const hit = names.find(x => FoodDB.norm(x) === n) || (names.filter(x => FoodDB.norm(x).startsWith(n) && n.length >= 2).length === 1 ? names.find(x => FoodDB.norm(x).startsWith(n)) : null);
+    if (!hit) return null;
+    const last = done.filter(w => w.exerciseName === hit).sort((a, b) => (a.date > b.date ? -1 : 1))[0];
+    const info = TF.exerciseInfo ? TF.exerciseInfo(hit) : { met: 7 };
+    return { exerciseName: hit, muscleGroup: last.muscleGroup || '有氧', weightKg: 0, sets: 1, reps: 1, durationMin: Math.round(minutes),
+      burnedCalories: TF.metBurn(info.met || 7, minutes, bodyKg), estimated: false };
+  }
+
   /**
    * 能本机记就返回和大模型一样格式的结果（source: 'local'），不能就返回 null。
    * data: { now, today, myFoods, diet, workouts, simple, bodyKg（算训练消耗用） }
@@ -143,6 +179,9 @@
     for (const seg of segs) {
       const lf = data.simple ? null : liftOf(seg.replace(/\s+/g, ''), data.workouts, data.bodyKg);
       if (lf) { lifts.push(lf); continue; }
+      const cd = cardioOf(seg.replace(/\s+/g, ''), data.workouts, data.bodyKg);
+      if (cd) { lifts.push(cd); continue; }
+      if (/分钟|小时|钟头/.test(seg)) return null; // 说了时长又不是练过的有氧：交给大模型
       // 吃的：按空格分开；整段认不出，再在「两个鸡蛋一杯牛奶」这种数字量词开头的地方切开
       for (const chunk of seg.split(/\s+/).filter(Boolean)) {
         const whole = foodItem(chunk, known);
@@ -213,7 +252,7 @@
     return out;
   }
 
-  Object.assign(TF, { cnNum, fastLog, parseIntro });
+  Object.assign(TF, { cnNum, fastLog, parseIntro, asrFix });
 
   if (typeof module !== 'undefined' && module.exports) module.exports = TF;
 })(typeof window !== 'undefined' ? window : globalThis);

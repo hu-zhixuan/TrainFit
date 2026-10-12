@@ -308,11 +308,16 @@
   };
   // 秀肌肉：两只胳膊端起来（ARMS_FLEX 盖上去），身子和伸懒腰一样
   STAND.flex = STAND.stretch;
+  // stompA / stompB：跺脚（v12，AI 算得久的时候急得一直跺），左脚抬起来 / 右脚抬起来，两帧换得飞快
   const LEGS = {
     boy: { legs: ['.........PPP.PPP........', '.........PPP.PPP........', '.........PPP.PPP........', '........FFFF.FFFF.......'],
-      walk: ['........PPP...PPP.......', '.......PPP.....PPP......', '.......PPP.....PPP......', '......FFFF.....FFFF.....'] },
+      walk: ['........PPP...PPP.......', '.......PPP.....PPP......', '.......PPP.....PPP......', '......FFFF.....FFFF.....'],
+      stompA: ['.........PPP.PPP........', '.........PPP.PPP........', '........FFFF.PPP........', '.............FFFF.......'],
+      stompB: ['.........PPP.PPP........', '.........PPP.PPP........', '.........PPP.FFFF.......', '........FFFF............'] },
     girl: { legs: ['.......PPPPPPPPPPP......', '.........SS...SS........', '.........pp...pp........', '........FFFF.FFFF.......'],
       walk: ['.......PPPPPPPPPPP......', '........SS.....SS.......', '.......pp.......pp......', '......FFFF.....FFFF.....'],
+      stompA: ['.......PPPPPPPPPPP......', '.........SS...SS........', '........FFFF..pp........', '.............FFFF.......'],
+      stompB: ['.......PPPPPPPPPPP......', '.........SS...SS........', '.........pp..FFFF.......', '........FFFF............'],
       waist: '........PPPPPPPPP.......' }
   };
   const ARMS_UP = { x: 5, y: 0, rows: ['SS............SS'].concat(Array(10).fill('RR............RR'), ['.R............R.']) };
@@ -402,7 +407,7 @@
   const AW = 24, AH = 17, AH_STAND = 25;
   const M = 3;                 // 四周留白（描边 + 特效）；底下不留：胳膊 / 鞋直接搭在下面那个框的边上
   const GW = AW + M * 2, GH = AH + M;
-  const POSES = ['lie', 'stand', 'walk', 'wave', 'stretch', 'flex', 'think'];
+  const POSES = ['lie', 'stand', 'walk', 'wave', 'stretch', 'flex', 'think', 'stomp'];
   const heightOf = (pose) => (pose && pose !== 'lie' ? AH_STAND : AH) + M;
 
   const HAIR = {
@@ -550,12 +555,12 @@
       const body = pose === 'wave' ? (o.frame ? STAND.wave2 : STAND.wave) : STAND[pose] || STAND.body;
       put(0, 13, body);
       if (l.char === 'girl') put(0, 20, [LEGS.girl.waist]);
-      put(0, 21, pose === 'walk' && o.frame ? LEGS[l.char].walk : LEGS[l.char].legs);
+      put(0, 21, pose === 'walk' && o.frame ? LEGS[l.char].walk : pose === 'stomp' ? LEGS[l.char][o.frame ? 'stompB' : 'stompA'] : LEGS[l.char].legs);
     }
     // 腹肌那一档：胳膊、肩膀粗一圈（男生）
     if (build === 'ripped' && l.char === 'boy') {
       const at = BUILDS.ripped.arms;
-      const pts = lie ? at.lie : pose === 'flex' ? at.flex : pose === 'stand' || pose === 'walk' ? at.stand : [];
+      const pts = lie ? at.lie : pose === 'flex' ? at.flex : pose === 'stand' || pose === 'walk' || pose === 'stomp' ? at.stand : [];
       pts.forEach(([x, y]) => put(x, y, [lie ? 'Q' : 'R']));
     }
     // 头、头发晃的那一帧、趴着时下巴旁边的鬓角
@@ -663,6 +668,7 @@
    */
   function svg(o) {
     const pose = POSES.includes(o.pose) ? o.pose : 'lie';
+    if (pose === 'stomp') o = Object.assign({}, o, { mood: 'bad', face: '' }); // 跺脚：急得冒汗
     const frame = (extra) => compose(Object.assign({}, o, { pose }, extra));
     const a = frame({ frame: 0 });
     const H = a.h;
@@ -1129,7 +1135,8 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     const q = String(question || '').replace(/\s+/g, ' ').trim();
     const eat = /吃|食谱|菜谱|蛋白|热量|碳水|饿/.test(q), lift = /练|训练|健身|动作/.test(q);
     // 聊天：不说「算算蛋白」这种干活的话，就是在听、在想怎么回你
-    const steps = kind === 'chat' ? ['嗯…', '我在听', '想想怎么说…', '嗯，我想好了…'] : ['我想想…', '先看看你今天吃了多少…', eat ? '算算还差多少蛋白、还能吃多少…' : '翻翻你最近的训练…',
+    const steps = kind === 'chat' ? ['嗯…', '我在听', '想想怎么说…', '嗯，我想好了…'] :
+      kind === 'brain' ? ['我想想…', '翻翻你这两周的记录…', '对一下你的身体数据和目标…', '在理清楚怎么说…', '快好了，再等一下下…'] : ['我想想…', '先看看你今天吃了多少…', eat ? '算算还差多少蛋白、还能吃多少…' : '翻翻你最近的训练…',
       eat && lift ? '把吃和练一起排一排…' : eat ? '在排吃什么、吃多少…' : lift ? '在排动作、重量和组数…' : '快好了…', '快好了，再等一下下…'];
     pop.dataset.mode = 'thinking';
     pop.dataset.level = 'none';
@@ -1196,7 +1203,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
         return;
       }
     }
-    if (!opts.streaming) this._lastAnswer = { question, answer, at: Date.now(), plan: opts.plan, baseDate: opts.baseDate, next: opts.next, chat: opts.chat };
+    if (!opts.streaming) this._lastAnswer = { question, answer, at: Date.now(), plan: opts.plan, baseDate: opts.baseDate, next: opts.next, chat: opts.chat, brain: opts.brain };
     const plan = !opts.streaming && opts.plan;
     // 一天的计划，或者排了好几天的训练（plan.days）
     const base = opts.baseDate || getTodayDateString();
@@ -1207,6 +1214,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       this._planOffer = { at: Date.now(), text: this.planText(plan, base) };
     }
     pop.dataset.mode = 'answer';
+    pop.dataset.kind = opts.brain ? 'brain' : '';
     pop.dataset.q = q;
     pop.dataset.level = 'none';
     const dayWord = (d) => (d === getTodayDateString() ? '今天' : d === shiftDateString(getTodayDateString(), 1) ? '明天' : `${+d.slice(5, 7)}月${+d.slice(8)}日`);
@@ -1215,7 +1223,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     // 有计划：动作、吃的画成一张张清单（按天分组），回答里已经画进清单的那几行就不重复了，只留说明
     const shownText = plan ? this.planNotes(answer, days) : answer;
     pop.innerHTML = `<div class="buddy-pop-head">${esc(q.length > 26 ? q.slice(0, 25) + '…' : q)}</div>` +
-      (shownText ? `<p class="buddy-answer${opts.streaming && !opts.planning ? ' typing' : ''}${plan ? ' notes' : ''}">${esc(shownText)}</p>` : '') +
+      (shownText ? `<p class="buddy-answer${opts.streaming && !opts.planning ? ' typing' : ''}${plan ? ' notes' : ''}${opts.brain ? ' brain' : ''}">${esc(shownText)}</p>` : '') +
       (plan ? this.planPreview(days, dayWord) : '') +
       (opts.streaming ? `<p class="buddy-wait${opts.planning ? '' : ' hidden'}">正在排成计划，好了能一键加上<span class="think-dots"><i></i><i></i><i></i></span></p>` : '') +
       (plan ? `<div class="buddy-acts"><button class="buddy-act" type="button" data-pa="edit">改一改</button>` +
@@ -1280,7 +1288,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     if (!opts.streaming && !opts.again) {
       if (this.bondGain) this.bondGain('ask');
       // 记下刚才聊的：接着说「那换成牛肉呢」「嗯，有点累」时小人接得上（15 分钟内）
-      if (this.pushTalk) this.pushTalk(q, plan ? this.planNotes(answer, days) || answer : answer);
+      if (this.pushTalk) this.pushTalk(q, plan ? this.planNotes(answer, days) || answer : answer, opts.chat ? 'chat' : 'ask');
       if (opts.face && this.buddyFace) this.buddyFace(opts.face);
     }
     // 聊天的回答一出来就带一点对话音
@@ -1658,10 +1666,49 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     if (!this._touring && !this._acting) this.buddyPose('lie');
   },
 
-  /** 有话在整理（大模型还没回来）：小人头上冒「…」 */
+  /** 有话在整理（大模型还没回来）：小人头上冒「…」；算了 5 秒还没好，站起来急得一直跺脚（v12），好了就停 */
   buddyThinking() {
     const btn = document.getElementById('buddy');
-    if (btn) btn.classList.toggle('thinking', (this.pending || []).some(p => p.status === 'working'));
+    const working = (this.pending || []).filter(p => p.status === 'working');
+    if (btn) btn.classList.toggle('thinking', working.length > 0);
+    clearTimeout(this._stompT);
+    if (!working.length) { this.buddyCalm(); return; }
+    const since = Math.min(...working.map(p => p.startedAt || p.ts || Date.now()));
+    const wait = since + this.STOMP_MS - Date.now();
+    this._stompT = setTimeout(() => this.buddyStomp(), Math.max(0, wait));
+  },
+
+  STOMP_MS: 5000,
+
+  /** 急得跺脚：回答已经在出字、在录音、在教程、在演剧情、在看手机的时候不跺 */
+  buddyStomp() {
+    const btn = document.getElementById('buddy');
+    const pop = document.getElementById('buddy-pop');
+    if (!btn || btn.classList.contains('hidden') || !(this.pending || []).some(p => p.status === 'working')) return;
+    const answering = pop && !pop.classList.contains('hidden') && pop.dataset.mode === 'answer';
+    if (answering || this._touring || this._listening || this._scene || (this.phoneIsOpen && this.phoneIsOpen())) {
+      this._stompT = setTimeout(() => this.buddyStomp(), 1000);
+      return;
+    }
+    if (this._pose === 'stomp') return;
+    this._actToken = (this._actToken || 0) + 1; // 打断正在做的小动作
+    clearTimeout(this._actTimer);
+    this._acting = false;
+    this.buddyMove(0, 0);
+    this._stomping = true;
+    this.buddyPose('stomp');
+    const line = pop && pop.dataset.mode === 'thinking' && pop.querySelector('.think-line');
+    if (line) line.textContent = '有点慢……我在催了';
+  },
+
+  /** 算完了：不跺了，趴回去（回答气泡开着时站着） */
+  buddyCalm() {
+    clearTimeout(this._stompT);
+    if (!this._stomping) return;
+    this._stomping = false;
+    if (this._pose !== 'stomp') return;
+    const pop = document.getElementById('buddy-pop');
+    this.buddyPose(pop && !pop.classList.contains('hidden') && pop.dataset.mode === 'answer' ? 'stand' : 'lie');
   },
 
   bindBuddy() {
@@ -1695,7 +1742,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       if (this.noteReady && this.noteReady() && this.showNote()) return;
       // 半小时内问过问题：先给刚才的回答，里面能点去看连续记录
       const a = this._lastAnswer;
-      if (a && Date.now() - a.at < 30 * 60 * 1000) this.showBuddyAnswer(a.question, a.answer, { again: true, plan: a.plan, baseDate: a.baseDate, next: a.next, chat: a.chat });
+      if (a && Date.now() - a.at < 30 * 60 * 1000) this.showBuddyAnswer(a.question, a.answer, { again: true, plan: a.plan, baseDate: a.baseDate, next: a.next, chat: a.chat, brain: a.brain });
       else this.showBuddyPop();
     });
     // 温度计的弹窗和小人的气泡不同时开

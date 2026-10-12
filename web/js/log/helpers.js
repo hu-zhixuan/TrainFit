@@ -210,6 +210,7 @@
   function looksLikeQuestion(text) {
     const t = String(text || '');
     if (/[？?]\s*$/.test(t)) return true;
+    if (/^(推荐|介绍一下|讲讲|教我|科普|解释一下)/.test(t)) return true; // v12：「推荐一本书」「科普一下肌酸」也是在问
     return /给我(定|制定|安排|推荐|出|做|列|想)|帮我(定|制定|安排|推荐|想|规划|看看)|(制定|安排|规划|推荐)(一下)?(明天|后天|今晚|晚上|下周|一周|一天)|(吃|练)点?(什么|啥)|该(吃|练)|(还)?(差|剩)多少|还能吃|能不能|可不可以|要不要|怎么(吃|喝|练|做|办|样)|给我排|帮我排|够不够|多不多|(练|吃|喝)多少|咋(行|办|样|整|弄|吃|喝|练|回事|没|不)|为(啥|什么)|行不行|好不好|有什么(建议|推荐)|食谱|菜谱|训练计划|健身计划|上(周|个月|一周)|这(周|个月)|几(次|天|顿|公斤|斤)|多少(次|天|斤|公斤|克|热量|卡)|哪(天|顿|个动作)|最(好|重|多|少)(的|是)|吗[。！!]?\s*$/.test(t);
   }
 
@@ -287,6 +288,8 @@
     const fit = /(吃|喝|练)(点)?(什么|啥)|食谱|菜谱|计划|蛋白|热量|卡路里|千卡|大卡|碳水|脂肪|减脂|增肌|动作|训练|饮食|排(一下|个)|怎么(吃|练|减|瘦)/;
     // 问小人自己的事（「你在干嘛」「你喜欢吃什么」）；问的是自己吃练（「你觉得我明天练什么」）的不算
     if (you.test(raw) && !(fit.test(t) && /我/.test(t))) return true;
+    // 问健康的事（「最近老失眠怎么办」「压力大怎么调」）：交给健康大脑认真答，不当闲聊（v12）；只是说说（「最近失眠好烦」）还是聊天
+    if (looksLikeQuestion(raw) && HEALTH.test(raw)) return false;
     // 提到吃的、练的东西（「好累，早餐包子豆浆」）：交给整理，别漏记
     if (/早餐|午餐|晚餐|早饭|午饭|晚饭|宵夜|夜宵|加餐|饭|面|粥|包子|馒头|饺子|蛋|奶|豆浆|咖啡|奶茶|肉|鸡|鱼|虾|菜|果|沙拉|面包|汉堡|披萨|火锅|烧烤|零食|可乐|酒|卧推|深蹲|硬拉|跑步|有氧|瑜伽|游泳|俯卧撑|引体|跳绳|骑车|散步|步数/.test(t)) return false;
     // 问吃和练的事：交给整理（能排计划、算热量）
@@ -299,8 +302,33 @@
     const life = /工作|上班|下班|加班|老板|领导|同事|公司|项目|面试|辞职|跳槽|工资|实习|考试|考研|考公|学习|作业|论文|期末|上课|老师|同学|室友|朋友|闺蜜|兄弟|对象|男朋友|女朋友|男友|女友|老公|老婆|喜欢的人|暗恋|表白|分手|恋爱|约会|相亲|结婚|爸|妈|家里|孩子|猫|狗|电影|电视剧|追剧|综艺|游戏|小说|音乐|唱歌|旅游|旅行|出差|下雨|天气|放假|周末|假期|生日|礼物|房租|搬家|看病|医院|感冒|发烧|头疼|牙疼/;
     // 随便问它一个问题（「地球为什么是圆的」「怎么跟老板提加薪」），不是问吃和练的
     const ask = (looksLikeQuestion(raw) || /^(推荐|介绍|讲讲|说说|教我|帮我想|给我讲)/.test(raw)) && !/练|健身|动作|器械|减|增肌|瘦|胖|体重|体脂|肌|吃|喝|饭|餐|食|蛋白|热量|卡|碳水|脂肪|饿|饱|记|计划/.test(raw);
-    return feel.test(raw) || social.test(raw) || about.test(raw) || life.test(raw) || ask || (reply.test(raw) && (inThread || raw.length <= 4)) ||
+    // v12 健康大脑：随便问它一个问题（「怎么跟老板提加薪」「地球为什么是圆的」）交给大脑答（结论 + 要点），不用小人闲聊的口气三两句带过；
+    // 说心情、搭话、问它自己的事、正在聊的接话，还是聊天
+    if (ask && !inThread && !feel.test(raw) && !about.test(raw) && !social.test(raw)) return false;
+    return feel.test(raw) || social.test(raw) || about.test(raw) || life.test(raw) || (reply.test(raw) && (inThread || raw.length <= 4)) ||
       inThread; // 正在聊（15 分钟内）：只要不是在报吃了练了什么（上面已经排除），都接着聊
+  }
+
+  /**
+   * 健康的事（v12 健康大脑）：问这些（「失眠怎么办」「尿酸高能吃啥」「经期能练吗」）交给健康大脑答，不当成闲聊。
+   */
+  const HEALTH = /健康|身体|睡眠|失眠|睡不着|早醒|熬夜|作息|头疼|头痛|头晕|血压|血糖|血脂|贫血|胆固醇|尿酸|痛风|心率|心跳|心慌|胸闷|体检|化验|指标|月经|经期|姨妈|痛经|排卵|激素|荷尔蒙|睾酮|雌激素|甲状腺|胰岛素|代谢|体脂|内脏脂肪|皮肤|长痘|痘痘|脱发|掉发|便秘|拉肚子|腹泻|胃|肠|消化|胀气|反酸|过敏|感冒|发烧|咳嗽|嗓子|喉咙|鼻炎|免疫|炎症|酸痛|疼|痛|拉伤|扭伤|受伤|伤病|旧伤|膝盖|腰|颈椎|肩|关节|韧带|肌腱|康复|理疗|拉伸|体态|驼背|骨盆|焦虑|抑郁|压力|情绪|精力|疲劳|乏力|维生素|矿物质|补剂|保健品|鱼油|肌酸|咖啡因|酒精|喝酒|抽烟|吸烟|药|副作用|怀孕|备孕|哺乳|更年期|衰老|抗衰|长寿|视力|眼睛|牙|心肺|最大摄氧|心脏|肝|肾|脂肪肝|水肿|抽筋|出汗|体温|BMI|基础代谢/i;
+
+  // 要排计划、要动手的问题：交给记录的提示词（能写 plan、act），不走健康大脑
+  const PLAN_ACT = /计划|食谱|菜谱|菜单|课表|序列|待办|安排|排(一下|个|到|成|进)|给我(定|制定|出|列|做|来|配)|帮我(定|制定|安排|规划|排|列|配)|放到|挪到|存(起来|一下)|改成|换成|删掉/;
+  const DAY_PLAN = /(明天|后天|今晚|今天|晚上|中午|早上|下午|这周|下周|一周|周[一二三四五六日天]|星期|礼拜).{0,8}(吃|练|喝)/;
+  const WHAT_DO = /吃(点)?(什么|啥)|练(点)?(什么|啥)|怎么练|练法|推荐.{0,4}(早|午|晚|加餐|夜宵|宵夜|吃|喝|菜|饭|动作)/;
+
+  /**
+   * 只是在问、不是要排安排、也不是要动手：交给健康大脑（v12）。
+   * 「尿酸高能吃什么」「膝盖疼怎么练」是健康的事 → 大脑；「晚上吃点啥」「明天练什么」是要排一天 → 记录的提示词（会给能加进计划的 plan）。
+   */
+  function brainQuestion(text, asked) {
+    const t = String(text || '');
+    // asked：点的「接着问」（「那晚上能喝酒吗」不一定带问号），一定当成在问；但报了吃了练了的还是交给记录
+    if (!(asked ? !/(吃|喝|练|跑|做|骑|游|走)了(?!几|多少|啥|什么|没)|\d+(\.\d+)?\s*(克|g|公斤|kg|斤|组|个|次|分钟|碗|杯)/i.test(t) : pureQuestion(t)) || PLAN_ACT.test(t) || DAY_PLAN.test(t)) return false;
+    if (HEALTH.test(t)) return true;
+    return !WHAT_DO.test(t);
   }
 
   /**
@@ -404,7 +432,7 @@
     return null;
   }
 
-  Object.assign(TF, { MUSCLES, MEAL_TYPES, num, cleanText, round1, mealTypeByHour, normMealType, mealTimes, mealSegments, NUTRIENTS, cleanNutrients, nutrientsText, toKg, quickWeight, findWeight, guessMuscle, exerciseInfo, metBurn, strengthBurn, workoutTag, looksLikeQuestion, looksLikePlanEdit, looksLikeChat, lifeEvent, LIFE_EVENT, pureQuestion, noCard, needsHistory, saidWeight, saidMinutes, quickIntent });
+  Object.assign(TF, { MUSCLES, MEAL_TYPES, num, cleanText, round1, mealTypeByHour, normMealType, mealTimes, mealSegments, NUTRIENTS, cleanNutrients, nutrientsText, toKg, quickWeight, findWeight, guessMuscle, exerciseInfo, metBurn, strengthBurn, workoutTag, looksLikeQuestion, looksLikePlanEdit, looksLikeChat, lifeEvent, LIFE_EVENT, HEALTH, brainQuestion, pureQuestion, noCard, needsHistory, saidWeight, saidMinutes, quickIntent });
 
   if (typeof module !== 'undefined' && module.exports) module.exports = TF;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -15,7 +15,7 @@
  *   { name: 'cat', prompt, opts: [几个现成的], max: 字数, r: [起好以后的台词（{cat}）] }：起名字
  *   { promise: 'jxp1' }：约定卡（cast.promises），约好了你在真实的记录里做到，就解锁一段加篇（story.js）
  *   { phone: true / false }：手机聊天的样子（对话变成气泡，TA 打字前有「正在输入…」）；{ typing: 毫秒, drop: true }：正在输入…然后没发（删掉了）
- *   { fx: 'shake' | 'flash' | 'close'（特写）| 'far' | 'sepia'（回忆）| 'nosepia' | 'dark' | 'light' | 'heart' }  { sfx: 音效 }  { amb: 环境声 }
+ *   { fx: 'shake' | 'flash' | 'close'（特写）| 'far' | 'sepia'（回忆）| 'nosepia' | 'dark' | 'light' | 'heart' | 'shadow'（只剩影子，v12）| 'noshadow' }  { sfx: 音效 }  { amb: 环境声 }
  *   { time: '那天晚上' }：黑场 + 一行字      { bg: 'pool' } 换背景（暗下去再亮）    { cg: 'jx-pool6' } / { cg: '' }    { enter: true } / { exit: true }
  *   { set: { trust: 1 } }：隐藏的好感      { end: 'romance' }：演完放结局字幕
  *   条件：rel:romance / friend / none、pick:jx2b=0（-1 是沉默）、has:lift、seen:jx1a、lv>=3、said:jx4a、v:trust>=2、promise:jxp1、kept:jxp1，& 连，! 取反。
@@ -319,7 +319,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     el.querySelector('.th-auto').classList.toggle('on', auto);
     el.querySelector('.th-tools').classList.toggle('hidden', !!sc.viewer);
     el.querySelector('.th-cgimg').style.backgroundImage = '';
-    el.classList.remove('hidden', 'closing', 'choosing', 'narr', 'other', 'me', 'in-cg', 'cg-art', 'rolling', 'phone', 'acting', 'has-sprite', 'fx-close', 'fx-sepia', 'fx-dark', 'iris-out',
+    el.classList.remove('hidden', 'closing', 'choosing', 'narr', 'other', 'me', 'in-cg', 'cg-art', 'rolling', 'phone', 'acting', 'has-sprite', 'fx-close', 'fx-sepia', 'fx-dark', 'fx-shadow', 'auto-close', 'iris-out',
       'sys-line', 'own-line', 'onair', 'glass-rain', 'twin', 'sysvoice', 'calling');
     // 电话（v10.0，TA 的手机）：上面一条「通话中 0:12」，一秒一跳
     el.classList.toggle('calling', !!sc.call);
@@ -536,8 +536,12 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
       const actor = el.querySelector('.th-actor');
       if (look) s.look = Object.assign({}, s.look || {}, look);
       const cg = s.cg && this.cgDef(s.cg);
-      const shown = twin ? '开心' : face;
-      if (face !== s.face || !actor.innerHTML) actor.innerHTML = this.sceneActor(shown, (cg && cg.pose) || pose, Object.assign({}, s.look || {}, cg && cg.outfit ? { outfit: cg.outfit } : {}));
+      // v12：按这句话换一张更贴的立绘（被说中了是慌张 / 嘴硬，说到眼泪是含泪，得意里带软的是偷笑）
+      const shown = twin ? '开心' : TF.Art && TF.Art.variant ? TF.Art.variant(this.castKey(), face, text) : face;
+      if (shown !== s.shown || face !== s.face || !actor.innerHTML) actor.innerHTML = this.sceneActor(shown, (cg && cg.pose) || pose, Object.assign({}, s.look || {}, cg && cg.outfit ? { outfit: cg.outfit } : {}));
+      s.shown = shown;
+      // 镜头（v12）：心里动了的那几句（害羞、心动、慌张、含泪、哭）慢慢推近一点，别的时候退回来；剧本自己写了特写（fx: close）就听剧本的
+      el.classList.toggle('auto-close', /^(害羞|心动|慌张|含泪|哭|泪笑)$/.test(shown) && !twin);
       // 表情动起来：开心、得意蹦一下，不服抖一下，害羞、心动冒爱心，别的冒符号；同一个表情接着说就轻轻一顿
       actor.classList.remove('th-hop', 'th-shake', 'th-talk', 'th-enter');
       void actor.offsetWidth;
@@ -616,7 +620,9 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
   sceneFx(fx, skipping) {
     const el = this.theaterEl();
     const once = (cls, ms) => { el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); setTimeout(() => el.classList.remove(cls), ms); };
-    if (fx === 'close') el.classList.add('fx-close');
+    if (fx === 'shadow') el.classList.add('fx-shadow'); // v12：只剩一个影子（回忆里的人、远处的人影）
+    else if (fx === 'noshadow') el.classList.remove('fx-shadow');
+    else if (fx === 'close') el.classList.add('fx-close');
     else if (fx === 'far') el.classList.remove('fx-close');
     else if (fx === 'sepia') el.classList.add('fx-sepia');
     else if (fx === 'nosepia') el.classList.remove('fx-sepia');
@@ -1337,7 +1343,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     }
     setTimeout(() => {
       el.classList.add('hidden');
-      el.classList.remove('closing', 'choosing', 'rolling', 'in-cg', 'iris-out', 'fade-out', 'phone', 'acting', 'act-card', 'fx-close', 'fx-sepia', 'fx-dark', 'sys-line', 'own-line', 'onair', 'glass-rain', 'twin', 'sysvoice', 'calling');
+      el.classList.remove('closing', 'choosing', 'rolling', 'in-cg', 'iris-out', 'fade-out', 'phone', 'acting', 'act-card', 'fx-close', 'fx-sepia', 'fx-dark', 'fx-shadow', 'auto-close', 'sys-line', 'own-line', 'onair', 'glass-rain', 'twin', 'sysvoice', 'calling');
       el.querySelector('.th-doc').classList.add('hidden');
       el.querySelector('.th-credits').classList.add('hidden');
       el.querySelector('.th-act').innerHTML = '';

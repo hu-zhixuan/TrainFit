@@ -102,40 +102,70 @@
         <div class="timeline" id="timeline"></div>
       </section>
 
-      <!-- ============ 趋势 ============ -->
+      <!-- ============ 趋势（v12 重做：3 / 7 / 10 / 30 天，动效图表，排行，过去 30 天划卡片） ============ -->
       <section class="view" id="view-trend">
-        <div class="seg" id="trend-range" role="tablist">
-          <button class="seg-btn active" data-range="7" type="button" role="tab">近 7 天</button>
-          <button class="seg-btn" data-range="30" type="button" role="tab">近 30 天</button>
+        <div class="seg tr-range" id="trend-range" role="tablist" aria-label="看多少天">
+          <button class="seg-btn" data-range="3" type="button" role="tab">3 天</button>
+          <button class="seg-btn active" data-range="7" type="button" role="tab">7 天</button>
+          <button class="seg-btn" data-range="10" type="button" role="tab">10 天</button>
+          <button class="seg-btn" data-range="30" type="button" role="tab">30 天</button>
         </div>
 
-        <div class="card coach-card" id="trend-buddy"></div>
+        <div class="card coach-card tr-card" id="trend-buddy"></div>
 
-        <div class="stat-row">
-          <div class="stat-card"><span id="tr-avg-l">平均每天赤字</span><b id="tr-avg">0</b><small id="tr-avg-u">kcal</small></div>
-          <div class="stat-card"><span id="tr-fat-l">折合脂肪</span><b id="tr-fat">0</b><small id="tr-fat-u">kg</small></div>
-          <div class="stat-card"><span>记录天数</span><b id="tr-days">0</b><small>天</small></div>
-        </div>
+        <div class="tr-kpis tr-card" id="tr-kpis"></div>
 
-        <div class="card chart-card">
-          <div class="card-head">
-            <span id="trend-chart-title">每天热量赤字</span>
-            <span class="legend" id="trend-legend"></span>
-          </div>
+        <div class="card chart-card tr-card" id="tr-energy">
+          <div class="card-head"><span>每天吃了多少</span><span class="legend" id="tr-energy-legend"></span></div>
+          <div class="tr-sub" id="tr-energy-sub"></div>
           <div class="chart" id="trend-chart"></div>
-          <div class="chart-note">点柱子查看那天的记录</div>
         </div>
 
-        <div class="card chart-card" id="weight-card">
+        <div class="card chart-card tr-card" id="tr-protein">
+          <div class="card-head"><span>蛋白质</span><span class="legend" id="tr-protein-legend"></span></div>
+          <div class="tr-sub" id="tr-protein-sub"></div>
+          <div class="chart" id="tr-protein-chart"></div>
+        </div>
+
+        <div class="card chart-card tr-card" id="tr-macro">
+          <div class="card-head"><span>热量从哪儿来</span><span class="tr-head-note" id="tr-macro-note"></span></div>
+          <div id="tr-macro-body"></div>
+        </div>
+
+        <div class="card chart-card tr-card fit-only" id="tr-train">
+          <div class="card-head"><span>训练</span><span class="tr-head-note" id="tr-train-note"></span></div>
+          <div class="tr-sub" id="tr-train-sub"></div>
+          <div class="chart" id="tr-train-chart"></div>
+          <div class="tr-muscles" id="tr-muscles"></div>
+        </div>
+
+        <div class="card chart-card tr-card" id="weight-card">
           <div class="card-head">
             <span>体重</span>
             <span class="weight-head-right"><span class="legend" id="weight-legend"></span><button type="button" class="chip" id="weight-log">记体重</button></span>
           </div>
+          <div class="tr-sub" id="weight-sub"></div>
           <div class="chart" id="weight-chart"></div>
         </div>
 
-        <div class="list-head fit-only">动作进步</div>
-        <div class="progress-list fit-only" id="progress-list"></div>
+        <div class="card tr-card tr-board fit-only" id="tr-lifts">
+          <div class="card-head"><span>动作排行</span><span class="tr-head-note">点一行看重量曲线</span></div>
+          <div id="progress-list"></div>
+        </div>
+
+        <div class="card tr-card tr-board" id="tr-foods">
+          <div class="card-head"><span id="tr-foods-title">蛋白主要靠</span>
+            <div class="seg seg-sm tr-foods-seg" id="tr-foods-seg">
+              <button class="seg-btn active" data-v="protein" type="button">蛋白</button>
+              <button class="seg-btn" data-v="kcal" type="button">热量</button>
+            </div>
+          </div>
+          <div id="tr-foods-list"></div>
+        </div>
+
+        <div class="tr-days-head tr-card"><span>过去 30 天</span><small>往左划看更早的</small></div>
+        <div class="tr-days tr-card" id="tr-days"></div>
+
       </section>
 
       <!-- ============ 设置 ============ -->
@@ -275,6 +305,14 @@
 
         <div class="card form-card">
           <div class="card-title">AI 接口</div>
+          <div class="field"><span class="field-label">先用哪条线路</span>
+            <div class="seg seg-sm" id="ql-route">
+              <button class="seg-btn" data-value="auto" type="button">自动</button>
+              <button class="seg-btn" data-value="main" type="button">主线路</button>
+              <button class="seg-btn" data-value="backup" type="button">备用</button>
+            </div>
+          </div>
+          <p class="field-note" id="ql-route-note"></p>
           <p class="field-note" id="ql-cfg-hint"></p>
           <label class="field"><span class="field-label">接口地址 (Base URL)</span><input id="ql-cfg-base" class="input" type="url" autocomplete="off" spellcheck="false"></label>
           <label class="field"><span class="field-label">模型</span><input id="ql-cfg-model" class="input" type="text" autocomplete="off" spellcheck="false"></label>
@@ -425,6 +463,14 @@
       <p class="ob-pal-say" id="ob-pal-say">点一下，听 TA 说句话</p>
       <button type="button" class="btn btn-primary btn-wide" id="ob-cast-done" disabled>选一个吧</button>
       <button type="button" class="ob-min" id="ob-cast-off">先不要小人<small>只有一个按钮。之后想要了，设置 → 外观里叫 TA 出来</small></button>
+    </div>
+  </div>
+
+  <!-- 一个动作的重量曲线（趋势页「动作排行」点开，v12） -->
+  <div class="sheet-overlay hidden" id="lift-sheet" role="dialog" aria-modal="true" aria-labelledby="lift-sheet-title">
+    <div class="sheet lift-sheet">
+      <div class="lift-sheet-head"><div class="sheet-title" id="lift-sheet-title"></div><button type="button" class="chip" id="lift-sheet-close">收起</button></div>
+      <div id="lift-sheet-body"></div>
     </div>
   </div>
 

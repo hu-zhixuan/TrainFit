@@ -40,7 +40,8 @@ SOURCES = os.path.join(SRC, 'sources.json')
 CACHE = os.environ.get('ART_CACHE_DIR') or os.path.join(ROOT, '.art-cache')
 OUT = os.path.join(ROOT, 'web', 'img', 'cast')
 MANIFEST = os.path.join(OUT, 'manifest.js')
-FACES = ['calm', 'happy', 'shy', 'worried', 'smug', 'surprised', 'pout', 'love', 'sleepy', 'sparkle', 'full', 'cry', 'cryhappy']
+# v12 多了四张（条款允许自己加腮红、眼泪）：fluster 慌张 = 惊讶 + 腮红，tearful 含泪 = 平静 + 一滴眼泪，sulky 嘴硬 = 不服 + 腮红，softsmile 偷笑 = 得意 + 腮红
+FACES = ['calm', 'happy', 'shy', 'worried', 'smug', 'surprised', 'pout', 'love', 'sleepy', 'sparkle', 'full', 'cry', 'cryhappy', 'fluster', 'tearful', 'sulky', 'softsmile']
 BGS = ['room', 'roomnight', 'gym', 'pool', 'studio', 'cafe', 'street', 'citynight', 'rain', 'night', 'dusk', 'dawn', 'stage']
 CHARS = ['jx', 'xy']
 EXT = ('.png', '.jpg', '.jpeg', '.webp')

@@ -72,7 +72,12 @@
 
     /** 按住说话 / 点开键盘时先连上大模型接口（原生那边一分钟最多连一次），松手后整理不用再等握手 */
     warm() {
-      try { if (this.has() && root.TrainFitNative.warmLlm) root.TrainFitNative.warmLlm(JSON.stringify(readOverride())); } catch (e) {}
+      try {
+        if (!this.has() || !root.TrainFitNative.warmLlm) return;
+        const ov = readOverride();
+        // 两条线路都先连上：慢了补发、出错换线时也不用再握手
+        LlmRoute.order(ov).forEach(id => root.TrainFitNative.warmLlm(JSON.stringify(LlmRoute.overrideFor(id, ov))));
+      } catch (e) {}
     },
 
     llmInfo() {
@@ -133,6 +138,76 @@
     }
   };
 
+  // ---------------------------------------------------------------------------
+  // 两条线路（v12）：主线路 = Atria（或设置里自己填的接口），备用 = 打包时带的 DeepSeek。
+  // 先走哪条：设置里「AI 线路」——自动（默认：先走主线路；这台手机上实测另一条快得多、或者主线路刚连着出错，就先走另一条）/ 主线路优先 / 备用优先。
+  // 慢了补发、出错换线都在 parser.js 的 sendHedged 里。
+  // ---------------------------------------------------------------------------
+  const ROUTE_KEY = 'tf_llm_route';
+  const STATS_KEY = 'tf_llm_stats';
+  const LlmRoute = {
+    NAMES: { main: '主线路', backup: '备用' },
+    mode() {
+      try { const m = root.localStorage.getItem(ROUTE_KEY); return m === 'main' || m === 'backup' ? m : 'auto'; } catch (e) { return 'auto'; }
+    },
+    setMode(m) { try { root.localStorage.setItem(ROUTE_KEY, m === 'main' || m === 'backup' ? m : 'auto'); } catch (e) {} },
+    _read() {
+      try { const o = JSON.parse(root.localStorage.getItem(STATS_KEY) || '{}'); return o && typeof o === 'object' ? o : {}; } catch (e) { return {}; }
+    },
+    /** 记一次：ok 时 ms 是从发出到写完的时间；失败记时间点。每条线路只留最近 8 次 */
+    note(id, ok, ms) {
+      try {
+        const all = this._read();
+        const list = (all[id] || []).concat([{ ok: !!ok, ms: Math.round(ms || 0), at: Date.now() }]).slice(-8);
+        all[id] = list;
+        root.localStorage.setItem(STATS_KEY, JSON.stringify(all));
+      } catch (e) {}
+    },
+    /** 最近几次写完的中位数（7 天内、至少 3 次才算），没有就 null */
+    median(id, now) {
+      const t = now || Date.now();
+      const ms = (this._read()[id] || []).filter(x => x.ok && t - x.at < 7 * 86400000).map(x => x.ms).sort((a, b) => a - b);
+      return ms.length >= 3 ? ms[Math.floor(ms.length / 2)] : null;
+    },
+    recentFails(id, now) {
+      const t = now || Date.now();
+      return (this._read()[id] || []).filter(x => !x.ok && t - x.at < 10 * 60000).length;
+    },
+    /** 哪些线路能用（主线路：设置里填了 key、或者安装包带了 key；备用：安装包带了 key）。至少返回主线路，没 key 时让它报 NO_KEY */
+    available(override) {
+      const info = Native.llmInfo();
+      const out = [];
+      const custom = !!(override && override.apiKey);
+      if (custom || !info || info.hasKey) out.push('main');
+      if (info && info.backup && info.backup.hasKey) out.push('backup');
+      if (!out.length) out.push('main');
+      return out;
+    },
+    /** 这次的先后顺序 */
+    order(override, now) {
+      const ids = this.available(override);
+      if (ids.length < 2) return ids;
+      const m = this.mode();
+      if (m === 'backup') return ['backup', 'main'];
+      if (m === 'main') return ['main', 'backup'];
+      const fm = this.recentFails('main', now), fb = this.recentFails('backup', now);
+      if (fm >= 2 && fb === 0) return ['backup', 'main'];
+      if (fb >= 2 && fm === 0) return ['main', 'backup'];
+      const a = this.median('main', now), b = this.median('backup', now);
+      if (a && b && b < a * 0.75) return ['backup', 'main'];
+      return ['main', 'backup'];
+    },
+    /** 这条线路用的 override：备用只写 provider，别的不看 */
+    overrideFor(id, override) {
+      return id === 'backup' ? { provider: 'backup' } : (override || {});
+    },
+    info() {
+      const i = Native.llmInfo();
+      if (!i) return null;
+      return { main: { model: i.model, hasKey: !!i.hasKey }, backup: i.backup ? { model: i.backup.model, hasKey: !!i.backup.hasKey } : null };
+    }
+  };
+
   root.__tfLlm = function (id, ok, payload) { Native._onLlm(id, ok, payload); };
   root.__tfLlmDelta = function (id, chunk) { Native._onDelta(id, chunk); };
 
@@ -151,7 +226,7 @@
   };
   root.Haptics = Haptics;
 
-  Object.assign(TF, { readOverride, writeOverride, readAsrOverride, writeAsrOverride, Native, Haptics });
+  Object.assign(TF, { readOverride, writeOverride, readAsrOverride, writeAsrOverride, Native, LlmRoute, Haptics });
 
   if (typeof module !== 'undefined' && module.exports) module.exports = TF;
 })(typeof window !== 'undefined' ? window : globalThis);

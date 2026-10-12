@@ -17,10 +17,28 @@
   const TF = root.TF = root.TF || {};
 
   // 剧本里的表情名 → 立绘文件名（英文好管理）
-  const FACES = { 平静: 'calm', 开心: 'happy', 害羞: 'shy', 担心: 'worried', 得意: 'smug', 惊讶: 'surprised', 不服: 'pout', 心动: 'love', 困: 'sleepy', 闪亮: 'sparkle', 撑: 'full', 哭: 'cry', 泪笑: 'cryhappy' };
+  // v12 多了四张（腮红、眼泪是自己加的，条款允许）：慌张、含泪、嘴硬、偷笑。剧本可以直接写，剧场也会按台词自动换（variant）
+  const FACES = { 平静: 'calm', 开心: 'happy', 害羞: 'shy', 担心: 'worried', 得意: 'smug', 惊讶: 'surprised', 不服: 'pout', 心动: 'love', 困: 'sleepy', 闪亮: 'sparkle', 撑: 'full', 哭: 'cry', 泪笑: 'cryhappy',
+    慌张: 'fluster', 含泪: 'tearful', 嘴硬: 'sulky', 偷笑: 'softsmile' };
   // 没有这个表情的立绘时，先找相近的（心动 → 害羞 → 开心 → 平静）
   // 哭、泪笑（v8.0，加了眼泪的那两张）没有就退回担心、开心，剧场另外画一滴 CSS 眼泪
-  const FALLBACK = { 哭: ['担心'], 泪笑: ['开心'], 心动: ['害羞', '开心'], 闪亮: ['得意', '开心'], 得意: ['开心'], 撑: ['开心'], 困: ['平静'], 不服: ['担心'], 惊讶: ['平静'], 害羞: ['开心'] };
+  const FALLBACK = { 哭: ['担心'], 泪笑: ['开心'], 心动: ['害羞', '开心'], 闪亮: ['得意', '开心'], 得意: ['开心'], 撑: ['开心'], 困: ['平静'], 不服: ['担心'], 惊讶: ['平静'], 害羞: ['开心'],
+    慌张: ['惊讶', '害羞'], 含泪: ['哭', '担心'], 嘴硬: ['不服', '担心'], 偷笑: ['得意', '开心'] };
+
+  /**
+   * 按这句话自动换一张更贴的（v12，用户：「立绘的变化不够多」）：剧本只写了「惊讶」「担心」「不服」「得意」，
+   * 话里是被说中、脸红的（「才没有」「不是」「谁说」「……你别看」）→ 慌张 / 嘴硬；说到眼泪、哭、难过 → 含泪；
+   * 得意里带着软的（「……行吧」「算你」「还行」）→ 偷笑。只在有那张图时换，没有就照剧本。
+   */
+  function variant(char, face, text) {
+    const t = String(text || '');
+    let v = '';
+    if (face === '惊讶' && /才没有|不是|没有啦|谁说|你别|别看|……你|啊？|诶？|什么？/.test(t)) v = '慌张';
+    else if (face === '不服' && /才没|谁|随便|哼|又不是|管我|不用你|……行/.test(t)) v = '嘴硬';
+    else if ((face === '担心' || face === '平静') && /眼泪|哭|泪|难过|对不起|谢谢你|……嗯。/.test(t) && t.length <= 40) v = '含泪';
+    else if (face === '得意' && /行吧|算你|还行|勉强|……嗯|不告诉你|你猜/.test(t)) v = '偷笑';
+    return v && has(char, v) ? v : face;
+  }
   const BGS = ['room', 'roomnight', 'gym', 'pool', 'studio', 'booth', 'cafe', 'street', 'citynight', 'rain', 'night', 'dusk', 'dawn', 'stage', 'backstage', 'archive', 'tower', 'roof', 'edge'];
 
   const broken = new Set(); // 加载失败的图（清单在、图没打进包时），以后不再用
@@ -83,6 +101,6 @@
     return { face: Object.keys(m.face || {}).length, cg: Object.keys(m.cg || {}).length, bg: Object.keys(manifest().bg || {}).length };
   }
 
-  TF.Art = { FACES, FALLBACK, BGS, sprite, blink, has, fail, credits, cg, bg, count };
+  TF.Art = { variant, FACES, FALLBACK, BGS, sprite, blink, has, fail, credits, cg, bg, count };
   if (typeof module !== 'undefined' && module.exports) module.exports = TF.Art;
 })(typeof window !== 'undefined' ? window : globalThis);

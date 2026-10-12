@@ -47,12 +47,16 @@ android {
         applicationId = "com.trainfit.ai"
         minSdk = 24
         targetSdk = 34
-        versionCode = 74
-        versionName = "11.0"
+        versionCode = 75
+        versionName = "12.0"
 
         buildConfigField("String", "LLM_BASE_URL", llmConfig("LLM_BASE_URL", "https://api.atria-asi.ai/v1"))
         buildConfigField("String", "LLM_MODEL", llmConfig("LLM_MODEL", "Atria-Dawn-Preview"))
         buildConfigField("String", "LLM_API_KEY", llmConfig("LLM_API_KEY", ""))
+        // 备用线路（v12）：DeepSeek（书生 discovery 接口），主线路出错、慢了就换它；key 在 Secret LLM_BACKUP_API_KEY
+        buildConfigField("String", "LLM_BACKUP_BASE_URL", llmConfig("LLM_BACKUP_BASE_URL", "https://discovery-api.intern-ai.org.cn/v1"))
+        buildConfigField("String", "LLM_BACKUP_MODEL", llmConfig("LLM_BACKUP_MODEL", "deepseek-v4-flash-0731"))
+        buildConfigField("String", "LLM_BACKUP_API_KEY", llmConfig("LLM_BACKUP_API_KEY", ""))
 
         // 云端语音转文字（OpenAI 兼容 /audio/transcriptions），默认硅基流动上的 Qwen3-ASR 大模型：
         // 松手后联网就用它再认一遍（比手机本机的 SenseVoice 准）；本机识别用不了时也用它

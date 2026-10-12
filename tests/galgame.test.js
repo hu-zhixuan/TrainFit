@@ -176,7 +176,7 @@ test('剧本格式：步骤都认得，表情、姿势画得出来，条件写�
   const FACES = ['开心', '害羞', '担心', '得意', '惊讶', '不服', '平静', '心动', '困', '闪亮', '撑', '哭', '泪笑'];
   const VARS = ['you', 'name', 'days', 'meals', 'trains', 'fav', 'lift', 'kg', 'cat', 'page', 'said', 'p'];
   const PROPS = ['water', 'dawnlight', 'cat', 'book', 'bokeh', 'umbrella', 'window', 'confetti', 'sunrise', 'petals', 'stars', 'mirror', 'sunset', 'spotlight', 'rain'];
-  const FX = ['shake', 'flash', 'close', 'far', 'sepia', 'nosepia', 'dark', 'light', 'heart', 'glitch', 'onair', 'offair'];
+  const FX = ['shake', 'flash', 'close', 'far', 'sepia', 'nosepia', 'dark', 'light', 'heart', 'glitch', 'onair', 'offair', 'shadow', 'noshadow'];
   const Sound = (() => { global.window = global; require('../web/js/log/sound.js'); return global.Sound; })();
   for (const k of ['jx', 'xy']) {
     const c = Cast[k];
@@ -481,4 +481,30 @@ test('立绘素材清单（art/sources.json）：两个人都有、能校验、�
   assert.ok(/^web\/img\/cast\/$/m.test(ignore) && /^\.art-cache\/$/m.test(ignore));
   const html = fs.readFileSync(path.join(root, 'web/index.html'), 'utf8');
   assert.ok(html.indexOf('src="img/cast/manifest.js"') > 0 && html.indexOf('src="img/cast/manifest.js"') < html.indexOf('src="js/app/art.js"'));
+});
+
+test('v12 立绘变化：多了慌张 / 含泪 / 嘴硬 / 偷笑四张；按台词自动换，没有那张图就照剧本', () => {
+  global.window = global;
+  require('../web/js/app/art.js');
+  const Art = global.TF.Art;
+  const fs = require('fs');
+  const build = fs.readFileSync(require('path').join(__dirname, '../scripts/build-art.py'), 'utf8');
+  for (const k of Object.values(Art.FACES)) assert.ok(build.includes(`'${k}'`), `build-art.py 认得 ${k}`);
+  const src = JSON.parse(fs.readFileSync(require('path').join(__dirname, '../art/sources.json'), 'utf8'));
+  for (const ch of ['jx', 'xy']) for (const k of ['fluster', 'tearful', 'sulky', 'softsmile']) assert.ok(src.cast[ch].faces[k], `${ch} 有 ${k}`);
+  const old = global.TF.ArtManifest;
+  global.TF.ArtManifest = { cast: { xy: { face: { calm: 'c.webp', surprised: 's.webp', fluster: 'f.webp', worried: 'w.webp', tearful: 't.webp', pout: 'p.webp', sulky: 'k.webp', smug: 'm.webp', softsmile: 'o.webp' } } } };
+  try {
+    assert.strictEqual(Art.variant('xy', '惊讶', '……才没有。'), '慌张');
+    assert.strictEqual(Art.variant('xy', '惊讶', '04:55。'), '惊讶');
+    assert.strictEqual(Art.variant('xy', '担心', '别哭。'), '含泪');
+    assert.strictEqual(Art.variant('xy', '不服', '随便你。'), '嘴硬');
+    assert.strictEqual(Art.variant('xy', '得意', '……行吧，算你赢。'), '偷笑');
+    assert.strictEqual(Art.variant('jx', '惊讶', '才没有'), '惊讶', '没有那张图：照剧本');
+    assert.strictEqual(Art.sprite('xy', '慌张'), 'f.webp');
+    global.TF.ArtManifest = { cast: { xy: { face: { calm: 'c.webp', surprised: 's.webp' } } } };
+    assert.strictEqual(Art.sprite('xy', '慌张'), 's.webp', '没有慌张退回惊讶');
+  } finally {
+    global.TF.ArtManifest = old;
+  }
 });

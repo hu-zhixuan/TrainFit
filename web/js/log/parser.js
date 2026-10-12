@@ -11,7 +11,7 @@
     require('./agent_intent.js');
   }
   const TF = root.TF = root.TF || {};
-  const { MUSCLES, MEAL_TYPES, NUTRIENTS, num, cleanText, round1, mealTypeByHour, normMealType, mealTimes, mealSegments, findWeight, guessMuscle, exerciseInfo, metBurn, strengthBurn, saidWeight, saidMinutes, readOverride, Native, FoodDB, MyFoods, groundItem, sizeOpts, sumItems } = TF;
+  const { MUSCLES, MEAL_TYPES, NUTRIENTS, num, cleanText, round1, mealTypeByHour, normMealType, mealTimes, mealSegments, findWeight, guessMuscle, exerciseInfo, metBurn, strengthBurn, saidWeight, saidMinutes, readOverride, Native, LlmRoute, FoodDB, MyFoods, groundItem, sizeOpts, sumItems } = TF;
 
   const summaryOf = (items) => cleanText(items.map(it => it.name + (it.amount || '')).join('、'), 60);
 
@@ -101,8 +101,8 @@
   // ---------------------------------------------------------------------------
   const GOALS = { fat_loss: '减脂', maintain: '保持体重', muscle_gain: '增肌' };
 
-  /** 问问题时的回答：去掉 markdown 符号，最多 8 行、600 字 */
-  function cleanAnswer(a) {
+  /** 问问题时的回答：去掉 markdown 符号，最多 8 行、600 字（健康大脑的回答 v12 放到 16 行、900 字） */
+  function cleanAnswer(a, maxLines, maxChars) {
     // 大模型偶尔写成一行一项的数组，或者 {"早餐": "..."} 这样的对象（v4.0 用户问食谱「没反应」可能就是这个）
     if (Array.isArray(a)) a = a.map(x => (typeof x === 'string' ? x : x && typeof x === 'object' ? Object.values(x).join('：') : '')).join('\n');
     else if (a && typeof a === 'object') a = Object.entries(a).map(([k, v]) => `${k}：${typeof v === 'string' ? v : JSON.stringify(v)}`).join('\n');
@@ -110,7 +110,29 @@
     const lines = a.replace(/\r/g, '').split('\n')
       .map(l => l.replace(/\*\*/g, '').replace(/^\s*(#+|[-*•]|\d+[.、)])\s*/, '').trim())
       .filter(Boolean);
-    return lines.slice(0, 8).join('\n').slice(0, 600);
+    return lines.slice(0, maxLines || 8).join('\n').slice(0, maxChars || 600);
+  }
+
+  /**
+   * 健康大脑要给哪些上下文（v12）：
+   * body 身体数据、体重（健康、吃练的事都给）；eat 今天吃了多少、还能吃多少（问吃喝、饿、热量、蛋白）；
+   * lift 各动作成绩（问练、动作、伤病疼痛）；history 最近两周 + 画像（问以前、问自己的进展、问减脂增肌、问吃练）。
+   */
+  function brainTopic(text) {
+    const t = String(text || '');
+    const health = !!(TF.HEALTH && TF.HEALTH.test(t));
+    const fit = ABOUT_FIT.test(t);
+    const eat = /吃|喝|饿|饱|餐|饭|食|热量|卡|蛋白|碳水|脂肪|嘌呤|糖|零食|外卖|酒|咖啡|奶|补剂|肌酸|维生素|鱼油/.test(t);
+    const lift = /练|动作|训练|力量|重量|组|深蹲|卧推|硬拉|划船|引体|肌肉|增肌|薄肌|腿|胸|背|肩|臂|腹|核心|膝|腰|伤|疼|痛|酸痛|酸胀|恢复|有氧|跑/.test(t);
+    const history = fit || /这(两|几)?周(吃|练)|这段时间(吃|练)|进展|进步|怎么样|不降|不涨|卡住|平台期|体重|体脂|减脂|增肌|瘦|胖/.test(t);
+    return { body: health || fit, eat: eat && (health || fit), lift, history };
+  }
+
+  /** 健康大脑边出边显示（纯文本）：「接着问」「记下」那两行之前的正文；万一写成 JSON 就按 JSON 抠 */
+  function brainPartial(buf) {
+    const t = String(buf || '').replace(/<think>[\s\S]*?(<\/think>|$)/g, '').replace(/^\s*```\w*\s*/, '');
+    if (/^\s*\{/.test(t)) return partialAnswer(t);
+    return t.split(/\n\s*(?:>>\s*)?(?:接着问|记下)\s*[:：]/)[0].replace(/^\s*结论\s*[:：]\s*/, '').replace(/\n{2,}/g, '\n').trim();
   }
 
   /** 流式输出还没写完时，先把 "answer":"…" 里已经出来的字拿出来（边想边显示）；还没到 / 是 null 返回 '' */
@@ -218,7 +240,7 @@
         '   写成几行短句，每行一件事（「早餐：两个鸡蛋＋一杯牛奶＋一个馒头，约450千卡、蛋白25g」），最多 8 行，不要 markdown 符号、不要客套话。reply 写一句「给了你明天的食谱」这样的话（又记又问就写「记了…，晚上吃啥看小人」），不要出现 answer 这个词。',
         '   回答了问题时，next 写两句用户接着最可能想问的话（每句 12 字以内，用用户的口吻，比如「晚上吃点啥能补蛋白」「给我排个练腿的」）；没回答问题就不写 next。',
         '   排计划要一次就能直接照着做，别让用户再补充：份量按下面的热量预算和蛋白目标配好（几顿加起来对得上），练过的动作按最近成绩往上加一点，没说的（在哪练、有多少时间、口味）按小本本、画像和最常见的情况定，不要反问；排了计划时 next 写两句一点就能改的（「在家没器械」「只有半小时」「不想吃米饭」）。',
-        '   练什么、怎么练、动作怎么做、练哪儿、减脂增肌、饿不饿、睡眠恢复、身体酸痛，都算吃和练的事，要正经回答：练什么就给动作、重量、组数次数，小本本里是新手或者问怎么做的，每个动作带一句要点。只有天气、新闻、写作业这种完全无关的，answer 才写一句「这个我帮不上，我只管吃和练」。',
+        '   练什么、怎么练、动作怎么做、练哪儿、减脂增肌、饿不饿、睡眠恢复、身体酸痛、别的健康问题，都要正经回答：练什么就给动作、重量、组数次数，小本本里是新手或者问怎么做的，每个动作带一句要点。和健康无关的事也照常简短回答，不说帮不上。',
         '   answer 是某一天的具体安排（明天的食谱、今晚吃什么、明天练什么、我想练腿怎么练）时，同时写 plan：{"dayOffset":1,"meals":[和 add.meals 一样的格式],"workouts":[和 add.workouts 一样的格式，每个动作再加 "tip":"一句要点，16字以内"]}，dayOffset 相对正在看的日期（明天 1，今天 0，没说哪天就是今天），内容和 answer 一致；只是回答问题（还差多少蛋白、能不能吃）就不写 plan。',
         '   要排好几天的训练（「这周怎么练」「一周练三次帮我排一下」「给我一个新手计划」）：plan 写成 {"days":[{"dayOffset":1,"workouts":[…]},{"dayOffset":3,"workouts":[…]}]}，从明天开始排一周、练的日子之间隔开，每天 4～6 个动作，不排吃的；重量按最近成绩往上加一点，没练过的按新手能做的估。answer 每天一行，开头写那天的星期（按下面的日期对照，「周五 腿：深蹲 40kg 4×10、腿举…」）。',
         '   下面有「刚才给的计划」，用户说要改（「不要米饭换红薯」「蛋白再多点」「晚上少吃点」「深蹲换成腿举」），就按要求改好，重新写完整的 answer 和 plan（还是那天的，dayOffset 按日期对照算；没让改的照原样写上），不要记录，不能只回一句「改好了」。',
@@ -280,6 +302,98 @@
         { role: 'system', content: system },
         { role: 'user', content: lines.join('\n') }
       ];
+    },
+
+    /**
+     * 健康大脑（v12，用户：「既然都接大模型了，应该就要可以回答任何问题了…做成个人健康大脑，you can ask anything about health」）：
+     * 只是在问、不是要排某天的吃练、不是要动手的问题（`TF.brainQuestion`），走这份单独的短提示词——
+     * 记录的那份 9000 多字全是记录规则，问「失眠怎么办」「尿酸高能吃什么」用不上，还把回答限在 8 行里。
+     * 这份：营养、训练、睡眠、压力情绪、激素生理期、伤病康复、体检指标、补剂用药……什么都答，别的事也照常答；
+     * 第一行结论、后面「· 」一行一个要点，长短看问题（最多 14 行）；带上他的身体数据、今天、最近两周、成绩、小本本、画像，和问题有关才点他的数。
+     * 输出是纯文本（最后「接着问：A｜B」「记下：…」两行），不是 JSON：DeepSeek 实测 10 句里 5 句不按 JSON 写或在字符串里直接换行，
+     * 纯文本边出边显示也不用从半截 JSON 里抠。系统提示词一个字不变（DeepSeek 的前缀缓存能命中，省钱），会变的都放在 user 里。
+     */
+    brainMessages(text, ctx) {
+      ctx = ctx || {};
+      const now = ctx.now || new Date();
+      const hh = String(now.getHours()).padStart(2, '0');
+      const mm = String(now.getMinutes()).padStart(2, '0');
+      const system = [
+        '你是「练食AI」里的健康大脑：用户的私人健康顾问，像一直跟着他的教练、营养师和医生朋友。你懂营养和饮食、训练（减脂、增肌、练出薄肌、有氧和力量怎么搭）、身体成分、睡眠、压力和情绪、激素和生理期、常见伤病和康复、体检和化验指标、补剂和常用药、作息和习惯。',
+        '用户可以问你任何问题。健康的事认真、专业、全面地答；别的事（工作、学习、常识、生活）也照常回答，短一点。下面有他的身体数据和最近的记录，要结合他自己的情况说，不说放之四海皆准的套话。',
+        '怎么答：',
+        '1. 第一行直接给结论（30 字以内），不复述问题、不客套、不写「结论：」。',
+        '2. 后面每行一个要点，以「· 」开头：为什么、怎么做、做多少。具体到数字（克、千卡、每公斤体重几克、组数次数、分钟、小时、几点）。',
+        '3. 他问的不一定是他自己（可能替家人朋友问），问别人就别套他的数据。用他的数据要对题：和问题有关的才点出来（问体重为什么不降，就说他这两周哪几天吃多了、平均多少；问练腿，就说他膝盖的旧伤和深蹲的重量）；和问题无关的记录一个字都别扯（问失眠不扯蛋白，问加薪不扯训练和吃的），也别每次都提今天还剩多少热量，只有问现在吃什么时才说。',
+        '4. 因果要靠谱：有共识的直接说；有争议、因人而异的说清楚怎么选；不确定就说不确定，不把不相关的东西说成原因，不编数据、不编研究。',
+        '5. 长短看问题：一句话能说清的 1～3 行；要分析、讲方法的 5～10 行；最多 14 行、450 字。',
+        '6. 安全：胸痛、晕倒、便血、呼吸困难、突然暴瘦、长期每天吃不到 1200 千卡、想催吐这类情况，明说要尽快就医或找专业的人，不下诊断；用药、怀孕备孕、慢性病，给通用知识，最后一行提醒具体剂量问医生或药师。',
+        '7. 说人话：不用 markdown（不要 #、**、表格、1. 2. 编号），不说「作为AI」「建议咨询专业人士」这种空话（第 6 条的情况除外），不说教。',
+        '8. 直接输出回答的正文，不要 JSON、不要代码块。正文写完另起一行写「接着问：A｜B」——他接着最可能说的两句（每句 12 字以内，用他的口吻），最好一句能让你直接动手，比如「帮我排明天的饭」「给我排个练背的」。',
+        '   他说了关于自己、以后一直有用的事（伤病、过敏、慢性病、作息、目标），再另起一行写「记下：一句话（12 字以内）」，下面「小本本」里有的不重复；没有就不写这行。'
+      ].join('\n');
+      const GOAL = { fat_loss: '减脂', maintain: '保持体重', muscle_gain: '增肌' };
+      // 按问题挑上下文（实测光靠提示词管不住：问加薪第一句是「先别想加薪，你最近吃超了」，问失眠扯蛋白）：
+      // 和吃练健康无关的不给记录；问吃、问热量才给今天还剩多少；问练、问伤才给各动作的成绩
+      const topic = brainTopic(text);
+      const lines = [`现在 ${hh}:${mm}，今天 ${ctx.date || ''}。`];
+      if (topic.body && ctx.body) lines.push('他：' + ctx.body);
+      const d = ctx.day;
+      if (topic.eat && d) lines.push(`今天：目标${GOAL[d.goal] || '减脂'}；热量预算 ${d.budget} 千卡（含训练消耗 ${d.burn}），已吃 ${d.intake}，还能吃 ${d.budget - d.intake}；蛋白质目标 ${d.proteinTarget}g，已吃 ${d.protein}g。`);
+      if (topic.body && ctx.lastWeight) lines.push(`最近体重：${ctx.lastWeight}kg`);
+      const past = topic.history ? (ctx.past || []).slice(-30) : [];
+      if (past.length) lines.push(`最近${past.length > 14 ? ' 30 天' : '两周'}（日期 吃了多少千卡 蛋白g 练了什么 体重kg）：\n` + past.join('\n'));
+      const recent = topic.lift ? (ctx.recent || []).slice(0, 15) : [];
+      if (recent.length) lines.push('各动作最近一次：' + recent.join('；'));
+      if (topic.body && ctx.state) lines.push(`今天的状态：昨晚${ctx.state}。`);
+      const memo = (ctx.memo || []).slice(0, 12);
+      if (memo.length) lines.push('小本本（他说过的自己的事）：' + memo.join('；'));
+      const portrait = topic.history ? (ctx.portrait || []).slice(0, 7) : [];
+      if (portrait.length) lines.push('画像（按最近 4 周的记录算的）：' + portrait.join('；'));
+      if (ctx.voice && ctx.voice.name) lines.push(`answer 用「${ctx.voice.name}」的口吻说：${ctx.voice.speech}。口吻只改说话的样子，内容照样完整、准，数字一个不能少。`);
+      const talk = (ctx.talk || []).slice(-2);
+      if (talk.length) lines.push('刚才问过（他接着问就接着答）：\n' + talk.map(x => `他：${x.q}\n你：${x.a}`).join('\n'));
+      lines.push('他问：' + text);
+      return [
+        { role: 'system', content: system },
+        { role: 'user', content: lines.join('\n') }
+      ];
+    },
+
+    /**
+     * 健康大脑的输出（纯文本）：正文 +「接着问：A｜B」+「记下：…」。万一还是写成了 JSON，也认。
+     * 正文空的算 NO_JSON（viaLlm 会马上换一条线路再问一次）
+     */
+    parseBrain(content, ctx) {
+      let t = String(content || '').replace(/<think>[\s\S]*?<\/think>/g, '').replace(/^\s*```\w*\s*|```\s*$/g, '').trim();
+      if (/^\{/.test(t)) {
+        try { const r = this.normalizeBrain(this.extractJson(t), ctx); if (r.answer) return r; } catch (e) {}
+        t = partialAnswer(t) || t; // JSON 写坏了（字符串里直接换行）：把 answer 那段抠出来
+      }
+      const next = [], memo = [];
+      const body = t.split('\n').filter(l => {
+        const m = l.match(/^\s*(?:>>\s*)?(接着问|记下)\s*[:：]\s*(.*)$/);
+        if (!m) return true;
+        (m[1] === '接着问' ? next : memo).push(...m[2].split(/[｜|]/).map(x => x.trim()).filter(Boolean));
+        return false;
+      }).join('\n');
+      const r = this.normalizeBrain({ answer: body, next, memo }, ctx);
+      if (!r.answer) throw new Error('NO_JSON');
+      return r;
+    },
+
+    /** 健康大脑的回答：最多 16 行、900 字；两句接着问；他说的自己的事进小本本 */
+    normalizeBrain(parsed, ctx) {
+      ctx = ctx || {};
+      const list = (k, n) => (Array.isArray(parsed && parsed[k]) ? parsed[k] : []).map(x => cleanText(x, n)).filter(Boolean);
+      const answer = cleanAnswer(String((parsed && parsed.answer) || '').replace(/^\s*结论\s*[:：]\s*/, ''), 16, 900);
+      return {
+        dayOffset: 0, workouts: [], meals: [], updates: [], deletes: [], bodyWeight: null, reply: '', remember: [], donePlans: [], acts: [],
+        answer, brain: true,
+        next: answer ? list('next', 16).map(x => x.replace(/[。.]$/, '')).filter(x => x.length >= 3).slice(0, 2) : [],
+        memo: list('memo', 24).slice(0, 3).filter(x => !(ctx.memo || []).includes(x)),
+        forget: list('forget', 24).filter(x => (ctx.memo || []).includes(x))
+      };
     },
 
     /**
@@ -778,12 +892,12 @@
     async viaLlm(text, ctx, onDelta) {
       const override = readOverride();
       const chat = !!(ctx && ctx.chat);
+      const brain = !chat && !!(ctx && ctx.brain);
       const base = {
-        messages: chat ? this.chatMessages(text, ctx) : this.buildMessages(text, ctx),
-        temperature: chat ? 0.7 : 0.2, // 聊天要有点变化，别每次一样的话；记录要稳
+        messages: chat ? this.chatMessages(text, ctx) : brain ? this.brainMessages(text, ctx) : this.buildMessages(text, ctx),
+        temperature: chat ? 0.7 : brain ? 0.4 : 0.2, // 聊天要有点变化，别每次一样的话；记录要稳
         stream: false
       };
-      if (override.model) base.model = override.model;
 
       // 关掉「先推理再回答」：Atria 实测 26 秒 → 3.6 秒，结果一样。
       // 换成不认这个参数的服务商时，自动去掉再试一次。
@@ -795,9 +909,11 @@
       const deltaFor = () => { if (!onDelta) return null; let soFar = ''; return (chunk) => { soFar += chunk; onDelta(soFar); }; };
       for (let i = 0; i < attempts.length; i++) {
         try {
-          const raw = await this.sendHedged(attempts[i], override, deltaFor());
+          // 重试时换一条线路先走（v12：主线路刚出错 / 写坏了 JSON，备用接着上）
+          const raw = await this.sendHedged(attempts[i], override, deltaFor(), retries);
+          if (brain) return this.parseBrain(this.contentFromResponse(raw), ctx);
           const parsed = this.extractJson(this.contentFromResponse(raw));
-          return chat ? this.normalizeChat(parsed, ctx) : this.normalize(parsed, Object.assign({ said: text }, ctx));
+          return chat ? this.normalizeChat(parsed, ctx) : brain ? this.normalizeBrain(parsed, ctx) : this.normalize(parsed, Object.assign({ said: text }, ctx));
         } catch (e) {
           lastErr = e;
           const msg = (e && e.message) || '';
@@ -819,32 +935,53 @@
 
     /**
      * 大模型偶尔开口特别慢（v5.4 实测：多数 2～6 秒出第一个字，约四分之一要等 15～18 秒才出，和提示词长短无关）：
-     * 7 秒还没出字就再发一份一样的，谁先出字用谁，另一份马上掐掉（还在排队就掐，不白花 token）。
-     * 第一份很快就失败的不补发，照原来的重试；服务商不支持流式（一直不出字）的，谁先回来用谁。
+     * 过一会儿还没出字就再发一份，谁先出字用谁，另一份马上掐掉（还在排队就掐，不白花 token）。
+     * v12 两条线路（native.js 的 LlmRoute）：补发的那份走另一条（4.5 秒没出字就补，只有一条线路时照旧 7 秒、同一条）；
+     *   还没人出字时先走的那份失败了（限流、超时、断网、5xx、key 不对），马上换另一条，不等补发的计时；参数被拒（400 / 422）不换，交给 viaLlm 换写法。
+     *   rotate：第几次重试——重试时从下一条线路开始。每份写完 / 失败都记进 LlmRoute（自动模式按它排先后）。
+     * 服务商不支持流式（一直不出字）的，谁先回来用谁。
      */
-    sendHedged(body, override, onDelta) {
-      const wait = this.hedgeMs == null ? 7000 : this.hedgeMs;
+    sendHedged(body, override, onDelta, rotate) {
+      const order = LlmRoute ? LlmRoute.order(override) : ['main'];
+      const k = (rotate || 0) % order.length;
+      const lines = order.slice(k).concat(order.slice(0, k));
+      const wait = this.hedgeMs == null ? (lines.length > 1 ? 4500 : 7000) : this.hedgeMs;
+      const spare = lines.slice(1);
       return new Promise((resolve, reject) => {
         let done = false, running = 0, timer = null, leader = null;
         const all = [];
         const stop = (keep) => all.forEach(h => { if (h !== keep && h.cancel && !h.stopped) { h.stopped = true; try { h.cancel(); } catch (e) {} } });
         const finish = (fn, v, from) => { if (done) return; done = true; clearTimeout(timer); stop(from); fn(v); };
-        const go = () => {
+        const go = (id) => {
           running += 1;
-          const me = {};
+          const me = { line: id };
           all.push(me);
+          const t0 = Date.now();
           // 只转发先出字的那一份；出了字就不再补发，别的那份掐掉
           const delta = (chunk) => {
             if (done) return;
             if (leader === null) { leader = me; clearTimeout(timer); stop(me); }
             if (leader === me && onDelta) onDelta(chunk);
           };
-          this.send(body, override, delta, me).then(
-            r => { if (leader === null || leader === me) finish(resolve, r, me); },
-            e => { running -= 1; if (leader === me || (leader === null && !running)) finish(reject, e, me); });
+          const ov = LlmRoute ? LlmRoute.overrideFor(id, override) : override;
+          const b = Object.assign({}, body);
+          if (id !== 'backup' && override && override.model) b.model = override.model;
+          this.send(b, ov, delta, me).then(
+            r => {
+              if (LlmRoute && !me.stopped) LlmRoute.note(id, true, Date.now() - t0);
+              if (leader === null || leader === me) finish(resolve, r, me);
+            },
+            e => {
+              running -= 1;
+              const msg = (e && e.message) || '';
+              if (me.stopped || done) return;
+              if (LlmRoute && msg !== 'CANCELLED' && msg !== 'NO_KEY' && !/^HTTP (400|422)/.test(msg)) LlmRoute.note(id, false, Date.now() - t0); // 参数被拒不算这条线路坏了
+              if (leader === null && spare.length && !/^HTTP (400|422)/.test(msg)) { clearTimeout(timer); go(spare.shift()); return; }
+              if (leader === me || (leader === null && !running)) finish(reject, e, me);
+            });
         };
-        go();
-        if (wait > 0) timer = setTimeout(() => { if (!done && leader === null) go(); }, wait);
+        go(lines[0]);
+        if (wait > 0) timer = setTimeout(() => { if (!done && leader === null) go(spare.length ? spare.shift() : lines[0]); }, wait);
       });
     },
 
@@ -897,7 +1034,7 @@
      */
     async parse(text, ctx, onDelta) {
       let r = await this.viaLlm(text, ctx, onDelta);
-      if (ctx && ctx.chat) return Object.assign(r, { source: 'llm' });
+      if (ctx && (ctx.chat || ctx.brain)) return Object.assign(r, { source: 'llm' });
       // 明明在问练、吃的事，大模型却说「帮不上」（实测「我操，我想练腿要怎么练」）：提醒一句再问一次
       if (r.answer && /帮不上/.test(r.answer) && ABOUT_FIT.test(text) && !(ctx && ctx._again)) {
         r = await this.viaLlm(text, Object.assign({}, ctx, { _again: true }), onDelta);
@@ -911,7 +1048,7 @@
     }
   };
 
-  Object.assign(TF, { partialAnswer, Parser, mergeItems, repairJson, dropNumberClauses });
+  Object.assign(TF, { partialAnswer, brainPartial, brainTopic, Parser, mergeItems, repairJson, dropNumberClauses });
 
   if (typeof module !== 'undefined' && module.exports) module.exports = TF;
 })(typeof window !== 'undefined' ? window : globalThis);
