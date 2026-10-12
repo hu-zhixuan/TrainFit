@@ -260,6 +260,8 @@
       lines.push(`现在时间 ${hh}:${mm}，正在看的日期：${day}。`);
       lines.push(records.length ? '这天已有记录：\n' + records.map(r => `${r.ref} ${r.text}`).join('\n') : '这天还没有记录。');
       if (recent.length) lines.push('最近成绩：' + recent.join('；'));
+      const over = (ctx.overload || []).slice(0, 8);
+      if (over.length) lines.push('下次练多少（按他的成绩本机算好的，排计划、说练法时这些动作照这个写，别另算）：' + over.join('；'));
       if (ctx.lastWeight) lines.push(`最近体重：${ctx.lastWeight}kg`);
       const past = (ctx.past || []).slice(-14);
       if (past.length) lines.push('最近两周（日期 吃了多少千卡 蛋白g 练了什么 体重kg）：\n' + past.join('\n'));
@@ -353,6 +355,9 @@
       if (ctx.voice && ctx.voice.name) lines.push(`answer 用「${ctx.voice.name}」的口吻说：${ctx.voice.speech}。口吻只改说话的样子，内容照样完整、准，数字一个不能少。`);
       const talk = (ctx.talk || []).slice(-2);
       if (talk.length) lines.push('刚才问过（他接着问就接着答）：\n' + talk.map(x => `他：${x.q}\n你：${x.a}`).join('\n'));
+      // v12.2：本机算好的下次练多少放在问题前面（离问题近，它才照着说；放前面实测一半自己另编 7kg）
+      const over = topic.lift ? (ctx.overload || []).slice(0, 8) : [];
+      if (over.length) lines.push('下次练多少（按他的成绩和他手上的器械算好的：几个一组、每次加多少、卡住了退多少都算过；说到这些动作的重量次数就用这里的数，别换成别的数）：' + over.join('；'));
       lines.push('他问：' + text);
       return [
         { role: 'system', content: system },
