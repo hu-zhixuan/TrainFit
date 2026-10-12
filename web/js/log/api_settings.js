@@ -4,7 +4,7 @@
 (function (root) {
   'use strict';
   const TF = root.TF = root.TF || {};
-  const { readOverride, writeOverride, readAsrOverride, writeAsrOverride, Native, Parser, QuickLog } = TF;
+  const { readOverride, writeOverride, readAsrOverride, writeAsrOverride, Native, LlmRoute, Parser, QuickLog } = TF;
 
   Object.assign(QuickLog, {
     // ----- 设置：AI 接口 -----
@@ -68,8 +68,38 @@
       });
     },
 
+    /** 「先用哪条线路」（v12）：自动 / 主线路 / 备用，下面一行写这台手机上实测的速度 */
+    initRouteSettings() {
+      const seg = document.getElementById('ql-route');
+      const note = document.getElementById('ql-route-note');
+      if (!seg || !LlmRoute) return;
+      const info = LlmRoute.info();
+      const sec = (ms) => (ms / 1000).toFixed(1) + ' 秒';
+      const draw = () => {
+        const m = LlmRoute.mode();
+        seg.querySelectorAll('.seg-btn').forEach(b => b.classList.toggle('active', b.dataset.value === m));
+        const name = { main: info && info.main.model ? info.main.model.replace(/-Preview$/, '') : '主线路', backup: info && info.backup && info.backup.model ? info.backup.model.replace(/-\d{4}$/, '') : '备用' };
+        if (info && !(info.backup && info.backup.hasKey)) { note.textContent = '安装包里没带备用线路的 key，只用主线路。'; return; }
+        const first = LlmRoute.order(readOverride())[0];
+        const a = LlmRoute.median('main'), b = LlmRoute.median('backup');
+        const speed = [a && `${name.main} ${sec(a)}`, b && `${name.backup} ${sec(b)}`].filter(Boolean).join(' · ');
+        note.textContent = `现在先用 ${name[first]}：慢了（4.5 秒没出字）或出错，马上换另一条。` +
+          (m === 'auto' ? '自动 = 先用主线路，这台手机上实测另一条快得多、或主线路刚连着出错，就先用另一条。' : '') +
+          (speed ? `最近写完一次：${speed}。` : '');
+      };
+      seg.addEventListener('click', (e) => {
+        const b = e.target.closest('.seg-btn');
+        if (!b) return;
+        LlmRoute.setMode(b.dataset.value);
+        draw();
+      });
+      draw();
+      this.refreshRouteNote = draw;
+    },
+
     initSettings() {
       this.initAsrSettings();
+      this.initRouteSettings();
       const baseEl = document.getElementById('ql-cfg-base');
       const modelEl = document.getElementById('ql-cfg-model');
       const keyEl = document.getElementById('ql-cfg-key');

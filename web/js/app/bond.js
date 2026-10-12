@@ -123,17 +123,26 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     return this.cast().sex === 'f' && B.girlLabel ? B.girlLabel : B.label;
   },
 
-  /** 刚才聊的（15 分钟内最多 3 轮）：接着聊时带给大模型，不存下来 */
-  chatThread() {
+  /**
+   * 刚才聊的（15 分钟内最多 3 轮）：接着聊时带给大模型，不存下来。
+   * v12：每轮记是聊天（chat）还是在问（ask，健康大脑 / 问吃练）；kind='ask' 只要问过的最近 2 轮（健康大脑接着答「那晚上呢」）
+   */
+  chatThread(kind) {
     const now = Date.now();
     this._talk = (this._talk || []).filter(x => now - x.at < 15 * 60 * 1000);
+    if (kind === 'ask') return this._talk.filter(x => x.kind === 'ask').slice(-2).map(x => ({ q: x.q, a: x.a }));
     return this._talk.slice(-3).map(x => ({ q: x.q, a: x.a }));
   },
 
-  chatActive() { return this.chatThread().length > 0; },
+  /** 正在跟 TA 聊天：最近一轮是聊天（刚问完问题不算，接着问的还交给健康大脑） */
+  chatActive() {
+    this.chatThread(); // 先把 15 分钟以前的清掉
+    const t = this._talk || [];
+    return !!(t.length && t[t.length - 1].kind !== 'ask');
+  },
 
-  pushTalk(q, a) {
-    this._talk = (this._talk || []).concat({ q: String(q || '').slice(0, 60), a: String(a || '').replace(/\s+/g, ' ').slice(0, 90), at: Date.now() }).slice(-3);
+  pushTalk(q, a, kind) {
+    this._talk = (this._talk || []).concat({ q: String(q || '').slice(0, 60), a: String(a || '').replace(/\s+/g, ' ').slice(0, kind === 'ask' ? 160 : 90), at: Date.now(), kind: kind || 'chat' }).slice(-3);
   },
 
   /** 小人说这句时的表情（大模型给的 face）：害羞冒爱心、担心冒汗、得意秀肌肉、不服蹦一下 */

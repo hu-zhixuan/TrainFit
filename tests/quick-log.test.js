@@ -925,16 +925,58 @@ test('聊天的提示词：小人是谁、多熟、刚才聊的都带上；回�
 });
 
 test('v6.3 聊什么都行：工作、学习、感情、随便问的问题走聊天；吃了练了照样记；正在聊时不是记录的都接着聊', () => {
-  for (const t of ['明天要面试了好紧张', '你觉得我该不该辞职', '地球为什么是圆的？', '我男朋友今天惹我生气了', '面试官问了好多算法题', '周末去看了电影'])
+  for (const t of ['明天要面试了好紧张', '你觉得我该不该辞职', '我男朋友今天惹我生气了', '面试官问了好多算法题', '周末去看了电影'])
     assert.ok(TF.looksLikeChat(t, '江叙', false), t);
+  // v12 健康大脑：随便问的问题（不是问它自己、不是说心情）交给大脑答；正在聊的时候还是接着聊
+  for (const t of ['地球为什么是圆的？', '推荐一本睡前看的书', '最近老失眠怎么办', '压力大怎么调节？'])
+    assert.ok(!TF.looksLikeChat(t, '江叙', false) && TF.brainQuestion(t), t);
+  assert.ok(TF.looksLikeChat('那我该怎么跟他说？', '江叙', true));
+  assert.ok(TF.looksLikeChat('最近失眠好烦', '江叙', false), '只是说说心情：聊天');
   for (const t of ['中午吃了牛肉面', '和同事吃了火锅', '卧推60公斤4组8个', '还差多少蛋白', '明天吃什么？', '给我排个练腿的', '加班到十点没吃晚饭'])
     assert.ok(!TF.looksLikeChat(t, '江叙', false), t);
   assert.ok(TF.looksLikeChat('过了一面，下周二面', '江叙', true));
   assert.ok(!TF.looksLikeChat('晚上吃了两碗饭', '江叙', true), '正在聊也不能把记录吃掉');
   for (const t of ['删掉刚才那条', '改成昨天的', '帮我记一下'])
     assert.ok(!TF.looksLikeChat(t, '江叙', true), '正在聊时改记录也交给整理：' + t);
-  assert.ok(TF.looksLikeChat('推荐一本睡前看的书', '江叙', false));
   assert.ok(!TF.looksLikeChat('推荐个早餐', '江叙', false));
+});
+
+test('v12 健康大脑：只是在问的交给大脑；要排某天的吃练、要动手、又记又问的还走记录的提示词', () => {
+  for (const t of ['尿酸高能吃什么？', '膝盖疼怎么练？', '经期能练吗', '肌酸要怎么吃？', '为什么体重一直不降？', '最近蛋白够不够？', '科普一下肌酸', '深蹲怎么做？', '能不能吃火锅？'])
+    assert.ok(TF.brainQuestion(t), t);
+  for (const t of ['晚上吃点啥？', '明天练什么？', '给我定个明天的食谱', '推荐个早餐', '帮我排一周的训练', '把明天的计划挪到后天？', '中午吃了牛肉面，晚上吃点啥？', '我想练腿要怎么练', '卧推60公斤4组8个'])
+    assert.ok(!TF.brainQuestion(t), t);
+  const m = TF.Parser.brainMessages('为什么体重一直不降？', { date: '2026-10-12', body: '男，28岁，175cm，目标减脂', past: ['10-11周日 吃1850 蛋白92'], memo: ['膝盖有旧伤'], day: { goal: 'fat_loss', budget: 1900, burn: 200, intake: 800, proteinTarget: 120, protein: 50 } });
+  assert.ok(m[0].content.includes('健康大脑') && m[0].content.includes('任何问题') && m[0].content.includes('接着问：A｜B') && m[0].content.includes('不要 JSON'));
+  assert.ok(!/\d{4}-\d{2}-\d{2}|膝盖有旧伤/.test(m[0].content), '系统提示词不带会变的东西（前缀缓存）');
+  assert.ok(m[1].content.includes('175cm') && m[1].content.includes('10-11周日') && m[1].content.includes('膝盖有旧伤'));
+  assert.ok(!m[1].content.includes('还能吃'), '没问吃的：不给今天还剩多少');
+  // 按问题挑上下文：问加薪不给记录（实测给了就第一句扯「你最近吃超了」），问吃给今天，问练给成绩
+  const full = { date: '2026-10-12', body: '男，28岁', past: ['10-11周日 吃1850'], recent: ['杠铃深蹲 80kg 5×5'], memo: ['程序员'], day: { goal: 'fat_loss', budget: 1900, burn: 0, intake: 800, proteinTarget: 120, protein: 50 } };
+  const u = (q) => TF.Parser.brainMessages(q, full)[1].content;
+  assert.ok(!/男，28岁|10-11周日|深蹲|还能吃/.test(u('怎么跟老板提加薪？')) && u('怎么跟老板提加薪？').includes('程序员'));
+  assert.ok(u('肌酸要怎么吃？').includes('还能吃') && !u('肌酸要怎么吃？').includes('深蹲'));
+  assert.ok(u('膝盖疼还能练腿吗？').includes('深蹲') && !u('膝盖疼还能练腿吗？').includes('还能吃'));
+  const long = Array.from({ length: 20 }, (_, i) => '· 第' + i + '行').join('\n');
+  const r = TF.Parser.normalizeBrain({ answer: '结论\n' + long, next: ['帮我排明天的饭', '再说说'], memo: ['膝盖有旧伤', '尿酸偏高'] }, { memo: ['膝盖有旧伤'] });
+  assert.strictEqual(r.answer.split('\n').length, 16);
+  assert.ok(r.answer.split('\n')[1].startsWith('· '), '要点的「· 」留着');
+  assert.deepStrictEqual(r.memo, ['尿酸偏高']);
+  assert.deepStrictEqual(r.next, ['帮我排明天的饭', '再说说']);
+  assert.strictEqual(r.brain, true);
+  // 纯文本输出：正文 +「接着问」「记下」两行；写成 JSON、JSON 写坏了（字符串里直接换行）也认
+  const P = TF.Parser;
+  const b = P.parseBrain('结论：体重卡住是周末吃多了\n· 周末两天 2600、2900\n\n· 周末压到 2200\n接着问：帮我排明天的饭｜周末怎么吃\n记下：尿酸偏高', { memo: [] });
+  assert.strictEqual(b.answer, '体重卡住是周末吃多了\n· 周末两天 2600、2900\n· 周末压到 2200');
+  assert.deepStrictEqual(b.next, ['帮我排明天的饭', '周末怎么吃']);
+  assert.deepStrictEqual(b.memo, ['尿酸偏高']);
+  assert.strictEqual(P.parseBrain('{"answer":"能喝\\n· 别加糖","next":["那拿铁呢","练前喝多少"]}', {}).answer, '能喝\n· 别加糖');
+  assert.strictEqual(P.parseBrain('{"answer":"不影响增肌\n· 别加糖","next":["a b c"]}', {}).answer, '不影响增肌\n· 别加糖');
+  assert.throws(() => P.parseBrain('接着问：a｜b', {}), /NO_JSON/);
+  // 边出边显示：「接着问」那行不显示
+  assert.strictEqual(TF.brainPartial('结论：能吃\n· 少吃贝类\n接着'), '能吃\n· 少吃贝类\n接着');
+  assert.strictEqual(TF.brainPartial('能吃\n· 少吃贝类\n接着问：那啤酒呢'), '能吃\n· 少吃贝类');
+  assert.strictEqual(TF.brainPartial('{"answer":"能吃'), '能吃');
 });
 
 test('v6.3 聊天提示词带上心情、关系、一起经历的事、他最近的事；回答里的 life 记成近况（几天后问）', () => {
@@ -993,4 +1035,103 @@ test('v6.5 训练类型按名字认：跑步、球类、瑜伽是有氧，平板
   assert.strictEqual(two[1].durationMin, 3, '两样按时间的，原话的时长不知道是谁的，不乱用');
   assert.deepStrictEqual(TF.saidMinutes('每组45秒做了四组'), { per: 0.75, total: null });
   assert.strictEqual(TF.saidMinutes('卧推80公斤5组'), null);
+});
+
+test('两条线路（v12）：主线路出错马上换备用；慢了补发走备用；备用不带自己填的模型；重试从另一条开始', async () => {
+  const { LlmRoute } = TF;
+  const origSend = Parser.send;
+  const store = {};
+  globalThis.localStorage = { getItem: (k) => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); }, removeItem: (k) => { delete store[k]; } };
+  globalThis.TrainFitNative = { getLlmInfo: () => JSON.stringify({ hasKey: true, model: 'Atria', backup: { hasKey: true, model: 'deepseek' } }) };
+  Parser.hedgeMs = 30;
+  Parser.retryWaits = [0, 0];
+  const ok = (reply) => JSON.stringify({ choices: [{ message: { content: JSON.stringify({ reply }) } }] });
+  const later = (ms, v, fail) => new Promise((res, rej) => setTimeout(() => (fail ? rej(new Error(v)) : res(v)), ms));
+  try {
+    assert.deepStrictEqual(LlmRoute.order({}), ['main', 'backup']);
+    // 主线路马上 429：不等补发的计时，直接换备用
+    let calls = [];
+    Parser.send = (body, ov) => { calls.push(ov.provider || 'main'); return ov.provider ? later(5, ok('备用')) : later(1, 'HTTP 429 busy', true); };
+    let t0 = Date.now();
+    let r = await Parser.parse('随便', {});
+    assert.strictEqual(r.reply, '备用');
+    assert.deepStrictEqual(calls, ['main', 'backup']);
+    assert.ok(Date.now() - t0 < 25, '没等补发的 30 毫秒');
+    // 主线路一直不出字：补发的那份走备用；备用不带设置里填的模型
+    calls = [];
+    const bodies = [];
+    Parser.send = (body, ov, onDelta, handle) => {
+      calls.push(ov.provider || 'main'); bodies.push(body);
+      return new Promise((resolve, reject) => {
+        if (handle) handle.cancel = () => reject(new Error('CANCELLED'));
+        if (!ov.provider) return; // 主线路卡住
+        setTimeout(() => { onDelta('{"reply"'); resolve(ok('快的')); }, 5);
+      });
+    };
+    store.tf_llm_override = JSON.stringify({ model: 'my-model' });
+    r = await Parser.parse('随便', {});
+    delete store.tf_llm_override;
+    assert.strictEqual(r.reply, '快的');
+    assert.deepStrictEqual(calls, ['main', 'backup']);
+    assert.strictEqual(bodies[0].model, 'my-model');
+    assert.strictEqual(bodies[1].model, undefined, '备用用它自己的模型');
+    // 主线路写坏了 JSON：重试从备用开始
+    calls = [];
+    Parser.send = (body, ov) => { calls.push(ov.provider || 'main'); return later(1, ov.provider ? ok('好了') : JSON.stringify({ choices: [{ message: { content: '{"reply":"半' } }] })); };
+    r = await Parser.parse('随便', {});
+    assert.strictEqual(r.reply, '好了');
+    assert.deepStrictEqual(calls, ['main', 'backup']);
+    // 参数被拒（400）：不换线路，换写法
+    calls = [];
+    Parser.send = (body, ov) => { calls.push((ov.provider || 'main') + (body.thinking ? '+t' : '')); return body.thinking ? later(1, 'HTTP 400 bad', true) : later(1, ok('ok')); };
+    await Parser.parse('随便', {});
+    assert.deepStrictEqual(calls, ['main+t', 'main']);
+  } finally {
+    Parser.send = origSend;
+    delete Parser.hedgeMs;
+    delete Parser.retryWaits;
+    delete globalThis.TrainFitNative;
+  }
+  // 自动模式：主线路刚连着出错两次 → 先走备用；这台手机上备用快得多 → 先走备用；设置里定了就照设置
+  try {
+    globalThis.TrainFitNative = { getLlmInfo: () => JSON.stringify({ hasKey: true, backup: { hasKey: true } }) };
+    for (const k of Object.keys(store)) delete store[k];
+    const now = Date.now();
+    LlmRoute.note('main', false, 100); LlmRoute.note('main', false, 100);
+    assert.deepStrictEqual(LlmRoute.order({}, now), ['backup', 'main']);
+    delete store.tf_llm_stats;
+    [9000, 8000, 10000].forEach(ms => LlmRoute.note('main', true, ms));
+    [3000, 2500].forEach(ms => LlmRoute.note('backup', true, ms));
+    assert.deepStrictEqual(LlmRoute.order({}, now), ['main', 'backup'], '备用不到 3 次不算数');
+    LlmRoute.note('backup', true, 2800);
+    assert.deepStrictEqual(LlmRoute.order({}, now), ['backup', 'main']);
+    LlmRoute.setMode('main');
+    assert.deepStrictEqual(LlmRoute.order({}, now), ['main', 'backup']);
+    LlmRoute.setMode('auto');
+    // 没有备用 key：只有主线路
+    globalThis.TrainFitNative = { getLlmInfo: () => JSON.stringify({ hasKey: true, backup: { hasKey: false } }) };
+    assert.deepStrictEqual(LlmRoute.order({}, now), ['main']);
+    // 只有备用 key：只走备用
+    globalThis.TrainFitNative = { getLlmInfo: () => JSON.stringify({ hasKey: false, backup: { hasKey: true } }) };
+    assert.deepStrictEqual(LlmRoute.order({}, now), ['backup']);
+  } finally {
+    delete globalThis.TrainFitNative;
+    delete globalThis.localStorage;
+  }
+});
+
+test('v12 口喷更准更快：常听错的健身词先改对；练过的有氧 + 时长本机秒记', () => {
+  require('../web/js/log/fastlog.js');
+  assert.strictEqual(TF.asrFix('卧腿六十公金四组八哥，然后划川'), '卧推六十公斤四组八个，然后划船');
+  assert.strictEqual(TF.asrFix('深吨八十，硬啦一百，茶叶大两个'), '深蹲八十，硬拉一百，茶叶蛋两个');
+  assert.strictEqual(TF.asrFix('哈密瓜一块'), '哈密瓜一块', '不是听错的不动');
+  const ws = [{ date: '2026-10-10', exerciseName: '跑步', muscleGroup: '有氧', durationMin: 25, ts: 1 }, { date: '2026-10-10', exerciseName: '杠铃卧推', muscleGroup: '胸部', weightKg: 60, sets: 4, reps: 8, ts: 2 }];
+  const fl = (t) => TF.fastLog(t, { now: new Date(2026, 9, 12, 19), today: '2026-10-12', myFoods: [], diet: [], workouts: ws, bodyKg: 70 });
+  const r = fl('跑步30分钟');
+  assert.strictEqual(r.workouts[0].durationMin, 30);
+  assert.ok(r.workouts[0].burnedCalories > 250 && r.workouts[0].burnedCalories < 450);
+  assert.strictEqual(fl('卧推60公斤4组8个，跑步二十分钟').workouts.length, 2);
+  assert.strictEqual(fl('跑步一个小时').workouts[0].durationMin, 60);
+  for (const t of ['椭圆机20分钟', '跑步5公里', '走了8000步', '跑了半小时'])
+    assert.strictEqual(fl(t), null, '没练过 / 说的是距离步数：交给大模型 ' + t);
 });

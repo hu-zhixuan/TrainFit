@@ -54,6 +54,7 @@ jobs:
       - name: Check LLM secret (不输出内容)
         env:
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          LLM_BACKUP_API_KEY: ${{ secrets.LLM_BACKUP_API_KEY || secrets.TOKENPLAN_API_KEY }}
         run: |
           if [ -z "$LLM_API_KEY" ]; then
             echo "::warning title=LLM_API_KEY::没有设置，APK 里不会带 key"
@@ -62,12 +63,21 @@ jobs:
             first=$(printf '%s\n' "$LLM_API_KEY" | grep -m1 . | tr -d '[:space:]')
             echo "::notice title=LLM_API_KEY::非空行数=${lines}，第一行长度=${#first}"
           fi
+          if [ -z "$LLM_BACKUP_API_KEY" ]; then
+            echo "::warning title=LLM_BACKUP_API_KEY::没有设置备用大模型的 key，主线路出错时没有备用"
+          else
+            echo "::notice title=LLM_BACKUP_API_KEY::已设置（长度 ${#LLM_BACKUP_API_KEY}）"
+          fi
 
       - name: Build Debug APK
         env:
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
           LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
           LLM_MODEL: ${{ vars.LLM_MODEL }}
+          # 备用大模型（DeepSeek）：Secret 叫 LLM_BACKUP_API_KEY 或 TOKENPLAN_API_KEY 都认
+          LLM_BACKUP_API_KEY: ${{ secrets.LLM_BACKUP_API_KEY || secrets.TOKENPLAN_API_KEY }}
+          LLM_BACKUP_BASE_URL: ${{ vars.LLM_BACKUP_BASE_URL }}
+          LLM_BACKUP_MODEL: ${{ vars.LLM_BACKUP_MODEL }}
           ASR_API_KEY: ${{ secrets.QWEN_API || secrets.ASR_API_KEY }}   # 千问 AI 平台的 key（sk-ws-）优先
           ASR_BASE_URL: ${{ vars.ASR_BASE_URL }}
           ASR_MODEL: ${{ vars.ASR_MODEL }}

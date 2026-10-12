@@ -477,6 +477,7 @@ class FitnessApp {
       if (this._editorBack) { this._editorBack = false; return; }
       if (!$('share-overlay').classList.contains('hidden')) this.closeShare(true);
       else if (!$('edit-overlay').classList.contains('hidden')) this.closeEditor(true);
+      else if ($('lift-sheet') && !$('lift-sheet').classList.contains('hidden')) $('lift-sheet').classList.add('hidden'); // 趋势页的动作重量曲线
       else if (this.view !== 'today') this.switchView('today', true);
     });
   }

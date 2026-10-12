@@ -23,6 +23,7 @@
     submit(text, opts) {
       text = (text || '').trim();
       if (!text) return;
+      if (TF.asrFix) text = TF.asrFix(text); // 语音常听错的健身词先改对（卧腿→卧推、四组八哥→4组8个），秒记和大模型都更准
       // 同一句点了两下、发了两次：5 秒内、或者上一句还在整理，就不再发（省 token，也不打断已经出来的回答）
       const now = Date.now();
       if (!(opts && opts.again) && ((this._last && this._last.text === text && now - this._last.at < 5000) ||
@@ -61,8 +62,10 @@
       }
       // 听着像提问：不出「正在整理」卡片，小人马上在气泡里说「我想想…」（Atria 写完一整个回答要十几秒）
       const ask = !!((opts && opts.ask) || (looksLikeQuestion && looksLikeQuestion(text)));
-      const p = root.app.addPending(text, ask);
-      if (ask && root.app.showBuddyThinking) root.app.showBuddyThinking(text);
+      // 只是在问（不是要排某天、不是要动手、没在报吃了练了）：交给健康大脑（v12），什么都能问
+      const brain = ask && !!TF.brainQuestion && TF.brainQuestion(text, !!(opts && opts.ask));
+      const p = root.app.addPending(text, ask, brain ? { brain: true } : null);
+      if (ask && root.app.showBuddyThinking) root.app.showBuddyThinking(text, brain ? 'brain' : '');
       this.process(p);
     },
 
@@ -111,26 +114,42 @@
       const offer = app._planOffer && Date.now() - app._planOffer.at < 15 * 60 * 1000 ? app._planOffer.text : '';
       return { now: new Date(p.ts || Date.now()), history: app.workouts, dayRecords, recent, dayLabel, lastWeight: lw ? lw.kg : null, myFoods: app.myFoods || [], day, plans, lastPlan: offer,
         memo: app.memoList ? app.memoList() : [], date, ask: !!p.ask, editPlan: p.plan === 'edit', maybeEditPlan: p.plan === 'maybe',
-        // 提问：带一行画像；问以前的事才把最近两周一天一行带上（省 token）
-        portrait: p.ask && app.portrait ? app.portrait() : [], past: p.ask && TF.needsHistory(p.text) ? this.pastDays(date) : [],
+        // 提问：带一行画像；问以前的事才把最近两周一天一行带上（省 token）；健康大脑每次都带（它要认识你，v12）
+        portrait: p.ask && app.portrait ? app.portrait() : [], past: p.ask && (p.brain || TF.needsHistory(p.text)) ? this.pastDays(date, p.brain ? this.daysAsked(p.text) : 14) : [],
+        brain: !!p.brain && !p.chat, body: p.brain ? this.bodyLine() : '',
         state: app.profile.dayState && app.profile.dayState.date === date ? app.profile.dayState.sleep : '',
         // 聊天：小人是谁、你们多熟、刚才聊了啥（最多 3 轮，15 分钟内）
-        chat: !!p.chat, buddy: p.chat && app.buddyPersona ? app.buddyPersona() : null, talk: p.chat && app.chatThread ? app.chatThread() : [],
+        chat: !!p.chat, buddy: p.chat && app.buddyPersona ? app.buddyPersona() : null, talk: (p.chat || p.brain) && app.chatThread ? app.chatThread(p.brain ? 'ask' : '') : [],
         life: p.chat && app.lifeList ? app.lifeList() : [], // v6.3：他最近说过的事（「周五面试」），小人接着上次聊
         // v6.5：存好的计划（说到计划、照着练时才带）；回答用小人的口吻（不要小人时不带）
         planBook: app.planBookContext ? app.planBookContext(p.text) : [],
         voice: !p.chat && app.buddyLook && app.buddyLook().show && app.cast ? { name: app.cast().name, speech: app.cast().speech } : null };
     },
 
+    /** 健康大脑要知道他是谁：「男，28岁，175cm，开始时 72kg，目标减脂，每天蛋白目标 120g」 */
+    bodyLine() {
+      const pr = (root.app && root.app.profile) || {};
+      const G = { fat_loss: '减脂', maintain: '保持体重', muscle_gain: '增肌' };
+      return [pr.gender === 'female' ? '女' : pr.gender === 'male' ? '男' : '', pr.age ? pr.age + '岁' : '', pr.heightCm ? pr.heightCm + 'cm' : '',
+        pr.weightKg ? `建档时 ${pr.weightKg}kg` : '', G[pr.goalType] ? '目标' + G[pr.goalType] : '', pr.targetProteinG ? `每天蛋白目标 ${pr.targetProteinG}g` : ''].filter(Boolean).join('，');
+    },
+
     /**
      * 提问时给大模型看的最近两周，一天一行（「09-28周日 吃1850 蛋白92 练:杠铃卧推80kg、杠铃深蹲100kg 体重61.2」），
      * 问「上周练了几次」「这个月瘦了多少」「哪天吃得最多」才答得上来。只在提问时带，记录时不带，不拖慢记录。
      */
-    pastDays(date) {
+    /** 健康大脑问「这 30 天」「这个月」：带几天的记录（至少两周，最多 30 天） */
+    daysAsked(text) {
+      const m = String(text || '').match(/(\d+)\s*天/);
+      const n = m ? +m[1] : /这个月|一个月|30天|三十天/.test(String(text || '')) ? 30 : 14;
+      return Math.max(14, Math.min(30, n));
+    },
+
+    pastDays(date, n) {
       const app = root.app;
       const WK = '日一二三四五六';
       const out = [];
-      for (let i = 13; i >= 0; i--) {
+      for (let i = (n || 14) - 1; i >= 0; i--) {
         const d = shiftDateString(date, -i);
         const s = app.getDaySummary(d);
         const ws = app.workouts.filter(w => w.date === d);
@@ -169,12 +188,12 @@
       let buf = '', planning = false;
       const onDelta = (soFar) => {
         buf = soFar;
-        const a = partialAnswer ? partialAnswer(buf) : '';
+        const a = p.brain && !p.chat && TF.brainPartial ? TF.brainPartial(buf) : partialAnswer ? partialAnswer(buf) : '';
         const pl = !!a && /"answer"\s*:\s*"(?:[^"\\]|\\.)*"/.test(buf) && /"plan"\s*:\s*\{/.test(buf);
         if (a && (a !== shown || pl !== planning) && app.showBuddyAnswer && mine()) {
           shown = a;
           planning = pl;
-          app.showBuddyAnswer(p.text, a, { streaming: true, planning: pl, chat: !!p.chat });
+          app.showBuddyAnswer(p.text, a, { streaming: true, planning: pl, chat: !!p.chat, brain: !!p.brain });
         }
       };
       let ctx;
@@ -205,6 +224,14 @@
         Object.assign(p, { chat: true, ask: true, rerouted: true });
         if (app.showBuddyThinking) app.showBuddyThinking(p.text, 'chat');
         this.process(p);
+        return;
+      }
+      // 健康大脑（v12）：不记录；他说了自己的事（伤病、过敏）悄悄进小本本；小人回答，下面两句接着问
+      if (p.brain && !p.chat) {
+        if (!result.answer) { fail(new Error('EMPTY_RESPONSE')); return; }
+        app.finishPending(p.id);
+        if (((result.memo || []).length || (result.forget || []).length) && app.updateMemo) { app.updateMemo(result.memo, result.forget); app.saveData(); }
+        if (app.showBuddyAnswer) app.showBuddyAnswer(p.text, result.answer, { next: result.next, brain: true });
         return;
       }
       // 聊天：不记录；他说了自己的事悄悄记进小本本，最近的事记下来过几天问，小人接话（带表情、两句你可能回的）
@@ -290,6 +317,22 @@
         if (to && to !== rec.date && to <= shiftDateString(getTodayDateString(), 7)) {
           rec.date = to;
           batch.moved = (batch.moved || []).concat(to);
+        }
+        // 只改了整顿的数（「只吃了一半」写成 calories 360）、没写是哪几样：明细跟着按比例缩放（v12，以前明细不动，
+        // 修改面板里的「合计」还是旧的，再保存一次又被改回去）
+        if (r.kind === 'meal' && !u.set.items && !u.set.removeItems && Array.isArray(rec.items) && rec.items.length &&
+            ['calories', 'proteinG'].some(k => u.set[k] != null)) {
+          const sum = sumItems(rec.items);
+          const fk = u.set.calories != null && sum.calories > 0 ? u.set.calories / sum.calories : null;
+          const fp = u.set.proteinG != null && sum.proteinG > 0 ? u.set.proteinG / sum.proteinG : fk;
+          const f = fk == null ? fp : fk;
+          if (f > 0 && Number.isFinite(f)) {
+            rec.items = rec.items.map(it => Object.assign({}, it, {
+              calories: Math.round((it.calories || 0) * f), proteinG: round1((it.proteinG || 0) * (fp || f)),
+              carbsG: round1((it.carbsG || 0) * f), fatG: round1((it.fatG || 0) * f), grams: it.grams ? Math.round(it.grams * f) : it.grams
+            }));
+            Object.assign(rec, sumItems(rec.items));
+          }
         }
         // 改了其中几样：按名字换掉 / 去掉，其他原样保留，合计重算
         if (r.kind === 'meal' && (u.set.items || u.set.removeItems)) {

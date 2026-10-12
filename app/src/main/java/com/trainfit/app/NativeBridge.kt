@@ -298,28 +298,44 @@ class NativeBridge(
 
     // ================= 大模型 =================
 
+    /**
+     * 两条线路（v12）：主线路是 Atria（或设置里自己填的接口），备用是打包时注入的 DeepSeek（LLM_BACKUP_*）。
+     * 网页在 override 里写 "provider":"backup" 就走备用，别的字段不看；先走哪条、什么时候换由网页定（parser.js 的 sendHedged）。
+     */
+    private fun llmCfg(overrideJson: String?): ApiConfig {
+        val ov = try { JSONObject(overrideJson ?: "") } catch (_: Exception) { null }
+        if (ov?.optString("provider") == "backup") {
+            return ApiConfig(BuildConfig.LLM_BACKUP_BASE_URL.trim().trimEnd('/'), BuildConfig.LLM_BACKUP_API_KEY.trim(), BuildConfig.LLM_BACKUP_MODEL.trim())
+        }
+        return ApiConfig.resolve(overrideJson, BuildConfig.LLM_BASE_URL, BuildConfig.LLM_API_KEY, BuildConfig.LLM_MODEL)
+    }
+
     @JavascriptInterface
-    fun isLlmConfigured(): Boolean = BuildConfig.LLM_API_KEY.isNotBlank()
+    fun isLlmConfigured(): Boolean = BuildConfig.LLM_API_KEY.isNotBlank() || BuildConfig.LLM_BACKUP_API_KEY.isNotBlank()
 
     @JavascriptInterface
     fun getLlmInfo(): String = JSONObject().apply {
         put("baseUrl", BuildConfig.LLM_BASE_URL)
         put("model", BuildConfig.LLM_MODEL)
         put("hasKey", BuildConfig.LLM_API_KEY.isNotBlank())
+        put("backup", JSONObject().apply {
+            put("baseUrl", BuildConfig.LLM_BACKUP_BASE_URL)
+            put("model", BuildConfig.LLM_BACKUP_MODEL)
+            put("hasKey", BuildConfig.LLM_BACKUP_API_KEY.isNotBlank())
+        })
     }.toString()
 
-    @Volatile private var lastWarm = 0L
+    private val lastWarm = ConcurrentHashMap<String, Long>()
 
-    /** 按住说话 / 点开键盘时调：先连上大模型接口，松手后整理不用再等握手。一分钟最多一次 */
+    /** 按住说话 / 点开键盘时调：先连上大模型接口，松手后整理不用再等握手。每条线路一分钟最多一次 */
     @JavascriptInterface
     fun warmLlm(overrideJson: String) {
+        val cfg = llmCfg(overrideJson)
+        if (!cfg.isComplete) return
         val now = System.currentTimeMillis()
-        if (now - lastWarm < 60_000) return
-        lastWarm = now
-        io.execute {
-            val cfg = ApiConfig.resolve(overrideJson, BuildConfig.LLM_BASE_URL, BuildConfig.LLM_API_KEY, BuildConfig.LLM_MODEL)
-            if (cfg.isComplete) OpenAiApi.warm(cfg)
-        }
+        if (now - (lastWarm[cfg.baseUrl] ?: 0L) < 60_000) return
+        lastWarm[cfg.baseUrl] = now
+        io.execute { OpenAiApi.warm(cfg) }
     }
 
     // 正在出字的请求：补发的那份先出了字，网页就调 llmCancel 把慢的这份掐掉（断开连接，不再等、不再花 token）
@@ -336,7 +352,7 @@ class NativeBridge(
     @JavascriptInterface
     fun llmChatStream(requestId: String, bodyJson: String, overrideJson: String) {
         io.execute {
-            val cfg = ApiConfig.resolve(overrideJson, BuildConfig.LLM_BASE_URL, BuildConfig.LLM_API_KEY, BuildConfig.LLM_MODEL)
+            val cfg = llmCfg(overrideJson)
             if (!cfg.isComplete) {
                 callJs("__tfLlm", requestId, false, "NO_KEY")
                 return@execute
@@ -359,12 +375,12 @@ class NativeBridge(
 
     /**
      * @param bodyJson  chat/completions 请求体（messages 等），model 为空时用默认模型
-     * @param overrideJson 可选 {"baseUrl","apiKey","model"}，App 设置里填了就覆盖打包时的默认值
+     * @param overrideJson 可选 {"baseUrl","apiKey","model"}，App 设置里填了就覆盖打包时的默认值；{"provider":"backup"} 走备用线路
      */
     @JavascriptInterface
     fun llmChat(requestId: String, bodyJson: String, overrideJson: String) {
         io.execute {
-            val cfg = ApiConfig.resolve(overrideJson, BuildConfig.LLM_BASE_URL, BuildConfig.LLM_API_KEY, BuildConfig.LLM_MODEL)
+            val cfg = llmCfg(overrideJson)
             if (!cfg.isComplete) {
                 callJs("__tfLlm", requestId, false, "NO_KEY")
                 return@execute
