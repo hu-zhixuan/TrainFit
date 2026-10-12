@@ -180,7 +180,8 @@ Object.assign(FitnessApp.prototype, {
 
   /**
    * 三个数（今天页大卡片下面那排「已吃 / 训练消耗 / 蛋白质」的样子）：热量赤字、蛋白质、训练（只记吃的模式：吃了多少、蛋白质）。
-   * 每个：小标签、大数（滚上去）、单位、和上一段比（好的绿、不好的红）、一行小字。点一个 = 下面那张图换成它。
+   * 每个：小标签、大数（滚上去）、单位、和上一段比（好的绿、不好的红）。点一个 = 下面那张图换成它。
+   * 目标、够了几天这些写在下面那张图的标题里（v12.6 简化：小字和图上的重复了）。
    */
   renderTrendKpis(el, days, cur, prev) {
     const simple = this.isSimple();
@@ -199,21 +200,14 @@ Object.assign(FitnessApp.prototype, {
     const g = avgGap(cur), gp = avgGap(prev);
     const tiles = [];
     if (simple) tiles.push(['energy', '吃了', cur.intake == null ? '<b class="tk-v">–</b>' : num(Math.round(cur.intake), fmt(cur.intake)), 'kcal/天',
-      cur.budget ? `预算 ${fmt(cur.budget)}` : '', delta(cur.intake, prev.intake, '', false)]);
-    else tiles.push(['gap', gap.label, g == null ? '<b class="tk-v">–</b>' : num(Math.round(g), fmt(g)), 'kcal/天',
-      gap.target ? `目标 ${fmt(gap.target)}` : '', delta(g, gp, '', true)]);
+      delta(cur.intake, prev.intake, '', false)]);
+    else tiles.push(['gap', gap.label, g == null ? '<b class="tk-v">–</b>' : num(Math.round(g), fmt(g)), 'kcal/天', delta(g, gp, '', true)]);
     tiles.push(['protein', '蛋白质', cur.protein == null ? '<b class="tk-v">–</b>' : num(Math.round(cur.protein), String(Math.round(cur.protein))), 'g/天',
-      cur.proteinTarget ? `够了 ${cur.proteinOk}/${cur.eatDays} 天` : '', delta(cur.protein, prev.protein, 'g', true)]);
-    if (!simple) {
-      const lift = this.trendLiftRows(days);
-      const prs = lift.rows.filter(r => r.pr).length;
-      tiles.push(['train', '训练', num(cur.trainDays, String(cur.trainDays)), `/ ${days.length} 天`,
-        prs ? `${prs} 个新纪录` : cur.minutes ? `有氧 ${cur.minutes} 分` : '', delta(cur.trainDays, prev.trainDays, '', true)]);
-    }
+      delta(cur.protein, prev.protein, 'g', true)]);
+    if (!simple) tiles.push(['train', '训练', num(cur.trainDays, String(cur.trainDays)), `/ ${days.length} 天`, delta(cur.trainDays, prev.trainDays, '', true)]);
     el.style.setProperty('--n', tiles.length);
-    el.innerHTML = tiles.map(([k, label, v, unit, sub, d]) => `<button type="button" class="tr-kpi${k === kind ? ' on' : ''}" data-k="${k}" role="tab" aria-selected="${k === kind}">` +
-      `<span class="tk-l"><i class="tk-dot ${k}"></i>${label}</span><span class="tk-num">${v}<small>${unit}</small></span>${d}` +
-      `<span class="tk-s">${esc(sub)}</span></button>`).join('');
+    el.innerHTML = tiles.map(([k, label, v, unit, d]) => `<button type="button" class="tr-kpi${k === kind ? ' on' : ''}" data-k="${k}" role="tab" aria-selected="${k === kind}">` +
+      `<span class="tk-l"><i class="tk-dot ${k}"></i>${label}</span><span class="tk-num">${v}<small>${unit}</small></span>${d}</button>`).join('');
     el.querySelectorAll('.tr-kpi').forEach(b => b.addEventListener('click', () => {
       if (this._trendKind === b.dataset.k) return;
       this._trendKind = b.dataset.k;
@@ -415,63 +409,17 @@ Object.assign(FitnessApp.prototype, {
   },
 
   // ---------------------------------------------------------------------------
-  // 趋势分析（v12.5）：累计热量赤字、三大营养素、练了哪些部位、五周打卡
+  // 趋势分析：v12.5 有四张（累计热量赤字、三大营养素、练了哪儿的雷达、五周打卡），v12.6 用户「简化趋势页」——
+  // 累计赤字和柱状图上「一共 X kcal ≈ Y kg 脂肪」重复、雷达和训练排行重复、日历和每一天的卡片重复，只留三大营养素
   // ---------------------------------------------------------------------------
   renderInsights(el, days) {
     if (!el) return;
-    const simple = this.isSimple();
-    const cards = [simple ? '' : this.insCumulative(days.length < 7 ? this.trendDaysData(7) : days), this.insMacros(days),
-      simple ? '' : this.insRadar(Math.max(14, days.length)), this.insCalendar()].filter(Boolean);
-    const sub = document.getElementById('tr-ins-sub');
-    if (sub) sub.textContent = days.length < 7 ? '至少按 7 天看' : `这 ${days.length} 天`;
-    el.innerHTML = cards.join('');
-    el.querySelectorAll('.chart').forEach(c => c._bind && c._bind());
-    el.querySelectorAll('[data-cal]').forEach(b => b.addEventListener('click', () => { window.Haptics && window.Haptics.fire('tick'); this.trendFocusDay(b.dataset.cal, true); }));
+    el.innerHTML = this.insMacros(days);
   },
 
   /** 一张分析卡：小标题、一句结论（大字）、图、脚注 */
   insCard(cls, title, take, body, foot) {
     return `<article class="card ti ${cls}"><div class="ti-head"><span>${esc(title)}</span></div><p class="ti-take">${take}</p>${body}${foot ? `<p class="tp-foot">${foot}</p>` : ''}</article>`;
-  },
-
-  /** 累计热量赤字：一天天加起来的线（面积渐变），和「每天照目标走」的虚线比；最后一个点在呼吸 */
-  insCumulative(days) {
-    const gap = this.trendGap();
-    let acc = 0, started = false;
-    const pts = [], goal = [];
-    days.forEach((d, i) => {
-      const v = gap.val(d);
-      if (v != null) { started = true; acc += v; }
-      if (started) { pts.push([i, acc]); goal.push([i, gap.target * (goal.length + 1)]); }
-    });
-    if (pts.length < 2) return '';
-    const vals = pts.map(p => p[1]).concat(gap.target ? goal.map(p => p[1]) : []);
-    const f = this.trendFrame(days.length, Math.min(0, ...vals) * 1.1, Math.max(...vals, 1) * 1.12, { h: 168 });
-    const line = this.trendLine(f, pts);
-    const g = gap.target ? this.trendLine(f, goal) : null;
-    const last = pts[pts.length - 1];
-    const uid = 'cu' + Math.random().toString(36).slice(2, 7);
-    const total = Math.round(last[1]);
-    const pace = gap.target && goal.length ? Math.round((total / goal[goal.length - 1][1]) * 100) : 0;
-    const svg = `<svg viewBox="0 0 ${f.W} ${f.H}" role="img" aria-label="累计${gap.label}">` +
-      `<defs><linearGradient id="${uid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--accent);stop-opacity:0.38"/><stop offset="1" style="stop-color:var(--accent);stop-opacity:0"/></linearGradient></defs>` +
-      `${f.grid}<path class="cu-area" fill="url(#${uid})" d="${line.area}"/>` +
-      (g ? `<path class="line goal" d="${g.d}"/>` : '') +
-      `<path class="line cu draw" pathLength="1" d="${line.d}"/>` +
-      `<circle class="cu-pulse" cx="${f.cx(last[0]).toFixed(1)}" cy="${f.y(last[1]).toFixed(1)}" r="5"/><circle class="cu-dot" cx="${f.cx(last[0]).toFixed(1)}" cy="${f.y(last[1]).toFixed(1)}" r="4"/>` +
-      `${this.trendXLabels(days, f)}<line class="xhair hidden" y1="${f.padT}" y2="${f.H - f.padB}"/></svg>`;
-    const id = uid + 'c';
-    const byI = new Map(pts.map((p, k) => [p[0], [p[1], goal[k] && goal[k][1]]]));
-    setTimeout(() => {
-      const el = document.getElementById(id);
-      if (el) el._bind = () => this.trendHover(el, f, days, (i) => { const x = byI.get(i); return x ? [['pos', '累计', fmt(Math.round(x[0])) + ' kcal']].concat(gap.target ? [['', `照目标该是 ${fmt(x[1])}`, '']] : []) : null; });
-      if (el && el.isConnected && el._bind) el._bind();
-    }, 0);
-    const take = gap.gain ? `累计多吃了 <b data-count="${Math.max(0, total)}" data-text="${fmt(Math.max(0, total))}">${fmt(Math.max(0, total))}</b> kcal`
-      : total >= 0 ? `累计少吃了 <b data-count="${total}" data-text="${fmt(total)}">${fmt(total)}</b> kcal<br>≈ <b>${round1(total / 7700)}</b> kg 脂肪`
-        : `累计多吃了 <b>${fmt(-total)}</b> kcal`;
-    const foot = gap.target ? (pace >= 95 ? `比「每天 ${fmt(gap.target)}」的节奏还快 ${pace - 100}%` : `是目标节奏的 ${pace}%`) + ' · 虚线是照目标走' : '';
-    return this.insCard('ti-cum', `累计${gap.label}`, take, `<div class="chart" id="${id}">${svg}<div class="chart-tip hidden"></div></div>`, foot);
   },
 
   /** 三大营养素：这几天吃进来的热量里，蛋白 / 碳水 / 脂肪各占多少（环形，三段之间留 2px 缝，一段段转出来） */
@@ -502,59 +450,6 @@ Object.assign(FitnessApp.prototype, {
       `<text class="mc-num" x="60" y="62" text-anchor="middle">${p}%</text><text class="mc-lab" x="60" y="78" text-anchor="middle">蛋白</text></svg>` +
       `<ul class="mc-legend">${legend}<li class="mc-tot"><span>平均每天</span><b>${fmt(Math.round(tot))}</b><small>kcal</small></li></ul></div>`;
     return this.insCard('ti-mac', '吃进来的热量从哪儿来', take, body, foot);
-  },
-
-  /** 练了哪些部位：最近几天每个部位练了几天（雷达，从中间撑开）；最久没练的大肌群点出来 */
-  insRadar(n) {
-    const today = getTodayDateString();
-    const since = shiftDateString(today, -(n - 1));
-    const AX = [['胸部', '胸'], ['背部', '背'], ['腿部', '腿'], ['肩部', '肩'], ['手臂', '手臂'], ['核心', '核心']];
-    const lifts = this.workouts.filter(w => !w.durationMin && w.date >= since && w.date <= today);
-    if (!lifts.length) return '';
-    const cnt = AX.map(([g]) => new Set(lifts.filter(w => w.muscleGroup === g || w.muscleGroup === '全身').map(w => w.date)).size);
-    const max = Math.max(2, ...cnt);
-    const cx = 120, cy = 96, R = 70;
-    const pt = (i, r) => { const a = -Math.PI / 2 + (i * 2 * Math.PI) / AX.length; return [cx + Math.cos(a) * r, cy + Math.sin(a) * r]; };
-    const ring = (k) => AX.map((_, i) => pt(i, (R * k) / 3).map(v => v.toFixed(1)).join(',')).join(' ');
-    const grid = [1, 2, 3].map(k => `<polygon class="rd-ring" points="${ring(k)}"/>`).join('') +
-      AX.map((_, i) => { const [x, y] = pt(i, R); return `<line class="rd-axis" x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}"/>`; }).join('');
-    const poly = AX.map((_, i) => pt(i, Math.max(4, (R * cnt[i]) / max)).map(v => v.toFixed(1)).join(',')).join(' ');
-    const dots = AX.map((_, i) => { const [x, y] = pt(i, Math.max(4, (R * cnt[i]) / max)); return `<circle class="rd-dot" style="--d:${500 + i * 60}ms" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3.2"/>`; }).join('');
-    const labels = AX.map(([, s], i) => { const [x, y] = pt(i, R + 15); return `<text class="rd-lab" x="${x.toFixed(1)}" y="${(y + 4).toFixed(1)}" text-anchor="middle">${s} <tspan>${cnt[i]}</tspan></text>`; }).join('');
-    // 最久没练的大肌群（胸背腿肩）
-    const lastOf = (g) => this.workouts.filter(w => w.muscleGroup === g && w.date <= today).reduce((m, w) => (w.date > m ? w.date : m), '');
-    const big = ['胸部', '背部', '腿部', '肩部'].map(g => ({ g, last: lastOf(g) }))
-      .map(x => Object.assign(x, { d: x.last ? Math.round((new Date(today + 'T00:00:00') - new Date(x.last + 'T00:00:00')) / 86400000) : 99 }))
-      .sort((a, b) => b.d - a.d)[0];
-    const spread = cnt.filter(v => v > 0).length;
-    const take = big && big.d >= 7 ? `<b>${big.g.replace('部', '')}</b>${big.d >= 99 ? '还没练过' : ` ${big.d} 天没练了`}` : spread >= 5 ? '练得<b>挺均衡</b>' : `主要在练<b>${AX[cnt.indexOf(Math.max(...cnt))][1]}</b>`;
-    const body = `<svg class="rd" viewBox="0 0 240 190" role="img" aria-label="最近 ${n} 天各部位练了几天">${grid}<polygon class="rd-shape" points="${poly}"/>${dots}${labels}</svg>`;
-    return this.insCard('ti-rad', `最近 ${n} 天练了哪儿`, take, body, '数字是练了几天 · 「全身」算进每个部位');
-  },
-
-  /** 五周打卡：一格一天（周一开头），颜色一种绿由浅到深 = 热量赤字离目标多近，红 = 多吃了，小点 = 练了；点一格，下面的卡片划到那天 */
-  insCalendar() {
-    const today = getTodayDateString();
-    const gap = this.trendGap();
-    const dow = (d) => (new Date(d + 'T00:00:00').getDay() + 6) % 7;
-    const start = shiftDateString(today, -(28 + dow(today)));
-    const cells = [];
-    let logged = 0, trained = 0;
-    for (let i = 0; i < 35; i++) {
-      const d = shiftDateString(start, i);
-      if (d > today) { cells.push('<span class="cal-c future"></span>'); continue; }
-      const t = this.trendDay(d);
-      const v = gap.val(t);
-      if (t.hasLogs) logged++;
-      if (t.ws.length) trained++;
-      const lv = !t.hasLogs ? 'none' : v == null ? 'l1' : v < 0 ? 'over' : !gap.target ? 'l3' : v >= gap.target * 0.8 ? 'l4' : v >= gap.target * 0.4 ? 'l3' : 'l2';
-      cells.push(`<button type="button" class="cal-c ${lv}${d === today ? ' now' : ''}" data-cal="${d}" style="--d:${i * 18}ms" aria-label="${+d.slice(5, 7)}月${+d.slice(8)}日">${t.ws.length ? '<i></i>' : ''}</button>`);
-    }
-    const st = this.buddyState ? this.buddyState() : {};
-    const take = st.streak >= 2 ? `连续记了 <b>${st.streak}</b> 天` : `这五周记了 <b>${logged}</b> 天`;
-    const body = `<div class="cal"><div class="cal-w">${'一二三四五六日'.split('').map(x => `<span>${x}</span>`).join('')}</div><div class="cal-g">${cells.join('')}</div></div>` +
-      `<div class="cal-key"><span><i class="cal-c none"></i>没记</span><span><i class="cal-c l2"></i><i class="cal-c l3"></i><i class="cal-c l4"></i>离${gap.gain ? '盈余' : '赤字'}目标越近越深</span><span><i class="cal-c over"></i>${gap.gain ? '少吃' : '多吃'}</span><span><i class="cal-dot"></i>练了</span></div>`;
-    return this.insCard('ti-cal', '五周打卡', take, body, `五周里记了 ${logged} 天、练了 ${trained} 天 · 点一格看那天`);
   },
 
   /** 数字从 0 滚上去（0.7 秒，先快后慢）；减少动态效果时直接显示 */
@@ -793,7 +688,8 @@ Object.assign(FitnessApp.prototype, {
   /**
    * 每一天（v12.5：「卡片一张一张，像社交软件的 Profile 那样左右划」）：今天在最前，往左划往前翻。
    * 一张卡：封面（这天好不好决定颜色）、头像位置是吃了多少对预算的圆环、日子、一句话、三个数（赤字 / 蛋白 / 动作）、
-   * 吃了哪几顿、练了什么（每个动作最重的一组）、按钮（看这天 / 存成计划 / 今天照这天练）。
+   * 按钮（看这天 / 存成计划 / 今天照这天练）。v12.6 简化：每顿的小标签、动作明细都去掉了（练了哪儿那句话里有，「看这天」看全的），
+   * 每张卡一样的几行，划起来整整齐齐。
    */
   renderDayCards(el) {
     if (!el) return;
@@ -809,20 +705,15 @@ Object.assign(FitnessApp.prototype, {
       const when = i === 0 ? '今天' : i === 1 ? '昨天' : `${i} 天前`;
       const v = gap.val(d);
       const over = d.hasDiet && d.intake > d.budget + 50;
-      const tone = !d.hasLogs ? 'empty' : over ? 'over' : v != null && gap.target && v >= gap.target * 0.8 ? 'good' : 'ok';
+      const tone = !d.hasLogs ? 'blank' : over ? 'over' : v != null && gap.target && v >= gap.target * 0.8 ? 'good' : 'ok';
       const pct = d.hasDiet && d.budget ? Math.min(1, d.intake / d.budget) : 0;
       const ring = `<svg class="dp-ring" viewBox="0 0 72 72" aria-hidden="true"><circle class="dp-track" cx="36" cy="36" r="${R}"/>` +
-        `<circle class="dp-arc" cx="36" cy="36" r="${R}" transform="rotate(-90 36 36)" stroke-dasharray="${(pct * C).toFixed(1)} ${C.toFixed(1)}" style="--len:${(pct * C).toFixed(1)}"/></svg>`;
+        (pct > 0 ? `<circle class="dp-arc" cx="36" cy="36" r="${R}" transform="rotate(-90 36 36)" stroke-dasharray="${(pct * C).toFixed(1)} ${C.toFixed(1)}"/>` : '') + '</svg>';
       const center = !d.hasDiet ? `<b>${d.hasLogs ? '—' : '?'}</b><small>${d.hasLogs ? '没记吃' : '没记'}</small>`
         : simple ? `<b>${fmt(d.intake)}</b><small>kcal</small>`
           : `<b>${fmt(Math.abs(v))}</b><small>${v < 0 ? (gap.gain ? '少吃' : '多吃') : gap.gain ? '盈余' : '赤字'}</small>`;
       const top = new Map();
       d.lifts.forEach(w => { const t = top.get(w.exerciseName); if (!t || (w.weightKg || 0) > (t.weightKg || 0)) top.set(w.exerciseName, w); });
-      const lifts = [...top.values()].map(w => `<li><span>${esc(w.exerciseName)}</span><b>${w.weightKg > 0 ? round1(w.weightKg) + 'kg' : '自重'} × ${w.reps}</b></li>`)
-        .concat(d.cardio.map(w => `<li><span>${esc(w.exerciseName)}</span><b>${w.durationMin} 分钟</b></li>`));
-      const meals = {};
-      d.meals.forEach(m => { const k = String(m.mealType || '').replace('/补剂', ''); meals[k] = (meals[k] || 0) + (m.calories || 0); });
-      const mealPills = Object.keys(meals).map(k => `<span class="dp-pill"><i>${esc(k)}</i>${fmt(meals[k])}</span>`).join('');
       const stats = [
         d.hasDiet ? [fmt(d.intake), `吃了 / ${fmt(d.budget)}`] : ['—', '吃了'],
         d.hasDiet ? [`${Math.round(d.protein)}g`, target ? `蛋白 / ${target}` : '蛋白'] : ['—', '蛋白'],
@@ -833,9 +724,7 @@ Object.assign(FitnessApp.prototype, {
         `<div class="dp-id"><div class="dp-avatar">${ring}<span class="dp-c">${center}</span></div>` +
         `<div class="dp-name"><b>${+d.date.slice(5, 7)}月${+d.date.slice(8)}日</b><span>${wd}${d.weight ? ` · ${round1(d.weight)}kg` : ''}</span></div></div>` +
         `<p class="dp-bio">${esc(this.dayBio(d, gap, target))}</p>` +
-        (d.hasLogs ? `<div class="dp-stats">${stats}</div>` : '') +
-        (mealPills ? `<div class="dp-pills">${mealPills}</div>` : '') +
-        (lifts.length ? `<ul class="dp-lifts">${lifts.slice(0, 4).join('')}${lifts.length > 4 ? `<li class="more">还有 ${lifts.length - 4} 个</li>` : ''}</ul>` : '') +
+        `<div class="dp-stats">${stats}</div>` +
         `<div class="dp-acts">${d.hasLogs ? '<button type="button" class="dp-btn" data-dc="open">看这天</button>' : '<button type="button" class="dp-btn" data-dc="open">去补一笔</button>'}` +
         (d.ws.length && !simple ? '<button type="button" class="dp-btn" data-dc="save">存成计划</button>' + (i ? '<button type="button" class="dp-btn main" data-dc="redo">今天照这天练</button>' : '') : '') +
         '</div></article>');
@@ -904,8 +793,8 @@ Object.assign(FitnessApp.prototype, {
     requestAnimationFrame(update);
   },
 
-  /** 图上点了某天：下面的卡片悄悄划到这天、亮一下（页面不跳，免得看数的时候被拽走）；日历点一格（reveal）才把页面带到卡片那儿 */
-  trendFocusDay(date, reveal) {
+  /** 图上点了某天：下面的卡片悄悄划到这天、亮一下（页面不跳，免得看数的时候被拽走） */
+  trendFocusDay(date) {
     const box = document.getElementById('tr-days');
     const card = box && box.querySelector(`.dp[data-date="${date}"]`);
     if (!card) return;
@@ -914,7 +803,5 @@ Object.assign(FitnessApp.prototype, {
     card.classList.add('focus');
     clearTimeout(this._focusT);
     this._focusT = setTimeout(() => card.classList.remove('focus'), 1600);
-    const sec = document.getElementById('tr-dots');
-    if (reveal && sec && sec.getBoundingClientRect().top > window.innerHeight - 40) box.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 });

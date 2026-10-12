@@ -68,7 +68,20 @@
       });
     },
 
-    /** 「先用哪条线路」（v12）：自动 / 主线路 / 备用，下面一行写这台手机上实测的速度 */
+    /**
+     * 「先用哪个模型」（v12；v12.6 说明照现在的做法重写）：自动 / Atria / DeepSeek，按钮上写模型的名字，
+     * 下面一两句大白话：现在先问谁、多久没动静同时问另一个、这台手机上实测各要几秒。
+     */
+    lineName(id) {
+      const info = LlmRoute && LlmRoute.info();
+      const own = (readOverride() || {}).model;
+      const model = id === 'main' ? (own || (info && info.main.model) || '') : ((info && info.backup && info.backup.model) || '');
+      if (/atria/i.test(model)) return 'Atria';
+      if (/deepseek/i.test(model)) return 'DeepSeek';
+      if (model) return model.replace(/-(Preview|\d{4})$/i, '');
+      return id === 'main' ? '主线路' : '备用';
+    },
+
     initRouteSettings() {
       const seg = document.getElementById('ql-route');
       const note = document.getElementById('ql-route-note');
@@ -77,15 +90,19 @@
       const sec = (ms) => (ms / 1000).toFixed(1) + ' 秒';
       const draw = () => {
         const m = LlmRoute.mode();
-        seg.querySelectorAll('.seg-btn').forEach(b => b.classList.toggle('active', b.dataset.value === m));
-        const name = { main: info && info.main.model ? info.main.model.replace(/-Preview$/, '') : '主线路', backup: info && info.backup && info.backup.model ? info.backup.model.replace(/-\d{4}$/, '') : '备用' };
-        if (info && !(info.backup && info.backup.hasKey)) { note.textContent = '安装包里没带备用线路的 key，只用主线路。'; return; }
-        const first = LlmRoute.order(readOverride())[0];
+        const name = { main: this.lineName('main'), backup: this.lineName('backup') };
+        seg.querySelectorAll('.seg-btn').forEach(b => {
+          b.classList.toggle('active', b.dataset.value === m);
+          if (b.dataset.value !== 'auto') b.textContent = name[b.dataset.value];
+        });
+        if (info && !(info.backup && info.backup.hasKey)) { note.textContent = `整理记录、回答问题、聊天都用 ${name.main}（安装包里没带备用模型的 key）。`; return; }
+        const [first, second] = LlmRoute.order(readOverride());
+        const wait = first === 'backup' ? 3 : 4.5;
+        const why = m !== 'auto' ? '' : first === 'backup' ? '（快，一句话两三秒写完）' : `（这台手机上 ${name.main} 实测更快，或 ${name.backup} 刚连着出错）`;
         const a = LlmRoute.median('main'), b = LlmRoute.median('backup');
-        const speed = [a && `${name.main} ${sec(a)}`, b && `${name.backup} ${sec(b)}`].filter(Boolean).join(' · ');
-        note.textContent = `现在先用 ${name[first]}：慢了（4.5 秒没出字）或出错，马上换另一条。` +
-          (m === 'auto' ? '自动 = 先用备用（DeepSeek，实测快两三倍），3 秒没动静同时问主线路，谁先出字用谁；这台手机上主线路实测快得多、或备用刚连着出错，就先用主线路。' : '') +
-          (speed ? `最近写完一次：${speed}。` : '');
+        const speed = [b && `${name.backup} ${sec(b)}`, a && `${name.main} ${sec(a)}`].filter(Boolean).join('、');
+        note.textContent = `整理记录、回答问题、聊天都走这里。${m === 'auto' ? '自动：' : ''}先问 ${name[first]}${why}，${wait} 秒没动静就同时问 ${name[second]}，谁先出字用谁；出错马上换另一个。` +
+          (speed ? `这台手机上最近写完一句：${speed}。` : '');
       };
       seg.addEventListener('click', (e) => {
         const b = e.target.closest('.seg-btn');
@@ -118,13 +135,14 @@
         baseEl.placeholder = info.baseUrl || 'https://…/v1';
         modelEl.placeholder = info.model || '模型名';
         keyEl.placeholder = info.hasKey ? '已内置，留空即可' : '还没有内置 key，请填写';
-        hint.textContent = info.hasKey ? '安装包里已经带了接口配置，一般不用填。填了会覆盖内置的。' : '安装包里没有内置 key，填上才能用 AI 解析；不填就只能用简单规则。';
+        hint.textContent = info.hasKey ? `下面三栏不用填，安装包里带好了。想换成自己的接口才填：只替换 ${this.lineName('main')} 那个，${this.lineName('backup')} 照旧。语音转文字用的是下面的千问，不走这里。` : '安装包里没有内置 key，填上才能用 AI 整理；不填就只能用简单规则。';
       } else {
         hint.textContent = '浏览器里调试用：填 OpenAI 兼容接口（部分服务商不允许浏览器跨域调用）。';
       }
 
       saveBtn.addEventListener('click', () => {
         writeOverride({ baseUrl: baseEl.value, model: modelEl.value, apiKey: keyEl.value });
+        if (this.refreshRouteNote) this.refreshRouteNote();
         root.app && root.app.showToast('✓ AI 接口设置已保存');
       });
 
