@@ -3,6 +3,12 @@
 每次发版时，GitHub Actions 会把这里对应版本的一节作为 Release 说明（见 `.github/workflows/build-apk.yml`）。
 更早的版本见 [GitHub Releases](https://github.com/hu-zhixuan/TrainFit/releases)。
 
+## v12.7 · 默认就用 DeepSeek；设置里「AI 模型」清爽了
+
+- **DeepSeek 能用就一直先用它**：今天实测同样 21 句吃的，DeepSeek 21 句全对、一句约 4 秒；Atria 对 18 句、一句要两三分钟。以前「自动」在这台手机上 Atria 更快时会换过去，现在不换了；只有 DeepSeek 十分钟内连着出错两次，才先用 Atria，过了十分钟自动换回来。
+- **设置里不用选了**：去掉「先问哪个：自动 / Atria / DeepSeek」三个按钮和中间那两段说明。最上面一行是现在在用的模型（DeepSeek 的鲸鱼 logo、V4 Flash、这台手机上最近一句几秒、「在用」），下面接口地址、模型、API Key 三栏照旧，灰色的字就是现在在用的那个的地址和模型 ID。
+- **自己填接口**：填了 Key 就先用你填的，DeepSeek 兜底；只填 Key、地址和模型空着，就按灰字那个地址和模型存。
+
 ## v12.6 · 趋势页更简单；设置里讲清楚用的哪个 AI；长列表能折起来
 
 - **趋势页删繁**：只留一句话、三个数、一天一根柱子的图、三大营养素圆环、每一天的卡片。

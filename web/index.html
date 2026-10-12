@@ -261,15 +261,11 @@
 
         <div class="card form-card">
           <div class="card-title">AI 模型</div>
-          <div class="field"><span class="field-label">先问哪个</span>
-            <div class="seg seg-sm" id="ql-route">
-              <button class="seg-btn" data-value="auto" type="button">自动</button>
-              <button class="seg-btn" data-value="main" type="button">Atria</button>
-              <button class="seg-btn" data-value="backup" type="button">DeepSeek</button>
-            </div>
+          <div class="ai-now">
+            <span class="ai-logo" id="ai-logo" aria-hidden="true"></span>
+            <div class="ai-name"><b id="ai-name">DeepSeek</b><small id="ai-sub"></small></div>
+            <span class="ai-state">在用</span>
           </div>
-          <p class="field-note" id="ql-route-note"></p>
-          <p class="field-note" id="ql-cfg-hint"></p>
           <label class="field"><span class="field-label">接口地址 (Base URL)</span><input id="ql-cfg-base" class="input" type="url" autocomplete="off" spellcheck="false"></label>
           <label class="field"><span class="field-label">模型</span><input id="ql-cfg-model" class="input" type="text" autocomplete="off" spellcheck="false"></label>
           <label class="field"><span class="field-label">API Key</span><input id="ql-cfg-key" class="input" type="password" autocomplete="off" spellcheck="false"></label>

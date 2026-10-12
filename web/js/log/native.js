@@ -141,17 +141,13 @@
 
   // ---------------------------------------------------------------------------
   // 两条线路（v12）：主线路 = Atria（或设置里自己填的接口），备用 = 打包时带的 DeepSeek。
-  // 先走哪条：设置里「AI 模型 → 先问哪个」——自动（v12.4 起默认先走备用 DeepSeek；这台手机上主线路实测快得多、或者备用刚连着出错，就先走主线路）/ 主线路优先 / 备用优先。
+  // 先走哪条（v12.7，用户：「不要太多选择，DeepSeek OK 就默认 DeepSeek」）：DeepSeek 能用就先走它；它 10 分钟内连着错两次、
+  // Atria 没错，才先走 Atria；设置里自己填了 key 就先走自己填的。设置里不再让选（以前的「自动 / 主线路 / 备用」去掉了）。
   // 慢了补发、出错换线都在 parser.js 的 sendHedged 里。
   // ---------------------------------------------------------------------------
-  const ROUTE_KEY = 'tf_llm_route';
   const STATS_KEY = 'tf_llm_stats';
   const LlmRoute = {
     NAMES: { main: '主线路', backup: '备用' },
-    mode() {
-      try { const m = root.localStorage.getItem(ROUTE_KEY); return m === 'main' || m === 'backup' ? m : 'auto'; } catch (e) { return 'auto'; }
-    },
-    setMode(m) { try { root.localStorage.setItem(ROUTE_KEY, m === 'main' || m === 'backup' ? m : 'auto'); } catch (e) {} },
     _read() {
       try { const o = JSON.parse(root.localStorage.getItem(STATS_KEY) || '{}'); return o && typeof o === 'object' ? o : {}; } catch (e) { return {}; }
     },
@@ -184,20 +180,21 @@
       if (!out.length) out.push('main');
       return out;
     },
-    /** 这次的先后顺序 */
+    /** 这次的先后顺序：自己填了 key 的先走自己的；不然 DeepSeek 先，它刚连着出错（Atria 没错）才 Atria 先 */
     order(override, now) {
       const ids = this.available(override);
       if (ids.length < 2) return ids;
-      const m = this.mode();
-      if (m === 'backup') return ['backup', 'main'];
-      if (m === 'main') return ['main', 'backup'];
+      if (override && override.apiKey) return ['main', 'backup'];
       const fm = this.recentFails('main', now), fb = this.recentFails('backup', now);
-      if (fm >= 2 && fb === 0) return ['backup', 'main'];
       if (fb >= 2 && fm === 0) return ['main', 'backup'];
-      // v12.4：自动先走备用（DeepSeek 实测写完中位 2.6 秒，Atria 6～8 秒）；这台手机上主线路实测反而快很多才换回来
-      const a = this.median('main', now), b = this.median('backup', now);
-      if (a && b && a < b * 0.75) return ['main', 'backup'];
       return ['backup', 'main'];
+    },
+    /** 设置里显示：现在先用的那条为什么不是 DeepSeek（'own' 自己填的 / 'down' DeepSeek 刚连着出错 / '' 就是 DeepSeek 或只有一条） */
+    why(override, now) {
+      const ids = this.available(override);
+      if (ids.length < 2) return '';
+      if (override && override.apiKey) return 'own';
+      return this.order(override, now)[0] === 'main' ? 'down' : '';
     },
     /** 这条线路用的 override：备用只写 provider，别的不看 */
     overrideFor(id, override) {
