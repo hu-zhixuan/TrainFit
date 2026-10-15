@@ -780,7 +780,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     const label = this.dexMealLabel();
     const stamp = Date.now();
     this.plans = (this.plans || []).filter(p => !(p.date === d.date && p.kind === 'meal' && p.mealType === d.meal && !p.done))
-      .concat({ id: `pl_${stamp}_dex`, date: d.date, kind: 'meal', ts: stamp, from: stamp, mealType: meal.mealType, foodSummary: meal.foodSummary,
+      .concat({ id: this.planId ? this.planId(d.date, 'dex') : `pl_${stamp}_dex`, date: d.date, kind: 'meal', ts: stamp, from: stamp, mealType: meal.mealType, foodSummary: meal.foodSummary,
         calories: meal.calories, proteinG: meal.proteinG, carbsG: meal.carbsG, fatG: meal.fatG, items: meal.items });
     this.bondGain && this.bondGain('plan');
     this.closeDex();

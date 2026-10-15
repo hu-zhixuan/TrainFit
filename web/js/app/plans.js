@@ -14,17 +14,46 @@ Object.assign(FitnessApp.prototype, {
 
   todoPlans(date) { return this.plansFor(date).filter(p => !p.done); },
 
+  /**
+   * 一行计划的编号，保证不和已有的撞（v12.9.2）：以前按「毫秒 + 第几样」起名，「加到这 3 天」同一毫秒放三天，三天的编号一模一样——
+   * 点今天那行的 × 删掉的是前一天那行（今天的「去不掉」），点 ✓ 记到了前一天。tag：m0 / w1 / dex / a0…
+   */
+  planId(date, tag) {
+    const taken = new Set((this.plans || []).map(p => p.id));
+    let id = `pl_${Date.now()}_${String(date || '').replace(/-/g, '').slice(4)}_${tag}`;
+    while (taken.has(id) || (this._planIdsNew && this._planIdsNew.has(id))) id += 'x';
+    (this._planIdsNew = this._planIdsNew || new Set()).add(id);
+    return id;
+  },
+
+  /** 打开 App、恢复备份后：以前撞了编号的计划，后面那些换个新编号（只改编号，内容不动）。改了返回 true */
+  fixPlanIds() {
+    const seen = new Set();
+    let changed = false;
+    (this.plans || []).forEach(p => {
+      if (!p || !p.id) return;
+      if (seen.has(p.id)) {
+        let id = `${p.id}_${String(p.date || '').replace(/-/g, '')}`;
+        while (seen.has(id)) id += 'x';
+        p.id = id;
+        changed = true;
+      }
+      seen.add(p.id);
+    });
+    return changed;
+  },
+
   /** 把小人给的计划放到那一天（同一天原来同类的计划换掉，免得改了几次叠在一起；v6.5 起只换同类：放训练不动那天的食谱） */
   addPlans(date, plan, noSave) {
     const stamp = Date.now();
     const from = plan.from || stamp;
     const meals = (plan.meals || []).map((m, i) => ({
-      id: `pl_${stamp}_m${i}`, date, kind: 'meal', ts: stamp + i, from,
+      id: this.planId(date, 'm' + i), date, kind: 'meal', ts: stamp + i, from,
       mealType: m.mealType, foodSummary: m.foodSummary, calories: m.calories, proteinG: m.proteinG,
       carbsG: m.carbsG, fatG: m.fatG, items: m.items && m.items.length ? m.items : undefined
     }));
     const lifts = (plan.workouts || []).map((w, i) => ({
-      id: `pl_${stamp}_w${i}`, date, kind: 'workout', ts: stamp + 50 + i, from,
+      id: this.planId(date, 'w' + i), date, kind: 'workout', ts: stamp + 50 + i, from,
       exerciseName: w.exerciseName, muscleGroup: w.muscleGroup, weightKg: w.weightKg, sets: w.sets, reps: w.reps,
       durationMin: w.durationMin || undefined, burnedCalories: w.burnedCalories, tip: w.tip || undefined
     }));
@@ -268,7 +297,7 @@ Object.assign(FitnessApp.prototype, {
       if (!add.length) return no('没认出要加什么');
       let ts = Math.max(Date.now(), ...plans.filter(x => x.date === date).map(x => x.ts || 0));
       const lines = add.map((x, i) => {
-        const row = Object.assign({ id: `pl_${Date.now()}_a${i}`, date, ts: ++ts, from: Date.now() }, this.planFields(x));
+        const row = Object.assign({ id: this.planId(date, 'a' + i), date, ts: ++ts, from: Date.now() }, this.planFields(x));
         reburn(row);
         plans.push(row);
         return `计划 · 加了${name(row)} ${val(row)}`;

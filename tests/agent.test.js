@@ -341,3 +341,13 @@ test('v12.9.1 说「练了序列A」是练完了：照计划记上（done），�
   assert.deepStrictEqual(mm('明天练序列B'), { do: 'usePlan', name: '序列B 全身复合日', dayOffset: 1 });
   for (const t of ['序列A练了几次', '今天练了序列A，卧推62.5公斤', '明天练完序列A']) assert.strictEqual(mm(t), null, t);
 });
+
+test('v12.9.2 没起名的计划（练腿 / 全身 / 有氧 / 胸+肩）：平常说「今天练了全身」不当成那份计划，说了「计划 / 那套」才认', () => {
+  const names = ['全身', '有氧', '练腿', '胸+肩', '练腿日', '序列A 上肢日'];
+  const mm = (t) => A.matchSkill(t, names, mon);
+  for (const t of ['今天练了全身', '今天做了有氧', '今天练腿', '今天练了胸+肩', '今天有氧跑了30分钟']) assert.strictEqual(mm(t), null, t);
+  assert.deepStrictEqual(mm('明天照练腿那套练'), { do: 'usePlan', name: '练腿', dayOffset: 1 });
+  assert.deepStrictEqual(mm('明天练全身那个计划'), { do: 'usePlan', name: '全身', dayOffset: 1 });
+  assert.deepStrictEqual(mm('明天练练腿日'), { do: 'usePlan', name: '练腿日', dayOffset: 1 }, '自己起的名字照旧');
+  assert.deepStrictEqual(mm('今天练了序列A'), { do: 'usePlan', name: '序列A 上肢日', dayOffset: 0, done: true });
+});
