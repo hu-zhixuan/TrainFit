@@ -172,3 +172,22 @@ test('v12.9.1「今天练了序列A」：没排的照计划直接记上（按成
   assert.ok(!app2.plans.find(p => p.id === 'b').done, '深蹲不在这份计划里，不动');
   assert.strictEqual(app2.workouts.find(w => w.id === app2.plans.find(p => p.id === 'a').recId).weightKg, 57.5);
 });
+
+test('v12.9.2「加到这 3 天」：几天的计划编号不撞，× 和 ✓ 动的是这天这行；以前撞了的打开时修好', () => {
+  const app = make();
+  app.plans = [];
+  const w = [{ exerciseName: '杠铃深蹲', weightKg: 80, sets: 5, reps: 5 }, { exerciseName: '杠铃卧推', weightKg: 60, sets: 4, reps: 8 }];
+  ['2026-10-14', TODAY, '2026-10-17'].forEach(d => app.addPlans(d, { workouts: w, from: 1 }, true)); // 同一毫秒放三天
+  assert.strictEqual(new Set(app.plans.map(p => p.id)).size, 6, '编号都不一样');
+  const row = app.plansFor(TODAY)[0];
+  app.dropPlan(row.id);
+  assert.strictEqual(app.plansFor(TODAY).length, 1, '删掉的是今天这行');
+  assert.strictEqual(app.plansFor('2026-10-14').length, 2, '前一天的不动');
+  // 以前存下来的：三天编号一样
+  const old = make();
+  old.plans = ['2026-10-14', TODAY, '2026-10-17'].map(d => ({ id: 'pl_1_w0', date: d, kind: 'workout', ts: 1, exerciseName: '杠铃深蹲', weightKg: 80, sets: 5, reps: 5 }));
+  assert.strictEqual(old.fixPlanIds(), true);
+  assert.strictEqual(new Set(old.plans.map(p => p.id)).size, 3);
+  assert.strictEqual(old.plans[0].id, 'pl_1_w0', '第一个不改');
+  assert.strictEqual(old.fixPlanIds(), false, '修过一次就不再改');
+});

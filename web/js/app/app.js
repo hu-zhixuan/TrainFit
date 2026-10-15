@@ -27,6 +27,7 @@ class FitnessApp {
     this.weights = load('fit_weights', []);   // [{date, kg, ts}]，一天一条
     this.myFoods = load('fit_my_foods', []);  // 记住的食物，见 foods.js
     this.plans = load('fit_plans', []);       // 小人给的计划（明天的食谱、训练），做完点 ✓ 变成记录，见 plans.js
+    if (this.fixPlanIds && this.fixPlanIds()) store('fit_plans', this.plans); // v12.9.2：以前「加到这 N 天」几天的计划编号撞了，× 删错天
     // 模式：eat = 只记吃的（想瘦 / 随便记记），fit = 吃和练都记（健身）
     // 老用户（已经有记录或改过身体数据）默认 fit，不打扰；新用户第一次打开先问
     this.needsOnboarding = false;

@@ -212,6 +212,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
     this.weights = d.fit_weights || [];
     this.myFoods = d.fit_my_foods || [];
     this.plans = d.fit_plans || [];
+    if (this.fixPlanIds) this.fixPlanIds(); // 备份里的老计划编号可能撞（v12.9.2）
     store(MY_FOODS_KEY, this.myFoods);
     this.recalculateMetabolism();
     this.saveData();
