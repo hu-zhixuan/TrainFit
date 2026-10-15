@@ -135,7 +135,10 @@ Object.assign(FitnessApp.prototype, {
     const pct = Math.round(done / all.length * 100);
     // 按成绩能往上加的（你自己写的计划第一次照抄，练过的动作这里推荐一下）：一点就全按成绩改（v12.9）
     const sug = Object.keys(this.planSuggest(date)).length;
-    const html = `<div class="group-head plan-head"><span>计划</span>${sug ? `<button type="button" class="plan-up" data-act="plan-overload" data-id="${esc(date)}">按成绩调 ${sug} 个</button>` : ''}` +
+    // 以前的日子还有没打勾的（v12.9.1：以前说「今天练了序列A」被当成排计划，那几天只有计划、没记上）：一下全记上
+    const past = left && date < getTodayDateString();
+    const html = `<div class="group-head plan-head"><span>计划</span>${past ? `<button type="button" class="plan-up" data-act="plan-all-done" data-id="${esc(date)}">都做了，记上</button>`
+      : sug ? `<button type="button" class="plan-up" data-act="plan-overload" data-id="${esc(date)}">按成绩调 ${sug} 个</button>` : ''}` +
       `<b>${done ? (left ? `完成 ${done}/${all.length}` : `全部完成 ✓`) : '点一行能改，做完点 ✓'}</b></div>` +
       `<div class="plan-bar${left ? '' : ' full'}"><i style="width:${this._planPct && this._planPct[date] != null ? this._planPct[date] : pct}%" data-to="${pct}"></i></div>`;
     this._planPct = Object.assign(this._planPct || {}, { [date]: pct });
@@ -448,6 +451,17 @@ Object.assign(FitnessApp.prototype, {
       grip.addEventListener('pointerup', end);
       grip.addEventListener('pointercancel', end);
     });
+  },
+
+  /** 以前那天的计划「都做了，记上」：没打勾的全照计划记上，能撤销 */
+  donePlansOn(date) {
+    const today = getTodayDateString();
+    const off = Math.round((new Date(date + 'T00:00:00') - new Date(today + 'T00:00:00')) / 86400000);
+    const r = this.runActs([{ do: 'donePlan', dayOffset: off, what: 'all' }], today);
+    if (!r.ok) { this.showToast(r.lines[0] || '没有要记的'); return; }
+    window.Haptics && window.Haptics.fire('success');
+    window.Sound && window.Sound.play('success');
+    if (window.QuickLog) window.QuickLog.showUndo('✓ 照计划记上了', r.lines, r.undo);
   },
 
   /** 「按成绩调 N 个」：这天的训练计划全按你的成绩改，能撤销 */
