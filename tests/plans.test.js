@@ -141,3 +141,34 @@ test('按成绩调全部、轻一点、加一档、新加一项、去掉', () =>
   assert.strictEqual(app.plans.find(p => p.id === 'm').foodSummary, '红薯200g、鸡胸肉150g');
   assert.strictEqual(run(app, { id: 'zz', drop: true }).ok, 0);
 });
+
+test('v12.9.1「今天练了序列A」：没排的照计划直接记上（按成绩算好的数），排着的打勾，不往计划里加', () => {
+  const app = make();
+  app.profile.planBook = [{ name: '序列A 上肢日', at: '2026-10-01', workouts: [
+    { exerciseName: '杠铃卧推', muscleGroup: '胸部', weightKg: 55, sets: 4, reps: 8 },
+    { exerciseName: '哑铃弯举', muscleGroup: '手臂', weightKg: 12, sets: 3, reps: 12 }], meals: [] }];
+  // 今天没排这份（换一天）：直接记上，计划一条都不多
+  app.plans = [];
+  const n = app.workouts.length;
+  let r = app.runActs([{ do: 'usePlan', name: '序列A 上肢日', dayOffset: 0, done: true }], TODAY);
+  assert.strictEqual(r.ok, 1);
+  assert.strictEqual(app.plans.length, 0, '不往计划里放');
+  const recs = app.workouts.filter(w => w.date === TODAY); // planToRecord 往前插
+  assert.deepStrictEqual(recs.map(w => [w.exerciseName, w.weightKg]).sort(), [['哑铃弯举', 12], ['杠铃卧推', 62.5]], '卧推按成绩');
+  assert.ok(recs.every(w => w.date === TODAY && w.burnedCalories > 0));
+  r.undo();
+  assert.strictEqual(app.workouts.length, n, '能撤销');
+  // 再说一遍：已经记过的不重复记
+  app.runActs([{ do: 'usePlan', name: '序列A 上肢日', dayOffset: 0, done: true }], TODAY);
+  r = app.runActs([{ do: 'usePlan', name: '序列A 上肢日', dayOffset: 0, done: true }], TODAY);
+  assert.strictEqual(r.ok, 0);
+  // 今天排着这份：打勾那几行（用你改过的数）
+  const app2 = make();
+  app2.profile.planBook = app.profile.planBook;
+  app2.plans.find(p => p.id === 'a').weightKg = 57.5;
+  r = app2.runActs([{ do: 'usePlan', name: '序列A', dayOffset: 0, done: true }], TODAY);
+  assert.strictEqual(r.ok, 1);
+  assert.ok(app2.plans.find(p => p.id === 'a').done && app2.plans.find(p => p.id === 'c').done);
+  assert.ok(!app2.plans.find(p => p.id === 'b').done, '深蹲不在这份计划里，不动');
+  assert.strictEqual(app2.workouts.find(w => w.id === app2.plans.find(p => p.id === 'a').recId).weightKg, 57.5);
+});

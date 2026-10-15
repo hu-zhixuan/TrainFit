@@ -138,7 +138,25 @@ Object.assign(FitnessApp.prototype, {
     const names = () => this.planBook().filter(e => !e.auto).map(e => `「${e.name}」`).join('、');
     (acts || []).slice(0, 8).forEach(a => {
       if (!a || !a.do) return;
-      if (a.do === 'usePlan') {
+      if (a.do === 'usePlan' && a.done) {
+        // 已经练完了（「今天练了序列A」，v12.9.1）：那天排着这份计划的就打勾；没排的照这份计划（按成绩算好的数）直接记上，不往计划里放
+        const e = this.planBookFind(a.name);
+        if (!e) { lines.push(`没找到计划「${a.name || ''}」`); return; }
+        const d = at(a.dayOffset || 0);
+        const core = (n) => TF.AgentIntent.liftCore(n);
+        const want = new Set((e.workouts || []).map(w => core(w.exerciseName)));
+        const already = new Set(this.workouts.filter(w => w.date === d).map(w => core(w.exerciseName)));
+        const rows = (this.plans || []).filter(p => p.date === d && !p.done && p.kind !== 'meal' && want.has(core(p.exerciseName)));
+        const todo = rows.length ? rows : (this.calibratePlan({ workouts: e.workouts || [] }, d).workouts || [])
+          .filter(w => !already.has(core(w.exerciseName))).map(w => Object.assign({ kind: 'workout', date: d }, w, { burnedCalories: undefined })); // 消耗按算好的数现算
+        if (!todo.length) { lines.push(`「${e.name}」${dayWord(d)}已经记过了`); return; }
+        let burn = 0;
+        todo.forEach((p, i) => { const rec = this.planToRecord(p, i); made.push(rec.id); burn += rec.burnedCalories || 0; });
+        lines.push(`训练 · 照「${e.name}」记上了 ${todo.length} 个动作，训练消耗 +${fmt(Math.round(burn))} 千卡`);
+        lines.push(rows.length ? `${dayWord(d)}排着的这几行打上勾了` : '重量组数按这份计划算的，哪个不一样点开那条改');
+        if (d !== this.selectedDate) jump = d;
+        ok += 1;
+      } else if (a.do === 'usePlan') {
         const e = this.planBookFind(a.name);
         if (!e) { lines.push(`没找到计划「${a.name || ''}」${names() ? '，存好的有：' + names() : '，先说「把这个计划存起来」'}`); return; }
         const d = at(a.dayOffset == null ? 1 : a.dayOffset);
@@ -271,7 +289,11 @@ Object.assign(FitnessApp.prototype, {
     const r = this.runActs([act], getTodayDateString());
     // 没做成（「今天不练了，太累了」但今天没有计划、刚才没给过计划）：当没认出来，照常走（聊天 / 大模型）
     if (!r.ok) return false;
-    if (window.QuickLog) window.QuickLog.showUndo('✓ 好了', r.lines, r.undo);
+    if (window.QuickLog) window.QuickLog.showUndo(act.done ? '✓ 记上了' : '✓ 好了', r.lines, r.undo);
+    if (act.done && r.made.length && this.reactRecord) { // 照计划记上的训练：和记一条训练一样，小人有反应
+      const date = shiftDateString(getTodayDateString(), act.dayOffset || 0);
+      this.reactRecord(null, { date, dietIds: [], workoutIds: r.made, asks: [] });
+    }
     window.Haptics && window.Haptics.fire('success');
     if (window.Sound) window.Sound.play('success');
     if (r.jump) this.jumpToPlans(r.jump);

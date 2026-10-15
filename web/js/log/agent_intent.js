@@ -4,6 +4,7 @@
  *
  * 这里是本机就能认的常用说法（技能），认出来直接做，不调大模型、不等：
  *   usePlan   「明天练计划A」「把练腿日排到周五」「今天练序列A」（存的是「序列A 上肢日」）→ 把存好的计划放到那天
+ *             「今天练了序列A」「序列A练完了」（已经练了，done: true）→ 照这份计划记上（v12.9.1）
  *   movePlan  「把明天的计划挪到后天」「把明天的饮食搬到今天」→ 挪计划（只挪吃的 / 练的）
  *   donePlan  「上肢日都练完了」「今天的计划都完成了」        → 照计划全记上（v9.2）
  *   clearPlan 「明天不练了」「取消周五的计划」               → 清掉那天没做的计划
@@ -131,7 +132,17 @@
     }
     // 用存好的计划：「明天练计划A」「把练腿日排到周五」
     const { name, key } = findNameKey(t, names);
-    if (name && (m = t.match(new RegExp(DAY))) && /放|排|安排|练|用|照|按|换|改|设|当|做|上/.test(norm(t).replace(key, ''))) {
+    if (!name) return null;
+    const rest = norm(t).replace(key, '');
+    // 已经练完了（「今天练了序列A」「序列A练完了」「今天按序列B练的」，v12.9.1）：是记录，不是排计划——照这份计划记上。
+    // 以前这几句也认成「今天练序列A」，每天练完说一句，就把整份计划又排进今天一遍。说了数、问了几次的交给大模型照实际的记
+    if (/练了|练完|练过|做完|做了|练的|做的|用的|打卡|搞定|完成|结束/.test(rest)) {
+      if (/几|多少|哪|\d|[一两二三四五六七八九十半]+(组|个|次|下|公斤|kg|斤|分钟|小时)/.test(rest)) return null;
+      m = t.match(new RegExp(DAY));
+      const d = m ? off(m[1]) : 0;
+      return d != null && d <= 0 && d >= -1 ? { do: 'usePlan', name, dayOffset: d, done: true } : null;
+    }
+    if ((m = t.match(new RegExp(DAY))) && /放|排|安排|练|用|照|按|换|改|设|当|做|上/.test(rest)) {
       const d = off(m[1]);
       if (d != null && d >= 0) return { do: 'usePlan', name, dayOffset: d };
     }

@@ -436,6 +436,7 @@ class FitnessApp {
         else if (act.dataset.act === 'plan-done') this.checkPlan(act, id);
         else if (act.dataset.act === 'plan-drop') this.dropPlan(id);
         else if (act.dataset.act === 'plan-overload') this.overloadPlans(id);
+        else if (act.dataset.act === 'plan-all-done') this.donePlansOn(id);
         return;
       }
       if (e.target.closest('.plan-grip') || (this._dragAt && Date.now() - this._dragAt < 400)) return; // 刚拖完：别当成点开

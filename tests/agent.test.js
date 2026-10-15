@@ -329,3 +329,15 @@ test('大模型改计划：说了「换成」却写成去掉 + 新加，合成�
   assert.strictEqual(r.acts[0].id, 'pl_1');
   assert.strictEqual(r.acts[0].workouts[0].exerciseName, '腿举');
 });
+
+test('v12.9.1 说「练了序列A」是练完了：照计划记上（done），不是再排一遍计划', () => {
+  const names = ['序列A 上肢日', '序列B 全身复合日'];
+  const mm = (t) => A.matchSkill(t, names, mon);
+  for (const t of ['今天练了序列A', '今天序列A练完了', '今天按序列A练的', '序列A今天练了', '今天的序列A做完了', '序列A练完了，感觉不错', '今天用的序列A'])
+    assert.deepStrictEqual(mm(t), { do: 'usePlan', name: '序列A 上肢日', dayOffset: 0, done: true }, t);
+  assert.deepStrictEqual(mm('刚练完序列B'), { do: 'usePlan', name: '序列B 全身复合日', dayOffset: 0, done: true });
+  assert.deepStrictEqual(mm('昨天练了序列B'), { do: 'usePlan', name: '序列B 全身复合日', dayOffset: -1, done: true });
+  assert.deepStrictEqual(mm('今天练序列A'), { do: 'usePlan', name: '序列A 上肢日', dayOffset: 0 }, '还没练：排进今天');
+  assert.deepStrictEqual(mm('明天练序列B'), { do: 'usePlan', name: '序列B 全身复合日', dayOffset: 1 });
+  for (const t of ['序列A练了几次', '今天练了序列A，卧推62.5公斤', '明天练完序列A']) assert.strictEqual(mm(t), null, t);
+});
