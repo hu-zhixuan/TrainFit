@@ -424,6 +424,7 @@ class FitnessApp {
       if (Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 1.5) this.shiftDate(dx > 0 ? -1 : 1);
     }, { passive: true });
 
+    this.bindPlanDrag && this.bindPlanDrag();
     $('timeline').addEventListener('click', (e) => {
       const act = e.target.closest('[data-act]');
       if (act) {
@@ -434,8 +435,10 @@ class FitnessApp {
         else if (act.dataset.act === 'edit-text') this.editPendingText(id);
         else if (act.dataset.act === 'plan-done') this.checkPlan(act, id);
         else if (act.dataset.act === 'plan-drop') this.dropPlan(id);
+        else if (act.dataset.act === 'plan-overload') this.overloadPlans(id);
         return;
       }
+      if (e.target.closest('.plan-grip') || (this._dragAt && Date.now() - this._dragAt < 400)) return; // 刚拖完：别当成点开
       const item = e.target.closest('.item[data-kind], .mg-row[data-kind]');
       if (item) this.openEditor(item.dataset.kind, item.dataset.id);
     });

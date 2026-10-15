@@ -5,7 +5,7 @@
  *   你说「把这个计划存起来叫练腿日」、点计划气泡里的「存起来」就存一份；把小人给的计划加到某天时也悄悄存一份（auto，留最近 6 份），
  *   所以「照上次那个练腿的计划」也找得到。以后说「明天练练腿日」就放到那天（本机认得出，不调大模型）。
  * 动作（act，大模型规则 12 / 本机技能 agent_intent.js 给的）：usePlan / addPlan / savePlan / copyDay / movePlan / clearPlan / donePlan /
- *   renamePlan / dropPlan / goal / protein / remind。runActs 照着做，返回提示条上的几行和撤销。
+ *   editPlan（改这天计划里的一行，v12.9，plans.js 的 applyPlanEdit）/ renamePlan / dropPlan / goal / protein / remind。runActs 照着做，返回提示条上的几行和撤销。
  * 计划一次就准（calibratePlan）：小人给的训练计划，练过的动作按你的成绩定重量和次数（和「下次练多少」一样）；
  *   食谱按那天还剩的热量、还差的蛋白配平（多了少了 12% 以上才动，能按克数、个数改的才改）。用户不用再说「蛋白再多点」。
  */
@@ -129,6 +129,7 @@ Object.assign(FitnessApp.prototype, {
     const lines = [];
     let jump = '', ok = 0;
     const made = []; // 照计划记上的记录（撤销时删掉）
+    const removed = []; // 撤回打勾时删掉的记录（撤销时放回去）
     const snap = { plans: JSON.stringify(this.plans || []), book: JSON.stringify(this.planBook()), goal: this.profile.goalType, deficit: this.profile.targetDeficitKcal,
       protein: this.profile.targetProteinG, touched: this.profile.proteinTouched, reminders: (() => { try { return localStorage.getItem('tf_reminders'); } catch (e) { return null; } })() };
     const at = (n) => shiftDateString(base, Math.round(+n || 0));
@@ -198,6 +199,11 @@ Object.assign(FitnessApp.prototype, {
         todo.forEach((p, i) => { const rec = this.planToRecord(p, i); made.push(rec.id); if (p.kind === 'meal') kcal += rec.calories || 0; else burn += rec.burnedCalories || 0; });
         lines.push(`计划 · ${dayWord(d)}的 ${todo.length} 条都记上了` + (burn ? `，训练消耗 +${fmt(Math.round(burn))} 千卡` : '') + (kcal ? `，吃了 +${fmt(Math.round(kcal))} 千卡` : ''));
         jump = d; ok += 1;
+      } else if (a.do === 'editPlan') {
+        // 改这天计划里的一行 / 所有训练（v12.9，plans.js 的 applyPlanEdit）
+        const r = this.applyPlanEdit(a, base, { made, removed });
+        lines.push(...r.lines);
+        if (r.ok) { ok += 1; if (r.date && r.date !== this.selectedDate) jump = r.date; }
       } else if (a.do === 'clearPlan') {
         const d = at(a.dayOffset);
         const left = (this.plans || []).filter(p => p.date === d && !p.done && (!a.what || a.what === 'all' || (a.what === 'meals') === (p.kind === 'meal')));
@@ -243,6 +249,7 @@ Object.assign(FitnessApp.prototype, {
     if (ok) { this.saveData(); this.render(); if (this.renderSettings && this.view === 'settings') this.renderSettings(); }
     const undo = () => {
       if (made.length) { this.diet = this.diet.filter(x => !made.includes(x.id)); this.workouts = this.workouts.filter(x => !made.includes(x.id)); }
+      removed.slice().reverse().forEach(x => { const list = x.kind === 'meal' ? this.diet : this.workouts; list.splice(Math.min(x.idx, list.length), 0, x.rec); });
       this.plans = JSON.parse(snap.plans);
       this.profile.planBook = JSON.parse(snap.book);
       Object.assign(this.profile, { goalType: snap.goal, targetDeficitKcal: snap.deficit, targetProteinG: snap.protein, proteinTouched: snap.touched });
@@ -251,7 +258,7 @@ Object.assign(FitnessApp.prototype, {
       this.saveData();
       this.render();
     };
-    return { lines, undo, jump, ok };
+    return { lines, undo, jump, ok, made };
   },
 
   /** 本机技能：认得出的动手说法直接做（不调大模型）。做了返回 true */
