@@ -137,31 +137,38 @@ function cleanRow(r) {
  */
 Object.assign(FitnessApp.prototype, {
   openEditor(kind, id) {
+    // 计划（v12.9）：和记录一样的面板，改的是那行计划；练的多一块「按你的成绩」、一行要点
+    const plan = kind === 'plan' ? (this.plans || []).find(p => p.id === id) : null;
+    if (kind === 'plan') { if (!plan || plan.done) return; kind = plan.kind === 'meal' ? 'meal' : 'workout'; }
     const list = kind === 'meal' ? this.diet : this.workouts;
-    const rec = list.find(r => r.id === id);
+    const rec = plan || list.find(r => r.id === id);
     if (!rec) return;
-    this.editing = { kind, id };
+    this.editing = { kind, id, plan: !!plan };
     this._draft = null;
-    document.getElementById('edit-delete').classList.remove('hidden');
+    // 照计划打勾记的那条：删掉 = 撤回打勾（计划回到还没做）
+    const fromPlan = !plan && (this.plans || []).some(p => p.done && p.recId === id);
+    const del = document.getElementById('edit-delete');
+    del.classList.remove('hidden');
+    del.textContent = plan ? '不要这条' : fromPlan ? '撤回打勾' : '删除';
     const f = document.getElementById('edit-fields');
     const input = (name, label, value, type = 'number', extra = '') =>
       `<label class="field"><span class="field-label">${label}</span><input class="input" name="${name}" type="${type}" value="${esc(value)}" ${type === 'number' ? 'inputmode="decimal" step="any"' : ''} ${extra}></label>`;
 
     if (kind === 'meal') {
-      document.getElementById('edit-title').textContent = '修改饮食';
+      document.getElementById('edit-title').textContent = plan ? '改计划 · 吃的' : '修改饮食';
       const hasItems = Array.isArray(rec.items) && rec.items.length > 0;
       f.innerHTML = `
         <div class="seg seg-sm" id="edit-meal-type">
           ${MEAL_TYPES.map(t => `<button type="button" class="seg-btn ${rec.mealType === t ? 'active' : ''}" data-value="${t}">${t.replace('/补剂', '')}</button>`).join('')}
         </div>
-        ${input('foodSummary', '吃了什么', rec.foodSummary, 'text', 'maxlength="60"')}
+        ${input('foodSummary', plan ? '吃什么' : '吃了什么', rec.foodSummary, 'text', 'maxlength="60"')}
         ${rec.said ? `<div class="said">你说的：「${esc(rec.said)}」</div>` : ''}
         ${hasItems ? `<div class="breakdown">
           <div class="breakdown-head"><span>明细</span><button type="button" class="bd-add" id="bd-add">＋ 加一样</button></div>
           <div class="bd-ai hidden" id="bd-ai" role="status"><span id="bd-ai-text"></span><button type="button" id="bd-ai-go"></button></div>
           <div class="bd-list" id="bd-list"></div>
           <div class="bd-total" id="bd-total"></div>
-          <div class="breakdown-note">改份量按比例算；改了数会记住，下次照你的。点来源标签看数是哪来的。</div>
+          <div class="breakdown-note">${plan ? '改份量按比例算。' : '改份量按比例算；改了数会记住，下次照你的。'}点来源标签看数是哪来的。</div>
         </div>` : `<div class="field-grid field-grid-2">
           ${input('calories', '热量 kcal', rec.calories)}
           ${input('proteinG', '蛋白质 g', rec.proteinG || 0)}
@@ -174,6 +181,21 @@ Object.assign(FitnessApp.prototype, {
         if (!b) return;
         f.querySelectorAll('#edit-meal-type .seg-btn').forEach(x => x.classList.toggle('active', x === b));
       });
+    } else if (plan) {
+      document.getElementById('edit-title').textContent = '改计划 · 训练';
+      f.innerHTML = rec.durationMin ? `
+        ${input('exerciseName', '项目', rec.exerciseName, 'text', 'maxlength="30"')}
+        ${input('durationMin', '时长 分钟', rec.durationMin)}
+        ${input('tip', '要点', rec.tip || '', 'text', 'maxlength="30" placeholder="可以不写"')}` : `
+        ${input('exerciseName', '动作', rec.exerciseName, 'text', 'maxlength="30"')}
+        <div class="plan-sug hidden" id="plan-sug"></div>
+        <div class="field-grid">
+          ${input('weightKg', '重量 kg', rec.weightKg || 0, 'number', 'placeholder="自重填 0"')}
+          ${input('sets', '组数', rec.sets)}
+          ${input('reps', '每组次数', rec.reps)}
+        </div>
+        ${input('tip', '要点', rec.tip || '', 'text', 'maxlength="30" placeholder="可以不写"')}`;
+      if (!rec.durationMin) this.bindPlanSug(rec, f.closest('form'));
     } else if (rec.durationMin) {
       document.getElementById('edit-title').textContent = '修改有氧';
       f.innerHTML = `
@@ -195,6 +217,45 @@ Object.assign(FitnessApp.prototype, {
     }
     document.getElementById('edit-overlay').classList.remove('hidden');
     history.pushState({ edit: true }, '');
+  },
+
+  /**
+   * 改训练计划时「按你的成绩」那一块（v12.9）：练过的动作写下次该练多少 + 为什么，点「用这个」填进下面；
+   * 动作名字改了就按新名字重算；没练过的写一句「练完记一次，下次按成绩给你加」。
+   */
+  bindPlanSug(rec, form) {
+    const box = form.querySelector('#plan-sug');
+    const draw = () => {
+      const name = (form.elements.exerciseName.value || '').trim();
+      const prog = name && this.exerciseProgress(name, { date: rec.date });
+      const n = prog && prog.next;
+      const cur = { w: parseFloat(form.elements.weightKg.value) || 0, s: parseInt(form.elements.sets.value, 10) || 0, r: parseInt(form.elements.reps.value, 10) || 0 };
+      if (!n) {
+        box.className = 'plan-sug none';
+        box.textContent = name ? `还没练过「${name}」，练完记一次，下次按成绩给你加` : '';
+        box.classList.toggle('hidden', !name);
+        return;
+      }
+      const sets = n.kind === 'sets' || /都用/.test(n.text) ? n.sets : (cur.s || n.sets);
+      const same = n.weightKg === cur.w && n.reps === cur.r && sets === cur.s;
+      const kg = (w) => (w > 0 ? round1(w) + 'kg' : '自重');
+      box.className = 'plan-sug';
+      box.innerHTML = `<b>按你的成绩：${kg(n.weightKg)} · ${sets}×${n.reps}</b>` +
+        `<small>上次 ${kg(prog.last.weightKg)} ${prog.last.sets}×${prog.last.reps}（${+prog.last.date.slice(5, 7)}月${+prog.last.date.slice(8)}日）${n.why ? ' · ' + esc(n.why) : ''}</small>` +
+        (same ? '<button type="button" disabled>已经是了</button>' : '<button type="button" data-use="1">用这个</button>');
+      const b = box.querySelector('[data-use]');
+      if (b) b.addEventListener('click', () => {
+        form.elements.weightKg.value = n.weightKg;
+        form.elements.sets.value = sets;
+        form.elements.reps.value = n.reps;
+        if (n.kind === 'harder' && !form.elements.tip.value) form.elements.tip.value = n.text.replace(/^下次/, '').slice(0, 30);
+        window.Haptics && window.Haptics.fire('tick');
+        draw();
+      });
+    };
+    form.elements.exerciseName.addEventListener('change', draw);
+    ['weightKg', 'sets', 'reps'].forEach(k => form.elements[k].addEventListener('input', draw));
+    draw();
   },
 
   /**
@@ -391,6 +452,22 @@ Object.assign(FitnessApp.prototype, {
     return [].concat(...((r && r.meals) || []).map(m => m.items || [])).map(it => cleanRow(it));
   },
 
+  /** 改了计划里吃的、没点「AI 重算明细」：后台估一下，算好了换掉这一行的明细（算不出来就留着你写的字，点开再算） */
+  async reestimatePlan(rec) {
+    this.showToast('计划改好了，AI 在算热量…');
+    try {
+      const items = await this.estimateFood(rec.foodSummary);
+      if (!items.length || !(this.plans || []).includes(rec)) throw new Error('EMPTY');
+      rec.items = items;
+      Object.assign(rec, TF.sumItems(items));
+      this.saveData();
+      this.render();
+      this.showToast(`算好了：${rec.foodSummary} ${fmt(rec.calories)} kcal`);
+    } catch (e) {
+      this.showToast('热量没算出来，点开那行再点「AI 重算明细」');
+    }
+  },
+
   closeEditor(fromBack) {
     if (!this.editing) return;
     this.editing = null;
@@ -414,7 +491,8 @@ Object.assign(FitnessApp.prototype, {
       if (window.QuickLog) window.QuickLog.showUndo(`✓ 记下体重 ${round1(kg)} kg`, [], () => { this.restoreWeight(date, prev); this.saveData(); this.render(); });
       return;
     }
-    const list = kind === 'meal' ? this.diet : this.workouts;
+    const isPlan = !!this.editing.plan;
+    const list = isPlan ? (this.plans || []) : kind === 'meal' ? this.diet : this.workouts;
     const rec = list.find(r => r.id === id);
     if (!rec) return this.closeEditor();
     const val = (name) => form.elements[name] ? form.elements[name].value : undefined;
@@ -425,14 +503,17 @@ Object.assign(FitnessApp.prototype, {
     if (kind === 'meal') {
       rec._oldSummary = rec.foodSummary;
       const active = form.querySelector('#edit-meal-type .seg-btn.active');
-      if (active && active.dataset.value !== rec.mealType) { rec.mealType = active.dataset.value; rec.mealFixed = true; } // 手动改了顿：以后分顿照这个
+      if (active && active.dataset.value !== rec.mealType) { rec.mealType = active.dataset.value; if (!isPlan) rec.mealFixed = true; } // 手动改了顿：以后分顿照这个
       const summary = (val('foodSummary') || '').trim();
       const summaryTouched = summary && summary !== rec.foodSummary;
       rec.foodSummary = summary || rec.foodSummary;
       const d = this._draft;
       if (d && Array.isArray(rec.items) && rec.items.length) {
         const oldSummary = rec._oldSummary || '';
-        if (d.words && summaryTouched && window.QuickLog) {
+        if (d.words && summaryTouched && isPlan) {
+          // 计划：标题先改上，AI 在后台重算这一行的明细（计划不是记录，不能交给「把…改成…」）
+          reestimate = 'plan';
+        } else if (d.words && summaryTouched && window.QuickLog) {
           // 上面换了吃的、没点「AI 重算明细」：标题先改上，保存后让 AI 按新的说法重估这一条（v12）
           reestimate = `把「${oldSummary}」改成「${summary}」`;
         } else {
@@ -443,7 +524,7 @@ Object.assign(FitnessApp.prototype, {
             if (r._mine) o.name = specificName(o.name, summary);
             return o;
           });
-          rows.forEach((r, i) => { if (r._mine && !r.supp) { this.rememberFood(items[i]); remembered.push(items[i].name); } });
+          if (!isPlan) rows.forEach((r, i) => { if (r._mine && !r.supp) { this.rememberFood(items[i]); remembered.push(items[i].name); } });
           rec.items = items.length ? items : undefined;
           Object.assign(rec, items.length ? TF.sumItems(items) : { calories: 0, proteinG: 0, carbsG: 0, fatG: 0 });
           rec.foodSummary = summary || draftSummary(items) || rec.foodSummary; // 下面改了名字 / 份量时上面已经跟着拼好了
@@ -465,14 +546,24 @@ Object.assign(FitnessApp.prototype, {
       }
       rec.burnedCalories = Math.round(numv('burnedCalories', rec.burnedCalories || 0));
       if (rec.notes && /估计/.test(rec.notes)) rec.notes = '一键记录（已手动修改）';
+      if (isPlan) {
+        // 计划：消耗按改完的重新算；换了动作，部位跟着换；要点能改
+        const lw = this.latestWeight ? this.latestWeight() : null;
+        const info = TF.exerciseInfo(rec.exerciseName);
+        if (info.muscle) rec.muscleGroup = info.muscle;
+        rec.burnedCalories = rec.durationMin ? TF.metBurn(info.met, rec.durationMin, lw && lw.kg) : TF.strengthBurn(rec.exerciseName, rec.weightKg, rec.sets, rec.reps, lw && lw.kg);
+        const tip = (val('tip') || '').trim();
+        if (tip) rec.tip = tip.slice(0, 30); else delete rec.tip;
+      }
     }
     delete rec._oldSummary;
     this.saveData();
     this.closeEditor();
     this.render();
     window.Haptics && window.Haptics.fire('tap');
+    if (reestimate === 'plan') { this.reestimatePlan(rec); return; }
     if (reestimate) { this.selectedDate = rec.date; window.QuickLog.submit(reestimate, { again: true }); return; }
-    this.showToast(remembered.length ? `已保存，记住了 ${remembered.join('、')}` : '已保存');
+    this.showToast(isPlan ? '计划改好了' : remembered.length ? `已保存，记住了 ${remembered.join('、')}` : '已保存');
   },
 
   deleteEditing() {
@@ -487,17 +578,22 @@ Object.assign(FitnessApp.prototype, {
       if (prev && window.QuickLog) window.QuickLog.showUndo('已删除这天的体重', [], () => { this.restoreWeight(date, prev); this.saveData(); this.render(); });
       return;
     }
+    if (this.editing.plan) { this.closeEditor(); this.dropPlan(id); return; }
     const list = kind === 'meal' ? this.diet : this.workouts;
     const idx = list.findIndex(r => r.id === id);
     if (idx === -1) return this.closeEditor();
     const [removed] = list.splice(idx, 1);
+    // 照计划打勾记的：计划回到还没做（v12.9「撤回打勾」）
+    const plan = (this.plans || []).find(p => p.done && p.recId === id);
+    if (plan) { delete plan.done; delete plan.recId; }
     window.Haptics && window.Haptics.fire('tap');
     this.saveData();
     this.closeEditor();
     this.render();
     if (window.QuickLog) {
-      window.QuickLog.showUndo('已删除 1 条', [], () => {
+      window.QuickLog.showUndo(plan ? '撤回了，变回计划' : '已删除 1 条', [], () => {
         list.splice(idx, 0, removed);
+        if (plan) { plan.done = true; plan.recId = removed.id; }
         this.saveData();
         this.render();
       });

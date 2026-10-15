@@ -214,3 +214,118 @@ test('贴来一整段计划（v12.3）：认得出是计划，交给大模型认
   const many = TF.Parser.cleanActs([1, 2, 3, 4, 5, 6].map(i => ({ do: 'savePlan', name: '计划' + i, workouts: [{ exerciseName: '卧推' }] })));
   assert.strictEqual(many.length, 6, '一次能存好几份');
 });
+
+// v12.9：口喷改这天的计划（本机认，不等大模型）
+require('../web/js/log/fastlog.js');
+const rows = [
+  { id: 'a', kind: 'workout', name: '杠铃卧推', weightKg: 60, sets: 4, reps: 8 },
+  { id: 'b', kind: 'workout', name: '深蹲', weightKg: 80, sets: 4, reps: 6 },
+  { id: 'c', kind: 'workout', name: '罗马尼亚硬拉', weightKg: 70, sets: 3, reps: 10 },
+  { id: 'd', kind: 'workout', name: '引体向上', weightKg: 0, sets: 4, reps: 8 },
+  { id: 'e', kind: 'workout', name: '坐姿哑铃推举', weightKg: 14, sets: 3, reps: 10 },
+  { id: 'f', kind: 'workout', name: '跑步', durationMin: 20, sets: 1, reps: 1 },
+  { id: 'g', kind: 'workout', name: '侧平举', weightKg: 6, sets: 3, reps: 15, done: true },
+  { id: 'm', kind: 'meal', name: '' }
+];
+const pe = (t) => A.matchPlanEdit(t, rows);
+
+test('改计划：数（绝对、加减）、组数次数、时长', () => {
+  assert.deepStrictEqual(pe('卧推改成60公斤'), { do: 'editPlan', id: 'a', set: { weightKg: 60 } });
+  assert.deepStrictEqual(pe('卧推改成六十二点五公斤'), { do: 'editPlan', id: 'a', set: { weightKg: 62.5 } }, '中文数字');
+  assert.deepStrictEqual(pe('卧推加5公斤'), { do: 'editPlan', id: 'a', set: { weightKg: 65 } });
+  assert.deepStrictEqual(pe('深蹲减10斤'), { do: 'editPlan', id: 'b', set: { weightKg: 75 } }, '斤');
+  assert.deepStrictEqual(pe('深蹲加一组'), { do: 'editPlan', id: 'b', set: { sets: 5 } });
+  assert.deepStrictEqual(pe('深蹲少一组'), { do: 'editPlan', id: 'b', set: { sets: 3 } });
+  assert.deepStrictEqual(pe('引体每组8个'), { do: 'editPlan', id: 'd', set: { reps: 8 } }, '「引体」认到引体向上');
+  assert.deepStrictEqual(pe('引体每组多做两个'), { do: 'editPlan', id: 'd', set: { reps: 10 } });
+  assert.deepStrictEqual(pe('硬拉改成5×5'), { do: 'editPlan', id: 'c', set: { sets: 5, reps: 5 } }, '「硬拉」认到罗马尼亚硬拉（只有一个）');
+  assert.deepStrictEqual(pe('推举改成4组12个'), { do: 'editPlan', id: 'e', set: { sets: 4, reps: 12 } }, '去掉前缀的「推举」');
+  assert.deepStrictEqual(pe('跑步改成30分钟'), { do: 'editPlan', id: 'f', set: { durationMin: 30 } });
+  assert.deepStrictEqual(pe('跑步改成半小时'), { do: 'editPlan', id: 'f', set: { durationMin: 30 } });
+  assert.deepStrictEqual(pe('明天的卧推重量改成55'), { do: 'editPlan', id: 'a', set: { weightKg: 55 } }, '说了哪天、说了「重量」没单位');
+  assert.deepStrictEqual(pe('卧推改成10个一组'), { do: 'editPlan', id: 'a', set: { reps: 10 } }, '「10 个一组」是次数');
+});
+
+test('改计划：去掉、换动作、挪顺序、打勾、撤回、按成绩、轻一点', () => {
+  assert.deepStrictEqual(pe('不做硬拉了'), { do: 'editPlan', id: 'c', drop: true });
+  assert.deepStrictEqual(pe('深蹲今天不做了'), { do: 'editPlan', id: 'b', drop: true });
+  assert.deepStrictEqual(pe('去掉引体向上'), { do: 'editPlan', id: 'd', drop: true });
+  assert.deepStrictEqual(pe('引体向上换成高位下拉'), { do: 'editPlan', id: 'd', set: { exerciseName: '高位下拉' } });
+  assert.deepStrictEqual(pe('卧推换成哑铃的'), { do: 'editPlan', id: 'a', set: { exerciseName: '哑铃卧推' } }, '只说器械：换成那个器械的同一个动作');
+  assert.deepStrictEqual(pe('先做深蹲'), { do: 'editPlan', id: 'b', move: 'first' });
+  assert.deepStrictEqual(pe('卧推放最后'), { do: 'editPlan', id: 'a', move: 'last' });
+  assert.deepStrictEqual(pe('推举放到卧推前面'), { do: 'editPlan', id: 'e', move: 'before', target: 'a' }, '先说到的是要挪的');
+  assert.deepStrictEqual(pe('把深蹲挪到硬拉后面'), { do: 'editPlan', id: 'b', move: 'after', target: 'c' });
+  assert.deepStrictEqual(pe('卧推和深蹲换一下'), { do: 'editPlan', id: 'a', move: 'swap', target: 'b' });
+  assert.deepStrictEqual(pe('卧推练完了'), { do: 'editPlan', id: 'a', done: true });
+  assert.deepStrictEqual(pe('侧平举还没做'), { do: 'editPlan', id: 'g', undone: true }, '打过勾的撤回');
+  assert.deepStrictEqual(pe('撤回侧平举'), { do: 'editPlan', id: 'g', undone: true });
+  assert.deepStrictEqual(pe('卧推加点重量'), { do: 'editPlan', id: 'a', overload: 'up' });
+  assert.deepStrictEqual(pe('深蹲按成绩来'), { do: 'editPlan', id: 'b', overload: true });
+  assert.deepStrictEqual(pe('卧推轻一点'), { do: 'editPlan', id: 'a', lighter: true });
+  assert.deepStrictEqual(pe('按我的成绩调一下计划'), { do: 'editPlan', all: true, overload: true });
+  assert.deepStrictEqual(pe('帮我按渐进超负荷排'), { do: 'editPlan', all: true, overload: true });
+  assert.deepStrictEqual(pe('今天状态不好，都轻一点'), { do: 'editPlan', all: true, lighter: true });
+});
+
+test('改计划：在问的、报练了的、对不上的不认（交给大模型 / 记录）', () => {
+  for (const t of ['卧推加多少合适？', '卧推要不要加重', '卧推练了60公斤4组8个', '卧推做了4组', '卧推60公斤4组8个', '卧推练完了，60公斤4组8个',
+    '今天中午吃了牛肉面', '卧推怎么做', '腿举改成100公斤', '侧平举改成8公斤', '卧推换一个动作'])
+    assert.strictEqual(pe(t), null, t);
+  // 两行都对得上（杠铃卧推、上斜卧推）：不认
+  assert.strictEqual(A.matchPlanEdit('卧推改成60公斤', [{ id: 'a', kind: 'workout', name: '杠铃卧推' }, { id: 'b', kind: 'workout', name: '上斜卧推' }]), null);
+  assert.deepStrictEqual(A.matchPlanEdit('上斜卧推改成40公斤', [{ id: 'a', kind: 'workout', name: '杠铃卧推' }, { id: 'b', kind: 'workout', name: '上斜卧推' }]), { do: 'editPlan', id: 'b', set: { weightKg: 40 } });
+  assert.strictEqual(A.matchPlanEdit('按成绩调一下', [{ id: 'm', kind: 'meal' }]), null, '没有训练计划');
+});
+
+test('改计划：好几句的只看说到动作那句；别的句子也在改、一句两个动作的不认；小数点', () => {
+  assert.deepStrictEqual(pe('深蹲换成腿举，重量你看着来'), { do: 'editPlan', id: 'b', set: { exerciseName: '腿举' } });
+  assert.deepStrictEqual(pe('好吧，卧推改成62.5公斤'), { do: 'editPlan', id: 'a', set: { weightKg: 62.5 } });
+  assert.deepStrictEqual(pe('卧推加2.5公斤'), { do: 'editPlan', id: 'a', set: { weightKg: 62.5 } });
+  assert.deepStrictEqual(pe('引体向上我今天不做了'), { do: 'editPlan', id: 'd', drop: true });
+  for (const t of ['深蹲去掉，加一个跑步40分钟', '弯举加一组，下压改成30公斤', '卧推加一组深蹲改成85公斤']) assert.strictEqual(pe(t), null, t);
+});
+
+test('大模型改计划（editPlan）：编号换成 id、新加的不带编号、「再加一个」写错编号当新加、照计划做了数不一样留着', () => {
+  const plans = [{ ref: 'p1', id: 'pl_1', text: '午餐 米饭150g、鸡胸肉150g 470kcal 蛋白45' }, { ref: 'p2', id: 'pl_2', text: '训练 绳索下压 25kg 3组×12次' }, { ref: 'p3', id: 'pl_3', text: '训练 杠铃卧推 60kg 4组×8次' }];
+  const ctx = (said) => ({ said, plans, dayRecords: [] });
+  let r = TF.Parser.normalize({ reply: '去掉了', act: [{ do: 'editPlan', ref: 'p2', drop: true }, { do: 'editPlan', ref: 'p9', drop: true }] }, ctx('下压不做了'));
+  assert.deepStrictEqual(r.acts, [{ do: 'editPlan', drop: true, id: 'pl_2' }], '编号对不上的不要');
+  r = TF.Parser.normalize({ reply: '换好了', act: [{ do: 'editPlan', ref: 'p3', workout: { exerciseName: '哑铃卧推', weightKg: 22, sets: 4, reps: 10 } }] }, ctx('卧推换成哑铃卧推'));
+  assert.strictEqual(r.acts[0].id, 'pl_3');
+  assert.strictEqual(r.acts[0].workouts[0].exerciseName, '哑铃卧推');
+  assert.ok(r.acts[0].workouts[0].burnedCalories > 0, '按记录的规矩洗过');
+  r = TF.Parser.normalize({ reply: '加好了', act: [{ do: 'editPlan', ref: 'p2', workout: { exerciseName: '哑铃侧平举', weightKg: 6, sets: 3, reps: 15 } }] }, ctx('再加一个侧平举，3组15个'));
+  assert.strictEqual(r.acts[0].id, undefined, '写错编号的「再加一个」当新加，不把绳索下压换掉');
+  r = TF.Parser.normalize({ reply: '加好了', act: [{ do: 'editPlan', add: true, ref: 'p2', workout: { exerciseName: '哑铃侧平举', weightKg: 6, sets: 3, reps: 15 } }] }, ctx('再加一个侧平举'));
+  assert.strictEqual(r.acts[0].id, undefined, 'add: true 不看编号');
+  r = TF.Parser.normalize({ reply: '加了一组', act: [{ do: 'editPlan', ref: 'p3', workout: { exerciseName: '杠铃卧推', weightKg: 60, sets: 5, reps: 8 } }] }, ctx('卧推加一组'));
+  assert.strictEqual(r.acts[0].id, 'pl_3', '同一个动作加一组：还是改那一项');
+  r = TF.Parser.normalize({ reply: '记上了', update: [{ ref: 'p3', set: { weightKg: 62.5 } }], donePlans: ['p3'] }, ctx('卧推做完了，62.5公斤4组8个'));
+  assert.deepStrictEqual(r.planSets, { p3: { weightKg: 62.5 } });
+  assert.deepStrictEqual(r.donePlans, ['p3']);
+  assert.strictEqual(r.updates.length, 0, '计划不是记录，update 不算');
+});
+
+test('大模型改计划：「深蹲去掉，加一个跑步」写了别的项的编号当新加；「晚饭的计划不要了」写成 clearPlan 只去掉晚饭', () => {
+  const plans = [{ ref: 'p1', id: 'pl_1', text: '午餐 米饭150g 174kcal 蛋白4' }, { ref: 'p2', id: 'pl_2', text: '晚餐 三文鱼150g 300kcal 蛋白30' },
+    { ref: 'p3', id: 'pl_3', text: '训练 杠铃深蹲 80kg 5组×5次' }, { ref: 'p4', id: 'pl_4', text: '训练 绳索下压 25kg 3组×12次' }];
+  const ctx = (said) => ({ said, plans, dayRecords: [] });
+  let r = TF.Parser.normalize({ reply: '好', act: [{ do: 'editPlan', ref: 'p3', drop: true }, { do: 'editPlan', ref: 'p4', workout: { exerciseName: '跑步', durationMin: 40 } }] }, ctx('今天不想练腿了，深蹲去掉，加一个跑步40分钟'));
+  assert.deepStrictEqual(r.acts.map(a => a.id), ['pl_3', undefined]);
+  r = TF.Parser.normalize({ reply: '好', act: [{ do: 'editPlan', ref: 'p3', workout: { exerciseName: '腿举', weightKg: 120, sets: 4, reps: 10 } }] }, ctx('深蹲换成腿举'));
+  assert.strictEqual(r.acts[0].id, 'pl_3', '说到了深蹲：是换');
+  r = TF.Parser.normalize({ reply: '清掉了', act: [{ do: 'clearPlan', dayOffset: 0, what: 'meals' }] }, ctx('晚饭的计划不要了'));
+  assert.deepStrictEqual(r.acts, [{ do: 'editPlan', id: 'pl_2', drop: true }]);
+  r = TF.Parser.normalize({ reply: '清掉了', act: [{ do: 'clearPlan', dayOffset: 0, what: 'meals' }] }, ctx('今天的饮食计划都不要了'));
+  assert.strictEqual(r.acts[0].do, 'clearPlan', '没说哪顿：照旧全清');
+});
+
+test('大模型改计划：说了「换成」却写成去掉 + 新加，合成换掉那一项', () => {
+  const plans = [{ ref: 'p1', id: 'pl_1', text: '训练 杠铃深蹲 80kg 5组×5次' }, { ref: 'p2', id: 'pl_2', text: '训练 绳索下压 25kg 3组×12次' }];
+  const r = TF.Parser.normalize({ reply: '换了', act: [{ do: 'editPlan', ref: 'p1', drop: true }, { do: 'editPlan', add: true, workout: { exerciseName: '腿举', weightKg: 120, sets: 5, reps: 5 } }] },
+    { said: '深蹲换成腿举，重量你看着来', plans, dayRecords: [] });
+  assert.strictEqual(r.acts.length, 1);
+  assert.strictEqual(r.acts[0].id, 'pl_1');
+  assert.strictEqual(r.acts[0].workouts[0].exerciseName, '腿举');
+});

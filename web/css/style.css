@@ -942,6 +942,25 @@ button.sb-open b::after { content: ' ▸'; color: var(--love); font-weight: 600;
 .item.plan.in-group .item-title { font-size: 0.9rem; font-weight: 600; color: var(--text-2); }
 .item.plan.in-group .item-title .tag { margin-right: 6px; }
 .item.plan.in-group .plan-acts button { width: 30px; height: 30px; }
+/* v12.9 计划能改：点一行打开修改面板；左边把手按住拖着排顺序；按成绩能加的写在下面 */
+.item.plan.in-group { position: relative; cursor: pointer; }
+.item.plan.in-group .item-sub { white-space: normal; }
+.plan-grip { position: absolute; left: 14px; top: 0; bottom: 0; width: 32px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; touch-action: none; cursor: grab; }
+.plan-grip i { display: block; width: 14px; height: 2px; border-radius: 1px; background: var(--text-3); opacity: 0.55; }
+.item.plan.dragging { z-index: 3; background: var(--surface-2); border-top-color: transparent; border-radius: 12px; outline: 1.5px solid var(--accent); box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28); transition: none; }
+.item.plan.dragging .plan-grip { cursor: grabbing; }
+.item.plan.dragging .plan-grip i { background: var(--accent); opacity: 1; }
+.mgroup .item.plan.can-drag:not(.dragging) { transition: transform 0.18s ease; }
+body.plan-dragging { user-select: none; -webkit-user-select: none; }
+.plan-up { margin-left: auto; border: 1px solid var(--accent); background: var(--accent-soft); color: var(--accent-text); border-radius: 999px; padding: 3px 10px; font: inherit; font-size: 0.74rem; font-weight: 700; cursor: pointer; }
+.plan-up:active { background: var(--accent); color: var(--accent-ink); }
+.group-head.plan-head { align-items: center; }
+/* 修改面板里「按你的成绩」那一块 */
+.plan-sug { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px 10px; padding: 10px 12px; border-radius: 12px; background: var(--accent-soft); margin: 2px 0 12px; }
+.plan-sug b { font-size: 0.9rem; color: var(--accent-text); }
+.plan-sug small { grid-column: 1; font-size: 0.74rem; line-height: 1.45; color: var(--text-2); }
+.plan-sug button { grid-column: 2; grid-row: 1 / span 2; border: 0; border-radius: 999px; padding: 7px 14px; background: var(--accent); color: var(--accent-ink); font: inherit; font-size: 0.82rem; font-weight: 700; cursor: pointer; }
+.plan-sug.none { display: block; background: transparent; border: 1px dashed var(--line); color: var(--text-3); font-size: 0.78rem; }
 .tag-lift { color: var(--lift); background: var(--lift-soft); }
 .tag-cardio { color: var(--cardio); background: var(--cardio-soft); }
 

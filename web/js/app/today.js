@@ -175,6 +175,7 @@ Object.assign(FitnessApp.prototype, {
     const pend = this.pending.filter(p => p.date === date && !(p.ask && (p.status === 'working' || p.plan || p.chat || (TF.pureQuestion && TF.pureQuestion(p.text))))).sort((a, b) => b.ts - a.ts);
     const todo = this.plansFor ? this.plansFor(date).filter(p => !p.done) : [];
 
+    this._planRecs = new Set((this.plans || []).filter(p => p.done && p.recId).map(p => p.recId)); // 照计划打勾记的（点开能撤回打勾）
     const tl = $('timeline');
     let html = pend.map(p => this.renderRow({ kind: 'pending', ts: p.ts, rec: p })).join('');
     html += this.renderPlanHead ? this.renderPlanHead(date) : '';
@@ -274,7 +275,7 @@ Object.assign(FitnessApp.prototype, {
       : this.isSimple() ? (x.proteinG ? `蛋白 ${round1(x.proteinG)}g` : '')
       : [x.proteinG ? `蛋白 ${round1(x.proteinG)}g` : '', x.carbsG ? `碳水 ${round1(x.carbsG)}g` : '', x.fatG ? `脂肪 ${round1(x.fatG)}g` : ''].filter(Boolean).join(' · ');
     return `<button class="mg-row" data-kind="meal" data-id="${esc(x.id)}" type="button"><span class="mg-main"><span class="mg-title">${esc(x.foodSummary)}</span>` +
-      `<span class="mg-sub">${late ? '补记 ' : ''}${esc(hhmm(recordTs(x)))}${macro ? ' · ' + macro : ''}</span></span><span class="mg-val">${supp && !x.calories ? '' : fmt(x.calories)}</span></button>`;
+      `<span class="mg-sub">${late ? '补记 ' : ''}${esc(hhmm(recordTs(x)))}${this._planRecs && this._planRecs.has(x.id) ? ' · 照计划 ✓' : ''}${macro ? ' · ' + macro : ''}</span></span><span class="mg-val">${supp && !x.calories ? '' : fmt(x.calories)}</span></button>`;
   },
 
   /** 训练一张卡：头上写几个动作、消耗多少，下面一行一个动作（下次练多少写在下面），还没做的计划虚线放最后 */
@@ -286,7 +287,7 @@ Object.assign(FitnessApp.prototype, {
       : `<span class="mg-total plan"><small>计划</small>${plans.length} 个动作</span>`;
     return `<section class="mgroup" data-group="train"><div class="mg-head"><span class="mg-ico lift">${ICONS.lift}</span>` +
       `<span class="mg-name">${simple ? '运动' : '训练'}${lifts.length ? `<small>${esc(hhmm(recordTs(lifts[0])))}</small>` : ''}</span>${total}</div>` +
-      lifts.map(w => this.renderWorkoutLine(w)).join('') + plans.map(p => this.renderPlanRow(p, true)).join('') + '</section>';
+      lifts.map(w => this.renderWorkoutLine(w)).join('') + plans.map(p => this.renderPlanRow(p, true, plans.length > 1)).join('') + '</section>';
   },
 
   renderWorkoutLine(x) {
@@ -294,6 +295,7 @@ Object.assign(FitnessApp.prototype, {
     const parts = [];
     let value;
     if (ts) parts.push(esc(hhmm(ts)));
+    if (this._planRecs && this._planRecs.has(x.id)) parts.push('照计划 ✓');
     if (x.durationMin) {
       value = `${fmt(x.durationMin)}<small>分钟</small>`;
       parts.push(`消耗约 ${fmt(x.burnedCalories)} kcal`);

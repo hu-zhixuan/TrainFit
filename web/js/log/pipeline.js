@@ -29,6 +29,8 @@
       if (!(opts && opts.again) && ((this._last && this._last.text === text && now - this._last.at < 5000) ||
         (root.app.pending || []).some(p => p.text === text && p.status === 'working'))) return;
       this._last = { text, at: now };
+      // 改这天已经排上的计划（「卧推改成 60 公斤」「深蹲加一组」「不做硬拉了」「先做深蹲」「卧推还没做」「按成绩调一下」）：本机直接改（v12.9）
+      if (!(opts && (opts.ask || opts.chat)) && root.app.planEditSkill && root.app.planEditSkill(text)) return;
       // 改小人刚给的计划（点了「改一改」，或者刚给过计划、说的是「不要米饭，换成红薯」）：当成提问，小人马上想，不出卡片
       const plan = root.app.planEditKind ? root.app.planEditKind(text) : '';
       if (plan) {
@@ -240,10 +242,28 @@
       }
       clearTimeout(deadline);
       if (!mine()) return; // 已被用户删掉，或者又点了重试
-      // 「早餐照计划吃了」：大模型记好了，把那几条计划划掉
-      if ((result.donePlans || []).length && app.dropPlan) {
+      // 「早餐照计划吃了」：大模型记好了，把那几条计划划掉；它只划了、没记（「卧推做完了，62.5 公斤」写成 update 计划）的，照计划记上（v12.9）
+      let plansDone = [];
+      if ((result.donePlans || []).length && app.markPlansDone) {
         const byRef = new Map((ctx.plans || []).map(x => [x.ref, x.id]));
-        app.markPlansDone(result.donePlans.map(ref => byRef.get(ref)).filter(Boolean));
+        const core = (n) => (TF.AgentIntent ? TF.AgentIntent.liftCore(n) : String(n || ''));
+        result.donePlans.forEach(ref => {
+          const pl = (app.plans || []).find(x => x.id === byRef.get(ref));
+          if (!pl || pl.done) return;
+          plansDone.push(pl.id);
+          const logged = pl.kind === 'meal' ? result.meals.some(m => (m.mealType || '').replace('/补剂', '') === (pl.mealType || '').replace('/补剂', ''))
+            : result.workouts.some(w => w.exerciseName === pl.exerciseName || core(w.exerciseName) === core(pl.exerciseName));
+          if (logged) return;
+          const set = (result.planSets || {})[ref] || {};
+          if (pl.kind === 'meal') result.meals.push({ mealType: pl.mealType, foodSummary: pl.foodSummary, calories: pl.calories, proteinG: pl.proteinG, carbsG: pl.carbsG, fatG: pl.fatG, items: pl.items || [] });
+          else {
+            const w = Object.assign({ exerciseName: pl.exerciseName, muscleGroup: pl.muscleGroup, weightKg: pl.weightKg || 0, sets: pl.sets, reps: pl.reps, durationMin: pl.durationMin || null }, set);
+            const lw = app.latestWeight ? app.latestWeight() : null;
+            w.burnedCalories = w.durationMin ? TF.metBurn(TF.exerciseInfo(w.exerciseName).met, w.durationMin, lw && lw.kg) : TF.strengthBurn(w.exerciseName, w.weightKg, w.sets, w.reps, lw && lw.kg);
+            result.workouts.push(w);
+          }
+        });
+        app.markPlansDone(plansDone);
       }
       // 记录的提示词回了「这个我帮不上，我只管吃和练」，问的又不是吃和练（「怎么跟老板提加薪」）：交给小人用聊天的方式接（v6.3 聊什么都行）
       if (!p.chat && !p.rerouted && result.answer && /帮不上/.test(result.answer) && !Parser.ABOUT_FIT.test(p.text) &&
@@ -304,6 +324,17 @@
       app.finishPending(p.id);
       if ((result.updates || []).length || (result.deletes || []).length) { try { localStorage.setItem('tf_used_fix', '1'); } catch (e) {} }
       const batch = this.save(Object.assign(result, { said: p.text }), p.date, ctx);
+      batch.plansDone = plansDone; // 撤销时这几条计划回到还没做
+      // 划掉的计划认一下是哪条记录（今天页那条写「照计划 ✓」，点开能撤回打勾）
+      plansDone.forEach(id => {
+        const pl = (app.plans || []).find(x => x.id === id);
+        const meal = pl && pl.kind === 'meal';
+        const list = meal ? app.diet : app.workouts;
+        const rec = pl && (meal ? batch.dietIds : batch.workoutIds).map(i => list.find(x => x.id === i))
+          .find(r => r && (meal ? (r.mealType || '').replace('/补剂', '') === (pl.mealType || '').replace('/补剂', '') : TF.AgentIntent.liftCore(r.exerciseName) === TF.AgentIntent.liftCore(pl.exerciseName)));
+        if (rec) pl.recId = rec.id;
+      });
+      if (plansDone.length) { app.saveData(); app.render(); }
       this.showSnack(batch, result);
       // 剧情里的约定（v8.0）：这条记录让哪个约定做到了，先标上；没有更要紧的话要说时，小人马上庆祝 + 问要不要看加篇
       const kept = app.promiseCheck ? app.promiseCheck(true) : null;
@@ -536,6 +567,7 @@
         (batch.remembered || []).slice().reverse().forEach(r => app.restoreFood(r.name, r.prev));
         if (batch.memoPrev) app.profile.memo = batch.memoPrev;
         if (batch.acts && batch.acts.ok) batch.acts.undo();
+        (batch.plansDone || []).forEach(id => { const pl = (app.plans || []).find(x => x.id === id); if (pl) { delete pl.done; delete pl.recId; } });
         app.saveData();
         app.render();
       });

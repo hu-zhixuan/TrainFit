@@ -1241,6 +1241,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
         const from = this._lastAnswer.at;
         const n = days.reduce((t, d) => t + this.addPlans(d.date, Object.assign({}, d, { from }), true), 0);
         if (this.rememberPlan) this.rememberPlan(days); // 悄悄存一份：以后说「照上次那个练腿的计划」找得到（v6.5）
+        this._planOffer = null; // 已经放上去了：再说「卧推改成 60 公斤」改的是那天的计划，不是气泡里这份（v12.9）
         this.saveData();
         if (this.bondGain) this.bondGain('plan');
         b.disabled = true;
@@ -1257,7 +1258,7 @@ if (typeof FitnessApp !== 'undefined') Object.assign(FitnessApp.prototype, {
           this.selectedDate = planDate;
           this.render();
           this.landPlanRows();
-          this.showToast(days.length > 1 ? `排好了 ${days.length} 天，练完点 ✓ 就记上` : `加了 ${n} 条，做完点 ✓ 就记上`);
+          this.showToast(days.length > 1 ? `排好了 ${days.length} 天，点一行能改，练完点 ✓` : `加了 ${n} 条，点一行能改，做完点 ✓`);
         }, quick ? 300 : 120 + rows.length * 70 + 700);
       } else if (b.dataset.pa === 'save') {
         // 存进计划本（v6.5）：以后说「明天练练腿」就放到那天，不用再问一遍
