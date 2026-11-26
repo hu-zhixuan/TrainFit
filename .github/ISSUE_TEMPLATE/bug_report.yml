@@ -1,0 +1,37 @@
+name: Bug 反馈 / 识别不准
+description: 遇到装不上、闪退、界面错位、热量估算离谱或提醒异常，来这里报一声
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈！报得越具体修得越快。**请勿上传包含个人密钥或隐私账单的截图。**
+  - type: input
+    id: version
+    attributes:
+      label: App 版本号
+      description: 在 App 右上角「设置」底部可看到（例如 v16.18）
+      placeholder: "v16.18"
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: 手机型号与安卓版本
+      placeholder: "例如：小米 14 / HyperOS 2 (Android 15)"
+    validations:
+      required: true
+  - type: textarea
+    id: what_happened
+    attributes:
+      label: 遇到了什么问题？
+      description: 说清楚你刚才说了哪句话 / 拍了什么图 / 点了哪里，实际发生了什么
+      placeholder: "例如：按住说「两个水煮蛋只吃一个蛋黄」，记完之后发现……"
+    validations:
+      required: true
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: 截图（可选）
+      description: 直接把截图拖进来即可，非常有助于定位界面和识别问题

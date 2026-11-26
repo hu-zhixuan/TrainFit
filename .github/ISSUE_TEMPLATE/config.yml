@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 📥 下载最新安卓安装包（Releases）
+    url: https://github.com/hu-zhixuan/TrainFit/releases/latest
+    about: 直接下载最新 TrainFit-v版本号.apk，覆盖安装数据保留
+  - name: 📋 查看全部历史更新日志
+    url: https://github.com/hu-zhixuan/TrainFit/releases
+    about: 浏览每个版本的进化记录与修复内容

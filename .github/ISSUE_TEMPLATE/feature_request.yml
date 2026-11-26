@@ -1,0 +1,33 @@
+name: 主动健康体验 / 功能建议
+description: 觉得 AI 可以在哪些场景更主动地帮到你，或者有更好用的交互想法
+title: "[Idea] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        练食AI 围绕 **「更主动的 AI 个人主动健康管理系统」** 持续演进，欢迎分享你在真实减脂、增肌或日常健康管理中遇到的卡点。
+  - type: textarea
+    id: scenario
+    attributes:
+      label: 你在什么真实场景卡住了？
+      placeholder: "例如：每次加班到 9 点忘记记晚饭，希望小人能在……"
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 你希望练食AI 怎么主动帮你？
+      placeholder: "描述你理想中少打扰、顺手就能完成的交互方式"
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: 涉及模块
+      options:
+        - 主动提醒与健康干预（AI Agent）
+        - 语音 / 拍照记录与热量校准
+        - 力量训练计划与渐进超负荷
+        - 像素小人陪伴与交互
+        - 趋势分析 / 备份 / 其它
