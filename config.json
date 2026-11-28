@@ -1,0 +1,145 @@
+{
+  "version": 1,
+  "ttlMin": 30,
+  "bet": {
+    "enabled": true,
+    "markets": [
+      "budget",
+      "no_late",
+      "light_dinner",
+      "precision"
+    ],
+    "marketHours": {
+      "budget": {
+        "cutoff": 19,
+        "settle": 21.5
+      },
+      "no_late": {
+        "cutoff": 21,
+        "settle": 24
+      },
+      "light_dinner": {
+        "cutoff": 20.5,
+        "settle": 21
+      },
+      "precision": {
+        "cutoff": 18,
+        "settle": 21.5
+      }
+    },
+    "trigger": {
+      "openProb": 0.42,
+      "mealProb": 0.55,
+      "whisperProb": 0.3,
+      "guaranteeDays": 2,
+      "minHour": 8.5,
+      "maxHour": 20.85,
+      "requireHistory": true
+    },
+    "drop": {
+      "proChance": 0.5,
+      "proDaysWeights": [
+        0.5,
+        0.35,
+        0.15
+      ],
+      "maxProDaysPerDrop": 3,
+      "giftProMaxCount": 4,
+      "giftProMaxDays": 9,
+      "skinTrialHours": 24,
+      "forceKind": ""
+    },
+    "anomaly": {
+      "enabled": true,
+      "deleteThresholdKcal": 400
+    }
+  },
+  "member": {
+    "trialDays": 3,
+    "plans": {
+      "free": {
+        "think": 3,
+        "convos": 5,
+        "photo": 3
+      },
+      "pro": {
+        "price": 4.9,
+        "think": 20,
+        "convos": 10,
+        "photo": 0
+      },
+      "max": {
+        "price": 9.9,
+        "think": 0,
+        "convos": 0,
+        "photo": 0
+      }
+    },
+    "gates": {
+      "photo": true,
+      "overload": true,
+      "plan": true,
+      "think": true,
+      "skin": true
+    },
+    "pay": {
+      "proEnabled": true,
+      "maxEnabled": true,
+      "tipEnabled": true,
+      "proReturnDelaySec": 8,
+      "alipayTipUrl": "https://qr.alipay.com/fkx17368g0xwluy4pbnk2fe?t=1792996789635",
+      "alipayProUrl": "https://qr.alipay.com/fkx14602ccgiwk25xkbece2",
+      "alipayMaxUrl": "https://qr.alipay.com/fkx13098bru4tylhpovqa8f"
+    }
+  },
+  "ai": {
+    "dayTokens": 500000,
+    "convoWindow": 6,
+    "convoMaxTurns": 30,
+    "convoGapMin": 60,
+    "memoMax": 20,
+    "memoContextMax": 14,
+    "memoLocalExtract": true,
+    "insightEnabled": true,
+    "insightInstant": true,
+    "insightEveryDays": 7,
+    "insightMinDays": 5,
+    "models": null,
+    "display": {
+      "llmName": "",
+      "llmSub": "",
+      "asrName": "",
+      "asrSub": ""
+    }
+  },
+  "buddy": {
+    "whisperEnabled": true,
+    "whisperCooldownSec": 150,
+    "proactiveBudget": {
+      "normalDay": 3,
+      "moreDay": 6,
+      "moreChat": 3
+    },
+    "adaptEnabled": true,
+    "adaptEveryDays": 7
+  },
+  "features": {
+    "bet": true,
+    "proteinTab": true,
+    "share": true,
+    "photoLog": true,
+    "dex": true,
+    "convo": true,
+    "updateCheck": true
+  },
+  "notice": {
+    "id": "",
+    "title": "",
+    "text": "",
+    "cta": "",
+    "url": "",
+    "minVer": "",
+    "maxVer": ""
+  },
+  "overrides": []
+}
